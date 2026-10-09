@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Arranca TODOS los daemons del cluster dentro de este contenedor, con la
+# arquitectura pedida en el docker run (DATANODES, NAMENODES, REPLICATION,
+# BLOCK_SIZE) y los servicios pedidos (SERVICIOS), y mantiene el proceso vivo
+# tail-eando logs.
+set -e
+. /opt/sandbox/lib.sh
+
+log()   { echo -e "\n\033[1;36m[sandbox]\033[0m $*"; }
+error() { echo -e "\n\033[1;31m[sandbox] ERROR:\033[0m $*" >&2; exit 1; }
+entre() { [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
+
+paralelo() { # $1=funcion, resto=argumentos: la corre con todos a la vez
+  local f=$1 a p pids=() r=0; shift
+  for a in "$@"; do "$f" "$a" & pids+=("$!"); done
+  for p in "${pids[@]}"; do wait "$p" || r=1; done
+  return "$r"
+}
+
+# ---------------------------------------------------------------------------
+# 0) Parametros
+# ---------------------------------------------------------------------------
+entre "$DATANODES" 1 9        || error "DATANODES=$DATANODES: tiene que ser un numero de 1 a 9"
+entre "$NAMENODES_PEDIDO" 1 3 || error "NAMENODES=$NAMENODES_PEDIDO: tiene que ser un numero de 1 a 3"
+entre "$REPLICATION" 1 9      || error "REPLICATION=$REPLICATION: tiene que ser un numero de 1 a 9"
+[[ "$BLOCK_SIZE" =~ ^[1-9][0-9]*[mMgG]$ ]] \
+  || error "BLOCK_SIZE=$BLOCK_SIZE: numero + m o g (ej. 1m, 32m, 128m, 1g). Minimo 1m"
+[[ "$SERVICIOS" =~ ^(hdfs|mapreduce|todo)$ ]] \
+  || error "SERVICIOS=$SERVICIOS: tiene que ser hdfs, mapreduce o todo"
+
+# La cantidad de NameNodes se graba en el volumen la primera vez
+if [ ! -f "$NN_FILE" ]; then
+  # Volumen de la version anterior de la imagen (siempre fue 1 NameNode)
+  if [ -d /hadoop/dfs/name/current ]; then echo 1; else echo "$NAMENODES_PEDIDO"; fi > "$NN_FILE"
+fi
+NAMENODES=$(cat "$NN_FILE")
+if [ "$NAMENODES" != "$NAMENODES_PEDIDO" ]; then
+  log "AVISO: este volumen se creo con $NAMENODES NameNode(s) y ahora NAMENODES vale" \
+      "$NAMENODES_PEDIDO: se usan $NAMENODES. Para cambiarlo hay que empezar de cero (borrar el volumen)."
+fi
+
+# PIDs de un arranque anterior (docker restart): si un proceso nuevo reusa ese
+# numero, Hadoop cree que el daemon ya corre y no lo levanta.
+rm -f /tmp/*.pid
+
+# Volumen de la version anterior: el unico DataNode guardaba en dfs/data
+if [ -d /hadoop/dfs/data ] && [ ! -e /hadoop/dfs/dn1 ]; then
+  mv /hadoop/dfs/data /hadoop/dfs/dn1
+fi
+
+generar_conf
+
+# ---------------------------------------------------------------------------
+# 1) HDFS
+# ---------------------------------------------------------------------------
+if ha; then
+  log "HDFS en alta disponibilidad: ZooKeeper + $JOURNALNODES JournalNodes + $NAMENODES NameNodes..."
+  zookeeper_start
+  paralelo journalnode_start $(seq 1 "$JOURNALNODES")
+  for k in $(seq 1 "$JOURNALNODES"); do esperar_puerto "$(jn_rpc "$k")"; done
+
+  if [ ! -d /hadoop/dfs/nn1/current ]; then
+    log "Primer arranque: formateando el NameNode 1 y los JournalNodes..."
+    HADOOP_CONF_DIR=$(nn_conf 1) hdfs namenode -format -force -nonInteractive
+    hdfs_daemon start nn1 namenode "$RUN_DIR/nn1"
+    esperar_puerto "$(nn_http 1)" 120
+    for j in $(seq 2 "$NAMENODES"); do
+      log "Primer arranque: copiando los metadatos al NameNode $j (bootstrapStandby)..."
+      HADOOP_CONF_DIR=$(nn_conf "$j") hdfs namenode -bootstrapStandby -force -nonInteractive
+    done
+    log "Primer arranque: preparando ZooKeeper para la eleccion del NameNode activo..."
+    HADOOP_CONF_DIR="$RUN_DIR/nn1" hdfs zkfc -formatZK -force
+  fi
+  paralelo namenode_start $(seq 1 "$NAMENODES")
+
+  log "Esperando que ZooKeeper elija el NameNode activo..."
+  for _ in $(seq 1 60); do nn_activo > /dev/null && break; sleep 2; done
+else
+  if [ ! -d /hadoop/dfs/name/current ]; then
+    log "Primer arranque: formateando NameNode..."
+    hdfs namenode -format -force -nonInteractive
+  fi
+  log "Arrancando NameNode + Secondary NameNode..."
+  namenode_start 1
+  hdfs_daemon start snn secondarynamenode
+fi
+
+log "Arrancando $DATANODES DataNode(s)..."
+paralelo datanode_start $(seq 1 "$DATANODES")
+
+log "Esperando a que HDFS salga de safe mode (en reinicios tarda unos segundos)..."
+if ! timeout 120 hdfs dfsadmin -safemode wait > /dev/null; then
+  log "AVISO: HDFS no salio solo de safe mode: faltan bloques (bajaste DATANODES?)." \
+      "Se fuerza la salida. Revisa que se perdio con: hdfs fsck /"
+  hdfs dfsadmin -safemode leave
+fi
+
+# ---------------------------------------------------------------------------
+# 2) Directorios en HDFS (solo la primera vez: cada comando hdfs es una JVM
+#    nueva y tarda en arrancar)
+# ---------------------------------------------------------------------------
+if [ ! -f /hadoop/.dirs-hdfs ]; then
+  log "Preparando directorios en HDFS..."
+  hdfs dfs -mkdir -p /tmp /user/hive/warehouse /user/root /apps/tez /apps/spark /spark-logs
+  hdfs dfs -chmod -R 1777 /tmp
+  hdfs dfs -chmod -R 777 /user/hive/warehouse /spark-logs
+  touch /hadoop/.dirs-hdfs
+fi
+
+# ---------------------------------------------------------------------------
+# 3) YARN + MapReduce JobHistory (SERVICIOS=mapreduce o todo)
+# ---------------------------------------------------------------------------
+yarn_daemon() {
+  if [ "$1" = historyserver ]; then mapred --daemon start "$1"; else yarn --daemon start "$1"; fi
+}
+if con_yarn; then
+  log "Arrancando YARN (ResourceManager + NodeManager) y MapReduce JobHistory..."
+  paralelo yarn_daemon resourcemanager nodemanager historyserver
+fi
+
+# ---------------------------------------------------------------------------
+# 4) Hive + Spark (SERVICIOS=todo)
+# ---------------------------------------------------------------------------
+if con_hive_spark; then
+  # Librerias de Tez y Spark en HDFS, la primera vez. Van con bloque de 128m
+  # aunque BLOCK_SIZE sea chico: con 1m serian cientos de bloques que solo
+  # ensucian lo que se quiere mirar.
+  if [ ! -f /hadoop/.libs-hdfs ]; then
+    if ! hdfs dfs -test -e /apps/tez/tez.tar.gz; then
+      log "Subiendo librerias de Tez a HDFS..."
+      hdfs dfs -D dfs.blocksize=128m -put "${TEZ_HOME}/share/tez.tar.gz" /apps/tez/tez.tar.gz
+    fi
+    if ! hdfs dfs -test -e /apps/spark/spark-libs.jar; then
+      log "Subiendo librerias de Spark a HDFS..."
+      # Todos los jars en un solo archivo (la imagen trae JRE, sin el comando 'jar')
+      python3 -c 'import glob, os, sys, zipfile
+z = zipfile.ZipFile(sys.argv[2], "w")
+for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.jar"))):
+    z.write(f, os.path.basename(f))
+z.close()' "${SPARK_HOME}/jars" /tmp/spark-libs.jar
+      hdfs dfs -D dfs.blocksize=128m -put /tmp/spark-libs.jar /apps/spark/spark-libs.jar
+      rm -f /tmp/spark-libs.jar
+    fi
+    touch /hadoop/.libs-hdfs
+  fi
+
+  # Metastore de Hive: inicializar schema la primera vez
+  if [ ! -d /hadoop/metastore_db ]; then
+    log "Primer arranque: inicializando schema del Metastore (Derby)..."
+    schematool -dbType derby -initSchema
+  fi
+
+  log "Arrancando Hive Metastore + HiveServer2 + Spark History Server..."
+  hive --service metastore > "${HIVE_HOME}/metastore.log" 2>&1 &
+  hive --service hiveserver2 > "${HIVE_HOME}/hiveserver2.log" 2>&1 &
+  "${SPARK_HOME}/sbin/start-history-server.sh" > /dev/null
+
+  log "Esperando a que HiveServer2 acepte conexiones (puede tardar ~1 min)..."
+  esperar_puerto 10000 180 || log "HiveServer2 no levanto: revisar ${HIVE_HOME}/hiveserver2.log"
+fi
+
+echo
+echo "  ============================================================"
+echo "   Cluster LISTO"
+echo "  ============================================================"
+estado
+
+# ---------------------------------------------------------------------------
+# 5) Mantener PID 1 vivo siguiendo los logs
+# ---------------------------------------------------------------------------
+mkdir -p "${HADOOP_HOME}/logs"
+exec tail -F \
+  "${HADOOP_HOME}"/logs/*.log \
+  "${HIVE_HOME}"/metastore.log \
+  "${HIVE_HOME}"/hiveserver2.log 2>/dev/null

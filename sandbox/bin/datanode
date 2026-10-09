@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# datanode              -> lista los DataNodes
+# datanode stop N       -> apaga el DataNode N (simula que se cae ese nodo)
+# datanode start N      -> lo vuelve a prender; si N > DATANODES, suma un nodo nuevo
+set -e
+. /opt/sandbox/lib.sh
+
+uso() {
+  echo "Uso: datanode                 lista los DataNodes"
+  echo "     datanode stop N          apaga el DataNode N (1-9)"
+  echo "     datanode start N         prende el DataNode N (si no existia, lo agrega)"
+  exit 1
+}
+
+listar() {
+  local i
+  for i in $(seq 1 9); do
+    if [ "$i" -le "$DATANODES" ] || corriendo "dn$i" datanode; then
+      if corriendo "dn$i" datanode; then st=arriba; else st=APAGADO; fi
+      printf '  DataNode %s  http://localhost:%s  datos en /hadoop/dfs/dn%s  %s\n' \
+        "$i" "$(dn_http "$i")" "$i" "$st"
+    fi
+  done
+}
+
+accion=${1:-}
+n=${2:-}
+case "$accion" in
+  "") listar; exit 0 ;;
+  start|stop) ;;
+  *) uso ;;
+esac
+[[ "$n" =~ ^[1-9]$ ]] || uso
+
+if [ "$accion" = stop ]; then
+  if ! corriendo "dn$n" datanode; then echo "El DataNode $n ya estaba apagado."; exit 0; fi
+  datanode_stop "$n"
+  echo "DataNode $n apagado."
+  echo "El NameNode lo da por muerto en ~40 s (http://localhost:9870 -> Datanodes)."
+  echo "Despues copia sus bloques a los DataNodes que quedan, si hay lugar para"
+  echo "cumplir la replicacion ($REPLICATION). Seguilo con: hdfs fsck / | tail -20"
+else
+  if corriendo "dn$n" datanode; then echo "El DataNode $n ya estaba prendido."; exit 0; fi
+  datanode_start "$n"
+  echo "DataNode $n prendido: http://localhost:$(dn_http "$n")"
+  if [ "$n" -gt "$DATANODES" ]; then
+    echo "Es un nodo nuevo (DATANODES=$DATANODES): se apaga al reiniciar el contenedor."
+    echo "Para que quede fijo, recrea el contenedor con -e DATANODES=$n."
+  fi
+fi

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# namenode              -> lista los NameNodes y cual esta activo
+# namenode stop N       -> apaga el NameNode N (simula que se cae)
+# namenode start N      -> lo vuelve a prender
+set -e
+. /opt/sandbox/lib.sh
+
+uso() {
+  echo "Uso: namenode                 lista los NameNodes"
+  echo "     namenode stop N          apaga el NameNode N (1-$NAMENODES)"
+  echo "     namenode start N         lo vuelve a prender"
+  exit 1
+}
+
+listar() {
+  local j st
+  for j in $(seq 1 "$NAMENODES"); do
+    st=$(nn_estado "$j")
+    printf '  NameNode %s (nn%s)  http://localhost:%s  %s\n' \
+      "$j" "$j" "$(nn_http "$j")" "${st:-APAGADO}"
+  done
+  ha || echo "  (sin HA: un solo NameNode. Para tener varios, crear el volumen con -e NAMENODES=2)"
+}
+
+accion=${1:-}
+n=${2:-}
+case "$accion" in
+  "") listar; exit 0 ;;
+  start|stop) ;;
+  *) uso ;;
+esac
+[[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "$NAMENODES" ] || uso
+
+if [ "$accion" = stop ]; then
+  if ! corriendo "nn$n" namenode; then echo "El NameNode $n ya estaba apagado."; exit 0; fi
+  namenode_stop "$n"
+  echo "NameNode $n apagado."
+  if ha; then
+    echo "Su ZKFC lo detecta y ZooKeeper le da el 'active' a otro NameNode en unos"
+    echo "segundos. HDFS, Hive y Spark siguen andando. Miralo con: namenode"
+  else
+    echo "Con un solo NameNode, HDFS queda SIN SERVICIO: es el punto unico de falla"
+    echo "(por eso existe la alta disponibilidad). Volvelo a prender: namenode start 1"
+  fi
+else
+  if corriendo "nn$n" namenode; then echo "El NameNode $n ya estaba prendido."; exit 0; fi
+  namenode_start "$n"
+  echo "NameNode $n prendido: http://localhost:$(nn_http "$n")"
+  ha && echo "Vuelve como standby: el activo sigue siendo el que tomo el control."
+  ha || echo "Tarda unos segundos en salir de safe mode."
+fi

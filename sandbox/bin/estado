@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Muestra la arquitectura del cluster: cada proceso, si esta arriba y su UI.
+. /opt/sandbox/lib.sh
+
+VERDE=$'\033[32m'; ROJO=$'\033[31m'; GRIS=$'\033[90m'; NEGRITA=$'\033[1m'; FIN=$'\033[0m'
+
+fila() { # $1=nombre $2=puerto que debe escuchar $3=url o descripcion [$4=nota]
+  local st
+  if escuchando "$2"; then st="${VERDE}arriba${FIN}"; else st="${ROJO}ABAJO ${FIN}"; fi
+  printf '   %-22s %-29s %s %s\n' "$1" "$3" "$st" "${4:-}"
+}
+
+if ha; then
+  modo="$NAMENODES NameNodes en alta disponibilidad (HA)"
+else
+  modo="1 NameNode + Secondary NameNode"
+fi
+
+echo
+echo "  ${NEGRITA}HDFS:${FIN} $modo, $DATANODES DataNode(s)"
+echo "  ${NEGRITA}Replicacion:${FIN} $REPLICATION   ${NEGRITA}Tamano de bloque:${FIN} $BLOCK_SIZE   ${NEGRITA}Servicios:${FIN} $SERVICIOS"
+if [ "$REPLICATION" -gt "$DATANODES" ]; then
+  echo "  ${ROJO}Ojo:${FIN} replicacion $REPLICATION con $DATANODES DataNode(s): los bloques quedan sub-replicados"
+fi
+echo
+echo "  ${NEGRITA}HDFS${FIN}"
+if ha; then
+  fila "ZooKeeper" "$ZK_PORT" "localhost:$ZK_PORT (zkCli.sh)"
+  for k in $(seq 1 "$JOURNALNODES"); do
+    fila "JournalNode $k" "$(jn_http "$k")" "http://localhost:$(jn_http "$k")"
+  done
+  for j in $(seq 1 "$NAMENODES"); do
+    st=$(nn_estado "$j")
+    fila "NameNode $j (nn$j)" "$(nn_http "$j")" "http://localhost:$(nn_http "$j")" "${NEGRITA}${st}${FIN}"
+    fila "  ZKFC de nn$j" "$(zkfc_port "$j")" "(sin UI)"
+  done
+else
+  fila "NameNode" 9870 "http://localhost:9870"
+  fila "Secondary NameNode" "$SNN_HTTP" "http://localhost:$SNN_HTTP"
+fi
+for i in $(seq 1 9); do
+  # Muestra los pedidos en DATANODES y tambien los agregados a mano
+  if [ "$i" -le "$DATANODES" ] || escuchando "$(dn_http "$i")"; then
+    fila "DataNode $i" "$(dn_http "$i")" "http://localhost:$(dn_http "$i")"
+  fi
+done
+
+# Lo que ve el NameNode activo
+if ha; then activo=$(nn_activo); else activo=1; fi
+if [ -n "$activo" ]; then
+  json=$(jmx "$(nn_http "$activo")" "Hadoop:service=NameNode,name=FSNamesystem*")
+  if [ -n "$json" ]; then
+    vivos=$(jmx_valor NumLiveDataNodes <<<"$json")
+    muertos=$(jmx_valor NumDeadDataNodes <<<"$json")
+    bloques=$(jmx_valor BlocksTotal <<<"$json")
+    subrep=$(jmx_valor UnderReplicatedBlocks <<<"$json")
+    faltan=$(jmx_valor MissingBlocks <<<"$json")
+    echo "   ${GRIS}Segun el NameNode: DataNodes vivos $vivos, muertos $muertos | bloques $bloques, sub-replicados $subrep, perdidos $faltan${FIN}"
+  fi
+fi
+
+echo
+if con_yarn; then
+  echo "  ${NEGRITA}YARN / MapReduce${FIN}"
+  fila "ResourceManager" 8088 "http://localhost:8088"
+  fila "NodeManager" 8042 "http://localhost:8042"
+  fila "MapReduce JobHistory" 19888 "http://localhost:19888"
+else
+  echo "  ${GRIS}YARN, MapReduce, Hive y Spark: apagados (SERVICIOS=hdfs)${FIN}"
+fi
+if con_hive_spark; then
+  echo
+  echo "  ${NEGRITA}Hive${FIN}"
+  fila "Metastore" 9083 "thrift://localhost:9083"
+  fila "HiveServer2 (JDBC)" 10000 "jdbc:hive2://localhost:10000"
+  fila "HiveServer2 (UI)" 10002 "http://localhost:10002"
+  echo
+  echo "  ${NEGRITA}Spark${FIN}"
+  fila "History Server" 18080 "http://localhost:18080"
+  printf '   %-22s %-29s %s\n' "Job activo" "http://localhost:4040" "${GRIS}(solo con un spark-shell/pyspark abierto)${FIN}"
+elif con_yarn; then
+  echo "  ${GRIS}Hive y Spark: apagados (SERVICIOS=mapreduce)${FIN}"
+fi
+echo
+echo "  ${GRIS}Comandos: estado | datanode [stop|start N] | namenode [stop|start N]${FIN}"
+echo

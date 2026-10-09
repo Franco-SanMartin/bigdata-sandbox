@@ -1,0 +1,4 @@
+el big data no es magia
+hadoop guarda los datos en bloques
+spark procesa los datos en memoria
+hive traduce sql a trabajos sobre los datos

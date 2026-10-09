@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>@FS@</value>
+  </property>
+  <!-- Solo lo usan los ZKFC en modo HA (NAMENODES >= 2) -->
+  <property>
+    <name>ha.zookeeper.quorum</name>
+    <value>localhost:2181</value>
+  </property>
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/hadoop/tmp</value>
+  </property>
+  <property>
+    <name>hadoop.http.staticuser.user</name>
+    <value>root</value>
+  </property>
+  <!-- Hive (usuario root) necesita impersonar para HiveServer2 -->
+  <property>
+    <name>hadoop.proxyuser.root.hosts</name>
+    <value>*</value>
+  </property>
+  <property>
+    <name>hadoop.proxyuser.root.groups</name>
+    <value>*</value>
+  </property>
+</configuration>

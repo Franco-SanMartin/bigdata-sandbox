@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# jps propio: la imagen trae solo el runtime de Java (JRE), que no incluye el
+# jps del JDK. Igual que el original, lista los procesos Java (PID + clase
+# principal) y suma la instancia de Hadoop: DataNode (dn2), NameNode (nn1)...
+for p in $(pgrep -x java); do
+  clase="" inst="" n=0 salto=0
+  while IFS= read -r -d '' a; do
+    n=$((n + 1))
+    [ "$n" = 1 ] && continue                       # el ejecutable java
+    if [ "$salto" = 1 ]; then salto=0; continue; fi
+    case "$a" in
+      -cp|-classpath) salto=1 ;;
+      -jar)           salto=2 ;;
+      -Dhadoop.id.str=*) inst=${a#*=} ;;
+      -*) ;;
+      *) clase=${a##*.}; break ;;
+    esac
+    if [ "$salto" = 2 ]; then
+      IFS= read -r -d '' a; clase=$(basename "$a"); break
+    fi
+  done < "/proc/$p/cmdline" 2>/dev/null
+  [ -n "$clase" ] || continue
+  if [ -n "$inst" ] && [ "$inst" != root ]; then
+    echo "$p $clase ($inst)"
+  else
+    echo "$p $clase"
+  fi
+done

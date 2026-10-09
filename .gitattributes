@@ -1,0 +1,2 @@
+# Forzar LF: con CRLF (clon en Windows) el entrypoint del contenedor no arranca
+* text=auto eol=lf
