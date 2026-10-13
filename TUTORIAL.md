@@ -57,23 +57,21 @@ conectar al *daemon*, Docker Desktop no está abierto.
 
 ## 2. Conseguir la imagen
 
-Una sola vez. La forma más simple:
+Una sola vez. Se baja de Docker Hub:
 
 ```bash
-docker pull ghcr.io/franki-678/bigdata-sandbox
-docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
+docker pull franki678/bigdata-sandbox
 ```
 
 - Baja ~1,5 GB. Sirve para Windows, Linux y Mac (Intel o M1–M4).
-- El `tag` le pone el nombre corto `bigdata-sandbox`, que es el que usa todo el
-  tutorial.
+- No hace falta cuenta de Docker Hub.
 - ¿Toda la clase con el mismo wifi? Que la baje uno solo y la pase por pendrive
   (`docker save` / `docker load`, README sección 2B).
 
 Comprobá que está:
 
 ```bash
-docker images bigdata-sandbox
+docker images franki678/bigdata-sandbox
 ```
 
 ## 3. Crear el cluster
@@ -101,19 +99,19 @@ docker run -d --name bigdata \
   -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 \
   -v bigdata_hadoop:/hadoop \
   -v "$(pwd)/datos:/datos" \
-  bigdata-sandbox
+  franki678/bigdata-sandbox
 ```
 
 **Windows, PowerShell** (una sola línea):
 
 ```powershell
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox
 ```
 
 **Windows, CMD** (una sola línea):
 
 ```bat
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox
 ```
 
 > ¿Ya tenías un contenedor `bigdata` de antes? Docker va a decir que el nombre

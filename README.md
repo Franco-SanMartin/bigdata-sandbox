@@ -74,11 +74,10 @@ docker version
 
 Tienen que aparecer *Client* y *Server*.
 
-**Paso 2. Bajar la imagen** (una sola vez; ~1,5 GB)
+**Paso 2. Bajar la imagen de Docker Hub** (una sola vez; ~1,5 GB)
 
 ```bash
-docker pull ghcr.io/franki-678/bigdata-sandbox
-docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
+docker pull franki678/bigdata-sandbox
 ```
 
 Toda la clase con el mismo wifi: mejor que la baje uno y la pase por pendrive
@@ -112,19 +111,19 @@ docker run -d --name bigdata \
   -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 \
   -v bigdata_hadoop:/hadoop \
   -v "$(pwd)/datos:/datos" \
-  bigdata-sandbox
+  franki678/bigdata-sandbox
 ```
 
 Windows, PowerShell (una sola línea):
 
 ```powershell
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox
 ```
 
 Windows, CMD (el que muestra `C:\...>`, una sola línea):
 
 ```bat
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox
 ```
 
 Docker crea solo la carpeta `datos/` adentro de tu carpeta de trabajo.
@@ -180,13 +179,13 @@ Los comandos `docker ...` van en la terminal de **tu compu**. El resto
 
 | Cuándo                                   | Comando                                                      |
 |------------------------------------------|--------------------------------------------------------------|
-| **Una sola vez** (por compu)             | Instalar Docker · `docker pull` + `docker tag` (o `docker load` del pendrive) |
+| **Una sola vez** (por compu)             | Instalar Docker · `docker pull franki678/bigdata-sandbox` (o `docker load` del pendrive) |
 | **Una sola vez** (por cluster)           | `docker run ...` (paso 4)                                    |
 | **Cada vez** que lo usás                 | `docker start bigdata` → esperar LISTO (`docker logs -f bigdata`) → `docker exec -it bigdata bash` |
 | Cada vez que necesites otra terminal     | `docker exec -it bigdata bash` (se pueden abrir varias)      |
 | **Cada vez** que terminás                | `exit` (salir) y `docker stop bigdata` (apagar)              |
 | Para **cambiar parámetros** (DataNodes, replicación, bloque, servicios) | `docker rm -f bigdata` y de nuevo `docker run` con otros `-e`. HDFS y las tablas se conservan |
-| Para **actualizar** la imagen            | `docker pull` + `docker tag` de nuevo, `docker rm -f bigdata` y `docker run`. HDFS y las tablas se conservan |
+| Para **actualizar** la imagen            | `docker pull franki678/bigdata-sandbox` de nuevo, `docker rm -f bigdata` y `docker run`. HDFS y las tablas se conservan |
 | Para **empezar de cero** (borrar todo HDFS, Hive y MySQL) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
 | Para mirar qué pasa                      | `docker logs bigdata` (arranque) · `docker stats bigdata` (RAM/CPU) · `docker ps -a` (si está prendido) |
 
@@ -257,7 +256,7 @@ hecha. Para usarla, no.
 | `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark, ZooKeeper y MySQL |
 | `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
 | `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
-| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica |
+| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica en Docker Hub |
 | `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
 
 ## 4. Requisitos
@@ -273,32 +272,36 @@ hecha. Para usarla, no.
 
 ## 5. Conseguir la imagen (una sola vez)
 
-Hay tres formas. Las tres terminan igual: una imagen llamada `bigdata-sandbox`
-en tu compu. Con ese nombre la vas a llamar después.
+La imagen se baja de **Docker Hub**: https://hub.docker.com/r/franki678/bigdata-sandbox.
+Hay tres formas de tenerla; las tres terminan igual: una imagen llamada
+`franki678/bigdata-sandbox` en tu compu, que es la que usa el `docker run`.
 
-### A) Bajarla ya armada (la más simple)
+### A) Bajarla de Docker Hub (la más simple)
 
 ```bash
-docker pull ghcr.io/franki-678/bigdata-sandbox
-docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
+docker pull franki678/bigdata-sandbox
 ```
 
-- `pull` la baja (~1,5 GB, sirve para Windows, Linux y Mac M1–M4).
-- `tag` le pone el nombre corto `bigdata-sandbox` que usa el resto de esta guía.
+- Baja ~1,5 GB y sirve para Windows, Linux y Mac (Intel o M1–M4): Docker elige
+  sola la versión de tu compu.
+- No hace falta cuenta de Docker Hub ni `docker login`.
+- Si te salteás el `pull`, el `docker run` la baja solo la primera vez.
 - No hace falta tener el repo: los ejemplos (datasets y scripts) vienen
   adentro de la imagen y aparecen solos en `datos/ejemplos/`.
-- Para actualizarla más adelante: los mismos dos comandos, y después recreás el
+- Para actualizarla más adelante: el mismo `docker pull`, y después recreás el
   contenedor (`docker rm -f bigdata` + `docker run`; tus datos quedan en el
   volumen).
 
 ### B) Pasarla por pendrive (para una clase entera, sin internet)
 
-Si 20 personas bajan la imagen a la vez por el mismo wifi, tarda muchísimo.
-Mejor que una sola persona la tenga (con A o C) y la pase:
+Si 20 personas bajan la imagen a la vez por el mismo wifi, tarda muchísimo (y
+Docker Hub limita las descargas sin cuenta a unas 100 cada 6 horas por
+conexión: toda una facultad sale por la misma). Mejor que una sola persona la
+tenga (con A o C) y la pase:
 
 ```bash
 # El que la tiene: la guarda en un solo archivo (~3 GB)
-docker save bigdata-sandbox -o bigdata-sandbox.tar
+docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar
 
 # Cada compañero, con el archivo copiado del pendrive (menos de 1 min)
 docker load -i bigdata-sandbox.tar
@@ -312,13 +315,13 @@ más de 4 GB.
 Desde la carpeta del repo:
 
 ```bash
-docker build -t bigdata-sandbox .
+docker build -t franki678/bigdata-sandbox .
 ```
 
 - Tarda ~5-10 min la primera vez (baja ~1,6 GB de Apache). Si cambiás algo y
   la volvés a buildear, reusa lo ya bajado.
-- Es lo que hace GitHub cada vez que cambia el código, para publicar la imagen
-  de la opción A (`.github/workflows/imagen.yml`).
+- Es lo que hace GitHub cada vez que cambia el código: la arma, la prueba y la
+  publica en Docker Hub para la opción A (`.github/workflows/imagen.yml`).
 
 ## 6. Crear el contenedor y todos sus parámetros
 
@@ -332,7 +335,7 @@ El `docker run` del paso 4, parte por parte:
 | `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos. Formato `-p <puerto en tu compu>:<puerto adentro>` |
 | `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS, el metastore y la base MySQL: **tus datos persisten** |
 | `-v .../datos:/datos`          | La carpeta `datos/` de tu compu aparece adentro como `/datos`      |
-| `bigdata-sandbox`              | La imagen (sección 5)                                              |
+| `franki678/bigdata-sandbox`              | La imagen (sección 5)                                              |
 
 La única diferencia entre consolas es cómo se escribe "la carpeta actual":
 `$(pwd)` en Mac/Linux, `${PWD}` en PowerShell, `%cd%` en CMD. Si usás la de
@@ -372,22 +375,22 @@ En lugar de `<...>` van los `-p` y `-v` del paso 4.
 
 ```bash
 # Todo por defecto: 1 NameNode (+ Secondary), 1 DataNode, replicación 1, bloque 128m
-docker run -d --name bigdata <...> bigdata-sandbox
+docker run -d --name bigdata <...> franki678/bigdata-sandbox
 
 # Para ver replicación: 3 DataNodes, cada bloque en 2 de ellos, bloques chicos (la del paso 4)
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> franki678/bigdata-sandbox
 
 # Para entrar a MySQL desde tu compu (DBeaver, Workbench...): sumar -p 3306:3306
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 3306:3306 <...> bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 3306:3306 <...> franki678/bigdata-sandbox
 
 # Alta disponibilidad: 2 NameNodes + 3 DataNodes con replicación 3
-docker run -d --name bigdata -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=3 <...> bigdata-sandbox
+docker run -d --name bigdata -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=3 <...> franki678/bigdata-sandbox
 
 # Clase de HDFS: solo HDFS, liviano y rápido de arrancar
-docker run -d --name bigdata -e SERVICIOS=hdfs -e DATANODES=3 -e REPLICATION=2 <...> bigdata-sandbox
+docker run -d --name bigdata -e SERVICIOS=hdfs -e DATANODES=3 -e REPLICATION=2 <...> franki678/bigdata-sandbox
 
 # Clase de MapReduce, Pig y Sqoop, sin Hive ni Spark
-docker run -d --name bigdata -e SERVICIOS=mapreduce -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
+docker run -d --name bigdata -e SERVICIOS=mapreduce -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> franki678/bigdata-sandbox
 ```
 
 ### Cambiar los parámetros
@@ -397,7 +400,7 @@ de HDFS, las tablas de Hive y la base MySQL quedan en el volumen:
 
 ```bash
 docker rm -f bigdata
-docker run -d --name bigdata -e DATANODES=4 <...> bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=4 <...> franki678/bigdata-sandbox
 ```
 
 - `DATANODES`, `REPLICATION`, `BLOCK_SIZE` y `SERVICIOS` se pueden cambiar
@@ -820,11 +823,10 @@ Detalle y ejemplos de cada herramienta (Sqoop incluido): [TUTORIAL, paso 15](TUT
 
 | Comando                                  | Qué hace                                               |
 |------------------------------------------|--------------------------------------------------------|
-| `docker pull ghcr.io/franki-678/bigdata-sandbox` | Baja (o actualiza) la imagen                   |
-| `docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox` | Le pone el nombre corto         |
-| `docker save bigdata-sandbox -o bigdata-sandbox.tar` | Guarda la imagen en un archivo (para el pendrive) |
+| `docker pull franki678/bigdata-sandbox`  | Baja (o actualiza) la imagen de Docker Hub             |
+| `docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar` | Guarda la imagen en un archivo (para el pendrive) |
 | `docker load -i bigdata-sandbox.tar`     | Carga la imagen desde ese archivo                      |
-| `docker build -t bigdata-sandbox .`      | Arma la imagen desde el repo                           |
+| `docker build -t franki678/bigdata-sandbox .`      | Arma la imagen desde el repo                           |
 | `docker run -d --name bigdata ...`       | Crea y prende el contenedor (una sola vez; sección 6)  |
 | `docker start bigdata` / `docker stop bigdata` | Prender / apagar                                 |
 | `docker restart bigdata`                 | Apagar y prender                                       |
@@ -1009,7 +1011,8 @@ Después repetís el `docker run` (con los `-e` que quieras).
 | Muchos `WARN` al correr `sqoop`                 | Normales (avisos de Hadoop y de la contraseña en la línea de comandos). Lo que importa es el final: `Transferred ...` / `Exported N records` |
 | `Unable to load native-hadoop library`          | Warning normal; Hadoop usa la versión Java. No afecta          |
 | `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 1, paso 4) |
-| `docker pull` dice `denied` o `unauthorized`     | La imagen publicada todavía no es pública: avisale a quien mantiene el repo |
+| `docker pull` dice `toomanyrequests`             | Se llegó al límite de descargas de Docker Hub sin cuenta (~100 cada 6 h por conexión). Esperá, entrá con una cuenta gratis (`docker login`) o pasala por pendrive (sección 5B) |
+| `docker pull` dice `denied` o `not found`        | Revisá el nombre: `franki678/bigdata-sandbox` (sin guion en `franki678`) |
 
 ## Notas
 

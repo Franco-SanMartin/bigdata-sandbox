@@ -1,6 +1,9 @@
 # Arma la imagen, la PRUEBA de punta a punta (pruebas/probar.sh: el paso a paso
 # de TUTORIAL.md con MapReduce, Pig, Hive, Spark y Sqoop) y, si todo da bien, la
-# publica en ghcr.io/franki-678/bigdata-sandbox para bajarla con 'docker pull'.
+# publica en Docker Hub (franki678/bigdata-sandbox) para bajarla con 'docker pull'.
+# Necesita en el repo (Settings > Secrets and variables > Actions) la variable
+# DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token de Docker Hub con
+# permiso Read & Write; cuando vence, hay que generar otro y reemplazarlo).
 # Corre sola cuando cambia el codigo en main, o a mano desde la pestaña Actions
 # ("Run workflow").
 name: Imagen
@@ -13,10 +16,9 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
-  IMAGEN: ghcr.io/franki-678/bigdata-sandbox:latest
+  IMAGEN: docker.io/franki678/bigdata-sandbox:latest
 
 jobs:
   imagen:
@@ -36,7 +38,7 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
-          tags: bigdata-sandbox
+          tags: franki678/bigdata-sandbox
           # Cache de capas en GitHub: si solo cambian scripts o ejemplos, no
           # vuelve a bajar todo de Apache (lo que mas tarda)
           cache-from: type=gha
@@ -47,7 +49,7 @@ jobs:
         run: |
           docker run -d --name bigdata \
             -e DATANODES=2 -e REPLICATION=2 -e BLOCK_SIZE=1m \
-            -v "$PWD/datos-prueba:/datos" bigdata-sandbox
+            -v "$PWD/datos-prueba:/datos" franki678/bigdata-sandbox
           for i in $(seq 1 60); do
             if docker logs bigdata 2>&1 | grep -q 'Cluster LISTO'; then exit 0; fi
             if [ "$(docker inspect -f '{{.State.Running}}' bigdata)" != true ]; then break; fi
@@ -71,9 +73,8 @@ jobs:
       # 4. Recien ahora, publicar amd64 + arm64 (reusa lo ya armado)
       - uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Publicar (amd64 + arm64)
         uses: docker/build-push-action@v6
