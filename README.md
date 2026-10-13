@@ -34,7 +34,42 @@ ZooKeeper 3.8.7 · Java 8 · Python 3.8
   - Lo que usa en cada momento: `docker stats bigdata`.
 - ~3 GB de disco para la imagen.
 
-## 2. Crear la imagen (una sola vez)
+## 2. Conseguir la imagen (una sola vez)
+
+Hay tres formas. Las tres terminan igual: una imagen llamada `bigdata-sandbox`
+en tu compu. Con ese nombre la vas a llamar después.
+
+### A) Bajarla ya armada (la más simple)
+
+```bash
+docker pull ghcr.io/franki-678/bigdata-sandbox
+docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
+```
+
+- `pull` la baja (~1,5 GB, sirve para Windows, Linux y Mac M1–M4).
+- `tag` le pone el nombre corto `bigdata-sandbox` que usa el resto de esta guía.
+- No hace falta tener el repo: los archivos de ejemplo (`ventas.csv`,
+  `texto.txt`) vienen adentro de la imagen y aparecen solos en `datos/`.
+- Para actualizarla más adelante: los mismos dos comandos, y después recreás el
+  contenedor (sección 3; tus datos quedan en el volumen).
+
+### B) Pasarla por pendrive (para una clase entera, sin internet)
+
+Si 20 personas bajan la imagen a la vez por el mismo wifi, tarda muchísimo.
+Mejor que una sola persona la tenga (con A o C) y la pase:
+
+```bash
+# El que la tiene: la guarda en un solo archivo (~3 GB)
+docker save bigdata-sandbox -o bigdata-sandbox.tar
+
+# Cada compañero, con el archivo copiado del pendrive (menos de 1 min)
+docker load -i bigdata-sandbox.tar
+```
+
+El pendrive tiene que estar en **exFAT o NTFS**: FAT32 no acepta archivos de
+más de 4 GB.
+
+### C) Armarla desde el código
 
 Desde la carpeta del repo:
 
@@ -42,12 +77,15 @@ Desde la carpeta del repo:
 docker build -t bigdata-sandbox .
 ```
 
-- `bigdata-sandbox` es el **nombre de la imagen**. Con ese nombre la vas a llamar
-  después.
 - Tarda ~5 min la primera vez (baja ~1,5 GB de Apache). Si cambiás algo y la
   volvés a buildear, reusa lo ya bajado.
+- Es lo que hace GitHub cada vez que cambia el código, para publicar la imagen
+  de la opción A (`.github/workflows/imagen.yml`).
 
 ## 3. Crear el contenedor (una sola vez)
+
+Pararte primero en la carpeta donde quieras tener tus archivos (la del repo, o
+cualquier otra): ahí se crea `datos/`, que el contenedor ve como `/datos`.
 
 **Mac / Linux:**
 
@@ -68,6 +106,16 @@ docker run -d --name bigdata \
 docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=32m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" bigdata-sandbox
 ```
 
+**Windows (CMD, el que muestra `C:\...>`), en una sola línea:**
+
+```bat
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=32m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" bigdata-sandbox
+```
+
+La única diferencia es cómo se escribe "la carpeta actual": `$(pwd)` en
+Mac/Linux, `${PWD}` en PowerShell, `%cd%` en CMD. Si usás la de otra consola,
+Docker se queja de `invalid characters for a local volume name`.
+
 Qué es cada parte:
 
 | Parte                          | Significado                                                        |
@@ -76,8 +124,8 @@ Qué es cada parte:
 | `-e DATANODES=3` …             | La arquitectura de HDFS (ver abajo). Si no ponés ninguno, todo vale 1 |
 | `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos |
 | `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS y el metastore: **tus datos persisten**   |
-| `-v .../datos:/datos`          | La carpeta `datos/` del repo aparece adentro como `/datos`         |
-| `bigdata-sandbox`              | La imagen que creaste en el paso 2                                 |
+| `-v .../datos:/datos`          | La carpeta `datos/` de tu compu aparece adentro como `/datos`      |
+| `bigdata-sandbox`              | La imagen del paso 2                                               |
 
 ### Parámetros de la arquitectura
 
@@ -382,6 +430,8 @@ Después repetís el paso 3 (con los `-e` que quieras).
 | El contenedor se cae solo                       | Poca RAM en Docker (ver requisitos). Mirá `docker logs bigdata` |
 | Abrí un 2º pyspark y la UI no está en :4040     | La segunda sesión usa :4041, que no está expuesto. Usá :8088 → *ApplicationMaster* |
 | `Unable to load native-hadoop library`          | Warning normal; Hadoop usa la versión Java. No afecta          |
+| `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 3: Mac/Linux, PowerShell o CMD) |
+| `docker pull` dice `denied` o `unauthorized`     | La imagen publicada todavía no es pública: avisale a quien mantiene el repo |
 
 ## Notas
 
@@ -396,7 +446,8 @@ Después repetís el paso 3 (con los `-e` que quieras).
   - `/opt/spark/logs/`
   - `/opt/zookeeper/logs/`
 - Se buildea desde los binarios oficiales de Apache, sin imágenes de terceros:
-  sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4).
+  sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4). La imagen publicada trae
+  las dos y Docker baja sola la que corresponde.
 - Para que entre en una notebook:
   - Cada daemon tiene un tope de memoria chico y una JVM liviana (`sandbox/lib.sh`).
   - La imagen usa el runtime de Java (JRE) y no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C (`Dockerfile`).

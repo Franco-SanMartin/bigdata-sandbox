@@ -1,0 +1,41 @@
+# Arma la imagen y la publica en ghcr.io/franki-678/bigdata-sandbox, para que
+# se pueda bajar con 'docker pull' sin buildear. Corre sola cuando cambia el
+# codigo en main, o a mano desde la pestaña Actions ("Run workflow").
+name: Imagen
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'datos/README.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  imagen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU: para armar tambien la version ARM64 (Mac M1-M4)
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ghcr.io/franki-678/bigdata-sandbox:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Hadoop + Hive + Spark en un solo contenedor

@@ -1,3 +1,7 @@
 .git
-datos
+.github
 README.md
+# datos/ no entra a la imagen, salvo los ejemplos
+datos/*
+!datos/ventas.csv
+!datos/texto.txt

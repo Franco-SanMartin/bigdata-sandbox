@@ -115,6 +115,9 @@ COPY conf/spark-hive-site.xml  ${SPARK_HOME}/conf/hive-site.xml
 COPY conf/zoo.cfg              ${ZK_HOME}/conf/zoo.cfg
 COPY sandbox/                  /opt/sandbox/
 COPY entrypoint.sh             /opt/entrypoint.sh
+# Archivos de ejemplo: se copian a /datos al arrancar, para quien baja la
+# imagen ya armada y no tiene el repo
+COPY datos/ventas.csv datos/texto.txt /opt/sandbox/ejemplos/
 # sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan
 RUN sed -i 's/\r$//' /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin/* \
  && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* && mkdir -p /datos
