@@ -1,4 +1,4 @@
-# BigData Sandbox — Hadoop + Hive + Spark en un solo contenedor
+# BigData Sandbox — Hadoop + Pig + Hive + Spark en un solo contenedor
 
 Una **sola imagen** y un **solo contenedor**, pero con un **cluster Hadoop real**
 adentro: cada componente corre como proceso separado y tiene su propia página
@@ -11,30 +11,259 @@ bloque. Nada de caja negra.
 | **HDFS**: NameNode(s), Secondary NameNode, 1 a 9 DataNodes | Sistema de archivos distribuido |
 | **HDFS HA** (opcional): ZooKeeper, 3 JournalNodes, ZKFC | Alta disponibilidad del NameNode |
 | **YARN** (ResourceManager + NodeManager) | Reparte CPU/memoria entre los trabajos   |
-| **MapReduce** + JobHistory        | El clásico wordcount y compañía                 |
+| **MapReduce** + JobHistory        | El clásico wordcount y compañía (en Java o en Python con Hadoop Streaming) |
+| **Pig**                           | Pig Latin: procesamiento paso a paso, se traduce a trabajos MapReduce |
 | **Hive 4** (Metastore + HiveServer2, sobre Tez) | SQL sobre HDFS                    |
 | **Spark 3.5** + PySpark + History Server | Procesamiento en memoria, corre sobre YARN |
 
 Hive y Spark comparten el mismo metastore: una tabla creada en uno se ve en el
 otro. Todos los datos viven en HDFS.
 
-Versiones: Hadoop 3.3.6 · Hive 4.0.0 · Tez 0.10.3 · Spark 3.5.9 ·
+Versiones: Hadoop 3.3.6 · Pig 0.18.0 · Hive 4.0.0 · Tez 0.10.3 · Spark 3.5.9 ·
 ZooKeeper 3.8.7 · Java 8 · Python 3.8
+
+**Cómo leer esta guía**
+
+- **Sección 1** es el arranque rápido: de una compu sin nada a tener el cluster
+  andando, en 8 pasos.
+- **Sección 2** dice qué comando se usa **una sola vez** y cuál **cada vez**.
+- **Sección 3** explica qué carpetas y archivos hay, en tu compu y adentro.
+- El [**TUTORIAL**](TUTORIAL.md) sigue desde ahí: procesar un dataset de
+  200.000 ventas con MapReduce, Pig, Hive y Spark, con lo que tiene que salir
+  en cada paso, y cómo hacer lo mismo con **tu propio CSV**.
+- El resto del README es la referencia: todos los parámetros, todos los
+  comandos, experimentos y problemas comunes.
+
+## Índice
+
+1. [Arranque rápido: de cero al cluster andando](#1-arranque-rápido-de-cero-al-cluster-andando)
+2. [Qué comando, cuándo](#2-qué-comando-cuándo)
+3. [Carpetas y archivos](#3-carpetas-y-archivos)
+4. [Requisitos](#4-requisitos)
+5. [Conseguir la imagen](#5-conseguir-la-imagen-una-sola-vez)
+6. [Crear el contenedor y todos sus parámetros](#6-crear-el-contenedor-y-todos-sus-parámetros)
+7. [Uso diario](#7-uso-diario)
+8. [Ver la arquitectura](#8-ver-la-arquitectura)
+9. [Experimentos de arquitectura](#9-experimentos-de-arquitectura)
+10. [Ejemplos: MapReduce, Pig, Hive y Spark](#10-ejemplos-mapreduce-pig-hive-y-spark)
+11. [Referencia de comandos](#11-referencia-de-comandos)
+12. [Empezar de cero](#12-empezar-de-cero)
+13. [Problemas comunes](#13-problemas-comunes)
+14. [Notas](#notas)
 
 ---
 
-## 1. Requisitos
+## 1. Arranque rápido: de cero al cluster andando
+
+No hace falta clonar este repo ni bajar ningún archivo: solo Docker y la
+imagen. Los ejemplos vienen adentro de la imagen.
+
+**Paso 1. Instalar Docker** (una sola vez)
+
+Docker Desktop (Windows o Mac) desde https://www.docker.com/products/docker-desktop/,
+o Docker Engine en Linux. Abrilo, y en *Settings → Resources → Memory* dale
+**6 GB** o más. Comprobá que anda:
+
+```bash
+docker version
+```
+
+Tienen que aparecer *Client* y *Server*.
+
+**Paso 2. Bajar la imagen** (una sola vez; ~1,5 GB)
+
+```bash
+docker pull ghcr.io/franki-678/bigdata-sandbox
+docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
+```
+
+Toda la clase con el mismo wifi: mejor que la baje uno y la pase por pendrive
+(sección 5B).
+
+**Paso 3. Crear una carpeta de trabajo y pararte en ella** (una sola vez)
+
+Una carpeta nueva y vacía, donde quieras. Por ejemplo:
+
+```bash
+mkdir bigdata
+cd bigdata
+```
+
+En Windows puede ser `C:\bigdata` (en el Explorador: clic en la barra de
+dirección, escribir `cmd` y Enter abre una consola parada ahí).
+
+**Paso 4. Crear el cluster** (una sola vez)
+
+Elegí el comando de **tu** consola. Este arma 3 DataNodes, cada bloque
+replicado 2 veces y bloques de 1 MB (los parámetros se explican en la
+sección 6):
+
+Mac / Linux:
+
+```bash
+docker run -d --name bigdata \
+  -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m \
+  -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 \
+  -p 8088:8088 -p 8042:8042 -p 19888:19888 \
+  -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 \
+  -v bigdata_hadoop:/hadoop \
+  -v "$(pwd)/datos:/datos" \
+  bigdata-sandbox
+```
+
+Windows, PowerShell (una sola línea):
+
+```powershell
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" bigdata-sandbox
+```
+
+Windows, CMD (el que muestra `C:\...>`, una sola línea):
+
+```bat
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" bigdata-sandbox
+```
+
+Docker crea solo la carpeta `datos/` adentro de tu carpeta de trabajo.
+
+**Paso 5. Esperar el cartel "Cluster LISTO"** (~1-2 min)
+
+```bash
+docker logs -f bigdata
+```
+
+Cuando aparece **Cluster LISTO**, abajo se ve cada proceso con su estado y su
+página web. `Ctrl+C` para salir del log (el cluster sigue prendido).
+
+**Paso 6. Abrir las páginas web**
+
+http://localhost:9870 (HDFS) y http://localhost:8088 (YARN, donde aparecen
+todos los trabajos). Las demás, en la sección 8.
+
+**Paso 7. Entrar al cluster y probar**
+
+```bash
+docker exec -it bigdata bash
+```
+
+El prompt cambia a `root@...:/datos#`: estás **adentro**. Probá:
+
+```bash
+estado                                  # todos los procesos y su web
+ls ejemplos                             # los ejemplos
+hdfs dfs -put ejemplos/texto.txt /user/root/
+hdfs dfs -ls /user/root
+pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig
+exit                                    # volver a tu compu
+```
+
+De acá en adelante, el [TUTORIAL](TUTORIAL.md) (desde su paso 5) o la
+sección 10.
+
+**Paso 8. Apagarlo cuando termines**
+
+```bash
+docker stop bigdata
+```
+
+Al otro día: `docker start bigdata`, esperar el LISTO, y `docker exec -it
+bigdata bash`. **No** repetir el `docker run`.
+
+## 2. Qué comando, cuándo
+
+Los comandos `docker ...` van en la terminal de **tu compu**. El resto
+(`hdfs`, `pig`, `beeline`, `estado`...), **adentro** del contenedor, después de
+`docker exec -it bigdata bash`.
+
+| Cuándo                                   | Comando                                                      |
+|------------------------------------------|--------------------------------------------------------------|
+| **Una sola vez** (por compu)             | Instalar Docker · `docker pull` + `docker tag` (o `docker load` del pendrive) |
+| **Una sola vez** (por cluster)           | `docker run ...` (paso 4)                                    |
+| **Cada vez** que lo usás                 | `docker start bigdata` → esperar LISTO (`docker logs -f bigdata`) → `docker exec -it bigdata bash` |
+| Cada vez que necesites otra terminal     | `docker exec -it bigdata bash` (se pueden abrir varias)      |
+| **Cada vez** que terminás                | `exit` (salir) y `docker stop bigdata` (apagar)              |
+| Para **cambiar parámetros** (DataNodes, replicación, bloque, servicios) | `docker rm -f bigdata` y de nuevo `docker run` con otros `-e`. HDFS y las tablas se conservan |
+| Para **actualizar** la imagen            | `docker pull` + `docker tag` de nuevo, `docker rm -f bigdata` y `docker run`. HDFS y las tablas se conservan |
+| Para **empezar de cero** (borrar todo HDFS y Hive) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
+| Para mirar qué pasa                      | `docker logs bigdata` (arranque) · `docker stats bigdata` (RAM/CPU) · `docker ps -a` (si está prendido) |
+
+Errores típicos:
+
+- Repetir `docker run` todos los días: falla con *the container name
+  "/bigdata" is already in use*. El contenedor ya existe: `docker start bigdata`.
+- Correr `hdfs` o `pig` en la terminal de tu compu: dice *command not found*.
+  Primero `docker exec -it bigdata bash`.
+- Correr un `docker ...` adentro del contenedor: lo mismo. Primero `exit`.
+
+## 3. Carpetas y archivos
+
+### En tu compu
+
+```
+bigdata/                   <- tu carpeta de trabajo (paso 3), el nombre que quieras
+└── datos/                 <- la crea el docker run. Adentro del contenedor es /datos
+    ├── ejemplos/          <- aparecen solos al prender el contenedor
+    │   ├── ventas.csv          7 ventas para mirar a ojo
+    │   ├── generar_ventas.py   genera un dataset de ventas grande
+    │   ├── mapper.py           ventas por producto en MapReduce (Python)
+    │   ├── reducer.py
+    │   ├── ventas.pig          lo mismo en Pig
+    │   ├── ventas.hql          lo mismo en Hive (SQL)
+    │   ├── ventas.py           lo mismo en Spark (PySpark)
+    │   ├── texto.txt           texto para el wordcount
+    │   └── wordcount.pig       wordcount en Pig
+    └── (tus archivos)     <- tus CSV, scripts y lo que bajes de HDFS
+```
+
+- Todo lo que pongas en `datos/` (con el Explorador, Finder o un editor) se ve
+  adentro en `/datos`, y al revés. Es la forma de pasar archivos.
+- Si editás un ejemplo, queda tu versión. Para recuperar el original: borralo y
+  `docker restart bigdata`.
+- Podés tener varias carpetas de trabajo, pero el `-v .../datos:/datos` del
+  `docker run` apunta a una sola: la carpeta donde estabas parado cuando lo
+  corriste.
+
+### Adentro del contenedor
+
+| Dónde                  | Qué es                                                      |
+|------------------------|-------------------------------------------------------------|
+| `/datos`               | Tu carpeta `datos/`. Ahí arrancás al entrar                 |
+| HDFS `/user/root/...`  | El sistema de archivos distribuido: se ve con `hdfs dfs -ls`, no con `ls`. Es lo que leen MapReduce, Pig, Hive y Spark |
+| `/hadoop`              | Disco del cluster: los bloques de cada DataNode, metadatos del NameNode y el metastore de Hive. Vive en el **volumen** `bigdata_hadoop`: sobrevive a `docker stop`, `docker rm` y a actualizar la imagen. Solo se borra con `docker volume rm` |
+| `/opt/hadoop`, `/opt/pig`, `/opt/hive`, `/opt/spark`... | Los programas y sus logs              |
+
+Un archivo pasa de tu compu al cluster así: lo dejás en `datos/` →
+`hdfs dfs -put` lo sube de `/datos` a HDFS → se procesa → `hdfs dfs -get` baja
+el resultado a `/datos` → lo abrís en tu compu.
+
+### Este repo
+
+Solo hace falta para **armar** la imagen (sección 5C) o para leer cómo está
+hecha. Para usarla, no.
+
+| Archivo                      | Qué es                                                  |
+|------------------------------|---------------------------------------------------------|
+| `Dockerfile`                 | Cómo se arma la imagen: baja Hadoop, Pig, Hive, Tez, Spark y ZooKeeper de Apache |
+| `entrypoint.sh`              | Lo que corre al prender el contenedor: genera la configuración según los `-e` y arranca cada proceso en orden |
+| `sandbox/lib.sh`             | Funciones comunes: generar el `hdfs-site.xml`, prender/apagar nodos, memoria de cada daemon |
+| `sandbox/bin/`               | Los comandos `estado`, `datanode`, `namenode` y `jps`   |
+| `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark y ZooKeeper |
+| `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
+| `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
+| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica |
+| `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
+
+## 4. Requisitos
 
 - **Docker Desktop** (Windows/Mac) o Docker Engine (Linux).
 - **RAM asignada a Docker** (Docker Desktop: *Settings → Resources → Memory*):
   - Con todo prendido (por defecto): **6 GB**.
   - Con alta disponibilidad (`NAMENODES=2` o más): **8 GB**.
-  - Solo HDFS (`SERVICIOS=hdfs`, ver sección 3): **4 GB** alcanzan.
+  - Solo HDFS (`SERVICIOS=hdfs`, ver sección 6): **4 GB** alcanzan.
   - Cada DataNode extra suma ~250 MB.
   - Lo que usa en cada momento: `docker stats bigdata`.
 - ~3 GB de disco para la imagen.
 
-## 2. Conseguir la imagen (una sola vez)
+## 5. Conseguir la imagen (una sola vez)
 
 Hay tres formas. Las tres terminan igual: una imagen llamada `bigdata-sandbox`
 en tu compu. Con ese nombre la vas a llamar después.
@@ -48,10 +277,11 @@ docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox
 
 - `pull` la baja (~1,5 GB, sirve para Windows, Linux y Mac M1–M4).
 - `tag` le pone el nombre corto `bigdata-sandbox` que usa el resto de esta guía.
-- No hace falta tener el repo: los archivos de ejemplo (`ventas.csv`,
-  `texto.txt`) vienen adentro de la imagen y aparecen solos en `datos/`.
+- No hace falta tener el repo: los ejemplos (datasets y scripts) vienen
+  adentro de la imagen y aparecen solos en `datos/ejemplos/`.
 - Para actualizarla más adelante: los mismos dos comandos, y después recreás el
-  contenedor (sección 3; tus datos quedan en el volumen).
+  contenedor (`docker rm -f bigdata` + `docker run`; tus datos quedan en el
+  volumen).
 
 ### B) Pasarla por pendrive (para una clase entera, sin internet)
 
@@ -77,73 +307,63 @@ Desde la carpeta del repo:
 docker build -t bigdata-sandbox .
 ```
 
-- Tarda ~5 min la primera vez (baja ~1,5 GB de Apache). Si cambiás algo y la
-  volvés a buildear, reusa lo ya bajado.
+- Tarda ~5-10 min la primera vez (baja ~1,6 GB de Apache). Si cambiás algo y
+  la volvés a buildear, reusa lo ya bajado.
 - Es lo que hace GitHub cada vez que cambia el código, para publicar la imagen
   de la opción A (`.github/workflows/imagen.yml`).
 
-## 3. Crear el contenedor (una sola vez)
+## 6. Crear el contenedor y todos sus parámetros
 
-Pararte primero en la carpeta donde quieras tener tus archivos (la del repo, o
-cualquier otra): ahí se crea `datos/`, que el contenedor ve como `/datos`.
-
-**Mac / Linux:**
-
-```bash
-docker run -d --name bigdata \
-  -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=32m \
-  -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 \
-  -p 8088:8088 -p 8042:8042 -p 19888:19888 \
-  -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 \
-  -v bigdata_hadoop:/hadoop \
-  -v "$(pwd)/datos:/datos" \
-  bigdata-sandbox
-```
-
-**Windows (PowerShell), en una sola línea:**
-
-```powershell
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=32m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" bigdata-sandbox
-```
-
-**Windows (CMD, el que muestra `C:\...>`), en una sola línea:**
-
-```bat
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=32m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" bigdata-sandbox
-```
-
-La única diferencia es cómo se escribe "la carpeta actual": `$(pwd)` en
-Mac/Linux, `${PWD}` en PowerShell, `%cd%` en CMD. Si usás la de otra consola,
-Docker se queja de `invalid characters for a local volume name`.
-
-Qué es cada parte:
+El `docker run` del paso 4, parte por parte:
 
 | Parte                          | Significado                                                        |
 |--------------------------------|--------------------------------------------------------------------|
-| `--name bigdata`               | Nombre del **contenedor**. Con ese nombre lo manejás de acá en más |
-| `-e DATANODES=3` …             | La arquitectura de HDFS (ver abajo). Si no ponés ninguno, todo vale 1 |
-| `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos |
+| `-d`                           | Corre en segundo plano: te devuelve la consola                     |
+| `--name bigdata`               | Nombre del **contenedor**. Con ese nombre lo manejás de acá en más (`start`, `stop`, `exec`, `logs`) |
+| `-e DATANODES=3` …             | La arquitectura del cluster (tabla de abajo). Los que no pongas toman su valor por defecto |
+| `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos. Formato `-p <puerto en tu compu>:<puerto adentro>` |
 | `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS y el metastore: **tus datos persisten**   |
 | `-v .../datos:/datos`          | La carpeta `datos/` de tu compu aparece adentro como `/datos`      |
-| `bigdata-sandbox`              | La imagen del paso 2                                               |
+| `bigdata-sandbox`              | La imagen (sección 5)                                              |
 
-### Parámetros de la arquitectura
+La única diferencia entre consolas es cómo se escribe "la carpeta actual":
+`$(pwd)` en Mac/Linux, `${PWD}` en PowerShell, `%cd%` en CMD. Si usás la de
+otra consola, Docker se queja de `invalid characters for a local volume name`.
+
+### Parámetros (`-e`)
 
 | Parámetro     | Qué elige                                   | Por defecto | Valores          |
 |---------------|---------------------------------------------|-------------|------------------|
 | `DATANODES`   | Cantidad de DataNodes (procesos que guardan los bloques) | 1 | 1 a 9   |
 | `NAMENODES`   | Cantidad de NameNodes. Con 2 o más se arma **alta disponibilidad**: uno *active*, el resto *standby*, y si el activo se cae otro toma el control solo | 1 | 1 a 3 |
-| `REPLICATION` | Copias de cada bloque, cada una en un DataNode distinto | 1 | 1 a 9 |
-| `BLOCK_SIZE`  | Tamaño de bloque: un archivo se parte en bloques de este tamaño | 128m | `1m`, `32m`, `128m`, `1g`… (mínimo 1m) |
+| `REPLICATION` | Copias de cada bloque, cada una en un DataNode distinto. Si es mayor que `DATANODES`, los bloques quedan sub-replicados (`estado` lo avisa) | 1 | 1 a 9 |
+| `BLOCK_SIZE`  | Tamaño de bloque: un archivo se parte en bloques de este tamaño. Chico (`1m`) para ver muchos bloques con archivos chicos; `128m` es el de un cluster real | 128m | número + `m` o `g`: `1m`, `32m`, `128m`, `1g`… (mínimo 1m) |
 | `SERVICIOS`   | Qué se prende además de HDFS (ver abajo)    | todo        | `hdfs`, `mapreduce`, `todo` |
 
-Ejemplos:
+Si un valor está mal escrito, el contenedor se apaga y `docker logs bigdata`
+dice cuál (`[sandbox] ERROR: ...`).
+
+`SERVICIOS` elige qué capas del stack se prenden, para no gastar memoria en lo
+que la clase no usa:
+
+| `SERVICIOS` | Qué corre                                          | RAM para Docker |
+|-------------|----------------------------------------------------|-----------------|
+| `hdfs`      | Solo HDFS (NameNodes, DataNodes y compañía). El más liviano y el que más rápido arranca | 4 GB |
+| `mapreduce` | HDFS + YARN + MapReduce (wordcount, JobHistory) + Pig | 5 GB |
+| `todo`      | Lo anterior + Hive + Spark (por defecto). Hive es lo que más tarda en arrancar (~1 min) | 6 GB |
+
+Pig no es un servicio: es un comando que manda trabajos MapReduce a YARN. Con
+`SERVICIOS=hdfs` (YARN apagado) se usa en modo local: `pig -x local`.
+
+### Combinaciones típicas
+
+En lugar de `<...>` van los `-p` y `-v` del paso 4.
 
 ```bash
 # Todo por defecto: 1 NameNode (+ Secondary), 1 DataNode, replicación 1, bloque 128m
-docker run -d --name bigdata <puertos y volúmenes> bigdata-sandbox
+docker run -d --name bigdata <...> bigdata-sandbox
 
-# Para ver replicación: 3 DataNodes, cada bloque en 2 de ellos, bloques chicos
+# Para ver replicación: 3 DataNodes, cada bloque en 2 de ellos, bloques chicos (la del paso 4)
 docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
 
 # Alta disponibilidad: 2 NameNodes + 3 DataNodes con replicación 3
@@ -151,35 +371,31 @@ docker run -d --name bigdata -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=3 <...
 
 # Clase de HDFS: solo HDFS, liviano y rápido de arrancar
 docker run -d --name bigdata -e SERVICIOS=hdfs -e DATANODES=3 -e REPLICATION=2 <...> bigdata-sandbox
+
+# Clase de MapReduce y Pig, sin Hive ni Spark
+docker run -d --name bigdata -e SERVICIOS=mapreduce -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
 ```
 
-`SERVICIOS` elige qué capas del stack se prenden, para no gastar memoria en lo
-que la clase no usa:
+### Cambiar los parámetros
 
-| `SERVICIOS` | Qué corre                                          |
-|-------------|----------------------------------------------------|
-| `hdfs`      | Solo HDFS (NameNodes, DataNodes y compañía). El más liviano y el que más rápido arranca |
-| `mapreduce` | HDFS + YARN + MapReduce (wordcount, JobHistory)    |
-| `todo`      | Lo anterior + Hive + Spark (por defecto). Hive es lo que más tarda en arrancar (~1 min) |
-
-Se cambia como los demás: recreando el contenedor. Los datos de HDFS y las
-tablas de Hive quedan en el volumen y vuelven cuando prendés `todo` otra vez.
-
-Para **cambiar** la arquitectura, borrás el contenedor y lo volvés a crear con
-otros `-e` (los datos quedan en el volumen):
+Se borra el contenedor y se vuelve a crear con otros `-e`. Los datos de HDFS y
+las tablas de Hive quedan en el volumen:
 
 ```bash
 docker rm -f bigdata
-docker run -d --name bigdata -e DATANODES=4 ... bigdata-sandbox
+docker run -d --name bigdata -e DATANODES=4 <...> bigdata-sandbox
 ```
 
-- `DATANODES`, `REPLICATION` y `BLOCK_SIZE` se pueden cambiar cuando quieras.
-  La replicación y el bloque nuevos aplican a los archivos que subas desde ese
-  momento. Los archivos viejos se cambian con `hdfs dfs -setrep`.
+- `DATANODES`, `REPLICATION`, `BLOCK_SIZE` y `SERVICIOS` se pueden cambiar
+  cuando quieras. La replicación y el bloque nuevos aplican a los archivos que
+  subas desde ese momento. Los archivos viejos se cambian con
+  `hdfs dfs -setrep`.
 - `NAMENODES` queda fijo cuando se crea el volumen: pasar de 1 a 2 cambia cómo
-  se guardan los metadatos. Para cambiarlo, empezá de cero (sección 8).
+  se guardan los metadatos. Para cambiarlo, empezá de cero (sección 12).
 - Si bajás `DATANODES` y los nodos que sacaste tenían la única copia de algún
   bloque, esos bloques se pierden. Igual que en un cluster de verdad.
+- Con `SERVICIOS=hdfs` o `mapreduce`, las tablas de Hive no se borran: vuelven
+  cuando prendés `todo` otra vez.
 
 ### Seguir el arranque
 
@@ -187,17 +403,20 @@ docker run -d --name bigdata -e DATANODES=4 ... bigdata-sandbox
 docker logs -f bigdata
 ```
 
-Cuando aparece el cartel **"Cluster LISTO"**, está todo arriba (~1-2 min la
-primera vez). Abajo del cartel ves la arquitectura completa, con cada proceso,
-su estado y su página web. Salís del log con `Ctrl+C`; el contenedor sigue
+Cuando aparece el cartel **"Cluster LISTO"**, está todo arriba (~1-2 min; la
+primera vez un poco más, porque formatea HDFS y sube las librerías de Tez y
+Spark). Abajo del cartel ves la arquitectura completa, con cada proceso, su
+estado y su página web. Salís del log con `Ctrl+C`; el contenedor sigue
 corriendo.
 
-## 4. Uso diario
+## 7. Uso diario
 
 ```bash
-docker stop bigdata        # apagar (los datos quedan guardados)
-docker start bigdata       # volver a prender (~1-2 min hasta el cartel LISTO)
+docker start bigdata       # prender (~1-2 min hasta el cartel LISTO)
+docker logs -f bigdata     # ver si ya está LISTO (Ctrl+C para salir)
 docker exec -it bigdata bash   # abrir una terminal ADENTRO del cluster
+exit                       # salir de esa terminal (el cluster sigue)
+docker stop bigdata        # apagar (los datos quedan guardados)
 ```
 
 No vuelvas a hacer `docker run` cada día: eso crea **otro** contenedor (y falla
@@ -207,7 +426,7 @@ porque el nombre `bigdata` ya existe). `docker run` es una sola vez; después,
 Al reiniciar, HDFS se queda unos segundos en *safe mode* revisando los bloques.
 Es normal en Hadoop; el script espera solo.
 
-## 5. Ver la arquitectura
+## 8. Ver la arquitectura
 
 ### Desde la terminal
 
@@ -229,18 +448,18 @@ jps             # los procesos Java, uno por nodo: DataNode (dn2), NameNode (nn1
 | Secondary NameNode    | http://localhost:9868       | Último *checkpoint* de los metadatos (cada 5 min). Solo sin HA |
 | DataNode N            | http://localhost:990N       | DataNode 1 → 9901, DataNode 2 → 9902… Sus bloques y su disco |
 | JournalNodes (HA)     | http://localhost:8480-8482  | Comparten el registro de cambios entre NameNodes |
-| YARN ResourceManager  | http://localhost:8088       | Todos los trabajos: MapReduce, TEZ (Hive), SPARK |
+| YARN ResourceManager  | http://localhost:8088       | Todos los trabajos: MapReduce (y Pig), TEZ (Hive), SPARK |
 | YARN NodeManager      | http://localhost:8042       | Contenedores corriendo                       |
-| MapReduce JobHistory  | http://localhost:19888      | Trabajos MapReduce terminados y sus logs     |
+| MapReduce JobHistory  | http://localhost:19888      | Trabajos MapReduce (y Pig) terminados y sus logs |
 | HiveServer2           | http://localhost:10002      | Sesiones y queries de Hive                   |
 | Spark History         | http://localhost:18080      | Trabajos de Spark terminados                 |
-| Spark (trabajo activo)| http://localhost:4040       | Solo mientras corre un spark-shell/pyspark   |
+| Spark (trabajo activo)| http://localhost:4040       | Solo mientras corre un spark-shell/pyspark/spark-submit |
 
 Los links entre páginas (por ejemplo, de la lista de DataNodes del NameNode a
 la página de cada DataNode) apuntan a `localhost` y funcionan desde el
 navegador.
 
-## 6. Experimentos de arquitectura
+## 9. Experimentos de arquitectura
 
 Todos adentro del contenedor. Los ejemplos suponen `DATANODES=3`,
 `REPLICATION=2` y `BLOCK_SIZE=1m`, pero andan con cualquier combinación.
@@ -276,7 +495,8 @@ En http://localhost:9870 → *Datanodes*, el DataNode 2 pasa a **Dead** en ~40 s
 En el Hadoop de fábrica tarda 10,5 min; acá está acortado para verlo en clase.
 Enseguida el NameNode copia los bloques que tenía ese nodo a los que quedan,
 para volver a cumplir la replicación. Volvé a correr el `fsck` de arriba: el
-DataNode 2 ya no aparece y todos los bloques siguen con 2 réplicas.
+DataNode 2 ya no aparece y todos los bloques siguen con 2 réplicas. Los
+trabajos (MapReduce, Pig, Hive, Spark) siguen andando.
 
 ```bash
 datanode start 2
@@ -338,40 +558,127 @@ cat $HADOOP_CONF_DIR/hdfs-site.xml           # replicación, bloque, NameNodes..
 cat /opt/sandbox/run/dn2/hdfs-site.xml       # lo propio del DataNode 2 (carpeta y puertos)
 ```
 
-## 7. Ejemplos
+## 10. Ejemplos: MapReduce, Pig, Hive y Spark
 
-Todos se corren **adentro** del contenedor (`docker exec -it bigdata bash`).
-Arrancás parado en `/datos`, o sea, en la carpeta `datos/` de tu compu.
+Todos se corren **adentro** del contenedor (`docker exec -it bigdata bash`),
+parado en `/datos`. Los archivos están en `datos/ejemplos/` (sección 3). El
+paso a paso completo, con qué tiene que salir en cada uno, está en el
+[TUTORIAL](TUTORIAL.md).
 
-### HDFS
+Los cuatro ejemplos de ventas (`mapper.py`+`reducer.py`, `ventas.pig`,
+`ventas.hql`, `ventas.py`) hacen el **mismo cálculo** (unidades y facturación
+por producto) sobre los mismos archivos de HDFS, y tienen que dar el mismo
+resultado. Cada uno guarda el suyo en `/user/root/resultados/`.
+
+### Orden recomendado
 
 ```bash
-hdfs dfs -put ventas.csv /user/root/          # subir un archivo de datos/ a HDFS
-hdfs dfs -ls /user/root
-hdfs fsck /user/root/ventas.csv -files -blocks -locations   # en qué bloques quedó
-hdfs dfsadmin -report                         # estado del cluster, DataNode por DataNode
+# 1. Dataset de prueba (una vez): 200.000 filas -> datos/ventas_grandes.csv (6 MB)
+python3 ejemplos/generar_ventas.py
+
+# 2. Subirlo a HDFS (una vez)
+hdfs dfs -mkdir -p /user/root/ventas
+hdfs dfs -put ventas_grandes.csv /user/root/ventas/
+hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations   # en qué bloques quedó
+
+# 3. Procesarlo con cada herramienta (las veces que quieras)
+hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \
+  -files ejemplos/mapper.py,ejemplos/reducer.py \
+  -mapper "python3 mapper.py" -reducer "python3 reducer.py" \
+  -input /user/root/ventas -output /user/root/resultados/mr_por_producto
+pig ejemplos/ventas.pig
+beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql
+spark-submit ejemplos/ventas.py
+
+# 4. Ver los resultados
+hdfs dfs -ls /user/root/resultados
+hdfs dfs -cat '/user/root/resultados/pig_por_producto/part-*'
+
+# 5. Bajarlos a tu compu (quedan en datos/resultados/)
+mkdir -p resultados
+hdfs dfs -getmerge /user/root/resultados/pig_por_producto resultados/pig.csv
 ```
 
-### MapReduce (wordcount)
+Resultado esperado (los cuatro iguales):
+
+| producto   | unidades | facturado   |
+|------------|---------:|------------:|
+| yerba      |  179.512 | 448.780.000 |
+| termo      |   11.793 | 412.755.000 |
+| mate       |   48.154 | 385.232.000 |
+| cafe       |   29.471 | 191.561.500 |
+| galletitas |   82.979 | 149.362.200 |
+| facturas   |  121.087 | 108.978.300 |
+| bombilla   |   36.281 | 108.843.000 |
+| azucar     |   89.796 | 107.755.200 |
+
+### MapReduce
+
+El wordcount en Java, que viene con Hadoop:
 
 ```bash
-hdfs dfs -put texto.txt /user/root/
+hdfs dfs -put ejemplos/texto.txt /user/root/
 hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.6.jar \
   wordcount /user/root/texto.txt /user/root/wc-out
 hdfs dfs -cat /user/root/wc-out/part-r-00000
 ```
 
+Mapper y reducer propios en Python (Hadoop Streaming). Primero se prueban sin
+Hadoop, con `sort` haciendo de *shuffle*:
+
+```bash
+cat ejemplos/ventas.csv | python3 ejemplos/mapper.py | sort | python3 ejemplos/reducer.py
+```
+
+Y en el cluster, el comando del paso 3 de arriba. Hay un mapper por bloque:
+con `BLOCK_SIZE=1m`, el dataset de 6 MB da 6 mappers.
+
+MapReduce no pisa una salida que ya existe: para repetir, primero
+`hdfs dfs -rm -r <carpeta de salida>`. Los demás ejemplos (Pig, Hive, Spark)
+pisan la suya solos.
+
+### Pig
+
+```bash
+pig ejemplos/ventas.pig                              # script en el cluster (trabajos MapReduce)
+hdfs dfs -cat '/user/root/resultados/pig_por_producto/part-*'
+pig -param entrada=/user/root/otra ejemplos/ventas.pig   # parámetros del script (%default)
+pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig   # sin cluster, sobre /datos
+pig                                                  # consola interactiva (grunt)
+```
+
+```pig
+-- dentro de grunt
+ventas = LOAD '/user/root/ventas' USING PigStorage(',')
+         AS (fecha:chararray, sucursal:chararray, producto:chararray, cantidad:int, precio:int);
+DESCRIBE ventas;
+primeras = LIMIT ventas 5;
+DUMP primeras;          -- recién acá corre algo (Pig es lazy)
+EXPLAIN primeras;       -- el plan: qué trabajos MapReduce va a lanzar
+quit
+```
+
+Cada `DUMP`/`STORE` aparece en http://localhost:8088 como uno o más trabajos
+MapReduce, y terminados en http://localhost:19888.
+
 ### Hive
 
 ```bash
-beeline -u jdbc:hive2://localhost:10000
+beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql   # crea la tabla ventas y consulta
+beeline -u jdbc:hive2://localhost:10000                          # consola interactiva
 ```
 
 ```sql
+SHOW TABLES;
+SELECT sucursal, COUNT(*) FROM ventas GROUP BY sucursal;
 CREATE TABLE demo (id INT, nombre STRING);
 INSERT INTO demo VALUES (1, 'hola'), (2, 'bigdata');
 SELECT * FROM demo;
+!quit
 ```
+
+`ventas` es una tabla **EXTERNAL**: Hive lee los archivos de
+`/user/root/ventas` en su lugar, los mismos que usan Pig y Spark.
 
 Desde DBeaver u otro cliente en tu compu: `jdbc:hive2://localhost:10000`, sin
 usuario ni contraseña.
@@ -379,6 +686,7 @@ usuario ni contraseña.
 ### Spark
 
 ```bash
+spark-submit ejemplos/ventas.py     # script entero
 spark-shell     # Scala
 pyspark         # Python
 spark-sql       # SQL; ve las mismas tablas que Hive
@@ -386,51 +694,168 @@ spark-sql       # SQL; ve las mismas tablas que Hive
 
 ```python
 # dentro de pyspark
-df = spark.read.csv("hdfs:///user/root/ventas.csv", header=True, inferSchema=True)
+df = spark.read.csv("hdfs:///user/root/ventas", header=True, inferSchema=True)
 df.groupBy("producto").count().show()
-df.write.saveAsTable("ventas")      # queda como tabla de Hive, en HDFS
-spark.sql("SELECT * FROM demo").show()   # lee la tabla creada en Hive
-```
-
-Un script entero (lo dejás en `datos/`):
-
-```bash
-spark-submit mi_script.py
+df.write.mode("overwrite").saveAsTable("ventas_spark")   # queda como tabla de Hive, en HDFS
+spark.sql("SELECT * FROM ventas LIMIT 5").show()         # lee la tabla creada en Hive
+exit()
 ```
 
 Todo Spark corre sobre YARN: cada sesión aparece en http://localhost:8088 como
 aplicación SPARK y, al terminar, en http://localhost:18080.
 
-### Logs de cualquier trabajo
+### Con tu propio dataset
 
-```bash
-yarn application -list -appStates ALL
-yarn logs -applicationId <application_id>
-```
+1. Copiá tu CSV a `datos/` en tu compu.
+2. Adentro: `head` y `file` para ver separador (`,` o `;`), encabezado y si
+   tiene fines de línea de Windows (`sed -i 's/\r$//' archivo.csv`).
+3. `hdfs dfs -mkdir -p /user/root/<nombre>` y `hdfs dfs -put archivo.csv /user/root/<nombre>/`.
+4. Copiá el ejemplo de la herramienta que quieras y cambiale la carpeta y las
+   columnas.
 
-## 8. Empezar de cero
+Detalle y ejemplos de cada herramienta: [TUTORIAL, paso 14](TUTORIAL.md#14-con-tu-propio-dataset).
 
-Borra el contenedor y **todos los datos** de HDFS y Hive:
+## 11. Referencia de comandos
+
+### En tu compu (Docker)
+
+| Comando                                  | Qué hace                                               |
+|------------------------------------------|--------------------------------------------------------|
+| `docker pull ghcr.io/franki-678/bigdata-sandbox` | Baja (o actualiza) la imagen                   |
+| `docker tag ghcr.io/franki-678/bigdata-sandbox bigdata-sandbox` | Le pone el nombre corto         |
+| `docker save bigdata-sandbox -o bigdata-sandbox.tar` | Guarda la imagen en un archivo (para el pendrive) |
+| `docker load -i bigdata-sandbox.tar`     | Carga la imagen desde ese archivo                      |
+| `docker build -t bigdata-sandbox .`      | Arma la imagen desde el repo                           |
+| `docker run -d --name bigdata ...`       | Crea y prende el contenedor (una sola vez; sección 6)  |
+| `docker start bigdata` / `docker stop bigdata` | Prender / apagar                                 |
+| `docker restart bigdata`                 | Apagar y prender                                       |
+| `docker exec -it bigdata bash`           | Terminal adentro del cluster                           |
+| `docker exec bigdata estado`             | Un comando suelto adentro, sin entrar                  |
+| `docker logs -f bigdata`                 | Ver el arranque (Ctrl+C sale)                          |
+| `docker ps -a`                           | Ver si el contenedor está prendido (`Up`) o apagado (`Exited`) |
+| `docker stats bigdata`                   | RAM y CPU que está usando                              |
+| `docker cp archivo.csv bigdata:/datos/`  | Copiar un archivo adentro (alternativa a la carpeta `datos/`) |
+| `docker rm -f bigdata`                   | Borrar el contenedor (los datos del volumen quedan)    |
+| `docker volume rm bigdata_hadoop`        | Borrar los datos de HDFS y Hive (con el contenedor ya borrado) |
+
+### Adentro: el cluster
+
+| Comando                 | Qué hace                                                     |
+|-------------------------|--------------------------------------------------------------|
+| `estado`                | Arquitectura: cada proceso, arriba/abajo, su web, y lo que reporta el NameNode |
+| `datanode`              | Lista los DataNodes                                          |
+| `datanode stop N`       | Apaga el DataNode N (simula que se cae ese nodo)             |
+| `datanode start N`      | Lo prende. Si N es mayor que `DATANODES`, suma un nodo nuevo (1-9) |
+| `namenode`              | Lista los NameNodes y cuál está activo                       |
+| `namenode stop N` / `namenode start N` | Apaga / prende el NameNode N                  |
+| `jps`                   | Procesos Java, con su instancia (nn1, dn2...)                |
+
+### Adentro: HDFS
+
+| Comando                                        | Qué hace                                  |
+|------------------------------------------------|-------------------------------------------|
+| `hdfs dfs -ls <carpeta>`                       | Listar (2ª columna: replicación)          |
+| `hdfs dfs -mkdir -p <carpeta>`                 | Crear carpeta (y las de arriba)           |
+| `hdfs dfs -put [-f] <local> <hdfs>`            | Subir de `/datos` a HDFS (`-f`: pisar)     |
+| `hdfs dfs -get <hdfs> <local>`                 | Bajar de HDFS a `/datos`                  |
+| `hdfs dfs -getmerge <carpeta> <archivo>`       | Bajar todos los `part-*` juntos, en un archivo |
+| `hdfs dfs -cat <archivo>` / `-head` / `-tail`  | Ver contenido / primer KB / último KB      |
+| `hdfs dfs -du -h <carpeta>`                    | Cuánto ocupa                               |
+| `hdfs dfs -cp` / `-mv`                         | Copiar / mover dentro de HDFS             |
+| `hdfs dfs -rm -r <ruta>`                       | Borrar                                    |
+| `hdfs dfs -setrep -w N <ruta>`                 | Cambiar la replicación de algo ya subido  |
+| `hdfs dfs -D dfs.blocksize=2m -put ...`        | Subir con otro tamaño de bloque           |
+| `hdfs fsck <ruta> -files -blocks -locations`   | Bloques de cada archivo y en qué DataNodes están |
+| `hdfs dfsadmin -report`                        | Estado de cada DataNode                    |
+| `hdfs dfsadmin -safemode get`                  | ¿Está en safe mode?                        |
+| `hdfs haadmin -getAllServiceState`             | (HA) Cuál NameNode está activo             |
+| `hdfs haadmin -failover nn1 nn2`               | (HA) Pasar el activo de nn1 a nn2          |
+
+### Adentro: YARN y MapReduce
+
+| Comando                                        | Qué hace                                  |
+|------------------------------------------------|-------------------------------------------|
+| `hadoop jar <jar> <clase/programa> <args>`     | Correr un trabajo MapReduce               |
+| `hadoop jar .../hadoop-streaming-3.3.6.jar -files a.py,b.py -mapper "python3 a.py" -reducer "python3 b.py" -input <in> -output <out>` | MapReduce con scripts (Python u otro). Opcional: `-numReduceTasks N` |
+| `yarn application -list`                       | Trabajos corriendo (`-appStates ALL`: también terminados) |
+| `yarn application -kill <application_id>`      | Matar un trabajo trabado                   |
+| `yarn logs -applicationId <application_id>`    | Logs de un trabajo                         |
+| `mapred job -list`                             | Trabajos MapReduce                         |
+
+### Adentro: Pig
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `pig script.pig`                            | Corre el script en el cluster (MapReduce sobre YARN) |
+| `pig`                                       | Consola interactiva `grunt>` (salir: `quit`) |
+| `pig -x local script.pig`                   | Sin cluster: lee y escribe en `/datos`, no usa HDFS ni YARN |
+| `pig -param nombre=valor script.pig`        | Pasa un parámetro (pisa el `%default` del script). Se repite para varios |
+| `pig -dryrun -param ... script.pig`         | Muestra el script con los parámetros reemplazados, sin correrlo |
+| `pig -e 'comando'`                          | Corre una sola línea (ej. `pig -e 'fs -ls /user/root'`) |
+
+Dentro de un script o de grunt: `DESCRIBE` (esquema), `DUMP` (correr y
+mostrar), `STORE` (correr y guardar), `EXPLAIN` (plan), `ILLUSTRATE` (ejemplo
+de datos en cada paso), `fs -ls` y demás comandos de HDFS.
+
+### Adentro: Hive
+
+| Comando                                                     | Qué hace                       |
+|-------------------------------------------------------------|--------------------------------|
+| `beeline -u jdbc:hive2://localhost:10000`                   | Consola SQL (salir: `!quit`)   |
+| `beeline -u jdbc:hive2://localhost:10000 -f script.hql`     | Corre un archivo SQL           |
+| `beeline -u jdbc:hive2://localhost:10000 -e "SELECT ..."`   | Corre una consulta suelta      |
+| `... --outputformat=csv2 -e "SELECT ..." > salida.csv`      | Resultado como CSV, a un archivo de `/datos` |
+
+### Adentro: Spark
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `spark-submit script.py`                    | Corre un script en YARN                       |
+| `spark-submit --num-executors 3 --executor-memory 1g script.py` | Con más ejecutores o memoria (por defecto: 2 de 512m) |
+| `spark-submit --conf spark.sql.shuffle.partitions=8 script.py` | Cualquier opción de Spark (por defecto 4 particiones) |
+| `pyspark` / `spark-shell` / `spark-sql`     | Consola en Python / Scala / SQL (salir: `exit()` / `:quit` / `exit;`) |
+
+### Adentro: el generador de datos
+
+| Comando                                               | Qué hace                         |
+|-------------------------------------------------------|----------------------------------|
+| `python3 ejemplos/generar_ventas.py`                  | 200.000 ventas → `ventas_grandes.csv` (6 MB) |
+| `python3 ejemplos/generar_ventas.py 1000000`          | 1 millón de ventas (~30 MB)      |
+| `python3 ejemplos/generar_ventas.py 50000 chico.csv`  | Otra cantidad y otro nombre       |
+
+Siempre genera los mismos datos para la misma cantidad de filas (semilla fija):
+a todos les da el mismo resultado.
+
+## 12. Empezar de cero
+
+Borra el contenedor y **todos los datos** de HDFS y Hive (tu carpeta `datos/`
+no se toca):
 
 ```bash
 docker rm -f bigdata
 docker volume rm bigdata_hadoop
 ```
 
-Después repetís el paso 3 (con los `-e` que quieras).
+Después repetís el `docker run` (con los `-e` que quieras).
 
-## 9. Problemas comunes
+## 13. Problemas comunes
 
 | Síntoma                                         | Causa / solución                                              |
 |-------------------------------------------------|---------------------------------------------------------------|
+| `the container name "/bigdata" is already in use` | Ya lo creaste: usá `docker start bigdata`. Si querés recrearlo, antes `docker rm -f bigdata` |
+| `hdfs: command not found` (o `pig`, `beeline`...) | Estás en tu compu: primero `docker exec -it bigdata bash` |
 | `port is already allocated` o, en Windows, `access permissions` / `forbidden` | Otro programa (o Windows) usa ese puerto: cambiá el de la izquierda (ej. `-p 18888:8088`) o sacá ese `-p` si no usás ese nodo |
 | El contenedor termina con `[sandbox] ERROR: ...` | Un parámetro mal puesto: el mensaje dice cuál. Corregilo y recreá el contenedor |
-| `AVISO: este volumen se creo con N NameNode(s)` | `NAMENODES` no se cambia sobre un volumen existente (sección 3) |
+| `AVISO: este volumen se creo con N NameNode(s)` | `NAMENODES` no se cambia sobre un volumen existente (sección 6) |
+| `Output directory ... already exists`           | MapReduce no pisa resultados: `hdfs dfs -rm -r <carpeta>` y de nuevo |
+| `Name node is in safe mode`                     | Recién prendido: esperá el cartel LISTO. Si sigue, faltan DataNodes (bajaste `DATANODES`?) |
 | Queries o Spark quedan en `ACCEPTED` sin avanzar | Falta memoria en YARN: cerrá sesiones de beeline/pyspark abiertas, o dale más RAM a Docker |
-| El contenedor se cae solo                       | Poca RAM en Docker (ver requisitos). Mirá `docker logs bigdata` |
+| El contenedor se cae solo                       | Poca RAM en Docker (sección 4). Mirá `docker logs bigdata` |
 | Abrí un 2º pyspark y la UI no está en :4040     | La segunda sesión usa :4041, que no está expuesto. Usá :8088 → *ApplicationMaster* |
+| `pig` se queda en `Connecting to ResourceManager` | YARN está apagado (`SERVICIOS=hdfs`): usá `pig -x local`, o recreá el contenedor con `SERVICIOS=mapreduce` o `todo` |
+| `beeline` dice `Connection refused`             | HiveServer2 todavía arranca (~1 min) o `SERVICIOS` no es `todo`. Mirá `estado` |
 | `Unable to load native-hadoop library`          | Warning normal; Hadoop usa la versión Java. No afecta          |
-| `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 3: Mac/Linux, PowerShell o CMD) |
+| `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 1, paso 4) |
 | `docker pull` dice `denied` o `unauthorized`     | La imagen publicada todavía no es pública: avisale a quien mantiene el repo |
 
 ## Notas
@@ -448,7 +873,10 @@ Después repetís el paso 3 (con los `-e` que quieras).
 - Se buildea desde los binarios oficiales de Apache, sin imágenes de terceros:
   sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4). La imagen publicada trae
   las dos y Docker baja sola la que corresponde.
+- Antes de publicar cada versión de la imagen, GitHub prende un cluster y corre
+  `pruebas/probar.sh`: el tutorial entero, verificando que MapReduce, Pig, Hive
+  y Spark den el resultado esperado. Si algo falla, no se publica.
 - Para que entre en una notebook:
   - Cada daemon tiene un tope de memoria chico y una JVM liviana (`sandbox/lib.sh`).
-  - La imagen usa el runtime de Java (JRE) y no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C (`Dockerfile`).
+  - La imagen usa el runtime de Java (JRE) y no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C, la copia de Hadoop que trae Pig (`Dockerfile`).
   - `jps` es una versión propia, porque el JRE no lo trae.
