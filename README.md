@@ -799,6 +799,9 @@ Para tener en cuenta:
   solo el paso de Hive no.
 - Para entrar a la base desde tu compu (DBeaver, Workbench), sumá
   `-p 3306:3306` al `docker run` (sección 6).
+- `--hive-import` (importar directo a una tabla de Hive) **no anda**: Sqoop
+  1.4.7 es anterior a Hive 4. Se hace como en `tienda.hql`: importar a una
+  carpeta y crear encima una tabla EXTERNAL.
 
 ### Con tu propio dataset
 
