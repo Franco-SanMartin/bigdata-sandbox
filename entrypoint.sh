@@ -123,6 +123,45 @@ if con_yarn; then
 fi
 
 # ---------------------------------------------------------------------------
+# 3b) MySQL con la base de ejemplo "tienda", para Sqoop (SERVICIOS=mapreduce o
+#     todo: Sqoop copia con trabajos MapReduce). Vive en el volumen.
+# ---------------------------------------------------------------------------
+mysql_start() {
+  mkdir -p /run/mysqld /var/log/mysql
+  if [ ! -d /hadoop/mysql/mysql ]; then
+    log "Primer arranque: creando la base MySQL..."
+    mysql_install_db --user=root --datadir=/hadoop/mysql > /tmp/mysql_install_db.log 2>&1 \
+      || { cat /tmp/mysql_install_db.log; return 1; }
+  fi
+  log "Arrancando MySQL (base de ejemplo para Sqoop)..."
+  mysqld > /dev/null 2>&1 &
+  local _
+  for _ in $(seq 1 60); do mysqladmin --silent ping > /dev/null 2>&1 && break; sleep 1; done
+  mysqladmin --silent ping > /dev/null 2>&1 || return 1
+
+  # La primera vez (o si quedo a medias): usuario para Sqoop y base "tienda"
+  if [ ! -f /hadoop/mysql/.sandbox-listo ]; then
+    log "Primer arranque: cargando la base de ejemplo 'tienda' (200.000 ventas)..."
+    mysql <<'SQL' || return 1
+DELETE FROM mysql.user WHERE User = '';
+DROP DATABASE IF EXISTS test;
+CREATE OR REPLACE USER 'alumno'@'%' IDENTIFIED BY 'alumno';
+CREATE OR REPLACE USER 'alumno'@'localhost' IDENTIFIED BY 'alumno';
+GRANT ALL PRIVILEGES ON *.* TO 'alumno'@'%', 'alumno'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+    python3 /opt/sandbox/ejemplos/generar_ventas.py 200000 /tmp/tienda_ventas.csv > /dev/null \
+      && mysql < /opt/sandbox/ejemplos/tienda.sql || return 1
+    rm -f /tmp/tienda_ventas.csv
+    touch /hadoop/mysql/.sandbox-listo
+  fi
+}
+if con_yarn; then
+  mysql_start || log "AVISO: MySQL no levanto (Sqoop no va a tener base de ejemplo)." \
+                     "Revisar /var/log/mysql/error.log"
+fi
+
+# ---------------------------------------------------------------------------
 # 4) Hive + Spark (SERVICIOS=todo)
 # ---------------------------------------------------------------------------
 if con_hive_spark; then
@@ -176,4 +215,5 @@ mkdir -p "${HADOOP_HOME}/logs"
 exec tail -F \
   "${HADOOP_HOME}"/logs/*.log \
   "${HIVE_HOME}"/metastore.log \
-  "${HIVE_HOME}"/hiveserver2.log 2>/dev/null
+  "${HIVE_HOME}"/hiveserver2.log \
+  /var/log/mysql/error.log 2>/dev/null

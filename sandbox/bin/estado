@@ -66,8 +66,12 @@ if con_yarn; then
   fila "NodeManager" 8042 "http://localhost:8042"
   fila "MapReduce JobHistory" 19888 "http://localhost:19888"
   printf '   %-22s %-29s %s\n' "Pig" "comando: pig" "${GRIS}(sin servicio propio: corre como trabajos MapReduce)${FIN}"
+  echo
+  echo "  ${NEGRITA}Sqoop${FIN}"
+  fila "MySQL (base tienda)" 3306 "jdbc:mysql://localhost/tienda" "${GRIS}usuario alumno, clave alumno${FIN}"
+  printf '   %-22s %-29s %s\n' "Sqoop" "comando: sqoop" "${GRIS}(sin servicio propio: copia tablas con trabajos MapReduce)${FIN}"
 else
-  echo "  ${GRIS}YARN, MapReduce, Pig, Hive y Spark: apagados (SERVICIOS=hdfs). Pig sin cluster: pig -x local${FIN}"
+  echo "  ${GRIS}YARN, MapReduce, Pig, Sqoop, Hive y Spark: apagados (SERVICIOS=hdfs). Pig sin cluster: pig -x local${FIN}"
 fi
 if con_hive_spark; then
   echo

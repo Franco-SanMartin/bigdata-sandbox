@@ -1,5 +1,5 @@
 # Arma la imagen, la PRUEBA de punta a punta (pruebas/probar.sh: el paso a paso
-# de TUTORIAL.md con MapReduce, Pig, Hive y Spark) y, si todo da bien, la
+# de TUTORIAL.md con MapReduce, Pig, Hive, Spark y Sqoop) y, si todo da bien, la
 # publica en ghcr.io/franki-678/bigdata-sandbox para bajarla con 'docker pull'.
 # Corre sola cuando cambia el codigo en main, o a mano desde la pestaña Actions
 # ("Run workflow").
@@ -37,6 +37,10 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: bigdata-sandbox
+          # Cache de capas en GitHub: si solo cambian scripts o ejemplos, no
+          # vuelve a bajar todo de Apache (lo que mas tarda)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # 2. Prenderla como lo haria un alumno y esperar el cartel LISTO
       - name: Prender el cluster
@@ -53,7 +57,7 @@ jobs:
           exit 1
 
       # 3. El paso a paso del tutorial, verificando los resultados
-      - name: Probar MapReduce, Pig, Hive y Spark
+      - name: Probar MapReduce, Pig, Hive, Spark y Sqoop
         run: |
           docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
           docker exec bigdata bash /tmp/probar.sh
@@ -62,7 +66,7 @@ jobs:
         if: failure()
         run: |
           docker logs bigdata || true
-          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log' || true
+          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log /var/log/mysql/error.log' || true
 
       # 4. Recien ahora, publicar amd64 + arm64 (reusa lo ya armado)
       - uses: docker/login-action@v3
@@ -78,7 +82,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
+          cache-from: type=gha
           tags: ${{ env.IMAGEN }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark en un solo contenedor
+            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop en un solo contenedor

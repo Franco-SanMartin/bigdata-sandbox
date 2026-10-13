@@ -26,6 +26,14 @@
     <name>hive.execution.engine</name>
     <value>tez</value>
   </property>
+  <!-- Cache de resultados apagado: con el prendido, un INSERT OVERWRITE
+       DIRECTORY igual a una consulta anterior deja la salida en el cache y
+       no en la carpeta pedida. Y para aprender conviene ver correr cada
+       consulta de verdad. -->
+  <property>
+    <name>hive.query.results.cache.enabled</name>
+    <value>false</value>
+  </property>
   <property>
     <name>hive.server2.thrift.port</name>
     <value>10000</value>

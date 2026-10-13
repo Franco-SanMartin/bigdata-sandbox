@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Prueba de punta a punta: hace el paso a paso de TUTORIAL.md adentro del
 # contenedor y verifica que MapReduce, Pig, Hive y Spark den el mismo
-# resultado que un calculo directo en Python. GitHub Actions la corre antes de
+# resultado que un calculo directo en Python, y que Sqoop traiga y devuelva
+# bien los datos de MySQL. GitHub Actions la corre antes de
 # publicar la imagen; si algo falla, la imagen no se publica.
 #
 # A mano, con el contenedor 'bigdata' prendido y en "Cluster LISTO":
@@ -72,6 +73,39 @@ spark-submit ejemplos/ventas.py
 hdfs dfs -cat '/user/root/resultados/spark_por_producto/part-*' | normalizar > /tmp/spark.txt
 diff /tmp/esperado.txt /tmp/spark.txt || falla "Spark no coincide"
 
+paso "Sqoop: MySQL -> HDFS -> Hive -> MySQL"
+mysql -N -B -e "SELECT COUNT(*) FROM tienda.ventas" | grep -qx 200000 \
+  || falla "la base MySQL 'tienda' no tiene las 200000 ventas"
+bash ejemplos/sqoop.sh
+partes=$(hdfs dfs -ls /user/root/tienda/ventas | grep -c 'part-m-' || true)
+[ "$partes" -eq 4 ] || falla "sqoop import -m 4: se esperaban 4 archivos y hay $partes"
+# Lo importado es exactamente el dataset (sacando la columna id)
+a=$(hdfs dfs -cat '/user/root/tienda/ventas/part-m-*' | cut -d, -f2- | md5sum)
+b=$(tail -n +2 ventas_grandes.csv | md5sum)
+[ "$a" = "$b" ] || falla "sqoop import: lo importado no coincide con la tabla de MySQL"
+# Y lo exportado volvio a MySQL con el JOIN por categoria
+cat > /tmp/esperado_cat.txt <<'FIN'
+accesorios,96228,906830000
+almacen,172775,257117400
+infusiones,208983,640341500
+panaderia,121087,108978300
+FIN
+mysql -N -B -e "SELECT categoria, unidades, facturado FROM tienda.resumen_categoria" \
+  | normalizar > /tmp/sqoop.txt
+diff /tmp/esperado_cat.txt /tmp/sqoop.txt || falla "sqoop export: no coincide"
+
+# --hive-import (Sqoop 1.4.7 es anterior a Hive 4): se informa, no corta la prueba
+paso "Sqoop: --hive-import (informativo)"
+if timeout 600 sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+     --table sucursales --hive-import --hive-table sqoop_sucursales --delete-target-dir -m 1 \
+     > /tmp/hive-import.log 2>&1 \
+   && beeline -u jdbc:hive2://localhost:10000 --outputformat=csv2 \
+        -e "SELECT COUNT(*) FROM sqoop_sucursales" 2>/dev/null | grep -qx 4; then
+  echo "HIVE-IMPORT: ANDA"
+else
+  echo "HIVE-IMPORT: NO ANDA"; tail -40 /tmp/hive-import.log
+fi
+
 paso "Bajar un resultado a la compu"
 rm -rf resultados && mkdir resultados
 hdfs dfs -get /user/root/resultados/pig_por_producto resultados/
@@ -87,4 +121,4 @@ paso "estado"
 estado
 
 echo
-echo "TODO OK: MapReduce, Pig, Hive y Spark dan el mismo resultado"
+echo "TODO OK: MapReduce, Pig, Hive, Spark y Sqoop dan el resultado esperado"
