@@ -1,4 +1,4 @@
-# BigData Sandbox — Hadoop + Pig + Hive + Spark en un solo contenedor
+# BigData Sandbox — Hadoop + Pig + Hive + Spark + Sqoop en un solo contenedor
 
 Una **sola imagen** y un **solo contenedor**, pero con un **cluster Hadoop real**
 adentro: cada componente corre como proceso separado y tiene su propia página
@@ -15,12 +15,15 @@ bloque. Nada de caja negra.
 | **Pig**                           | Pig Latin: procesamiento paso a paso, se traduce a trabajos MapReduce |
 | **Hive 4** (Metastore + HiveServer2, sobre Tez) | SQL sobre HDFS                    |
 | **Spark 3.5** + PySpark + History Server | Procesamiento en memoria, corre sobre YARN |
+| **Sqoop** + **MySQL** (MariaDB) con una base de ejemplo | Copiar tablas de una base relacional a HDFS y de vuelta |
 
 Hive y Spark comparten el mismo metastore: una tabla creada en uno se ve en el
-otro. Todos los datos viven en HDFS.
+otro. Todos los datos viven en HDFS. Sqoop trae datos de afuera (de la base
+MySQL `tienda`, que viene cargada) y devuelve resultados.
 
 Versiones: Hadoop 3.3.6 · Pig 0.18.0 · Hive 4.0.0 · Tez 0.10.3 · Spark 3.5.9 ·
-ZooKeeper 3.8.7 · Java 8 · Python 3.8
+Sqoop 1.4.7 · MariaDB 10.3 (compatible MySQL) · ZooKeeper 3.8.7 · Java 8 ·
+Python 3.8
 
 **Cómo leer esta guía**
 
@@ -29,8 +32,9 @@ ZooKeeper 3.8.7 · Java 8 · Python 3.8
 - **Sección 2** dice qué comando se usa **una sola vez** y cuál **cada vez**.
 - **Sección 3** explica qué carpetas y archivos hay, en tu compu y adentro.
 - El [**TUTORIAL**](TUTORIAL.md) sigue desde ahí: procesar un dataset de
-  200.000 ventas con MapReduce, Pig, Hive y Spark, con lo que tiene que salir
-  en cada paso, y cómo hacer lo mismo con **tu propio CSV**.
+  200.000 ventas con MapReduce, Pig, Hive y Spark, traer y llevar tablas de
+  MySQL con Sqoop, con lo que tiene que salir en cada paso, y cómo hacer lo
+  mismo con **tu propio CSV**.
 - El resto del README es la referencia: todos los parámetros, todos los
   comandos, experimentos y problemas comunes.
 
@@ -45,7 +49,7 @@ ZooKeeper 3.8.7 · Java 8 · Python 3.8
 7. [Uso diario](#7-uso-diario)
 8. [Ver la arquitectura](#8-ver-la-arquitectura)
 9. [Experimentos de arquitectura](#9-experimentos-de-arquitectura)
-10. [Ejemplos: MapReduce, Pig, Hive y Spark](#10-ejemplos-mapreduce-pig-hive-y-spark)
+10. [Ejemplos: MapReduce, Pig, Hive, Spark y Sqoop](#10-ejemplos-mapreduce-pig-hive-spark-y-sqoop)
 11. [Referencia de comandos](#11-referencia-de-comandos)
 12. [Empezar de cero](#12-empezar-de-cero)
 13. [Problemas comunes](#13-problemas-comunes)
@@ -171,7 +175,7 @@ bigdata bash`. **No** repetir el `docker run`.
 ## 2. Qué comando, cuándo
 
 Los comandos `docker ...` van en la terminal de **tu compu**. El resto
-(`hdfs`, `pig`, `beeline`, `estado`...), **adentro** del contenedor, después de
+(`hdfs`, `pig`, `beeline`, `sqoop`, `mysql`, `estado`...), **adentro** del contenedor, después de
 `docker exec -it bigdata bash`.
 
 | Cuándo                                   | Comando                                                      |
@@ -183,7 +187,7 @@ Los comandos `docker ...` van en la terminal de **tu compu**. El resto
 | **Cada vez** que terminás                | `exit` (salir) y `docker stop bigdata` (apagar)              |
 | Para **cambiar parámetros** (DataNodes, replicación, bloque, servicios) | `docker rm -f bigdata` y de nuevo `docker run` con otros `-e`. HDFS y las tablas se conservan |
 | Para **actualizar** la imagen            | `docker pull` + `docker tag` de nuevo, `docker rm -f bigdata` y `docker run`. HDFS y las tablas se conservan |
-| Para **empezar de cero** (borrar todo HDFS y Hive) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
+| Para **empezar de cero** (borrar todo HDFS, Hive y MySQL) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
 | Para mirar qué pasa                      | `docker logs bigdata` (arranque) · `docker stats bigdata` (RAM/CPU) · `docker ps -a` (si está prendido) |
 
 Errores típicos:
@@ -209,6 +213,9 @@ bigdata/                   <- tu carpeta de trabajo (paso 3), el nombre que quie
     │   ├── ventas.pig          lo mismo en Pig
     │   ├── ventas.hql          lo mismo en Hive (SQL)
     │   ├── ventas.py           lo mismo en Spark (PySpark)
+    │   ├── sqoop.sh            Sqoop: MySQL -> HDFS -> Hive -> MySQL
+    │   ├── tienda.sql          la base MySQL "tienda" (ya viene cargada)
+    │   ├── tienda.hql          JOIN en Hive de las tablas que trajo Sqoop
     │   ├── texto.txt           texto para el wordcount
     │   └── wordcount.pig       wordcount en Pig
     └── (tus archivos)     <- tus CSV, scripts y lo que bajes de HDFS
@@ -228,8 +235,9 @@ bigdata/                   <- tu carpeta de trabajo (paso 3), el nombre que quie
 |------------------------|-------------------------------------------------------------|
 | `/datos`               | Tu carpeta `datos/`. Ahí arrancás al entrar                 |
 | HDFS `/user/root/...`  | El sistema de archivos distribuido: se ve con `hdfs dfs -ls`, no con `ls`. Es lo que leen MapReduce, Pig, Hive y Spark |
-| `/hadoop`              | Disco del cluster: los bloques de cada DataNode, metadatos del NameNode y el metastore de Hive. Vive en el **volumen** `bigdata_hadoop`: sobrevive a `docker stop`, `docker rm` y a actualizar la imagen. Solo se borra con `docker volume rm` |
-| `/opt/hadoop`, `/opt/pig`, `/opt/hive`, `/opt/spark`... | Los programas y sus logs              |
+| `/hadoop`              | Disco del cluster: los bloques de cada DataNode, metadatos del NameNode, el metastore de Hive y la base MySQL. Vive en el **volumen** `bigdata_hadoop`: sobrevive a `docker stop`, `docker rm` y a actualizar la imagen. Solo se borra con `docker volume rm` |
+| `/opt/hadoop`, `/opt/pig`, `/opt/hive`, `/opt/spark`, `/opt/sqoop`... | Los programas y sus logs |
+| MySQL `tienda`         | Base relacional de ejemplo (fuera de HDFS): se ve con `mysql tienda`. Es de donde Sqoop trae y adonde devuelve |
 
 Un archivo pasa de tu compu al cluster así: lo dejás en `datos/` →
 `hdfs dfs -put` lo sube de `/datos` a HDFS → se procesa → `hdfs dfs -get` baja
@@ -242,11 +250,11 @@ hecha. Para usarla, no.
 
 | Archivo                      | Qué es                                                  |
 |------------------------------|---------------------------------------------------------|
-| `Dockerfile`                 | Cómo se arma la imagen: baja Hadoop, Pig, Hive, Tez, Spark y ZooKeeper de Apache |
+| `Dockerfile`                 | Cómo se arma la imagen: baja Hadoop, Pig, Hive, Tez, Spark, Sqoop y ZooKeeper de Apache, e instala MariaDB |
 | `entrypoint.sh`              | Lo que corre al prender el contenedor: genera la configuración según los `-e` y arranca cada proceso en orden |
 | `sandbox/lib.sh`             | Funciones comunes: generar el `hdfs-site.xml`, prender/apagar nodos, memoria de cada daemon |
 | `sandbox/bin/`               | Los comandos `estado`, `datanode`, `namenode` y `jps`   |
-| `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark y ZooKeeper |
+| `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark, ZooKeeper y MySQL |
 | `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
 | `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
 | `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica |
@@ -322,7 +330,7 @@ El `docker run` del paso 4, parte por parte:
 | `--name bigdata`               | Nombre del **contenedor**. Con ese nombre lo manejás de acá en más (`start`, `stop`, `exec`, `logs`) |
 | `-e DATANODES=3` …             | La arquitectura del cluster (tabla de abajo). Los que no pongas toman su valor por defecto |
 | `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos. Formato `-p <puerto en tu compu>:<puerto adentro>` |
-| `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS y el metastore: **tus datos persisten**   |
+| `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS, el metastore y la base MySQL: **tus datos persisten** |
 | `-v .../datos:/datos`          | La carpeta `datos/` de tu compu aparece adentro como `/datos`      |
 | `bigdata-sandbox`              | La imagen (sección 5)                                              |
 
@@ -349,11 +357,14 @@ que la clase no usa:
 | `SERVICIOS` | Qué corre                                          | RAM para Docker |
 |-------------|----------------------------------------------------|-----------------|
 | `hdfs`      | Solo HDFS (NameNodes, DataNodes y compañía). El más liviano y el que más rápido arranca | 4 GB |
-| `mapreduce` | HDFS + YARN + MapReduce (wordcount, JobHistory) + Pig | 5 GB |
+| `mapreduce` | HDFS + YARN + MapReduce (wordcount, JobHistory) + Pig + Sqoop y MySQL | 5 GB |
 | `todo`      | Lo anterior + Hive + Spark (por defecto). Hive es lo que más tarda en arrancar (~1 min) | 6 GB |
 
 Pig no es un servicio: es un comando que manda trabajos MapReduce a YARN. Con
-`SERVICIOS=hdfs` (YARN apagado) se usa en modo local: `pig -x local`.
+`SERVICIOS=hdfs` (YARN apagado) se usa en modo local: `pig -x local`. Sqoop
+tampoco es un servicio: copia con trabajos MapReduce, así que necesita
+`mapreduce` o `todo` (el ejemplo completo, con Hive en el medio, necesita
+`todo`).
 
 ### Combinaciones típicas
 
@@ -366,20 +377,23 @@ docker run -d --name bigdata <...> bigdata-sandbox
 # Para ver replicación: 3 DataNodes, cada bloque en 2 de ellos, bloques chicos (la del paso 4)
 docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
 
+# Para entrar a MySQL desde tu compu (DBeaver, Workbench...): sumar -p 3306:3306
+docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 3306:3306 <...> bigdata-sandbox
+
 # Alta disponibilidad: 2 NameNodes + 3 DataNodes con replicación 3
 docker run -d --name bigdata -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=3 <...> bigdata-sandbox
 
 # Clase de HDFS: solo HDFS, liviano y rápido de arrancar
 docker run -d --name bigdata -e SERVICIOS=hdfs -e DATANODES=3 -e REPLICATION=2 <...> bigdata-sandbox
 
-# Clase de MapReduce y Pig, sin Hive ni Spark
+# Clase de MapReduce, Pig y Sqoop, sin Hive ni Spark
 docker run -d --name bigdata -e SERVICIOS=mapreduce -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> bigdata-sandbox
 ```
 
 ### Cambiar los parámetros
 
-Se borra el contenedor y se vuelve a crear con otros `-e`. Los datos de HDFS y
-las tablas de Hive quedan en el volumen:
+Se borra el contenedor y se vuelve a crear con otros `-e` (o `-p`). Los datos
+de HDFS, las tablas de Hive y la base MySQL quedan en el volumen:
 
 ```bash
 docker rm -f bigdata
@@ -395,7 +409,7 @@ docker run -d --name bigdata -e DATANODES=4 <...> bigdata-sandbox
 - Si bajás `DATANODES` y los nodos que sacaste tenían la única copia de algún
   bloque, esos bloques se pierden. Igual que en un cluster de verdad.
 - Con `SERVICIOS=hdfs` o `mapreduce`, las tablas de Hive no se borran: vuelven
-  cuando prendés `todo` otra vez.
+  cuando prendés `todo` otra vez. Lo mismo la base MySQL con `SERVICIOS=hdfs`.
 
 ### Seguir el arranque
 
@@ -454,6 +468,7 @@ jps             # los procesos Java, uno por nodo: DataNode (dn2), NameNode (nn1
 | HiveServer2           | http://localhost:10002      | Sesiones y queries de Hive                   |
 | Spark History         | http://localhost:18080      | Trabajos de Spark terminados                 |
 | Spark (trabajo activo)| http://localhost:4040       | Solo mientras corre un spark-shell/pyspark/spark-submit |
+| MySQL                 | `localhost:3306` (no es web) | Solo si agregaste `-p 3306:3306` (sección 6). Desde DBeaver: `jdbc:mysql://localhost:3306/tienda`, usuario `alumno`, clave `alumno` |
 
 Los links entre páginas (por ejemplo, de la lista de DataNodes del NameNode a
 la página de cada DataNode) apuntan a `localhost` y funcionan desde el
@@ -496,7 +511,7 @@ En el Hadoop de fábrica tarda 10,5 min; acá está acortado para verlo en clase
 Enseguida el NameNode copia los bloques que tenía ese nodo a los que quedan,
 para volver a cumplir la replicación. Volvé a correr el `fsck` de arriba: el
 DataNode 2 ya no aparece y todos los bloques siguen con 2 réplicas. Los
-trabajos (MapReduce, Pig, Hive, Spark) siguen andando.
+trabajos (MapReduce, Pig, Hive, Spark, Sqoop) siguen andando.
 
 ```bash
 datanode start 2
@@ -558,7 +573,7 @@ cat $HADOOP_CONF_DIR/hdfs-site.xml           # replicación, bloque, NameNodes..
 cat /opt/sandbox/run/dn2/hdfs-site.xml       # lo propio del DataNode 2 (carpeta y puertos)
 ```
 
-## 10. Ejemplos: MapReduce, Pig, Hive y Spark
+## 10. Ejemplos: MapReduce, Pig, Hive, Spark y Sqoop
 
 Todos se corren **adentro** del contenedor (`docker exec -it bigdata bash`),
 parado en `/datos`. Los archivos están en `datos/ejemplos/` (sección 3). El
@@ -568,7 +583,8 @@ paso a paso completo, con qué tiene que salir en cada uno, está en el
 Los cuatro ejemplos de ventas (`mapper.py`+`reducer.py`, `ventas.pig`,
 `ventas.hql`, `ventas.py`) hacen el **mismo cálculo** (unidades y facturación
 por producto) sobre los mismos archivos de HDFS, y tienen que dar el mismo
-resultado. Cada uno guarda el suyo en `/user/root/resultados/`.
+resultado. Cada uno guarda el suyo en `/user/root/resultados/`. El de Sqoop
+(`sqoop.sh`) es otro caso: datos que están en una base MySQL (más abajo).
 
 ### Orden recomendado
 
@@ -704,6 +720,86 @@ exit()
 Todo Spark corre sobre YARN: cada sesión aparece en http://localhost:8088 como
 aplicación SPARK y, al terminar, en http://localhost:18080.
 
+### Sqoop
+
+Sqoop copia tablas entre una **base relacional** y HDFS: `import` trae una
+tabla a HDFS (como archivos de texto) y `export` devuelve una carpeta de HDFS a
+una tabla. Cada copia es un trabajo MapReduce que solo tiene mappers (se ve en
+http://localhost:8088).
+
+Adentro del contenedor corre un **MySQL** (MariaDB) con la base `tienda` ya
+cargada, para tener de dónde traer:
+
+| Tabla               | Filas   | Qué tiene                                             |
+|---------------------|--------:|-------------------------------------------------------|
+| `productos`         | 8       | producto, categoría (infusiones, accesorios, almacen, panaderia) y precio |
+| `sucursales`        | 4       | sucursal, encargado y fecha de apertura               |
+| `ventas`            | 200.000 | id, fecha, sucursal, producto, cantidad y precio: las **mismas** ventas que `ventas_grandes.csv` |
+| `resumen_categoria` | 0       | Vacía: acá vuelve el resultado calculado en Hadoop    |
+
+Usuario `alumno`, clave `alumno`. Para mirarla con SQL:
+
+```bash
+mysql tienda          # consola de MySQL (salir: exit)
+```
+
+```sql
+SHOW TABLES;
+SELECT * FROM productos;
+SELECT sucursal, COUNT(*) FROM ventas GROUP BY sucursal;
+exit
+```
+
+El ejemplo completo (necesita `SERVICIOS=todo`, porque usa Hive en el medio):
+
+```bash
+bash ejemplos/sqoop.sh
+```
+
+Hace cuatro pasos, que también se pueden copiar de a uno desde el archivo:
+
+1. **Mirar** la base desde Sqoop: `list-databases`, `list-tables` y `eval`
+   (corre un SQL en MySQL y muestra el resultado; no usa Hadoop).
+2. **Importar** `productos` (1 mapper → 1 archivo) y `ventas` (4 mappers en
+   paralelo: Sqoop parte la tabla en 4 rangos de `id` → 4 archivos
+   `part-m-0000N`) a `/user/root/tienda/<tabla>`.
+3. **Procesar** en Hive (`ejemplos/tienda.hql`): tablas externas sobre esas
+   carpetas y un `JOIN` ventas + productos para facturar por categoría. El
+   resultado queda en `/user/root/resultados/hive_por_categoria`.
+4. **Exportar** ese resultado a la tabla `resumen_categoria` de MySQL.
+
+```bash
+sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --table ventas --target-dir /user/root/tienda/ventas --delete-target-dir -m 4
+
+sqoop export --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --table resumen_categoria --export-dir /user/root/resultados/hive_por_categoria -m 1
+```
+
+Resultado esperado en `resumen_categoria`:
+
+| categoria  | unidades | facturado   |
+|------------|---------:|------------:|
+| accesorios |   96.228 | 906.830.000 |
+| infusiones |  208.983 | 640.341.500 |
+| almacen    |  172.775 | 257.117.400 |
+| panaderia  |  121.087 | 108.978.300 |
+
+Para tener en cuenta:
+
+- `--delete-target-dir` pisa la carpeta de HDFS si ya existe; sin eso, el
+  import falla igual que MapReduce.
+- `export` **agrega** filas: la tabla destino tiene que existir y, para
+  repetir, hay que vaciarla antes (el script hace `TRUNCATE`).
+- Antes de copiar, Sqoop genera una clase Java para leer la tabla: queda un
+  `<tabla>.java` en la carpeta donde estás. Se puede borrar.
+- `Setting your password on the command-line is insecure`: es un aviso. Con
+  `-P` en lugar de `--password alumno`, la pide por teclado.
+- Sin `SERVICIOS=todo` (con `mapreduce`) andan el import, el export y `eval`;
+  solo el paso de Hive no.
+- Para entrar a la base desde tu compu (DBeaver, Workbench), sumá
+  `-p 3306:3306` al `docker run` (sección 6).
+
 ### Con tu propio dataset
 
 1. Copiá tu CSV a `datos/` en tu compu.
@@ -713,7 +809,7 @@ aplicación SPARK y, al terminar, en http://localhost:18080.
 4. Copiá el ejemplo de la herramienta que quieras y cambiale la carpeta y las
    columnas.
 
-Detalle y ejemplos de cada herramienta: [TUTORIAL, paso 14](TUTORIAL.md#14-con-tu-propio-dataset).
+Detalle y ejemplos de cada herramienta (Sqoop incluido): [TUTORIAL, paso 15](TUTORIAL.md#15-con-tu-propio-dataset).
 
 ## 11. Referencia de comandos
 
@@ -736,7 +832,7 @@ Detalle y ejemplos de cada herramienta: [TUTORIAL, paso 14](TUTORIAL.md#14-con-t
 | `docker stats bigdata`                   | RAM y CPU que está usando                              |
 | `docker cp archivo.csv bigdata:/datos/`  | Copiar un archivo adentro (alternativa a la carpeta `datos/`) |
 | `docker rm -f bigdata`                   | Borrar el contenedor (los datos del volumen quedan)    |
-| `docker volume rm bigdata_hadoop`        | Borrar los datos de HDFS y Hive (con el contenedor ya borrado) |
+| `docker volume rm bigdata_hadoop`        | Borrar los datos de HDFS, Hive y MySQL (con el contenedor ya borrado) |
 
 ### Adentro: el cluster
 
@@ -815,6 +911,56 @@ de datos en cada paso), `fs -ls` y demás comandos de HDFS.
 | `spark-submit --conf spark.sql.shuffle.partitions=8 script.py` | Cualquier opción de Spark (por defecto 4 particiones) |
 | `pyspark` / `spark-shell` / `spark-sql`     | Consola en Python / Scala / SQL (salir: `exit()` / `:quit` / `exit;`) |
 
+### Adentro: Sqoop
+
+Todos llevan la conexión: `--connect jdbc:mysql://localhost/tienda --username alumno --password alumno`
+(abajo, `<con>`). `list-databases` usa `jdbc:mysql://localhost`, sin base.
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `sqoop list-databases <con>`                | Bases de datos del servidor                  |
+| `sqoop list-tables <con>`                   | Tablas de la base                            |
+| `sqoop eval <con> --query "SELECT ..."`     | Corre un SQL en MySQL y muestra el resultado (también `INSERT`, `TRUNCATE`...) |
+| `sqoop import <con> --table T --target-dir <hdfs>` | Copia la tabla T a esa carpeta de HDFS |
+| `sqoop export <con> --table T --export-dir <hdfs>` | Agrega los archivos de esa carpeta a la tabla T (tiene que existir) |
+| `sqoop help` / `sqoop help import`          | Todas las opciones                           |
+
+Opciones de `import`:
+
+| Opción                                  | Qué hace                                          |
+|-----------------------------------------|---------------------------------------------------|
+| `-m N`                                  | N mappers en paralelo → N archivos `part-m-*` (por defecto 4). Con `-m 1` no hace falta clave primaria |
+| `--split-by columna`                    | Por qué columna partir entre los mappers (por defecto, la clave primaria) |
+| `--delete-target-dir`                   | Si la carpeta ya existe, la pisa                  |
+| `--where "sucursal = 'Centro'"`         | Solo las filas que cumplen                        |
+| `--columns "fecha,producto,cantidad"`   | Solo esas columnas                                |
+| `--query 'SELECT ... WHERE $CONDITIONS'` | Importa el resultado de una consulta (en lugar de `--table`). Va entre comillas **simples**, con `$CONDITIONS` y con `-m 1` o `--split-by` |
+| `--fields-terminated-by ';'`            | Separador de columnas (por defecto `,`)           |
+| `--as-textfile` / `--as-parquetfile` / `--as-avrodatafile` | Formato de los archivos (por defecto texto) |
+| `--incremental append --check-column id --last-value 200000` | Trae solo las filas nuevas (con `id` mayor a ese) |
+
+Opciones de `export`: `-m N`, `--input-fields-terminated-by ';'` (si los
+archivos no van separados por comas), `--columns` (a qué columnas de la tabla
+va cada campo), `--update-key columna` (actualiza filas en lugar de agregar).
+
+### Adentro: MySQL
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `mysql tienda`                              | Consola SQL en la base `tienda` (salir: `exit`) |
+| `mysql tienda -e "SELECT ..."`              | Una consulta suelta                          |
+| `mysql tienda < script.sql`                 | Corre un archivo SQL                         |
+| `mysql -u alumno -palumno tienda`           | Lo mismo, con el usuario que usa Sqoop       |
+| `mysql < ejemplos/tienda.sql`               | Recrea la base `tienda` (antes: `python3 ejemplos/generar_ventas.py 200000 /tmp/tienda_ventas.csv`) |
+
+Una tabla propia desde un CSV, para después traerla con Sqoop:
+
+```sql
+CREATE TABLE tienda.notas (alumno VARCHAR(50), materia VARCHAR(50), nota DECIMAL(4,2));
+LOAD DATA LOCAL INFILE '/datos/notas.csv' INTO TABLE tienda.notas
+  FIELDS TERMINATED BY ',' IGNORE 1 LINES;     -- IGNORE: saltea el encabezado
+```
+
 ### Adentro: el generador de datos
 
 | Comando                                               | Qué hace                         |
@@ -828,8 +974,8 @@ a todos les da el mismo resultado.
 
 ## 12. Empezar de cero
 
-Borra el contenedor y **todos los datos** de HDFS y Hive (tu carpeta `datos/`
-no se toca):
+Borra el contenedor y **todos los datos** de HDFS, Hive y MySQL (tu carpeta
+`datos/` no se toca):
 
 ```bash
 docker rm -f bigdata
@@ -854,6 +1000,10 @@ Después repetís el `docker run` (con los `-e` que quieras).
 | Abrí un 2º pyspark y la UI no está en :4040     | La segunda sesión usa :4041, que no está expuesto. Usá :8088 → *ApplicationMaster* |
 | `pig` se queda en `Connecting to ResourceManager` | YARN está apagado (`SERVICIOS=hdfs`): usá `pig -x local`, o recreá el contenedor con `SERVICIOS=mapreduce` o `todo` |
 | `beeline` dice `Connection refused`             | HiveServer2 todavía arranca (~1 min) o `SERVICIOS` no es `todo`. Mirá `estado` |
+| `sqoop` dice `Communications link failure`      | MySQL no está corriendo: recién prendido, o `SERVICIOS=hdfs`. Mirá `estado` y `/var/log/mysql/error.log` |
+| `sqoop import` dice `No primary key could be found` | La tabla no tiene clave primaria: usá `-m 1` o `--split-by <columna>` |
+| `sqoop export` falla con `Duplicate entry`      | La tabla ya tiene esas filas: vaciala antes (`TRUNCATE TABLE ...`) |
+| Muchos `WARN` al correr `sqoop`                 | Normales (avisos de Hadoop y de la contraseña en la línea de comandos). Lo que importa es el final: `Transferred ...` / `Exported N records` |
 | `Unable to load native-hadoop library`          | Warning normal; Hadoop usa la versión Java. No afecta          |
 | `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 1, paso 4) |
 | `docker pull` dice `denied` o `unauthorized`     | La imagen publicada todavía no es pública: avisale a quien mantiene el repo |
@@ -870,13 +1020,16 @@ Después repetís el `docker run` (con los `-e` que quieras).
   - `/opt/hive/*.log`
   - `/opt/spark/logs/`
   - `/opt/zookeeper/logs/`
+  - `/var/log/mysql/error.log`
 - Se buildea desde los binarios oficiales de Apache, sin imágenes de terceros:
   sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4). La imagen publicada trae
   las dos y Docker baja sola la que corresponde.
 - Antes de publicar cada versión de la imagen, GitHub prende un cluster y corre
   `pruebas/probar.sh`: el tutorial entero, verificando que MapReduce, Pig, Hive
-  y Spark den el resultado esperado. Si algo falla, no se publica.
+  y Spark den el resultado esperado, y que Sqoop traiga la tabla `ventas`
+  completa y devuelva el resumen por categoría. Si algo falla, no se publica.
 - Para que entre en una notebook:
   - Cada daemon tiene un tope de memoria chico y una JVM liviana (`sandbox/lib.sh`).
-  - La imagen usa el runtime de Java (JRE) y no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C, la copia de Hadoop que trae Pig (`Dockerfile`).
-  - `jps` es una versión propia, porque el JRE no lo trae.
+  - La imagen no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C, la copia de Hadoop que trae Pig (`Dockerfile`). Trae el JDK completo (y no solo el JRE) porque Sqoop compila una clase Java por cada tabla que copia.
+  - MySQL arranca con poca memoria (`conf/mysql.cnf`): alcanza para la base de ejemplo y tablas de unos cientos de miles de filas.
+  - `jps` es una versión propia, que además muestra la instancia de cada proceso (nn1, dn2...).

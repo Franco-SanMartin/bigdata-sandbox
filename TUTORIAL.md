@@ -1,8 +1,9 @@
-# Tutorial: de cero a procesar un dataset con MapReduce, Pig, Hive y Spark
+# Tutorial: de cero a procesar un dataset con MapReduce, Pig, Hive, Spark y Sqoop
 
 Paso a paso, desde una compu sin nada hasta procesar un dataset de 200.000
-ventas con las cuatro herramientas del stack y comparar los resultados. Al
-final, cómo hacer lo mismo con **tu propio** CSV.
+ventas con las cuatro herramientas del stack y comparar los resultados; después
+traer esas mismas ventas desde una base **MySQL** con Sqoop y devolverle un
+resultado. Al final, cómo hacer lo mismo con **tu propio** CSV.
 
 Cada paso dice qué escribir, qué tenés que ver y qué está pasando por abajo.
 Para el detalle de cada parámetro y experimento está el [README](README.md).
@@ -12,7 +13,8 @@ Para el detalle de cada parámetro y experimento está el [README](README.md).
 >   CMD, o la de Mac/Linux).
 > - `root@...:/datos#`: **adentro** del contenedor (después del paso 4).
 > - `grunt>`: adentro de Pig interactivo. `0: jdbc:hive2://...>`: adentro de
->   Hive (beeline). `>>>`: adentro de pyspark.
+>   Hive (beeline). `>>>`: adentro de pyspark. `MariaDB [tienda]>`: adentro de
+>   MySQL.
 >
 > En los bloques de código el prompt no aparece: se copia la línea tal cual.
 
@@ -29,10 +31,11 @@ Para el detalle de cada parámetro y experimento está el [README](README.md).
 9. [Hive](#9-hive)
 10. [Spark](#10-spark)
 11. [Comparar los cuatro resultados](#11-comparar-los-cuatro-resultados)
-12. [Bajar los resultados a tu compu](#12-bajar-los-resultados-a-tu-compu)
-13. [Romper cosas: se cae un DataNode](#13-romper-cosas-se-cae-un-datanode)
-14. [Con tu propio dataset](#14-con-tu-propio-dataset)
-15. [Apagar, prender y empezar de cero](#15-apagar-prender-y-empezar-de-cero)
+12. [Sqoop: traer y llevar tablas de MySQL](#12-sqoop-traer-y-llevar-tablas-de-mysql)
+13. [Bajar los resultados a tu compu](#13-bajar-los-resultados-a-tu-compu)
+14. [Romper cosas: se cae un DataNode](#14-romper-cosas-se-cae-un-datanode)
+15. [Con tu propio dataset](#15-con-tu-propio-dataset)
+16. [Apagar, prender y empezar de cero](#16-apagar-prender-y-empezar-de-cero)
 
 ---
 
@@ -123,12 +126,13 @@ Seguí el arranque:
 docker logs -f bigdata
 ```
 
-Vas a ver cómo se formatea HDFS, arrancan los DataNodes, YARN, Hive y Spark. A
+Vas a ver cómo se formatea HDFS, arrancan los DataNodes, YARN, MySQL (la
+primera vez carga una base de ejemplo), Hive y Spark. A
 los 1–2 minutos aparece el cartel **Cluster LISTO** con la lista de procesos.
 Salís del log con `Ctrl+C` (el cluster sigue prendido).
 
 `docker run` es **una sola vez**. Los días siguientes: `docker start bigdata`
-y `docker stop bigdata` (paso 15).
+y `docker stop bigdata` (paso 16).
 
 ## 4. Mirar la arquitectura y entrar
 
@@ -156,17 +160,17 @@ estado
 ```
 
 Lista cada proceso (NameNode, Secondary NameNode, los 3 DataNodes,
-ResourceManager, NodeManager, JobHistory, Metastore, HiveServer2, Spark
-History) con su estado y su página web. Pig no es un servicio: es un comando
-que manda trabajos a YARN.
+ResourceManager, NodeManager, JobHistory, MySQL, Metastore, HiveServer2, Spark
+History) con su estado y su página web. Pig y Sqoop no son servicios: son
+comandos que mandan trabajos a YARN.
 
 ```bash
 ls ejemplos
 ```
 
 ```
-generar_ventas.py  mapper.py  reducer.py  texto.txt  ventas.csv
-ventas.hql  ventas.pig  ventas.py  wordcount.pig
+generar_ventas.py  reducer.py  texto.txt   tienda.sql  ventas.hql  ventas.py
+mapper.py          sqoop.sh    tienda.hql  ventas.csv  ventas.pig  wordcount.pig
 ```
 
 | Archivo              | Qué es                                                   |
@@ -177,6 +181,9 @@ ventas.hql  ventas.pig  ventas.py  wordcount.pig
 | `ventas.pig`         | Lo mismo en **Pig**                                      |
 | `ventas.hql`         | Lo mismo en **Hive** (SQL), y además por sucursal         |
 | `ventas.py`          | Lo mismo en **Spark** (PySpark)                           |
+| `sqoop.sh`           | **Sqoop**: trae tablas de MySQL a HDFS y devuelve un resultado |
+| `tienda.sql`         | La base MySQL `tienda` que usa Sqoop (ya viene cargada)   |
+| `tienda.hql`         | Consulta en Hive las tablas que trajo Sqoop               |
 | `texto.txt`, `wordcount.pig` | El clásico wordcount                             |
 
 También los ves desde tu compu, en `datos/ejemplos/`: los podés abrir y editar
@@ -642,7 +649,193 @@ for h in mr pig hive spark; do
 done
 ```
 
-## 12. Bajar los resultados a tu compu
+## 12. Sqoop: traer y llevar tablas de MySQL
+
+Hasta acá los datos vinieron de un CSV. En una empresa, casi siempre están en
+una **base de datos relacional** (MySQL, PostgreSQL, Oracle...). Sqoop es el
+puente: **import** copia una tabla a HDFS para procesarla con Hadoop y
+**export** devuelve el resultado a una tabla.
+
+### 12.1 La base de ejemplo
+
+Adentro del contenedor corre un MySQL con la base `tienda`, cargada en el
+primer arranque. Su tabla `ventas` tiene **las mismas 200.000 ventas** del
+paso 5, más un `id`. Mirala:
+
+```bash
+mysql tienda
+```
+
+```sql
+SHOW TABLES;
+SELECT * FROM productos;
+SELECT COUNT(*) FROM ventas;
+SELECT * FROM ventas LIMIT 3;
+exit
+```
+
+```
++------------+------------+--------+
+| producto   | categoria  | precio |
++------------+------------+--------+
+| azucar     | almacen    |   1200 |
+| bombilla   | accesorios |   3000 |
+...
+```
+
+| Tabla               | Qué tiene                                             |
+|---------------------|-------------------------------------------------------|
+| `productos`         | Cada producto con su **categoría** (que no está en el CSV) y su precio |
+| `sucursales`        | Las 4 sucursales, con encargado y fecha de apertura    |
+| `ventas`            | Las 200.000 ventas                                    |
+| `resumen_categoria` | Vacía: acá vamos a devolver lo que calcule Hadoop     |
+
+La pregunta nueva: **¿cuánto facturó cada categoría?** Hace falta cruzar
+`ventas` con `productos`.
+
+### 12.2 Todo de una
+
+```bash
+bash ejemplos/sqoop.sh
+```
+
+Tarda unos minutos y escribe mucho (`WARN` incluidos: son normales). Abajo
+está paso por paso; abrí `ejemplos/sqoop.sh` en tu compu y seguilo a la par.
+Todos los comandos de Sqoop llevan la misma conexión: la dirección JDBC de la
+base, usuario `alumno` y clave `alumno`.
+
+### 12.3 Mirar la base desde Sqoop
+
+```bash
+sqoop list-tables --connect jdbc:mysql://localhost/tienda --username alumno --password alumno
+sqoop eval --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --query "SELECT * FROM productos"
+```
+
+`eval` manda el SQL a MySQL y muestra el resultado: sirve para probar la
+conexión, sin Hadoop de por medio.
+
+### 12.4 Importar: MySQL → HDFS
+
+```bash
+sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --table productos --target-dir /user/root/tienda/productos --delete-target-dir -m 1
+
+sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --table ventas --target-dir /user/root/tienda/ventas --delete-target-dir -m 4
+```
+
+Mientras corre, http://localhost:8088: cada import es un trabajo **MapReduce**
+con mappers y sin reducers. Con `-m 4`, Sqoop pregunta el `id` mínimo y máximo,
+parte la tabla en 4 rangos y cada mapper copia uno, en paralelo. Al final dice
+`Retrieved 200000 records`.
+
+```bash
+hdfs dfs -ls /user/root/tienda/ventas
+hdfs dfs -cat /user/root/tienda/ventas/part-m-00000 | head -3
+```
+
+```
+.../tienda/ventas/_SUCCESS
+.../tienda/ventas/part-m-00000
+.../tienda/ventas/part-m-00001
+.../tienda/ventas/part-m-00002
+.../tienda/ventas/part-m-00003
+
+1,2026-01-31,Sur,azucar,5,1200
+2,2026-06-15,Centro,bombilla,5,3000
+...
+```
+
+Un archivo por mapper (`part-m-`: salida de un *map*), separado por comas y sin
+encabezado. Si comparás con `ventas_grandes.csv`, son las mismas filas.
+
+> Antes de copiar, Sqoop genera y compila una clase Java para leer la tabla:
+> por eso aparecen `productos.java` y `ventas.java` en tu carpeta. Se pueden
+> borrar.
+
+### 12.5 Procesar en Hive: un JOIN
+
+```bash
+cat ejemplos/tienda.hql
+beeline -u jdbc:hive2://localhost:10000 -f ejemplos/tienda.hql
+```
+
+Crea dos tablas EXTERNAL sobre las carpetas que dejó Sqoop (`tienda_ventas` y
+`tienda_productos`), las cruza por producto y suma por categoría:
+
+```
++--------------+-----------+------------+
+| p.categoria  | unidades  | facturado  |
++--------------+-----------+------------+
+| accesorios   | 96228     | 906830000  |
+| infusiones   | 208983    | 640341500  |
+| almacen      | 172775    | 257117400  |
+| panaderia    | 121087    | 108978300  |
++--------------+-----------+------------+
+```
+
+Fijate que cierra con el paso 11: infusiones = yerba + cafe, accesorios =
+mate + bombilla + termo, etc. El mismo resultado queda como archivo en
+`/user/root/resultados/hive_por_categoria`.
+
+### 12.6 Exportar: HDFS → MySQL
+
+```bash
+sqoop eval --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --query "TRUNCATE TABLE resumen_categoria"
+
+sqoop export --connect jdbc:mysql://localhost/tienda --username alumno --password alumno \
+  --table resumen_categoria --export-dir /user/root/resultados/hive_por_categoria -m 1
+```
+
+`export` lee los archivos de esa carpeta y hace `INSERT` en la tabla, que
+tiene que existir antes. El `TRUNCATE` la vacía para poder repetir el ejemplo
+(sino falla con `Duplicate entry`). Termina con `Exported 4 records`.
+
+El resultado ya está en la base, para cualquier sistema que use MySQL:
+
+```bash
+mysql tienda -e "SELECT * FROM resumen_categoria ORDER BY facturado DESC"
+```
+
+El circuito completo, que es para lo que se usa Sqoop en la vida real:
+
+```
+MySQL (tienda.ventas)  --sqoop import-->  HDFS  --Hive/Pig/Spark-->  HDFS  --sqoop export-->  MySQL (resumen_categoria)
+```
+
+### 12.7 Otras formas de importar
+
+```bash
+C="--connect jdbc:mysql://localhost/tienda --username alumno --password alumno"
+
+# Solo algunas filas y columnas
+sqoop import $C --table ventas --where "sucursal = 'Centro'" --columns "fecha,producto,cantidad" \
+  --target-dir /user/root/tienda/centro --delete-target-dir -m 2
+
+# El resultado de una consulta (comillas SIMPLES y $CONDITIONS obligatorios)
+sqoop import $C --query 'SELECT v.fecha, v.cantidad, p.categoria FROM ventas v JOIN productos p ON v.producto = p.producto WHERE $CONDITIONS' \
+  --target-dir /user/root/tienda/con_categoria --delete-target-dir -m 1
+
+# Separado por ';' en lugar de comas
+sqoop import $C --table sucursales --fields-terminated-by ';' \
+  --target-dir /user/root/tienda/sucursales --delete-target-dir -m 1
+
+# Solo lo nuevo: filas con id mayor a 200000 (agrega archivos, no pisa)
+sqoop import $C --table ventas --incremental append --check-column id --last-value 200000 \
+  --target-dir /user/root/tienda/ventas -m 1
+```
+
+Para el último, metele una venta nueva antes y fijate que trae solo esa:
+
+```bash
+mysql tienda -e "INSERT INTO ventas (fecha, sucursal, producto, cantidad, precio) VALUES ('2026-12-24', 'Centro', 'termo', 2, 35000)"
+```
+
+Todas las opciones: `sqoop help import` y la sección 11 del README.
+
+## 13. Bajar los resultados a tu compu
 
 ```bash
 mkdir -p resultados
@@ -655,7 +848,7 @@ hdfs dfs -getmerge /user/root/resultados/spark_por_producto resultados/spark.csv
 
 Quedan en `datos/resultados/` de tu compu: el CSV se abre con Excel.
 
-## 13. Romper cosas: se cae un DataNode
+## 14. Romper cosas: se cae un DataNode
 
 ```bash
 datanode stop 2
@@ -671,7 +864,8 @@ réplicas. Comprobalo:
 hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations
 ```
 
-Los trabajos también siguen andando (probá `pig ejemplos/ventas.pig`).
+Los trabajos también siguen andando (probá `pig ejemplos/ventas.pig` o
+`bash ejemplos/sqoop.sh`).
 Volvé a prenderlo:
 
 ```bash
@@ -681,11 +875,11 @@ datanode start 2
 Más experimentos (NameNode caído, alta disponibilidad, cambiar la replicación):
 README, sección 6.
 
-## 14. Con tu propio dataset
+## 15. Con tu propio dataset
 
 La receta es la misma; lo que cambia son los nombres de las columnas.
 
-### 14.1 Ponerlo en `datos/`
+### 15.1 Ponerlo en `datos/`
 
 Copiá tu CSV a la carpeta `datos/` de tu compu (con el explorador de archivos).
 Adentro del contenedor ya lo ves:
@@ -694,7 +888,7 @@ Adentro del contenedor ya lo ves:
 ls -lh /datos
 ```
 
-### 14.2 Mirarlo antes de nada
+### 15.2 Mirarlo antes de nada
 
 ```bash
 head -5 mi_archivo.csv
@@ -715,7 +909,7 @@ Revisá cuatro cosas:
 > (`"Perez, Juan"`), Pig y Hive con un separador simple lo parten mal. Lo más
 > fácil: guardarlo desde Excel/Sheets con `;` o tabulaciones como separador.
 
-### 14.3 Subirlo a su carpeta de HDFS
+### 15.3 Subirlo a su carpeta de HDFS
 
 Supongamos `notas.csv` con columnas `alumno,materia,nota`:
 
@@ -728,7 +922,7 @@ hdfs fsck /user/root/notas -files -blocks
 Una carpeta por dataset: si después llega `notas_2027.csv`, lo subís a la misma
 carpeta y todas las herramientas lo leen junto.
 
-### 14.4 Adaptar cada herramienta
+### 15.4 Adaptar cada herramienta
 
 Lo más rápido para explorar es **Spark**: infiere las columnas solo.
 
@@ -776,12 +970,33 @@ promedios = FOREACH por_materia GENERATE group AS materia, AVG(datos.nota) AS pr
 DUMP promedios;
 ```
 
+**Sqoop**: si tu dataset está en una base de datos (o lo querés cargar en
+una), primero llevalo a MySQL y después traelo con Sqoop:
+
+```bash
+mysql tienda
+```
+
+```sql
+CREATE TABLE notas (alumno VARCHAR(50), materia VARCHAR(50), nota DECIMAL(4,2));
+LOAD DATA LOCAL INFILE '/datos/notas.csv' INTO TABLE notas
+  FIELDS TERMINATED BY ',' IGNORE 1 LINES;     -- ';' si hace falta; IGNORE saltea el encabezado
+exit
+```
+
+```bash
+sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno   --table notas --target-dir /user/root/notas_sql --delete-target-dir -m 1
+```
+
+`-m 1` porque `notas` no tiene clave primaria (con más mappers, agregá
+`--split-by alumno`).
+
 **MapReduce**: copiá `mapper.py` y `reducer.py`. En el mapper cambiá cuántos
 campos espera, cómo se llama la primera columna del encabezado y qué emite
 (clave `<TAB>` valor); en el reducer, qué hace con los valores de cada clave.
 Probalo primero con la tubería del paso 7.1.
 
-### 14.5 ¿Es muy grande para el sandbox?
+### 15.5 ¿Es muy grande para el sandbox?
 
 - Hasta unos cientos de MB anda bien. Varios GB también, pero lento: es una
   sola compu haciendo de cluster.
@@ -789,17 +1004,17 @@ Probalo primero con la tubería del paso 7.1.
   `pyspark` y `beeline` abiertos.
 - `docker stats bigdata` muestra cuánta RAM está usando.
 
-## 15. Apagar, prender y empezar de cero
+## 16. Apagar, prender y empezar de cero
 
 ```bash
 exit                       # salir del contenedor (sigue prendido)
-docker stop bigdata        # apagar: los datos de HDFS y las tablas quedan
+docker stop bigdata        # apagar: los datos de HDFS, las tablas y la base MySQL quedan
 docker start bigdata       # prender otro día (~1-2 min hasta "Cluster LISTO")
 docker exec -it bigdata bash
 ```
 
-Empezar de cero, borrando **todo** lo de HDFS y Hive (tus archivos de `datos/`
-en la compu no se tocan):
+Empezar de cero, borrando **todo** lo de HDFS, Hive y MySQL (tus archivos de
+`datos/` en la compu no se tocan):
 
 ```bash
 docker rm -f bigdata
@@ -807,6 +1022,14 @@ docker volume rm bigdata_hadoop
 ```
 
 Y de nuevo el paso 3.
+
+Si solo querés la base `tienda` como vino (por ejemplo, después de meterle
+ventas a mano):
+
+```bash
+python3 ejemplos/generar_ventas.py 200000 /tmp/tienda_ventas.csv
+mysql < ejemplos/tienda.sql
+```
 
 Si editaste un ejemplo y querés el original: borralo de `datos/ejemplos/` y
 reiniciá el contenedor (`docker restart bigdata`); vuelve a aparecer.
