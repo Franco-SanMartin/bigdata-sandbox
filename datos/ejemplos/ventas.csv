@@ -1,0 +1,8 @@
+fecha,sucursal,producto,cantidad,precio
+2026-10-01,Centro,yerba,3,2500
+2026-10-01,Norte,mate,1,8000
+2026-10-02,Centro,yerba,5,2500
+2026-10-02,Sur,bombilla,2,3000
+2026-10-03,Norte,yerba,1,2500
+2026-10-03,Centro,termo,1,35000
+2026-10-04,Sur,mate,2,8000

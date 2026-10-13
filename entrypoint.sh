@@ -48,8 +48,9 @@ if [ -d /hadoop/dfs/data ] && [ ! -e /hadoop/dfs/dn1 ]; then
   mv /hadoop/dfs/data /hadoop/dfs/dn1
 fi
 
-# Archivos de ejemplo en /datos, sin pisar los que ya esten
-cp -n /opt/sandbox/ejemplos/* /datos/ 2>/dev/null || true
+# Ejemplos en /datos/ejemplos, sin pisar los que ya esten (si editaste uno, queda
+# tu version; para recuperar el original, borralo y reinicia el contenedor)
+mkdir -p /datos/ejemplos && cp -rn /opt/sandbox/ejemplos/. /datos/ejemplos/ 2>/dev/null || true
 
 generar_conf
 

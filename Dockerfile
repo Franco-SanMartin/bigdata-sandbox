@@ -1,42 +1,34 @@
-# BigData sandbox: HDFS + YARN + MapReduce + Hive (sobre Tez) + Spark, todo en
-# UNA imagen / UN contenedor, pero con cada daemon como proceso separado y su
-# UI web navegable. La arquitectura de HDFS (DataNodes, NameNodes, replicacion,
-# tamano de bloque) se elige en el docker run. Buildea desde los tarballs
-# oficiales de Apache sobre base Java -> corre en amd64 y ARM64.
-# JRE y no JDK: para correr Hadoop/Hive/Spark alcanza el runtime de Java
-# (no se compila nada adentro) y la imagen pesa menos.
-FROM eclipse-temurin:8-jre-focal
+# BigData sandbox: HDFS + YARN + MapReduce + Pig + Hive (sobre Tez) + Spark,
+# todo en UNA imagen / UN contenedor, pero con cada daemon como proceso
+# separado y su UI web navegable. La arquitectura de HDFS (DataNodes,
+# NameNodes, replicacion, tamano de bloque) se elige en el docker run.
+# Buildea desde los tarballs oficiales de Apache sobre base Java -> corre en
+# amd64 y ARM64.
 
 ARG HADOOP_VERSION=3.3.6
 ARG HIVE_VERSION=4.0.0
 ARG TEZ_VERSION=0.10.3
 ARG SPARK_VERSION=3.5.9
 ARG ZOOKEEPER_VERSION=3.8.7
+ARG PIG_VERSION=0.18.0
 
-ENV HADOOP_HOME=/opt/hadoop \
-    HIVE_HOME=/opt/hive \
-    TEZ_HOME=/opt/tez \
-    SPARK_HOME=/opt/spark \
-    ZK_HOME=/opt/zookeeper \
-    HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop \
-    YARN_CONF_DIR=/opt/hadoop/etc/hadoop \
-    HIVE_CONF_DIR=/opt/hive/conf \
-    PYSPARK_PYTHON=python3 \
-    HDFS_NAMENODE_USER=root \
-    HDFS_DATANODE_USER=root \
-    HDFS_SECONDARYNAMENODE_USER=root \
-    HDFS_JOURNALNODE_USER=root \
-    HDFS_ZKFC_USER=root \
-    YARN_RESOURCEMANAGER_USER=root \
-    YARN_NODEMANAGER_USER=root \
-    HADOOP_CLIENT_OPTS="-XX:+UseSerialGC -XX:TieredStopAtLevel=1"
-# HADOOP_CLIENT_OPTS: los comandos (hdfs dfs, hive, beeline...) arrancan una
-# JVM nueva cada vez; con estas opciones arrancan mas rapido y ocupan menos.
-# Spark al final del PATH: trae su propio 'beeline' y tiene que ganar el de Hive
-ENV PATH=/opt/sandbox/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$HIVE_HOME/bin:$ZK_HOME/bin:$PATH:$SPARK_HOME/bin
+# ===========================================================================
+# Etapa 1: bajar y desarmar los paquetes de Apache.
+# Son programas Java, iguales para amd64 y ARM64. Esta etapa corre en el
+# procesador de la maquina que buildea ($BUILDPLATFORM), asi al armar la
+# imagen para las dos arquitecturas se bajan una sola vez y no se desarman
+# emulando el otro procesador (lo que mas tarda).
+# ===========================================================================
+FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-focal AS descargas
+ARG HADOOP_VERSION
+ARG HIVE_VERSION
+ARG TEZ_VERSION
+ARG SPARK_VERSION
+ARG ZOOKEEPER_VERSION
+ARG PIG_VERSION
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl procps net-tools less python3 \
+ && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/*
 
 # Baja de la CDN de Apache (rapida); si esa version ya no esta ahi (la CDN solo
@@ -52,13 +44,13 @@ RUN printf '#!/bin/sh\ncurl -fSL "https://dlcdn.apache.org/$1" -o "$2" || curl -
 # "minicluster" que se usa para tests.
 RUN apache-dl "hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz" /tmp/hadoop.tgz \
  && tar -xzf /tmp/hadoop.tgz -C /opt \
- && mv /opt/hadoop-${HADOOP_VERSION} ${HADOOP_HOME} \
+ && mv /opt/hadoop-${HADOOP_VERSION} /opt/hadoop \
  && rm /tmp/hadoop.tgz \
- && rm -rf ${HADOOP_HOME}/share/doc ${HADOOP_HOME}/lib/native/examples \
- && rm -f ${HADOOP_HOME}/share/hadoop/tools/lib/aws-java-sdk-bundle-*.jar \
-          ${HADOOP_HOME}/lib/native/*.a ${HADOOP_HOME}/lib/native/libhdfspp* \
-          ${HADOOP_HOME}/share/hadoop/yarn/hadoop-yarn-applications-catalog-webapp-*.war \
-          ${HADOOP_HOME}/share/hadoop/client/hadoop-client-minicluster-*.jar
+ && rm -rf /opt/hadoop/share/doc /opt/hadoop/lib/native/examples \
+ && rm -f /opt/hadoop/share/hadoop/tools/lib/aws-java-sdk-bundle-*.jar \
+          /opt/hadoop/lib/native/*.a /opt/hadoop/lib/native/libhdfspp* \
+          /opt/hadoop/share/hadoop/yarn/hadoop-yarn-applications-catalog-webapp-*.war \
+          /opt/hadoop/share/hadoop/client/hadoop-client-minicluster-*.jar
 
 # --- Hive ---
 # Sin el driver JDBC suelto (es para clientes de afuera), sin los conectores a
@@ -66,18 +58,18 @@ RUN apache-dl "hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.t
 # de 33 MB. Hive 4 trae un guava viejo que choca con el de Hadoop: alineamos.
 RUN apache-dl "hive/hive-${HIVE_VERSION}/apache-hive-${HIVE_VERSION}-bin.tar.gz" /tmp/hive.tgz \
  && tar -xzf /tmp/hive.tgz -C /opt \
- && mv /opt/apache-hive-${HIVE_VERSION}-bin ${HIVE_HOME} \
+ && mv /opt/apache-hive-${HIVE_VERSION}-bin /opt/hive \
  && rm /tmp/hive.tgz \
- && rm -rf ${HIVE_HOME}/jdbc \
- && rm -f ${HIVE_HOME}/lib/hive-druid-handler-*.jar ${HIVE_HOME}/lib/hive-kudu-handler-*.jar \
-          ${HIVE_HOME}/lib/kudu-client-*.jar ${HIVE_HOME}/examples/files/web_sales.parquet \
-          ${HIVE_HOME}/lib/guava-*.jar \
- && cp ${HADOOP_HOME}/share/hadoop/common/lib/guava-*.jar ${HIVE_HOME}/lib/
+ && rm -rf /opt/hive/jdbc \
+ && rm -f /opt/hive/lib/hive-druid-handler-*.jar /opt/hive/lib/hive-kudu-handler-*.jar \
+          /opt/hive/lib/kudu-client-*.jar /opt/hive/examples/files/web_sales.parquet \
+          /opt/hive/lib/guava-*.jar \
+ && cp /opt/hadoop/share/hadoop/common/lib/guava-*.jar /opt/hive/lib/
 
 # --- Tez (motor de ejecucion de Hive 4) ---
 RUN apache-dl "tez/${TEZ_VERSION}/apache-tez-${TEZ_VERSION}-bin.tar.gz" /tmp/tez.tgz \
  && tar -xzf /tmp/tez.tgz -C /opt \
- && mv /opt/apache-tez-${TEZ_VERSION}-bin ${TEZ_HOME} \
+ && mv /opt/apache-tez-${TEZ_VERSION}-bin /opt/tez \
  && rm /tmp/tez.tgz
 
 # --- Spark (build con soporte Hive, para leer las tablas del metastore) ---
@@ -85,22 +77,74 @@ RUN apache-dl "tez/${TEZ_VERSION}/apache-tez-${TEZ_VERSION}-bin.tar.gz" /tmp/tez
 # se usa: cada executor sirve su propio shuffle).
 RUN apache-dl "spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz" /tmp/spark.tgz \
  && tar -xzf /tmp/spark.tgz -C /opt \
- && mv /opt/spark-${SPARK_VERSION}-bin-hadoop3 ${SPARK_HOME} \
+ && mv /opt/spark-${SPARK_VERSION}-bin-hadoop3 /opt/spark \
  && rm /tmp/spark.tgz \
- && rm -rf ${SPARK_HOME}/R ${SPARK_HOME}/kubernetes ${SPARK_HOME}/yarn
+ && rm -rf /opt/spark/R /opt/spark/kubernetes /opt/spark/yarn
 
 # --- ZooKeeper (solo arranca con NAMENODES >= 2: elige el NameNode activo) ---
 RUN apache-dl "zookeeper/zookeeper-${ZOOKEEPER_VERSION}/apache-zookeeper-${ZOOKEEPER_VERSION}-bin.tar.gz" /tmp/zk.tgz \
  && tar -xzf /tmp/zk.tgz -C /opt \
- && mv /opt/apache-zookeeper-${ZOOKEEPER_VERSION}-bin ${ZK_HOME} \
+ && mv /opt/apache-zookeeper-${ZOOKEEPER_VERSION}-bin /opt/zookeeper \
  && rm /tmp/zk.tgz \
- && rm -rf ${ZK_HOME}/docs
+ && rm -rf /opt/zookeeper/docs
+
+# --- Pig (Pig Latin -> trabajos MapReduce sobre YARN) ---
+# El paquete pesa ~600 MB; quedan ~90. Se saca: su copia propia de Hadoop (usa
+# la del contenedor), el modo Spark, los conectores a HBase y Accumulo, los
+# UDF en Ruby, y documentacion, codigo fuente, tests y tutorial.
+RUN apache-dl "pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" /tmp/pig.tgz \
+ && tar -xzf /tmp/pig.tgz -C /opt \
+ && mv /opt/pig-${PIG_VERSION} /opt/pig \
+ && rm /tmp/pig.tgz \
+ && cd /opt/pig \
+ && rm -rf docs src test tutorial contrib legacy lib-src ivy shims build.xml ivy.xml \
+           lib/spark lib/hadoop3-runtime lib/h2 \
+ && rm -f lib/hbase-*.jar lib/accumulo-*.jar lib/jruby-*.jar
+
+# ===========================================================================
+# Etapa 2: la imagen final (una por arquitectura)
+# JRE y no JDK: para correr Hadoop/Hive/Spark alcanza el runtime de Java
+# (no se compila nada adentro) y la imagen pesa menos.
+# ===========================================================================
+FROM eclipse-temurin:8-jre-focal
+
+ENV HADOOP_HOME=/opt/hadoop \
+    HIVE_HOME=/opt/hive \
+    TEZ_HOME=/opt/tez \
+    SPARK_HOME=/opt/spark \
+    ZK_HOME=/opt/zookeeper \
+    PIG_HOME=/opt/pig \
+    HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop \
+    YARN_CONF_DIR=/opt/hadoop/etc/hadoop \
+    HIVE_CONF_DIR=/opt/hive/conf \
+    PYSPARK_PYTHON=python3 \
+    PIG_HEAPSIZE=512 \
+    HDFS_NAMENODE_USER=root \
+    HDFS_DATANODE_USER=root \
+    HDFS_SECONDARYNAMENODE_USER=root \
+    HDFS_JOURNALNODE_USER=root \
+    HDFS_ZKFC_USER=root \
+    YARN_RESOURCEMANAGER_USER=root \
+    YARN_NODEMANAGER_USER=root \
+    HADOOP_CLIENT_OPTS="-XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+# HADOOP_CLIENT_OPTS: los comandos (hdfs dfs, hive, beeline, pig...) arrancan
+# una JVM nueva cada vez; con estas opciones arrancan mas rapido y ocupan menos.
+# Spark al final del PATH: trae su propio 'beeline' y tiene que ganar el de Hive
+ENV PATH=/opt/sandbox/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$HIVE_HOME/bin:$PIG_HOME/bin:$ZK_HOME/bin:$PATH:$SPARK_HOME/bin
 
 # tini como proceso 1: recoge los procesos que mueren (ej. 'datanode stop').
 # Sin el, quedan zombies que Hadoop sigue viendo como vivos.
+# python3: PySpark y los scripts de Hadoop Streaming.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tini \
+ && apt-get install -y --no-install-recommends curl procps net-tools less python3 tini \
  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=descargas /opt/hadoop    ${HADOOP_HOME}
+COPY --from=descargas /opt/hive      ${HIVE_HOME}
+COPY --from=descargas /opt/tez       ${TEZ_HOME}
+COPY --from=descargas /opt/spark     ${SPARK_HOME}
+COPY --from=descargas /opt/zookeeper ${ZK_HOME}
+COPY --from=descargas /opt/pig       ${PIG_HOME}
 
 # JAVA_HOME explicito para los scripts de Hadoop
 RUN echo "export JAVA_HOME=${JAVA_HOME}" >> ${HADOOP_CONF_DIR}/hadoop-env.sh
@@ -115,11 +159,11 @@ COPY conf/spark-hive-site.xml  ${SPARK_HOME}/conf/hive-site.xml
 COPY conf/zoo.cfg              ${ZK_HOME}/conf/zoo.cfg
 COPY sandbox/                  /opt/sandbox/
 COPY entrypoint.sh             /opt/entrypoint.sh
-# Archivos de ejemplo: se copian a /datos al arrancar, para quien baja la
-# imagen ya armada y no tiene el repo
-COPY datos/ventas.csv datos/texto.txt /opt/sandbox/ejemplos/
+# Ejemplos (datasets y scripts): se copian a /datos/ejemplos al arrancar, para
+# quien baja la imagen ya armada y no tiene el repo
+COPY datos/ejemplos/           /opt/sandbox/ejemplos/
 # sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan
-RUN sed -i 's/\r$//' /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin/* \
+RUN sed -i 's/\r$//' /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin/* /opt/sandbox/ejemplos/* \
  && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* && mkdir -p /datos
 
 # HDFS: NameNodes 9870-9872, Secondary 9868, DataNodes 9901-9909, RPC 9000

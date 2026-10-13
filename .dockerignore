@@ -1,7 +1,7 @@
 .git
 .github
-README.md
+pruebas
+*.md
 # datos/ no entra a la imagen, salvo los ejemplos
 datos/*
-!datos/ventas.csv
-!datos/texto.txt
+!datos/ejemplos

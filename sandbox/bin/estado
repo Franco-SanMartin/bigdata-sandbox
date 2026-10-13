@@ -65,8 +65,9 @@ if con_yarn; then
   fila "ResourceManager" 8088 "http://localhost:8088"
   fila "NodeManager" 8042 "http://localhost:8042"
   fila "MapReduce JobHistory" 19888 "http://localhost:19888"
+  printf '   %-22s %-29s %s\n' "Pig" "comando: pig" "${GRIS}(sin servicio propio: corre como trabajos MapReduce)${FIN}"
 else
-  echo "  ${GRIS}YARN, MapReduce, Hive y Spark: apagados (SERVICIOS=hdfs)${FIN}"
+  echo "  ${GRIS}YARN, MapReduce, Pig, Hive y Spark: apagados (SERVICIOS=hdfs). Pig sin cluster: pig -x local${FIN}"
 fi
 if con_hive_spark; then
   echo

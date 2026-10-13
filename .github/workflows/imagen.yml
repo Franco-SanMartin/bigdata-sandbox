@@ -1,21 +1,27 @@
-# Arma la imagen y la publica en ghcr.io/franki-678/bigdata-sandbox, para que
-# se pueda bajar con 'docker pull' sin buildear. Corre sola cuando cambia el
-# codigo en main, o a mano desde la pestaña Actions ("Run workflow").
+# Arma la imagen, la PRUEBA de punta a punta (pruebas/probar.sh: el paso a paso
+# de TUTORIAL.md con MapReduce, Pig, Hive y Spark) y, si todo da bien, la
+# publica en ghcr.io/franki-678/bigdata-sandbox para bajarla con 'docker pull'.
+# Corre sola cuando cambia el codigo en main, o a mano desde la pestaña Actions
+# ("Run workflow").
 name: Imagen
 
 on:
   push:
     branches: [main]
-    paths-ignore: ['README.md', 'datos/README.md']
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+env:
+  IMAGEN: ghcr.io/franki-678/bigdata-sandbox:latest
+
 jobs:
   imagen:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -23,19 +29,56 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
+      # 1. Armar la version amd64 y cargarla en el Docker del runner
+      - name: Armar (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: bigdata-sandbox
+
+      # 2. Prenderla como lo haria un alumno y esperar el cartel LISTO
+      - name: Prender el cluster
+        run: |
+          docker run -d --name bigdata \
+            -e DATANODES=2 -e REPLICATION=2 -e BLOCK_SIZE=1m \
+            -v "$PWD/datos-prueba:/datos" bigdata-sandbox
+          for i in $(seq 1 60); do
+            if docker logs bigdata 2>&1 | grep -q 'Cluster LISTO'; then exit 0; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' bigdata)" != true ]; then break; fi
+            sleep 5
+          done
+          docker logs bigdata
+          exit 1
+
+      # 3. El paso a paso del tutorial, verificando los resultados
+      - name: Probar MapReduce, Pig, Hive y Spark
+        run: |
+          docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
+          docker exec bigdata bash /tmp/probar.sh
+
+      - name: Logs si algo fallo
+        if: failure()
+        run: |
+          docker logs bigdata || true
+          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log' || true
+
+      # 4. Recien ahora, publicar amd64 + arm64 (reusa lo ya armado)
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - name: Publicar (amd64 + arm64)
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
-          tags: ghcr.io/franki-678/bigdata-sandbox:latest
+          tags: ${{ env.IMAGEN }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=Hadoop + Hive + Spark en un solo contenedor
+            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark en un solo contenedor
