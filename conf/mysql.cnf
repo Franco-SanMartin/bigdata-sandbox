@@ -2,7 +2,7 @@
 # (/hadoop/mysql), asi sobreviven a recrear el contenedor. Configurada chica:
 # alcanza para practicar y ocupa ~100 MB de memoria.
 [mysqld]
-user                    = root
+user                    = mysql
 datadir                 = /hadoop/mysql
 bind-address            = 0.0.0.0
 port                    = 3306
@@ -15,5 +15,6 @@ performance_schema      = OFF
 skip-name-resolve
 local_infile            = 1
 
-[client]
+# Solo el cliente 'mysql' (no mysqladmin): permite LOAD DATA LOCAL INFILE
+[mysql]
 local-infile            = 1

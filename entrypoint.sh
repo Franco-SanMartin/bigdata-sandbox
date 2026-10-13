@@ -127,11 +127,13 @@ fi
 #     todo: Sqoop copia con trabajos MapReduce). Vive en el volumen.
 # ---------------------------------------------------------------------------
 mysql_start() {
-  mkdir -p /run/mysqld /var/log/mysql
+  # mysqld corre como el usuario 'mysql' (no como root): sus carpetas son de el
+  mkdir -p /run/mysqld /var/log/mysql /hadoop/mysql
+  chown -R mysql:mysql /run/mysqld /var/log/mysql /hadoop/mysql
   if [ ! -d /hadoop/mysql/mysql ]; then
     log "Primer arranque: creando la base MySQL..."
-    mysql_install_db --user=root --datadir=/hadoop/mysql > /tmp/mysql_install_db.log 2>&1 \
-      || { cat /tmp/mysql_install_db.log; return 1; }
+    mysql_install_db --user=mysql --datadir=/hadoop/mysql > /tmp/mysql_install_db.log 2>&1 \
+      || { cat /tmp/mysql_install_db.log; find /hadoop/mysql -mindepth 1 -delete; return 1; }
   fi
   log "Arrancando MySQL (base de ejemplo para Sqoop)..."
   mysqld > /dev/null 2>&1 &
