@@ -80,8 +80,8 @@ Tienen que aparecer *Client* y *Server*.
 docker pull franki678/bigdata-sandbox
 ```
 
-Toda la clase con el mismo wifi: mejor que la baje uno y la pase por pendrive
-(sección 5B).
+¿Toda un aula a la vez? Mejor que la baje una sola PC y la reparta (sección
+5B).
 
 **Paso 3. Crear una carpeta de trabajo y pararte en ella** (una sola vez)
 
@@ -179,7 +179,7 @@ Los comandos `docker ...` van en la terminal de **tu compu**. El resto
 
 | Cuándo                                   | Comando                                                      |
 |------------------------------------------|--------------------------------------------------------------|
-| **Una sola vez** (por compu)             | Instalar Docker · `docker pull franki678/bigdata-sandbox` (o `docker load` del pendrive) |
+| **Una sola vez** (por compu)             | Instalar Docker · `docker pull franki678/bigdata-sandbox` (o `docker load`, sección 5B) |
 | **Una sola vez** (por cluster)           | `docker run ...` (paso 4)                                    |
 | **Cada vez** que lo usás                 | `docker start bigdata` → esperar LISTO (`docker logs -f bigdata`) → `docker exec -it bigdata bash` |
 | Cada vez que necesites otra terminal     | `docker exec -it bigdata bash` (se pueden abrir varias)      |
@@ -257,7 +257,7 @@ hecha. Para usarla, no.
 | `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
 | `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
 | `pruebas/escenarios.sh`      | Reinicios, alta disponibilidad, cada `SERVICIOS`, cambios de parámetros, arranques cortados |
-| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica en Docker Hub |
+| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica en Docker Hub y deja el archivo para el aula en Releases (sección 5B) |
 | `.github/workflows/escenarios.yml` | Corre `escenarios.sh` con la imagen ya publicada (a mano, desde la pestaña Actions) |
 | `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
 
@@ -294,23 +294,64 @@ docker pull franki678/bigdata-sandbox
   contenedor (`docker rm -f bigdata` + `docker run`; tus datos quedan en el
   volumen).
 
-### B) Pasarla por pendrive (para una clase entera, sin internet)
+### B) En el aula: la baja una sola PC y la reparte
 
-Si 20 personas bajan la imagen a la vez por el mismo wifi, tarda muchísimo (y
-Docker Hub limita las descargas sin cuenta a unas 100 cada 6 horas por
-conexión: toda una facultad sale por la misma). Mejor que una sola persona la
-tenga (con A o C) y la pase:
+Si 20 PCs bajan la imagen a la vez, se satura la internet de la facultad (puede
+tardar una hora) y Docker Hub limita las descargas sin cuenta por conexión.
+Mejor bajarla **una sola vez** y repartirla por la red del aula o por pendrive.
+Para eso está lista en un solo archivo, `bigdata-sandbox.tar.gz` (~1,2 GB,
+para PCs Intel/AMD con Windows o Linux), que se actualiza solo cada vez que se
+publica la imagen:
+
+https://github.com/Franki-678/bigdata-sandbox/releases/download/imagen/bigdata-sandbox.tar.gz
+
+**1. La PC del profesor lo baja** con el navegador (queda en Descargas; ~2 min
+con la internet libre). Si esa PC también se borra al reiniciar, conviene
+guardarlo en un pendrive y copiarlo de ahí cada clase.
+
+**2. Lo reparte a las PCs de los alumnos**, de una de estas formas:
+
+- **Con Veyon:** en Veyon Master, seleccionar todas las PCs → **Transferencia
+  de archivos** → elegir `bigdata-sandbox.tar.gz` → **Solo transferir**. Queda
+  en la carpeta del usuario de cada PC (`C:\Users\<usuario>`).
+- **Por la red, desde la PC del profesor** (sin Veyon, o si con Veyon tarda
+  mucho): ver más abajo.
+- **Con pendrive:** copiarlo a la carpeta del usuario (`C:\Users\<usuario>`).
+  Entra en uno de 4 GB, aunque esté en FAT32.
+
+**3. Cada alumno lo carga en Docker**, con Docker Desktop abierto. En una
+terminal nueva (arranca en la carpeta del usuario, donde quedó el archivo):
 
 ```bash
-# El que la tiene: la guarda en un solo archivo (1,2 a 3 GB según el Docker)
-docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar
-
-# Cada compañero, con el archivo copiado del pendrive (menos de 1 min)
-docker load -i bigdata-sandbox.tar
+docker load -i bigdata-sandbox.tar.gz
 ```
 
-Entra en un pendrive de 4 GB, aunque esté en FAT32 (que no acepta archivos
-de más de 4 GB).
+Tarda 1-2 min. Después, el `docker run` de siempre (sección 1, paso 4): como la
+imagen ya está, no baja nada de internet.
+
+**Por la red, desde la PC del profesor.** Necesita Docker Desktop abierto y la
+imagen ya cargada en esa PC (paso 3). Abrir la carpeta Descargas, escribir
+`cmd` en la barra de dirección y Enter, y ahí:
+
+```bat
+docker run -d --rm --name compartir -p 8000:8000 -v "%cd%:/srv:ro" -w /srv --entrypoint python3 franki678/bigdata-sandbox -m http.server 8000
+ipconfig
+```
+
+De `ipconfig`, anotar la **Dirección IPv4** (por ejemplo `192.168.1.10`). Si
+Windows pregunta por el firewall, **Permitir**. Cada alumno, cambiando la IP:
+
+```bash
+curl.exe -o bigdata-sandbox.tar.gz http://192.168.1.10:8000/bigdata-sandbox.tar.gz
+docker load -i bigdata-sandbox.tar.gz
+```
+
+Al terminar, el profesor lo corta con `docker stop compartir`.
+
+**Para pasarla entre compañeros** (sin el archivo de GitHub): el que la tiene
+la guarda con `docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar`
+(1,2 a 3 GB según el Docker) y los demás la cargan con `docker load -i
+bigdata-sandbox.tar`.
 
 ### C) Armarla desde el código
 

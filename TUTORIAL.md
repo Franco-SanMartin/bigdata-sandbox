@@ -65,8 +65,8 @@ docker pull franki678/bigdata-sandbox
 
 - Baja ~1,3 GB. Sirve para Windows, Linux y Mac (Intel o M1–M4).
 - No hace falta cuenta de Docker Hub.
-- ¿Toda la clase con el mismo wifi? Que la baje uno solo y la pase por pendrive
-  (`docker save` / `docker load`, README sección 5B).
+- ¿Toda un aula a la vez? Que la baje una sola PC y la reparta por la red o por
+  pendrive (`docker load`, README sección 5B).
 
 Comprobá que está:
 

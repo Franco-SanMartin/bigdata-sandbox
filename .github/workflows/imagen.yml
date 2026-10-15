@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # para subir el archivo del aula a Releases
 
 env:
   IMAGEN: docker.io/franki678/bigdata-sandbox:latest
@@ -88,3 +88,33 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop en un solo contenedor
+
+      # 5. La misma imagen (amd64) en un solo archivo, para bajarla una vez y
+      #    repartirla en el aula (README seccion 5B). Queda en el release
+      #    'imagen' y se reemplaza en cada publicacion.
+      - name: Archivo para el aula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          docker rm -f bigdata
+          docker save franki678/bigdata-sandbox | gzip > bigdata-sandbox.tar.gz
+          ls -lh bigdata-sandbox.tar.gz
+          # Releases acepta hasta 2 GiB por archivo
+          [ "$(stat -c %s bigdata-sandbox.tar.gz)" -lt 2147483648 ]
+          # Probar lo que hace el aula: compartirlo como la PC del profesor,
+          # bajarlo como un alumno y cargarlo
+          docker run -d --rm --name compartir -p 8000:8000 -v "$PWD:/srv:ro" -w /srv \
+            --entrypoint python3 franki678/bigdata-sandbox -m http.server 8000
+          sleep 3
+          curl -sf -o /tmp/bajado.tar.gz http://localhost:8000/bigdata-sandbox.tar.gz
+          docker stop compartir
+          cmp bigdata-sandbox.tar.gz /tmp/bajado.tar.gz
+          docker image rm franki678/bigdata-sandbox
+          docker load -i /tmp/bajado.tar.gz
+          docker image inspect -f '{{.Architecture}}' franki678/bigdata-sandbox:latest
+          # Subirlo
+          if ! gh release view imagen > /dev/null 2>&1; then
+            gh release create imagen --title "Imagen para el aula" \
+              --notes "La imagen en un solo archivo, para bajarla una vez y repartirla (README, seccion 5B). Se actualiza sola en cada publicacion."
+          fi
+          gh release upload imagen bigdata-sandbox.tar.gz --clobber
