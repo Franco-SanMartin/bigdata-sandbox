@@ -188,7 +188,10 @@ parametros() {
   prender -e DATANODES=3 -e REPLICATION=3 -e BLOCK_SIZE=1m -e SERVICIOS=hdfs; listo 1
   en "datanode start 4" ; en datanode
   en datanode | grep -q 'DataNode 4 .*arriba' || falla "datanode start 4"
-  en "datanode stop 4" ; en datanode | grep -q 'DataNode 4 .*APAGADO' || falla "datanode stop 4"
+  # el 4 no esta en DATANODES: apagado ya no se lista
+  en "datanode stop 4" ; en datanode | grep -q 'DataNode 4 .*arriba' && falla "datanode stop 4"
+  en "datanode stop 3" ; en datanode | grep -q 'DataNode 3 .*APAGADO' || falla "datanode stop 3"
+  en "datanode start 3"; en datanode | grep -q 'DataNode 3 .*arriba' || falla "datanode start 3"
   leer_ok
 
   paso "Bajar DATANODES perdiendo bloques: avisa y arranca igual"
