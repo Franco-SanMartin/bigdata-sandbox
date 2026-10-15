@@ -8,6 +8,10 @@
 # A mano, con el contenedor 'bigdata' prendido y en "Cluster LISTO":
 #   docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
 #   docker exec bigdata bash /tmp/probar.sh
+# Necesita SERVICIOS=todo, DATANODES y REPLICATION de 2 o mas y un BLOCK_SIZE
+# chico (1m), como el arranque del TUTORIAL. Pisa los resultados de los
+# ejemplos en HDFS (/user/root/resultados, wc-out, tienda) y la tabla
+# resumen_categoria de MySQL.
 set -euo pipefail
 cd /datos
 
@@ -106,10 +110,10 @@ else
   echo "HIVE-IMPORT: NO ANDA"; tail -40 /tmp/hive-import.log
 fi
 
-paso "Bajar un resultado a la compu"
-rm -rf resultados && mkdir resultados
-hdfs dfs -get /user/root/resultados/pig_por_producto resultados/
-ls resultados/pig_por_producto
+paso "Bajar un resultado de HDFS"
+rm -rf /tmp/bajados && mkdir /tmp/bajados
+hdfs dfs -get /user/root/resultados/pig_por_producto /tmp/bajados/
+ls /tmp/bajados/pig_por_producto
 
 paso "Se cae un DataNode: los datos siguen ahi"
 datanode stop 2

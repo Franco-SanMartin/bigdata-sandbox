@@ -63,10 +63,10 @@ Una sola vez. Se baja de Docker Hub:
 docker pull franki678/bigdata-sandbox
 ```
 
-- Baja ~1,5 GB. Sirve para Windows, Linux y Mac (Intel o M1–M4).
+- Baja ~1,3 GB. Sirve para Windows, Linux y Mac (Intel o M1–M4).
 - No hace falta cuenta de Docker Hub.
 - ¿Toda la clase con el mismo wifi? Que la baje uno solo y la pase por pendrive
-  (`docker save` / `docker load`, README sección 2B).
+  (`docker save` / `docker load`, README sección 5B).
 
 Comprobá que está:
 
@@ -116,7 +116,9 @@ docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p
 
 > ¿Ya tenías un contenedor `bigdata` de antes? Docker va a decir que el nombre
 > está en uso. Borralo con `docker rm -f bigdata` (tus datos de HDFS quedan en
-> el volumen) y repetí el `docker run`.
+> el volumen) y repetí el `docker run`. Vas a seguir con lo que ya tenías en
+> HDFS, Hive y MySQL; para hacer el tutorial desde cero, borrá también el
+> volumen (README, sección 12).
 
 Seguí el arranque:
 
@@ -240,7 +242,7 @@ propia carpeta (Hive y Spark leen *carpetas*, no archivos sueltos):
 
 ```bash
 hdfs dfs -mkdir -p /user/root/ventas
-hdfs dfs -put ventas_grandes.csv /user/root/ventas/
+hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/
 hdfs dfs -ls /user/root/ventas
 ```
 
@@ -273,7 +275,7 @@ paralelo, en la máquina donde está guardado.
 Subí también el texto del wordcount:
 
 ```bash
-hdfs dfs -put ejemplos/texto.txt /user/root/
+hdfs dfs -put -f ejemplos/texto.txt /user/root/
 ```
 
 Comandos de HDFS que vas a usar siempre:
@@ -443,7 +445,10 @@ DUMP primeras;
 
 - `DESCRIBE` muestra el esquema. No corre nada.
 - `DUMP` **sí** corre (un trabajo en YARN) y muestra el resultado por
-  pantalla: `(2026-01-31,Sur,azucar,5,1200)`...
+  pantalla: `(2026-01-31,Sur,azucar,5,1200)`... Si sale una fila
+  `(fecha,sucursal,producto,,)`, es el encabezado del CSV: `LOAD` no lo
+  saltea (y `cantidad` y `precio` quedan vacíos porque no son números). Por
+  eso `ventas.pig` lo saca con un `FILTER`.
 - Pig es *lazy*: las líneas con `=` solo arman el plan. Recién `DUMP` o
   `STORE` lo ejecutan.
 
@@ -616,6 +621,8 @@ hdfs dfs -ls /user/root/resultados
 .../resultados/pig_por_producto
 .../resultados/spark_por_producto
 ```
+
+(Y las que hayas creado vos, como `otra_prueba`.)
 
 Y tienen que dar **exactamente** esto:
 
@@ -871,7 +878,7 @@ datanode start 2
 ```
 
 Más experimentos (NameNode caído, alta disponibilidad, cambiar la replicación):
-README, sección 6.
+README, sección 9.
 
 ## 15. Con tu propio dataset
 

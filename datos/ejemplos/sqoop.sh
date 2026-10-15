@@ -41,6 +41,12 @@ hdfs dfs -ls /user/root/tienda/ventas
 hdfs dfs -cat /user/root/tienda/ventas/part-m-00000 | head -5
 
 echo; echo "=== 3. Procesar en Hive: JOIN ventas + productos ==="
+if ! netstat -tln 2>/dev/null | grep -q ':10000 '; then
+  echo "Hive no esta prendido: los pasos 3 y 4 lo necesitan. Hive corre con"
+  echo "SERVICIOS=todo (el valor por defecto); si recien prendiste el contenedor,"
+  echo "espera a que diga 'Cluster LISTO' (docker logs bigdata)."
+  exit 0
+fi
 beeline -u jdbc:hive2://localhost:10000 -f ejemplos/tienda.hql
 
 echo; echo "=== 4. Exportar: HDFS -> MySQL ==="

@@ -66,14 +66,21 @@ if ha; then
   if [ ! -d /hadoop/dfs/nn1/current ]; then
     log "Primer arranque: formateando el NameNode 1 y los JournalNodes..."
     HADOOP_CONF_DIR=$(nn_conf 1) hdfs namenode -format -force -nonInteractive
-    hdfs_daemon start nn1 namenode "$RUN_DIR/nn1"
+    rm -f /hadoop/.zk-listo
+  fi
+  # Los demas NameNodes copian los metadatos del 1 (tambien si un primer
+  # arranque se corto antes de llegar a copiarlos)
+  for j in $(seq 2 "$NAMENODES"); do
+    ls /hadoop/dfs/nn"$j"/current/fsimage_* > /dev/null 2>&1 && continue
+    hdfs_daemon start nn1 namenode "$(nn_conf 1)"
     esperar_puerto "$(nn_http 1)" 120
-    for j in $(seq 2 "$NAMENODES"); do
-      log "Primer arranque: copiando los metadatos al NameNode $j (bootstrapStandby)..."
-      HADOOP_CONF_DIR=$(nn_conf "$j") hdfs namenode -bootstrapStandby -force -nonInteractive
-    done
+    log "Primer arranque: copiando los metadatos al NameNode $j (bootstrapStandby)..."
+    HADOOP_CONF_DIR=$(nn_conf "$j") hdfs namenode -bootstrapStandby -force -nonInteractive
+  done
+  if [ ! -f /hadoop/.zk-listo ]; then
     log "Primer arranque: preparando ZooKeeper para la eleccion del NameNode activo..."
-    HADOOP_CONF_DIR="$RUN_DIR/nn1" hdfs zkfc -formatZK -force
+    HADOOP_CONF_DIR=$(nn_conf 1) hdfs zkfc -formatZK -force
+    touch /hadoop/.zk-listo
   fi
   paralelo namenode_start $(seq 1 "$NAMENODES")
 
@@ -130,10 +137,12 @@ mysql_start() {
   # mysqld corre como el usuario 'mysql' (no como root): sus carpetas son de el
   mkdir -p /run/mysqld /var/log/mysql /hadoop/mysql
   chown -R mysql:mysql /run/mysqld /var/log/mysql /hadoop/mysql
-  if [ ! -d /hadoop/mysql/mysql ]; then
+  # La primera vez (o si un primer arranque se corto a la mitad): de cero
+  if [ ! -f /hadoop/mysql/.sandbox-listo ]; then
     log "Primer arranque: creando la base MySQL..."
+    find /hadoop/mysql -mindepth 1 -delete
     mysql_install_db --user=mysql --datadir=/hadoop/mysql > /tmp/mysql_install_db.log 2>&1 \
-      || { cat /tmp/mysql_install_db.log; find /hadoop/mysql -mindepth 1 -delete; return 1; }
+      || { cat /tmp/mysql_install_db.log; return 1; }
   fi
   log "Arrancando MySQL (base de ejemplo para Sqoop)..."
   mysqld > /dev/null 2>&1 &
@@ -141,7 +150,7 @@ mysql_start() {
   for _ in $(seq 1 60); do mysqladmin --silent ping > /dev/null 2>&1 && break; sleep 1; done
   mysqladmin --silent ping > /dev/null 2>&1 || return 1
 
-  # La primera vez (o si quedo a medias): usuario para Sqoop y base "tienda"
+  # Usuario para Sqoop y base "tienda"
   if [ ! -f /hadoop/mysql/.sandbox-listo ]; then
     log "Primer arranque: cargando la base de ejemplo 'tienda' (200.000 ventas)..."
     mysql <<'SQL' || return 1
@@ -177,7 +186,7 @@ if con_hive_spark; then
     fi
     if ! hdfs dfs -test -e /apps/spark/spark-libs.jar; then
       log "Subiendo librerias de Spark a HDFS..."
-      # Todos los jars en un solo archivo (la imagen trae JRE, sin el comando 'jar')
+      # Todos los jars en un solo archivo
       python3 -c 'import glob, os, sys, zipfile
 z = zipfile.ZipFile(sys.argv[2], "w")
 for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.jar"))):
@@ -189,15 +198,26 @@ z.close()' "${SPARK_HOME}/jars" /tmp/spark-libs.jar
     touch /hadoop/.libs-hdfs
   fi
 
-  # Metastore de Hive: inicializar schema la primera vez
-  if [ ! -d /hadoop/metastore_db ]; then
-    log "Primer arranque: inicializando schema del Metastore (Derby)..."
-    schematool -dbType derby -initSchema
+  # Metastore de Hive: inicializar el schema la primera vez. Si un primer
+  # arranque se corto a la mitad, la base quedo incompleta: se rehace.
+  # (Desde /hadoop: Derby deja su derby.log en la carpeta actual, y la de
+  # trabajo es /datos, la del alumno.)
+  cd /hadoop
+  if [ ! -f /hadoop/.metastore-listo ]; then
+    if [ -d /hadoop/metastore_db ] && schematool -dbType derby -info > /dev/null 2>&1; then
+      :   # volumen de una version anterior de la imagen: ya estaba listo
+    else
+      log "Primer arranque: inicializando schema del Metastore (Derby)..."
+      rm -rf /hadoop/metastore_db
+      schematool -dbType derby -initSchema
+    fi
+    touch /hadoop/.metastore-listo
   fi
 
   log "Arrancando Hive Metastore + HiveServer2 + Spark History Server..."
   hive --service metastore > "${HIVE_HOME}/metastore.log" 2>&1 &
   hive --service hiveserver2 > "${HIVE_HOME}/hiveserver2.log" 2>&1 &
+  cd /datos
   "${SPARK_HOME}/sbin/start-history-server.sh" > /dev/null
 
   log "Esperando a que HiveServer2 acepte conexiones (puede tardar ~1 min)..."
@@ -211,11 +231,30 @@ echo "  ============================================================"
 estado
 
 # ---------------------------------------------------------------------------
-# 5) Mantener PID 1 vivo siguiendo los logs
+# 5) Mantener el contenedor vivo siguiendo los logs. Con 'docker stop' (o el
+#    boton de Docker Desktop) se apaga todo en orden; sin esto Docker mata
+#    los procesos de golpe y MySQL, el Metastore y HDFS tienen que
+#    recuperarse en el proximo arranque.
 # ---------------------------------------------------------------------------
+apagar() {
+  trap - TERM INT
+  log "Apagando el cluster..."
+  pkill -TERM -x mysqld || true
+  pkill -TERM -x java || true
+  local _
+  # Docker espera 10 s antes de matar todo
+  for _ in $(seq 1 16); do
+    pgrep -x java > /dev/null || pgrep -x mysqld > /dev/null || break
+    sleep 0.5
+  done
+  exit 0
+}
+trap apagar TERM INT
+
 mkdir -p "${HADOOP_HOME}/logs"
-exec tail -F \
+tail -F \
   "${HADOOP_HOME}"/logs/*.log \
   "${HIVE_HOME}"/metastore.log \
   "${HIVE_HOME}"/hiveserver2.log \
-  /var/log/mysql/error.log 2>/dev/null
+  /var/log/mysql/error.log 2>/dev/null &
+wait $!

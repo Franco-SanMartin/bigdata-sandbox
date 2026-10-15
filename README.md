@@ -53,7 +53,7 @@ Python 3.8
 11. [Referencia de comandos](#11-referencia-de-comandos)
 12. [Empezar de cero](#12-empezar-de-cero)
 13. [Problemas comunes](#13-problemas-comunes)
-14. [Notas](#notas)
+- [Notas](#notas)
 
 ---
 
@@ -74,7 +74,7 @@ docker version
 
 Tienen que aparecer *Client* y *Server*.
 
-**Paso 2. Bajar la imagen de Docker Hub** (una sola vez; ~1,5 GB)
+**Paso 2. Bajar la imagen de Docker Hub** (una sola vez; ~1,3 GB)
 
 ```bash
 docker pull franki678/bigdata-sandbox
@@ -153,7 +153,7 @@ El prompt cambia a `root@...:/datos#`: estás **adentro**. Probá:
 ```bash
 estado                                  # todos los procesos y su web
 ls ejemplos                             # los ejemplos
-hdfs dfs -put ejemplos/texto.txt /user/root/
+hdfs dfs -put -f ejemplos/texto.txt /user/root/
 hdfs dfs -ls /user/root
 pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig
 exit                                    # volver a tu compu
@@ -256,7 +256,9 @@ hecha. Para usarla, no.
 | `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark, ZooKeeper y MySQL |
 | `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
 | `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
+| `pruebas/escenarios.sh`      | Reinicios, alta disponibilidad, cada `SERVICIOS`, cambios de parámetros, arranques cortados |
 | `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica en Docker Hub |
+| `.github/workflows/escenarios.yml` | Corre `escenarios.sh` con la imagen ya publicada (a mano, desde la pestaña Actions) |
 | `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
 
 ## 4. Requisitos
@@ -282,7 +284,7 @@ Hay tres formas de tenerla; las tres terminan igual: una imagen llamada
 docker pull franki678/bigdata-sandbox
 ```
 
-- Baja ~1,5 GB y sirve para Windows, Linux y Mac (Intel o M1–M4): Docker elige
+- Baja ~1,3 GB y sirve para Windows, Linux y Mac (Intel o M1–M4): Docker elige
   sola la versión de tu compu.
 - No hace falta cuenta de Docker Hub ni `docker login`.
 - Si te salteás el `pull`, el `docker run` la baja solo la primera vez.
@@ -405,12 +407,14 @@ docker run -d --name bigdata -e DATANODES=4 <...> franki678/bigdata-sandbox
 
 - `DATANODES`, `REPLICATION`, `BLOCK_SIZE` y `SERVICIOS` se pueden cambiar
   cuando quieras. La replicación y el bloque nuevos aplican a los archivos que
-  subas desde ese momento. Los archivos viejos se cambian con
-  `hdfs dfs -setrep`.
+  subas desde ese momento. A los archivos viejos se les cambia la replicación
+  con `hdfs dfs -setrep`; el tamaño de bloque no: hay que volver a subirlos.
 - `NAMENODES` queda fijo cuando se crea el volumen: pasar de 1 a 2 cambia cómo
   se guardan los metadatos. Para cambiarlo, empezá de cero (sección 12).
 - Si bajás `DATANODES` y los nodos que sacaste tenían la única copia de algún
-  bloque, esos bloques se pierden. Igual que en un cluster de verdad.
+  bloque, esos bloques quedan *perdidos* (`hdfs fsck /` los lista), igual que
+  en un cluster de verdad. Acá no se borran: siguen en `/hadoop/dfs/dnN` y
+  vuelven si prendés ese nodo (`datanode start N`) o subís `DATANODES` otra vez.
 - Con `SERVICIOS=hdfs` o `mapreduce`, las tablas de Hive no se borran: vuelven
   cuando prendés `todo` otra vez. Lo mismo la base MySQL con `SERVICIOS=hdfs`.
 
@@ -486,7 +490,7 @@ Todos adentro del contenedor. Los ejemplos suponen `DATANODES=3`,
 
 ```bash
 seq 1 1000000 > numeros.txt                  # archivo de ~7 MB en datos/
-hdfs dfs -put numeros.txt /user/root/
+hdfs dfs -put -f numeros.txt /user/root/
 hdfs dfs -ls /user/root                      # la 2ª columna es la replicación
 hdfs fsck /user/root/numeros.txt -files -blocks -locations
 ```
@@ -546,12 +550,15 @@ namenode start 1
 **Con HA** (`NAMENODES=2`):
 
 ```bash
-namenode              # nn1 active, nn2 standby
+namenode              # ej.: nn1 active, nn2 standby
 namenode stop 1       # se cae el activo
-namenode              # a los ~2 s: nn2 active
+namenode              # a los pocos segundos: nn2 active
 hdfs dfs -ls /        # HDFS sigue andando, y Hive y Spark también
 namenode start 1      # vuelve como standby
 ```
+
+El activo no es siempre el 1: el que gana la elección en ZooKeeper. Mirá con
+`namenode` cuál es y apagá ese.
 
 Cómo funciona: cada NameNode tiene su **ZKFC**, que lo vigila y compite en
 **ZooKeeper** por un *lock*. El que lo tiene es el activo. El activo escribe
@@ -597,7 +604,7 @@ python3 ejemplos/generar_ventas.py
 
 # 2. Subirlo a HDFS (una vez)
 hdfs dfs -mkdir -p /user/root/ventas
-hdfs dfs -put ventas_grandes.csv /user/root/ventas/
+hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/
 hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations   # en qué bloques quedó
 
 # 3. Procesarlo con cada herramienta (las veces que quieras)
@@ -636,7 +643,7 @@ Resultado esperado (los cuatro iguales):
 El wordcount en Java, que viene con Hadoop:
 
 ```bash
-hdfs dfs -put ejemplos/texto.txt /user/root/
+hdfs dfs -put -f ejemplos/texto.txt /user/root/
 hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.6.jar \
   wordcount /user/root/texto.txt /user/root/wc-out
 hdfs dfs -cat /user/root/wc-out/part-r-00000
@@ -798,8 +805,9 @@ Para tener en cuenta:
   `<tabla>.java` en la carpeta donde estás. Se puede borrar.
 - `Setting your password on the command-line is insecure`: es un aviso. Con
   `-P` en lugar de `--password alumno`, la pide por teclado.
-- Sin `SERVICIOS=todo` (con `mapreduce`) andan el import, el export y `eval`;
-  solo el paso de Hive no.
+- Con `SERVICIOS=mapreduce` (sin Hive) andan `list`, `eval`, el import y el
+  export. `sqoop.sh` hace los pasos 1 y 2 y avisa que el 3 y el 4 necesitan
+  Hive (lo que exporta es el resultado del JOIN en Hive).
 - Para entrar a la base desde tu compu (DBeaver, Workbench), sumá
   `-p 3306:3306` al `docker run` (sección 6).
 - `--hive-import` (importar directo a una tabla de Hive) **no anda**: Sqoop

@@ -1,0 +1,52 @@
+# Prueba la imagen publicada en Docker Hub (la misma que baja cualquiera con
+# 'docker pull') en los escenarios de pruebas/escenarios.sh: reinicios, alta
+# disponibilidad, cada SERVICIOS, cambios de parametros, volumenes de
+# versiones anteriores y primeros arranques cortados. Cada escenario corre en
+# una maquina aparte, en paralelo.
+# Se corre a mano desde la pestaña Actions ("Escenarios" > "Run workflow"),
+# despues de que "Imagen" publico.
+name: Escenarios
+
+on:
+  workflow_dispatch:
+    inputs:
+      arm64:
+        description: Probar tambien el arranque en ARM64 (Mac M1-M4)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGEN: franki678/bigdata-sandbox
+
+jobs:
+  escenario:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bajar la imagen
+        run: |
+          docker pull "$IMAGEN"
+          docker image ls "$IMAGEN"
+      - name: Escenario ${{ matrix.escenario }}
+        run: bash pruebas/escenarios.sh ${{ matrix.escenario }}
+
+  arm64:
+    if: inputs.arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bajar la imagen
+        run: |
+          docker pull "$IMAGEN"
+          docker image inspect -f '{{.Architecture}}' "$IMAGEN"
+      - name: Escenario reinicio (prueba completa, apagar y prender)
+        run: bash pruebas/escenarios.sh reinicio
