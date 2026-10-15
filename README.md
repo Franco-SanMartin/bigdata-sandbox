@@ -302,15 +302,15 @@ conexión: toda una facultad sale por la misma). Mejor que una sola persona la
 tenga (con A o C) y la pase:
 
 ```bash
-# El que la tiene: la guarda en un solo archivo (~3 GB)
+# El que la tiene: la guarda en un solo archivo (1,2 a 3 GB según el Docker)
 docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar
 
 # Cada compañero, con el archivo copiado del pendrive (menos de 1 min)
 docker load -i bigdata-sandbox.tar
 ```
 
-El pendrive tiene que estar en **exFAT o NTFS**: FAT32 no acepta archivos de
-más de 4 GB.
+Entra en un pendrive de 4 GB, aunque esté en FAT32 (que no acepta archivos
+de más de 4 GB).
 
 ### C) Armarla desde el código
 
