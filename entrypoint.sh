@@ -106,6 +106,18 @@ if ! timeout 120 hdfs dfsadmin -safemode wait > /dev/null; then
   hdfs dfsadmin -safemode leave
 fi
 
+# Que todos los DataNodes ya esten anotados en el NameNode: si no, un archivo
+# subido apenas aparece "LISTO" queda con menos replicas que REPLICATION
+dn_vivos() {
+  local a=1
+  if ha; then a=$(nn_activo) || return 0; fi
+  jmx "$(nn_http "$a")" "Hadoop:service=NameNode,name=FSNamesystemState" | jmx_valor NumLiveDataNodes
+}
+for _ in $(seq 1 60); do
+  [ "$(dn_vivos)" -ge "$DATANODES" ] 2>/dev/null && break
+  sleep 1
+done
+
 # ---------------------------------------------------------------------------
 # 2) Directorios en HDFS (solo la primera vez: cada comando hdfs es una JVM
 #    nueva y tarda en arrancar)
