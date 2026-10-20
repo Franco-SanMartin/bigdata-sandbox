@@ -1,0 +1,153 @@
+# BigData Sandbox con Docker Compose: el mismo cluster que el "docker run" del
+# README, pero con todos los parametros en este archivo. Para cambiar algo, se
+# edita aca y se vuelve a correr "docker compose up -d".
+#
+# Las lineas que empiezan con # estan apagadas. Para prender una, se le saca el
+# # (y el espacio que le sigue), respetando la sangria.
+#
+# Uso, parado en la carpeta de este archivo:
+#
+#   docker compose up -d               crear y prender (la primera vez, ~2 min)
+#   docker compose logs -f             ver el arranque hasta "Cluster LISTO" (Ctrl+C sale)
+#   docker compose exec bigdata bash   entrar al cluster (o: docker exec -it bigdata bash)
+#   docker compose ps                  ver si esta prendido
+#   docker compose stop                apagar en orden (los datos quedan)
+#   docker compose start               prender otro dia
+#   docker compose up -d               despues de editar este archivo: recrea el
+#                                      contenedor con los cambios (los datos quedan)
+#   docker compose down                borrar el contenedor (los datos QUEDAN en el volumen)
+#   docker compose down -v             borrar contenedor Y volumen: se pierde todo
+#                                      HDFS, las tablas de Hive y la base MySQL
+#
+# No mezclar con el "docker run" del README: los dos crean un contenedor
+# llamado "bigdata". Si ya existe uno, antes: docker rm -f bigdata
+# (los datos no se pierden: los dos usan el mismo volumen, bigdata_hadoop).
+
+name: bigdata
+
+services:
+  bigdata:
+
+    # --- La imagen ------------------------------------------------------------
+    # La publicada en Docker Hub (o la cargada con "docker load").
+    image: franki678/bigdata-sandbox
+
+    # En lugar de usar la publicada, armarla desde el Dockerfile de esta
+    # carpeta (5-10 min la primera vez). Se usa con: docker compose up -d --build
+    # build: .
+
+    # Bajar la imagen de nuevo en cada "up" para tener siempre la ultima.
+    # NO usar en el aula: 20 PCs bajando 1,3 GB a la vez saturan la red.
+    # pull_policy: always
+
+    # Nombre del contenedor: el que usan docker start/stop/exec/logs.
+    container_name: bigdata
+
+    # --- Arquitectura del cluster ---------------------------------------------
+    # Estos son TODOS los parametros que lee el arranque. Los apagados toman el
+    # valor por defecto que figura en cada uno.
+    environment:
+
+      # Cantidad de DataNodes: los procesos que guardan los bloques. De 1 a 9.
+      # Por defecto: "1". Cada uno suma ~250 MB de RAM.
+      DATANODES: "3"
+
+      # Copias de cada bloque, cada una en un DataNode distinto. De 1 a 9.
+      # Por defecto: "1". Si es mayor que DATANODES, los bloques quedan
+      # sub-replicados (el comando "estado" lo avisa).
+      REPLICATION: "2"
+
+      # Tamano de bloque: numero + m o g ("1m", "32m", "128m", "1g"). Minimo 1m.
+      # Por defecto: "128m", el de un cluster real. Chico se ven muchos bloques
+      # con archivos chicos: con 1m, el dataset del tutorial queda en 6 bloques.
+      BLOCK_SIZE: "1m"
+
+      # Cantidad de NameNodes, de 1 a 3. Por defecto: "1" (+ Secondary NameNode).
+      # Con 2 o 3 se arma ALTA DISPONIBILIDAD: uno activo y el resto en espera,
+      # con ZooKeeper y 3 JournalNodes. Necesita ~8 GB de RAM para Docker.
+      # Queda fijo al crear el volumen: para cambiarlo hay que empezar de cero
+      # (docker compose down -v). Si lo prendes, prende tambien los puertos
+      # de "Alta disponibilidad" de abajo.
+      # NAMENODES: "2"
+
+      # Que se prende ademas de HDFS. Por defecto: "todo".
+      #   hdfs       solo HDFS (4 GB de RAM; Pig solo con "pig -x local")
+      #   mapreduce  HDFS + YARN + MapReduce + Pig + Sqoop y MySQL (5 GB)
+      #   todo       lo anterior + Hive + Spark (6 GB)
+      # SERVICIOS: "todo"
+
+      # Avanzado: memoria (en MB) del comando "pig" mismo, no de sus trabajos.
+      # Por defecto: "512".
+      # PIG_HEAPSIZE: "1024"
+
+    # --- Puertos: las paginas web en tu compu ---------------------------------
+    # Formato "IP:puerto en tu compu:puerto adentro". El 127.0.0.1 hace que se
+    # vean SOLO desde esta compu: el sandbox no tiene contrasenas y, abierto a
+    # la red del aula, cualquiera podria mandar trabajos o borrar tus datos.
+    # Si un puerto ya lo usa otro programa ("port is already allocated"),
+    # cambiar el numero del medio: "127.0.0.1:18088:8088" -> localhost:18088
+    ports:
+
+      # HDFS
+      - "127.0.0.1:9870:9870"             # NameNode 1: http://localhost:9870
+      - "127.0.0.1:9868:9868"             # Secondary NameNode (solo sin alta disponibilidad)
+      - "127.0.0.1:9901-9909:9901-9909"   # DataNode N: http://localhost:990N (los 9 posibles)
+
+      # Alta disponibilidad (prender si NAMENODES es 2 o 3)
+      # - "127.0.0.1:9871-9872:9871-9872" # NameNodes 2 y 3
+      # - "127.0.0.1:8480-8482:8480-8482" # JournalNodes 1 a 3
+
+      # YARN y MapReduce
+      - "127.0.0.1:8088:8088"             # ResourceManager: todos los trabajos
+      - "127.0.0.1:8042:8042"             # NodeManager: contenedores corriendo
+      - "127.0.0.1:19888:19888"           # JobHistory: trabajos MapReduce y Pig terminados
+
+      # Hive
+      - "127.0.0.1:10000:10000"           # HiveServer2 JDBC: beeline o DBeaver
+      - "127.0.0.1:10002:10002"           # HiveServer2 web: sesiones y queries
+      # - "127.0.0.1:9083:9083"           # Metastore (thrift): solo para un Spark o Hive de afuera
+
+      # Spark
+      - "127.0.0.1:18080:18080"           # History Server: trabajos terminados
+      - "127.0.0.1:4040:4040"             # Trabajo activo (con un pyspark/spark-submit abierto)
+      # - "127.0.0.1:4041-4045:4041-4045" # 2a a 6a sesion de Spark abierta a la vez
+
+      # MySQL (la base "tienda" de Sqoop), para entrar desde DBeaver o
+      # Workbench: localhost:3306, usuario alumno, clave alumno
+      # - "127.0.0.1:3306:3306"
+
+      # HDFS por RPC (hdfs://localhost:9000) para un cliente de Hadoop de
+      # afuera. Para leer o escribir archivos haria falta exponer tambien los
+      # puertos de transferencia de los DataNodes: queda solo como referencia.
+      # - "127.0.0.1:9000:9000"
+
+    # --- Donde se guardan los datos -------------------------------------------
+    volumes:
+      # Volumen con nombre (definido al final): HDFS, metastore de Hive y MySQL.
+      # Vive adentro de Docker y sobrevive a "down"; solo lo borra "down -v".
+      - bigdata_hadoop:/hadoop
+      # La carpeta datos/ al lado de este archivo = /datos adentro. Para pasar
+      # archivos: lo que dejes aca lo ve el cluster, y al reves.
+      - ./datos:/datos
+
+    # --- Encendido y apagado --------------------------------------------------
+    # Tiempo para que el cluster se apague en orden (MySQL, Hive, HDFS) con
+    # "stop" o "down" antes de que Docker lo corte. El de fabrica es 10 s.
+    stop_grace_period: 20s
+
+    # Prenderlo solo cada vez que se abre Docker Desktop (salvo que lo hayas
+    # apagado a mano). Por defecto "no": se prende con "docker compose start".
+    # restart: unless-stopped
+
+    # --- Limites de recursos ----------------------------------------------------
+    # Por defecto puede usar toda la RAM y CPU que tenga Docker. Para dejarle
+    # lugar a otras cosas (con "todo" necesita al menos 6g):
+    # mem_limit: 6g
+    # cpus: "4"
+
+volumes:
+  bigdata_hadoop:
+    # Sin esta linea, compose lo llamaria "bigdata_bigdata_hadoop". Con ella es
+    # el mismo volumen que usa el "docker run" del README: se puede pasar de
+    # uno a otro sin perder datos.
+    name: bigdata_hadoop
