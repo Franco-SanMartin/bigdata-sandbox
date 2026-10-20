@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+html { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Mapa del Stack Hadoop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: el stack como un rack de capas horizontales (arriba lo que escribis, abajo lo que guarda), con la ficha de la herramienta al costado */
+:root {
+  --bg: #EFF3F4;
+  --surface: #FFFFFF;
+  --ink: #14212B;
+  --ink-2: #4A5966;
+  --line: #CFD9DF;
+  --code: #E9EEF1;
+  --accent: #E0A000;
+  --accent-ink: #7A5000;
+  --focus: #1C6BD0;
+  --ok: #1B7346;
+  --no: #B03636;
+  --t-cli: #E4E9EE; --i-cli: #36434F;
+  --t-tra: #EAE5F7; --i-tra: #47378C;
+  --t-cal: #FAEED3; --i-cal: #744800;
+  --t-rec: #DFEBF8; --i-rec: #1C4A78;
+  --t-alm: #DCEFEA; --i-alm: #105647;
+  --t-out: #F2E9E3; --i-out: #6B412D;
+  --font-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1519; --surface: #16212A; --ink: #E4EBEF; --ink-2: #9AABB7; --line: #2A3743; --code: #0B1216;
+    --accent: #F0B72A; --accent-ink: #F6CD62; --focus: #6AA8FF; --ok: #5FC48D; --no: #F08A8A;
+    --t-cli: #1B252E; --i-cli: #C5D0D8;
+    --t-tra: #221D38; --i-tra: #C3B6F4;
+    --t-cal: #2B2210; --i-cal: #F1C66A;
+    --t-rec: #13253A; --i-rec: #9DC4EC;
+    --t-alm: #102E28; --i-alm: #8BD8C4;
+    --t-out: #2A201B; --i-out: #E2B8A2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1519; --surface: #16212A; --ink: #E4EBEF; --ink-2: #9AABB7; --line: #2A3743; --code: #0B1216;
+  --accent: #F0B72A; --accent-ink: #F6CD62; --focus: #6AA8FF; --ok: #5FC48D; --no: #F08A8A;
+  --t-cli: #1B252E; --i-cli: #C5D0D8;
+  --t-tra: #221D38; --i-tra: #C3B6F4;
+  --t-cal: #2B2210; --i-cal: #F1C66A;
+  --t-rec: #13253A; --i-rec: #9DC4EC;
+  --t-alm: #102E28; --i-alm: #8BD8C4;
+  --t-out: #2A201B; --i-out: #E2B8A2;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+a { color: var(--focus); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Encabezado */
+.head { display: flex; flex-direction: column; gap: 10px; }
+.head h1 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; font-stretch: 118%; letter-spacing: -0.01em; line-height: 1.05; }
+.head h1 span { color: var(--accent-ink); }
+.head .lead { max-width: 66ch; color: var(--ink-2); font-size: 17px; }
+.versions { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.versions b { color: var(--ink); font-weight: 600; }
+
+/* Controles */
+.controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.ctl { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ctl h2 { font-size: 15px; font-weight: 700; font-stretch: 110%; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; line-height: 1.3; text-align: left; }
+.chip:hover { border-color: var(--ink-2); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #1B1300; font-weight: 700; }
+.answer { border-left: 3px solid var(--accent); border-radius: 0; padding: 4px 0 4px 12px; font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
+.answer .go { display: flex; flex-wrap: wrap; gap: 6px; }
+.linkish { background: none; border: none; padding: 0; color: var(--focus); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.flowbar { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.flowbar .stepinfo { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.flowbar .count { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent-ink); font-weight: 600; }
+.flowbar .steptext { font-size: 15px; }
+.navbtns { display: flex; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+.btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.clear { align-self: flex-start; }
+
+/* Escenario: mapa + ficha */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 22px; align-items: start; }
+.hint { font-size: 14px; color: var(--ink-2); margin-bottom: 10px; }
+
+.map { display: grid; grid-template-columns: 112px repeat(4, minmax(0, 1fr)); column-gap: 10px; row-gap: 8px; position: relative; }
+.band { grid-column: 1 / -1; border-radius: 14px; z-index: 0; }
+.b-cli { background: var(--t-cli); } .b-tra { background: var(--t-tra); } .b-cal { background: var(--t-cal); } .b-rec { background: var(--t-rec); } .b-alm { background: var(--t-alm); }
+.band-label { grid-column: 1; z-index: 1; align-self: center; padding: 10px 0 10px 14px; font-family: var(--font-display); font-stretch: 110%; font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1.25; }
+.band-label small { display: block; text-transform: none; letter-spacing: 0; font-family: var(--font-body); font-weight: 400; font-size: 12.5px; opacity: 0.85; margin-top: 2px; }
+.l-cli { color: var(--i-cli); } .l-tra { color: var(--i-tra); } .l-cal { color: var(--i-cal); } .l-rec { color: var(--i-rec); } .l-alm { color: var(--i-alm); }
+.r1 { grid-row: 1; } .r2 { grid-row: 2; } .r3 { grid-row: 3; } .r4 { grid-row: 4; } .r5 { grid-row: 5; }
+.r23 { grid-row: 2 / 4; } .r24 { grid-row: 2 / 5; }
+.c2 { grid-column: 2; } .c3 { grid-column: 3; } .c4 { grid-column: 4; } .c5 { grid-column: 5; } .c35 { grid-column: 3 / 6; } .c25 { grid-column: 2 / 6; } .c5x { grid-column: 5; }
+
+.tool, .group { z-index: 1; margin-block: 10px; min-width: 0; }
+.tool { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; position: relative; transition: opacity .15s, box-shadow .15s, border-color .15s; }
+.tool:hover { border-color: var(--ink-2); }
+.tool .name { font-family: var(--font-display); font-weight: 700; font-stretch: 106%; font-size: 16.5px; line-height: 1.2; overflow-wrap: anywhere; }
+.tool .role { font-size: 13.5px; color: var(--ink-2); line-height: 1.35; }
+.tool .port { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.group .tool.flat { margin: 0; border: none; padding: 0; background: none; }
+.subs { display: flex; flex-wrap: wrap; gap: 6px; }
+.sub { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; cursor: pointer; font-size: 13px; display: inline-flex; gap: 6px; align-items: baseline; position: relative; transition: opacity .15s, box-shadow .15s; }
+.sub:hover { border-color: var(--ink-2); }
+.sub code { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+.tall { justify-content: center; }
+.tall .both { font-family: var(--font-mono); font-size: 11.5px; color: var(--i-tra); margin-top: 6px; }
+
+.pipe { z-index: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+.pipe::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed var(--ink-2); opacity: 0.5; }
+.pipe span { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; color: var(--ink-2); text-align: center; line-height: 1.3; }
+
+/* Estados del mapa */
+.is-dim { opacity: 0.32; }
+.is-on { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent) !important; }
+.is-current { box-shadow: 0 0 0 4px var(--accent); border-color: var(--accent) !important; }
+.is-selected { box-shadow: inset 0 0 0 2px var(--ink); }
+.is-on.is-selected, .is-current.is-selected { box-shadow: 0 0 0 3px var(--accent), inset 0 0 0 2px var(--ink); }
+.badge { position: absolute; top: -9px; right: -6px; background: var(--accent); color: #1B1300; font-family: var(--font-mono); font-weight: 600; font-size: 11.5px; border-radius: 999px; padding: 1px 7px; line-height: 1.5; z-index: 2; }
+
+/* Alrededor */
+.around { margin-top: 18px; background: var(--t-out); border-radius: 14px; padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 4px; }
+.around .band-label { padding: 0; color: var(--i-out); }
+.around-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+
+/* Ficha */
+.detail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.d-layer { align-self: flex-start; font-family: var(--font-display); font-stretch: 110%; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; padding: 3px 8px; border-radius: 6px; }
+.d-head { display: flex; flex-direction: column; gap: 6px; }
+.d-head h2 { font-size: 28px; font-weight: 800; font-stretch: 112%; line-height: 1.1; }
+.d-head .what { font-size: 16px; }
+.d-sec { display: flex; flex-direction: column; gap: 6px; }
+.d-sec h3 { font-size: 12.5px; font-weight: 700; font-stretch: 110%; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); }
+.d-sec ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.d-sec li { padding-left: 22px; position: relative; font-size: 15px; }
+.yes li::before, .nope li::before { position: absolute; left: 0; top: 0; font-family: var(--font-mono); font-weight: 600; }
+.yes li::before { content: "+"; color: var(--ok); }
+.nope li::before { content: "\2212"; color: var(--no); }
+.when { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 10px; padding: 10px 12px; }
+.when h3 { color: var(--accent-ink); }
+.cmds { display: flex; flex-direction: column; gap: 8px; }
+.cmd { display: flex; flex-direction: column; gap: 3px; }
+.cmd-row { display: flex; gap: 6px; align-items: stretch; }
+.cmd pre { flex: 1; min-width: 0; margin: 0; background: var(--code); border-radius: 8px; padding: 7px 10px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; overflow-x: auto; white-space: pre; }
+.copy { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 0 8px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+.copy:hover { color: var(--ink); border-color: var(--ink-2); }
+.cmd .note { font-size: 13.5px; color: var(--ink-2); padding-left: 2px; }
+.ports { display: flex; flex-wrap: wrap; gap: 6px; }
+.portlink { font-family: var(--font-mono); font-size: 12.5px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; text-decoration: none; color: var(--ink); }
+.portlink:hover { border-color: var(--focus); color: var(--focus); }
+.portlink.nolink { color: var(--ink-2); }
+.d-note { font-size: 14.5px; color: var(--ink-2); }
+.related { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Secciones de abajo */
+.sec { display: flex; flex-direction: column; gap: 12px; }
+.sec > h2 { font-size: 24px; font-weight: 800; font-stretch: 112%; }
+.sec > p { max-width: 70ch; color: var(--ink-2); }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: none; }
+thead th { font-family: var(--font-display); font-stretch: 110%; font-size: 15px; font-weight: 700; }
+tbody th { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); white-space: nowrap; }
+td.mono, .mono { font-family: var(--font-mono); font-size: 13px; }
+.portgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.pg { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.pg h3 { font-size: 14px; font-weight: 700; font-stretch: 110%; text-transform: uppercase; letter-spacing: 0.06em; }
+.pg ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.pg li { display: flex; gap: 10px; align-items: baseline; }
+.pg li .p { font-family: var(--font-mono); font-size: 13px; min-width: 88px; font-variant-numeric: tabular-nums; }
+.foot { font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 14px; }
+
+@media (max-width: 1060px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .detail { position: static; max-height: none; }
+}
+@media (max-width: 860px) {
+  .controls { grid-template-columns: minmax(0, 1fr); }
+  .around-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .map { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .map > * { grid-column: auto; grid-row: auto; }
+  .band, .pipe { display: none; }
+  .band-label { padding: 8px 12px; border-radius: 10px; margin-top: 10px; }
+  .l-cli { background: var(--t-cli); } .l-tra { background: var(--t-tra); } .l-cal { background: var(--t-cal); } .l-rec { background: var(--t-rec); } .l-alm { background: var(--t-alm); }
+  .tool, .group { margin-block: 0; }
+  .around-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool, .sub { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <h1>El stack de Big Data, <span>en un mapa</span></h1>
+    <p class="lead">Leelo de arriba hacia abajo: arriba están los comandos que escribís vos; abajo, lo que hace el trabajo y lo que guarda los datos. Tocá cualquier herramienta para ver qué es, cuándo usarla y cómo.</p>
+    <div class="versions" aria-label="Versiones del sandbox">
+      <span>franki678/bigdata-sandbox</span>
+      <span>Hadoop <b>3.3.6</b></span><span>Pig <b>0.18.0</b></span><span>Hive <b>4.0.0</b></span><span>Tez <b>0.10.3</b></span><span>Spark <b>3.5.9</b></span><span>Sqoop <b>1.4.7</b></span><span>ZooKeeper <b>3.8.7</b></span>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Elegir qué ver en el mapa">
+    <div class="ctl">
+      <h2>¿Qué querés hacer?</h2>
+      <div class="chips" id="tasks"></div>
+      <div class="answer" id="answer" aria-live="polite" hidden></div>
+    </div>
+    <div class="ctl">
+      <h2>Recorridos: qué pasa por adentro</h2>
+      <div class="chips" id="flows"></div>
+      <div class="flowbar" id="flowbar" hidden>
+        <div class="stepinfo">
+          <span class="count" id="stepcount"></span>
+          <span class="steptext" id="steptext" aria-live="polite"></span>
+        </div>
+        <div class="navbtns">
+          <button class="btn" id="prev" type="button">Anterior</button>
+          <button class="btn primary" id="next" type="button">Siguiente</button>
+        </div>
+      </div>
+      <button class="btn clear" id="clear" type="button" hidden>Limpiar el mapa</button>
+    </div>
+  </section>
+
+  <section class="stage">
+    <div>
+      <p class="hint">Cada tarjeta es una herramienta. El número de puerto es la página web donde la mirás en tu compu.</p>
+      <div class="map" id="map">
+        <div class="band b-cli r1"></div>
+        <div class="band b-tra r2"></div>
+        <div class="band b-cal r3"></div>
+        <div class="band b-rec r4"></div>
+        <div class="band b-alm r5"></div>
+
+        <div class="band-label l-cli r1">Escribís<small>los comandos</small></div>
+        <button class="tool r1 c2" data-id="cli_hdfs" type="button"><span class="name">hdfs dfs</span><span class="role">mover archivos</span></button>
+        <button class="tool r1 c3" data-id="grunt" type="button"><span class="name">pig · grunt</span><span class="role">scripts de Pig</span></button>
+        <button class="tool r1 c4" data-id="beeline" type="button"><span class="name">beeline</span><span class="role">consultas SQL</span></button>
+        <button class="tool r1 c5" data-id="cli_spark" type="button"><span class="name">pyspark · spark-submit</span><span class="role">Python y SQL</span></button>
+
+        <div class="band-label l-tra r2">Traducen<small>tu pedido a un plan</small></div>
+        <div class="pipe r24 c2"><span>va directo<br>a HDFS</span></div>
+        <button class="tool r2 c3" data-id="pig" type="button"><span class="name">Pig</span><span class="role">Pig Latin, paso a paso</span></button>
+        <div class="group r2 c4">
+          <button class="tool flat" data-id="hive" type="button"><span class="name">Hive</span><span class="role">SQL sobre archivos</span></button>
+          <div class="subs">
+            <button class="sub" data-id="hs2" type="button">HiveServer2 <code>:10000</code></button>
+            <button class="sub" data-id="metastore" type="button">Metastore <code>:9083</code></button>
+          </div>
+        </div>
+        <button class="tool tall r23 c5" data-id="spark" type="button"><span class="name">Spark</span><span class="role">traduce y calcula, en memoria</span><span class="port">:4040 · :18080</span><span class="both">traduce + calcula</span></button>
+
+        <div class="band-label l-cal r3">Calculan<small>los motores</small></div>
+        <button class="tool r3 c3" data-id="mapreduce" type="button"><span class="name">MapReduce</span><span class="role">trabajos en cadena</span><span class="port">:19888</span></button>
+        <button class="tool r3 c4" data-id="tez" type="button"><span class="name">Tez</span><span class="role">todo el plan de una (DAG)</span></button>
+
+        <div class="band-label l-rec r4">Reparte<small>CPU y RAM</small></div>
+        <div class="group r4 c35">
+          <button class="tool flat" data-id="yarn" type="button"><span class="name">YARN</span><span class="role">decide quién usa cuánta CPU y RAM. No calcula.</span><span class="port">:8088</span></button>
+          <div class="subs">
+            <button class="sub" data-id="rm" type="button">ResourceManager <code>:8088</code></button>
+            <button class="sub" data-id="nm" type="button">NodeManager <code>:8042</code></button>
+            <button class="sub" data-id="jobhistory" type="button">JobHistory <code>:19888</code></button>
+          </div>
+        </div>
+
+        <div class="band-label l-alm r5">Guarda<small>los datos</small></div>
+        <div class="group r5 c25">
+          <button class="tool flat" data-id="hdfs" type="button"><span class="name">HDFS</span><span class="role">guarda los archivos partidos en bloques y replicados. No calcula.</span><span class="port">:9870</span></button>
+          <div class="subs">
+            <button class="sub" data-id="namenode" type="button">NameNode <code>:9870</code></button>
+            <button class="sub" data-id="datanode" type="button">DataNodes <code>:9901–9909</code></button>
+            <button class="sub" data-id="secnn" type="button">Secondary NameNode <code>:9868</code></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="around">
+        <div class="band-label">Alrededor del cluster</div>
+        <div class="around-grid">
+          <button class="tool" data-id="sqoop" type="button"><span class="name">Sqoop</span><span class="role">copia tablas MySQL ↔ HDFS</span></button>
+          <button class="tool" data-id="mysql" type="button"><span class="name">MySQL</span><span class="role">la base "tienda", de afuera</span><span class="port">:3306</span></button>
+          <button class="tool" data-id="zookeeper" type="button"><span class="name">ZooKeeper</span><span class="role">alta disponibilidad</span><span class="port">:2181</span></button>
+          <button class="tool" data-id="docker" type="button"><span class="name">Docker</span><span class="role">la caja donde corre todo</span></button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="detail" id="detail" aria-live="polite" aria-label="Ficha de la herramienta"></aside>
+  </section>
+
+  <section class="sec" aria-labelledby="cmp-t">
+    <h2 id="cmp-t">MapReduce, Pig, Hive o Spark</h2>
+    <p>Los cuatro pueden hacer el mismo cálculo: en el tutorial, las ventas por producto dan igual con los cuatro. Cambia cómo lo escribís y quién lo ejecuta.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">MapReduce</th><th scope="col">Pig</th><th scope="col">Hive</th><th scope="col">Spark</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Escribís</th><td>Un mapper y un reducer (Java o Python)</td><td>Pasos en Pig Latin</td><td>SQL (HiveQL)</td><td>Python, SQL o Scala</td></tr>
+          <tr><th scope="row">Lo ejecuta</th><td>MapReduce</td><td>MapReduce, varios trabajos</td><td>Tez, un solo plan</td><td>Spark, en memoria</td></tr>
+          <tr><th scope="row">Velocidad</th><td>Lenta: escribe en HDFS entre trabajos</td><td>Lenta: es MapReduce por abajo</td><td>Mejor: sin HDFS entre pasos</td><td>La más rápida</td></tr>
+          <tr><th scope="row">Usalo para</th><td>Entender el modelo</td><td>Transformar datos paso a paso</td><td>Preguntas que se contestan con SQL</td><td>Casi todo lo nuevo, Python y ML</td></tr>
+          <tr><th scope="row">En la industria</th><td>Casi nadie lo programa a mano</td><td>Prácticamente sin uso</td><td>Empresas con Hadoop propio</td><td>El estándar</td></tr>
+          <tr><th scope="row">En el sandbox</th><td class="mono">hadoop jar …streaming…</td><td class="mono">pig ejemplos/ventas.pig</td><td class="mono">beeline -u … -f ejemplos/ventas.hql</td><td class="mono">spark-submit ejemplos/ventas.py</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="ports-t">
+    <h2 id="ports-t">Las páginas web, por puerto</h2>
+    <p>Los links abren en tu compu y funcionan solo con el cluster prendido. Los puertos sin link no son páginas: los usan los programas para conectarse.</p>
+    <div class="portgrid" id="portgrid"></div>
+  </section>
+
+  <p class="foot">Hecho para el sandbox <span class="mono">franki678/bigdata-sandbox</span>. Los comandos se corren adentro del contenedor (<span class="mono">docker exec -it bigdata bash</span>), salvo los que empiezan con <span class="mono">docker</span>.</p>
+</div>
+
+<script>
+const LAYERS = {
+  cli: ["Escribís", "--t-cli", "--i-cli"],
+  tra: ["Traduce", "--t-tra", "--i-tra"],
+  cal: ["Calcula", "--t-cal", "--i-cal"],
+  rec: ["Reparte CPU y RAM", "--t-rec", "--i-rec"],
+  alm: ["Guarda los datos", "--t-alm", "--i-alm"],
+  out: ["Alrededor del cluster", "--t-out", "--i-out"]
+};
+
+const TOOLS = {
+  cli_hdfs: {
+    name: "hdfs dfs", layer: "cli",
+    what: "El comando para manejar los archivos de HDFS: subir, listar, mirar, bajar y borrar. Solo mueve archivos; no calcula nada.",
+    when: ["Subir un CSV a HDFS antes de procesarlo.", "Ver qué dejó un trabajo en su carpeta de resultados.", "Bajar un resultado a /datos para abrirlo en tu compu."],
+    not: ["Contar, sumar o filtrar datos: eso es Pig, Hive o Spark.", "Moverte con cd: no existe. Cada comando lleva su ruta (o usá la consola de Pig)."],
+    how: [
+      ["hdfs dfs -mkdir -p /user/root/ventas", "Crear una carpeta en HDFS (-p: y las de arriba si faltan)."],
+      ["hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/", "Subir de /datos a HDFS (-f: pisar si existe)."],
+      ["hdfs dfs -ls", "Sin ruta lista /user/root, tu carpeta personal. 'ventas' sin barra es /user/root/ventas."],
+      ["hdfs dfs -cat '/user/root/resultados/pig_por_producto/part-*'", "Ver el contenido de un resultado."],
+      ["hdfs dfs -getmerge /user/root/resultados/pig_por_producto pig.csv", "Bajar todos los part-* juntos a un archivo de /datos."],
+      ["hdfs dfs -rm -r /user/root/resultados/mr_por_producto", "Borrar (por ejemplo, la salida de MapReduce antes de repetirlo)."]
+    ],
+    see: [["9870", "NameNode → Utilities → Browse the file system"]],
+    note: "Las rutas que empiezan con / son de HDFS, no de Linux: 'ls /user/root' no encuentra nada, 'hdfs dfs -ls /user/root' sí.",
+    rel: ["hdfs", "grunt", "docker"]
+  },
+  grunt: {
+    name: "pig · grunt", layer: "cli",
+    what: "El comando pig. Corre scripts de Pig Latin, o abre su consola interactiva, grunt>, donde además podés moverte por HDFS con cd y ls.",
+    when: ["Correr un script .pig entero.", "Probar Pig Latin de a una línea antes de armar el script.", "Recorrer HDFS con cd, ls, pwd y cat."],
+    not: ["Si YARN está apagado (SERVICIOS=hdfs): ahí solo anda pig -x local."],
+    how: [
+      ["pig ejemplos/ventas.pig", "Correr un script en el cluster."],
+      ["pig -param salida=/user/root/resultados/otra ejemplos/ventas.pig", "Cambiar un %default del script sin editarlo."],
+      ["pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig", "Sin cluster: lee y escribe en /datos."],
+      ["pig", "Abre grunt>. Adentro: cd, ls, cat, DESCRIBE, DUMP, EXPLAIN. Salir: quit"]
+    ],
+    see: [["8088", "cada DUMP o STORE aparece como trabajos MAPREDUCE"], ["19888", "los terminados y sus logs"]],
+    rel: ["pig", "mapreduce", "cli_hdfs"]
+  },
+  beeline: {
+    name: "beeline", layer: "cli",
+    what: "La consola de SQL de Hive. No ejecuta nada por sí misma: le manda tu consulta a HiveServer2 y te muestra el resultado como tabla.",
+    when: ["Escribir consultas SQL sobre las tablas de Hive.", "Correr un script .hql entero.", "Sacar el resultado de una consulta como CSV."],
+    not: ["Manejar archivos de HDFS: para eso, hdfs dfs.", "Usar el comando hive de los apuntes viejos: en Hive 4 ya no existe."],
+    how: [
+      ["beeline -u jdbc:hive2://localhost:10000", "Consola interactiva. Cada consulta termina en ; — salir: !quit"],
+      ["beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql", "Correr un archivo SQL."],
+      ["beeline -u jdbc:hive2://localhost:10000 -e \"SHOW TABLES;\"", "Una consulta suelta."],
+      ["beeline -u jdbc:hive2://localhost:10000 --outputformat=csv2 -e \"SELECT * FROM ventas\" > salida.csv", "Resultado como CSV en /datos."]
+    ],
+    see: [["10002", "HiveServer2: tus sesiones y consultas"]],
+    note: "La dirección jdbc:hive2://localhost:10000 es la misma que usa DBeaver para conectarse a Hive.",
+    rel: ["hive", "hs2"]
+  },
+  cli_spark: {
+    name: "pyspark · spark-submit · spark-sql", layer: "cli",
+    what: "Las tres formas de usar Spark: una consola de Python, correr un script entero o una consola de SQL que ve las tablas de Hive.",
+    when: ["pyspark: explorar datos de a una línea en Python.", "spark-submit: correr un script .py de punta a punta.", "spark-sql: consultas SQL con el motor de Spark."],
+    not: ["Abrir varias consolas a la vez y dejarlas abiertas: cada una ocupa memoria de YARN aunque no haga nada."],
+    how: [
+      ["spark-submit ejemplos/ventas.py", "Correr un script en YARN."],
+      ["pyspark", "Consola de Python con la variable spark lista. Salir: exit()"],
+      ["df = spark.read.csv(\"hdfs:///user/root/ventas\", header=True, inferSchema=True)", "Dentro de pyspark: leer una carpeta de HDFS."],
+      ["spark-sql", "Consola SQL. Salir: exit;"]
+    ],
+    see: [["4040", "el trabajo que está corriendo ahora"], ["18080", "los trabajos terminados"]],
+    rel: ["spark", "yarn", "metastore"]
+  },
+  pig: {
+    name: "Pig", layer: "tra",
+    what: "Un lenguaje, Pig Latin, para describir el procesamiento paso a paso: cargar, filtrar, agrupar, sumar, ordenar y guardar. Pig lo traduce a trabajos MapReduce.",
+    when: ["Limpiar o transformar datos paso a paso, sin escribir SQL.", "Ver cómo un flujo de pasos se convierte en trabajos MapReduce (EXPLAIN)."],
+    not: ["Preguntas que se contestan con un SELECT: con Hive es más directo.", "Un proyecto nuevo en una empresa: hoy eso se hace con Spark."],
+    how: [
+      ["ventas = LOAD '/user/root/ventas' USING PigStorage(',') AS (fecha:chararray, sucursal:chararray, producto:chararray, cantidad:int, precio:int);", "Leer la carpeta con su esquema."],
+      ["por_producto = GROUP ventas BY producto;", "Agrupar: esto es el shuffle."],
+      ["DUMP por_producto;", "Recién acá se ejecuta algo: Pig es perezoso."],
+      ["EXPLAIN por_producto;", "Ver qué trabajos MapReduce va a lanzar."]
+    ],
+    see: [["8088", "varios trabajos MAPREDUCE por script"], ["19888", "terminados"]],
+    today: "Prácticamente sin uso en la industria; lo reemplazó Spark. Sirve para entender cómo un proceso se parte en trabajos.",
+    note: "LOAD no saltea el encabezado del CSV: ventas.pig lo saca con un FILTER.",
+    rel: ["grunt", "mapreduce", "hive"]
+  },
+  hive: {
+    name: "Hive", layer: "tra",
+    what: "SQL sobre los archivos de HDFS. Escribís HiveQL (el SQL de Hive) y Hive lo traduce a un plan que ejecuta Tez. Una tabla de Hive es una carpeta de HDFS más una descripción guardada en el Metastore.",
+    when: ["Preguntas que se contestan con SQL: agrupar, filtrar, sumar, cruzar tablas con JOIN.", "Muchos datos y gente que sabe SQL.", "Darle columnas y tipos a archivos que ya están en HDFS (tabla EXTERNAL)."],
+    not: ["Respuestas instantáneas: cada consulta lanza trabajos y tarda segundos.", "Modificar filas de a una, como en MySQL: no es una base transaccional.", "Lógica complicada o machine learning: eso es Spark."],
+    how: [
+      ["CREATE EXTERNAL TABLE ventas (fecha STRING, sucursal STRING, producto STRING, cantidad INT, precio INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION '/user/root/ventas' TBLPROPERTIES ('skip.header.line.count'='1');", "Describir la carpeta como tabla. Los archivos no se mueven."],
+      ["SELECT producto, SUM(cantidad) FROM ventas GROUP BY producto;", "Consultar."],
+      ["DESCRIBE FORMATTED ventas;", "Ver lo que guarda el Metastore: columnas, carpeta, tipo de tabla."]
+    ],
+    see: [["10002", "consultas en HiveServer2"], ["8088", "cada consulta corre como aplicación TEZ"]],
+    today: "Sigue en empresas con Hadoop propio. La idea de SQL sobre archivos más un catálogo de tablas está en Spark SQL y en casi toda la industria.",
+    note: "DROP TABLE de una tabla EXTERNAL borra la descripción y deja los archivos.",
+    rel: ["beeline", "hs2", "metastore", "tez"]
+  },
+  hs2: {
+    name: "HiveServer2", layer: "tra",
+    what: "El servidor de Hive, siempre prendido. Recibe tu SQL, lo valida, le pregunta al Metastore qué es cada tabla, arma el plan, lo manda a YARN y te devuelve el resultado.",
+    when: ["Lo usás sin darte cuenta cada vez que corrés beeline o te conectás con DBeaver.", "Mirás su página para ver qué consultas corrieron y cuánto tardaron."],
+    not: ["Recién prendido el cluster: tarda ~1 minuto más que el resto. Si beeline dice Connection refused, esperá y mirá estado."],
+    how: [
+      ["estado", "Fijate que HiveServer2 (JDBC) diga arriba."],
+      ["tail -n 50 /opt/hive/hiveserver2.log", "Su log, si algo falla."]
+    ],
+    see: [["10002", "página web"], ["10000", "JDBC (no es página: lo usan beeline y DBeaver)", true]],
+    note: "Se llama 2 porque es la segunda versión, la que atiende a varios usuarios a la vez.",
+    rel: ["beeline", "metastore", "tez"]
+  },
+  metastore: {
+    name: "Metastore", layer: "tra",
+    what: "El catálogo de tablas. Por cada tabla guarda el nombre, las columnas y sus tipos, cómo están escritos los archivos y en qué carpeta de HDFS están. Nunca guarda los datos.",
+    when: ["Lo consulta Hive en cada consulta.", "Lo consulta Spark: por eso ve las mismas tablas que Hive."],
+    not: ["Buscar ahí los datos: están en HDFS, como archivos."],
+    how: [
+      ["DESCRIBE FORMATTED ventas;", "En beeline: lo que el Metastore sabe de la tabla (Location, Table Type…)."],
+      ["spark.sql(\"SHOW TABLES\").show()", "En pyspark: las mismas tablas, leídas del mismo Metastore."]
+    ],
+    see: [["9083", "thrift (no es página: lo usan Hive y Spark)", true]],
+    note: "En el sandbox se guarda en una base Derby, en /hadoop/metastore_db (8,5 MB), dentro del volumen. En una empresa, en MySQL o PostgreSQL.",
+    rel: ["hive", "hs2", "spark"]
+  },
+  spark: {
+    name: "Spark", layer: "tra",
+    what: "Traduce y calcula. Tiene sus propios lenguajes (PySpark, Spark SQL, Scala) y su propio motor, que guarda los datos intermedios en memoria. Corre sobre YARN, lee de HDFS y usa el Metastore para las tablas.",
+    when: ["Casi cualquier procesamiento nuevo: varios pasos, lógica propia, Python.", "Machine learning (MLlib) y cálculos que vuelven a usar los mismos datos.", "SQL también: spark.sql(...) o spark-sql."],
+    not: ["Un archivo chico que entra en una compu: pandas o DuckDB lo resuelven sin cluster.", "Leer tablas de Hive con encabezado: Spark ignora el skip.header y el encabezado aparece como una fila más."],
+    how: [
+      ["spark-submit ejemplos/ventas.py", "El mismo cálculo de ventas, en Spark."],
+      ["df.groupBy(\"producto\").sum(\"cantidad\").show()", "En pyspark: agrupar y sumar."],
+      ["df.write.mode(\"overwrite\").saveAsTable(\"ventas_spark\")", "Guardar como tabla: Hive también la ve."]
+    ],
+    see: [["4040", "trabajo activo (stages, tareas)"], ["18080", "trabajos terminados"], ["8088", "aparece como aplicación SPARK"]],
+    today: "El estándar de la industria: Databricks, AWS EMR, Google Dataproc. Lo que aprendés acá se usa tal cual.",
+    note: "En el sandbox corre con 2 executors de 512 MB cada uno.",
+    rel: ["cli_spark", "yarn", "metastore", "hdfs"]
+  },
+  mapreduce: {
+    name: "MapReduce", layer: "cal",
+    what: "El modelo y el motor original de Hadoop. Map: cada línea se convierte en pares clave → valor. Shuffle: se ordena y se agrupa por clave. Reduce: cada clave, con todos sus valores, se resume en un resultado.",
+    when: ["Entender el modelo: es la base de todo lo demás.", "Procesos por lotes simples, con un mapper y un reducer propios en Python (Hadoop Streaming)."],
+    not: ["Consultas de varios pasos: cada paso es otro trabajo que escribe en HDFS, y es lento.", "Proyectos nuevos: hoy casi nadie lo programa a mano."],
+    how: [
+      ["cat ejemplos/ventas.csv | python3 ejemplos/mapper.py | sort | python3 ejemplos/reducer.py", "Probarlo sin Hadoop: sort hace de shuffle."],
+      ["hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar -files ejemplos/mapper.py,ejemplos/reducer.py -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" -input /user/root/ventas -output /user/root/resultados/mr_por_producto", "En el cluster: un mapper por bloque."]
+    ],
+    see: [["8088", "mientras corre"], ["19888", "terminado: tiempos y logs de cada tarea"]],
+    note: "No pisa una salida que ya existe: borrala con hdfs dfs -rm -r antes de repetir.",
+    rel: ["pig", "yarn", "jobhistory"]
+  },
+  tez: {
+    name: "Tez", layer: "cal",
+    what: "El motor que usa Hive. Arma la consulta entera como un solo plan de pasos conectados (un DAG), pasa los datos de un paso al siguiente sin escribirlos en HDFS y reusa los mismos contenedores.",
+    when: ["No lo usás directo: Hive lo usa solo en cada consulta."],
+    not: ["Confundirlo con YARN: Tez calcula; YARN solo le presta CPU y RAM."],
+    how: [
+      ["SELECT producto, SUM(cantidad) AS u FROM ventas GROUP BY producto ORDER BY u DESC;", "En beeline, el progreso muestra los pasos del plan: Map 1 → Reducer 2 → Reducer 3."]
+    ],
+    see: [["8088", "cada sesión de Hive aparece como aplicación TEZ"]],
+    note: "La misma cuenta con Pig lanza varios trabajos MAPREDUCE separados; con Hive y Tez es un solo plan.",
+    rel: ["hive", "yarn", "mapreduce"]
+  },
+  yarn: {
+    name: "YARN", layer: "rec",
+    what: "El administrador del cluster. No calcula: reparte CPU y RAM entre los trabajos en contenedores de YARN, que no tienen nada que ver con los contenedores de Docker. MapReduce, Tez y Spark le piden lugar.",
+    when: ["Ver qué trabajos están corriendo o terminaron.", "Leer los logs de un trabajo que falló.", "Matar un trabajo trabado."],
+    not: ["Si apagás YARN (SERVICIOS=hdfs) no corre ningún trabajo: solo queda HDFS."],
+    how: [
+      ["yarn application -list", "Trabajos corriendo (con -appStates ALL, también los terminados)."],
+      ["yarn application -kill application_1792041277726_0003", "Matar uno (el id sale del -list o de :8088)."],
+      ["yarn logs -applicationId application_1792041277726_0003", "Los logs de todas sus tareas."]
+    ],
+    see: [["8088", "ResourceManager: todos los trabajos"], ["8042", "NodeManager: contenedores corriendo"]],
+    note: "Si un trabajo queda en ACCEPTED y no arranca, falta memoria: cerrá sesiones de beeline o pyspark que hayan quedado abiertas. En el sandbox YARN reparte 4 GB.",
+    rel: ["rm", "nm", "jobhistory"]
+  },
+  rm: {
+    name: "ResourceManager", layer: "rec",
+    what: "El jefe de YARN: recibe los pedidos de todos los trabajos y decide a quién le da cada porción de CPU y RAM.",
+    when: ["Su página es el lugar para ver todos los trabajos, de cualquier herramienta, y su tipo: MAPREDUCE, TEZ o SPARK."],
+    not: [],
+    how: [["yarn application -list -appStates ALL", "Lo mismo que su página, en la terminal."]],
+    see: [["8088", "todos los trabajos"]],
+    rel: ["yarn", "nm"]
+  },
+  nm: {
+    name: "NodeManager", layer: "rec",
+    what: "El que trabaja en cada máquina: arranca los contenedores que le asigna el ResourceManager y los vigila. En una empresa hay uno por servidor; en el sandbox, uno.",
+    when: ["Mirar qué contenedores están corriendo en este momento."],
+    not: [],
+    how: [["jps", "Lista los procesos Java del contenedor; los de los trabajos aparecen mientras corren."]],
+    see: [["8042", "contenedores corriendo"]],
+    rel: ["yarn", "rm"]
+  },
+  jobhistory: {
+    name: "JobHistory", layer: "rec",
+    what: "El historial de los trabajos MapReduce terminados, incluidos los de Pig y Sqoop: cuánto tardó cada tarea, cuántas líneas leyó y sus logs.",
+    when: ["Entender por qué un trabajo MapReduce tardó o falló."],
+    not: ["Buscar ahí los de Spark: esos están en :18080."],
+    how: [["mapred job -list all", "Los trabajos MapReduce, en la terminal."]],
+    see: [["19888", "trabajos MapReduce terminados"]],
+    rel: ["mapreduce", "yarn"]
+  },
+  hdfs: {
+    name: "HDFS", layer: "alm",
+    what: "El sistema de archivos distribuido. Parte cada archivo en bloques y guarda cada bloque en varios DataNodes. Solo guarda y entrega: no tiene lenguaje de consultas ni calcula nada.",
+    when: ["Datos que no entran en una sola máquina, o que tienen que sobrevivir a que se caiga una.", "Siempre que proceses algo: MapReduce, Pig, Hive y Spark leen y escriben acá."],
+    not: ["Miles de archivos chiquitos: cada uno ocupa memoria del NameNode.", "Modificar el medio de un archivo: se reescribe entero."],
+    how: [
+      ["hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations", "Los bloques de un archivo y en qué DataNodes quedó cada copia."],
+      ["hdfs dfsadmin -report", "Estado de cada DataNode."],
+      ["hdfs dfs -setrep -w 3 /user/root/ventas/ventas_grandes.csv", "Cambiar la cantidad de copias de un archivo ya subido."]
+    ],
+    see: [["9870", "NameNode: capacidad, DataNodes y Browse the file system"]],
+    note: "En el sandbox cada bloque es un archivo blk_… dentro de /hadoop/dfs/dnN, en el volumen bigdata_hadoop. El tamaño de bloque y las copias salen de BLOCK_SIZE y REPLICATION.",
+    rel: ["namenode", "datanode", "cli_hdfs"]
+  },
+  namenode: {
+    name: "NameNode", layer: "alm",
+    what: "El índice de HDFS: sabe qué bloques forman cada archivo y en qué DataNode está cada uno. Los datos nunca pasan por él.",
+    when: ["Su página es el panel de HDFS: espacio, DataNodes vivos y muertos, bloques sub-replicados."],
+    not: ["Sin alta disponibilidad es el punto único de falla: si se cae, HDFS no responde aunque los DataNodes tengan los datos."],
+    how: [
+      ["namenode", "Lista los NameNodes y cuál está activo."],
+      ["namenode stop 1", "Simular que se cae (y namenode start 1 para volver)."]
+    ],
+    see: [["9870", "NameNode 1"]],
+    note: "Guarda sus metadatos en /hadoop/dfs/name: fsimage (la foto del árbol de archivos) y edits (cada cambio).",
+    rel: ["hdfs", "secnn", "zookeeper"]
+  },
+  datanode: {
+    name: "DataNodes", layer: "alm",
+    what: "Los que guardan los bloques. Cada 3 segundos le avisan al NameNode que están vivos; si uno deja de avisar ~40 segundos, el NameNode lo da por muerto y copia sus bloques a los demás.",
+    when: ["Ver dónde quedaron tus bloques.", "Simular la caída de un nodo y ver la re-replicación."],
+    not: ["Bajar DATANODES por debajo de REPLICATION: los bloques quedan sub-replicados."],
+    how: [
+      ["datanode", "Lista los DataNodes."],
+      ["datanode stop 2", "Apagar el DataNode 2 (y datanode start 2 para prenderlo)."]
+    ],
+    see: [["9901", "DataNode 1 (el N está en el puerto 990N)"]],
+    note: "En la salida de fsck aparecen por su puerto de datos: 127.0.0.1:9911 es el DataNode 1, :9912 el 2.",
+    rel: ["hdfs", "namenode"]
+  },
+  secnn: {
+    name: "Secondary NameNode", layer: "alm",
+    what: "Cada cierto tiempo junta la foto del NameNode con los cambios acumulados (un checkpoint), así el NameNode arranca más rápido. En el sandbox, cada 5 minutos; de fábrica, cada hora.",
+    when: ["Solo existe sin alta disponibilidad (NAMENODES=1)."],
+    not: ["Pensar que es un NameNode de repuesto: no reemplaza al NameNode si se cae. Para eso está la alta disponibilidad."],
+    how: [],
+    see: [["9868", "último checkpoint"]],
+    rel: ["namenode", "zookeeper"]
+  },
+  sqoop: {
+    name: "Sqoop", layer: "out",
+    what: "Copia tablas entre una base relacional y HDFS. import trae una tabla a HDFS como archivos de texto; export devuelve una carpeta de HDFS a una tabla. Cada copia es un trabajo MapReduce que solo tiene mappers.",
+    when: ["Traer datos del sistema de la empresa (MySQL) para procesarlos.", "Devolver un resultado calculado en Hadoop a la base."],
+    not: ["--hive-import: Sqoop 1.4.7 es anterior a Hive 4. Se importa a una carpeta y se crea una tabla EXTERNAL encima.", "Repetir un export sin vaciar la tabla: export agrega filas."],
+    how: [
+      ["sqoop list-tables --connect jdbc:mysql://localhost/tienda --username alumno --password alumno", "Ver las tablas de la base."],
+      ["sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table ventas --target-dir /user/root/tienda/ventas --delete-target-dir -m 4", "Traer ventas con 4 mappers → 4 archivos part-m-*."],
+      ["sqoop export --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table resumen_categoria --export-dir /user/root/resultados/hive_por_categoria -m 1", "Devolver un resultado a MySQL."],
+      ["bash ejemplos/sqoop.sh", "El ejemplo completo: MySQL → HDFS → Hive → MySQL."]
+    ],
+    see: [["8088", "cada import o export es un trabajo MAPREDUCE"]],
+    today: "Apache lo retiró en 2021, aunque se sigue enseñando. Hoy se usa Spark con JDBC, Airbyte, Fivetran o captura de cambios (Debezium).",
+    rel: ["mysql", "mapreduce", "hive"]
+  },
+  mysql: {
+    name: "MySQL", layer: "out",
+    what: "Una base relacional (MariaDB) con la base tienda: productos (8), sucursales (4), ventas (200.000) y resumen_categoria (vacía, para el export). Hace de sistema de la empresa de donde salen los datos. No es parte de Hadoop.",
+    when: ["Datos que se cargan y modifican fila por fila: ventas, clientes, stock.", "Ver de dónde trae Sqoop los datos."],
+    not: ["Procesar cientos de millones de filas: para eso se pasan a Hadoop."],
+    how: [
+      ["mysql tienda", "Consola SQL en la base tienda. Salir: exit"],
+      ["mysql tienda -e \"SELECT * FROM productos\"", "Una consulta suelta."]
+    ],
+    see: [["3306", "solo si sumás -p 127.0.0.1:3306:3306 (DBeaver: usuario alumno, clave alumno)", true]],
+    rel: ["sqoop"]
+  },
+  zookeeper: {
+    name: "ZooKeeper", layer: "out",
+    what: "Solo arranca con alta disponibilidad (NAMENODES de 2 o 3). Elige cuál NameNode es el activo. Lo acompañan los ZKFC, que vigilan cada NameNode, y 3 JournalNodes, que guardan los cambios que el NameNode de repuesto va leyendo.",
+    when: ["Cuando HDFS no puede quedar caído si se cae el NameNode."],
+    not: ["Con NAMENODES=1 no existe: ahí está el Secondary NameNode, que no es lo mismo."],
+    how: [
+      ["namenode", "Cuál NameNode está activo y cuál en espera."],
+      ["namenode stop 1", "Apagar el activo: en segundos, el otro toma el control."],
+      ["hdfs haadmin -getAllServiceState", "Lo mismo, con el comando de Hadoop."],
+      ["zkCli.sh -server localhost:2181 ls /hadoop-ha/sandbox", "Ver el lock en ZooKeeper."]
+    ],
+    see: [["9871", "NameNode 2 (dice active o standby)"], ["8480", "JournalNode 1 (8481, 8482)"]],
+    note: "NAMENODES queda fijo al crear el volumen: para cambiarlo hay que empezar de cero.",
+    rel: ["namenode", "secnn"]
+  },
+  docker: {
+    name: "Docker", layer: "out",
+    what: "La caja donde corre todo: un contenedor con todos los procesos del cluster. La imagen trae los programas; el volumen bigdata_hadoop guarda HDFS, el Metastore y MySQL; la carpeta datos/ de tu compu es /datos adentro.",
+    when: ["Prender, apagar y entrar al cluster.", "Pasar archivos entre tu compu y el cluster, por datos/."],
+    not: ["Repetir docker run cada día: se hace una sola vez; después, start y stop.", "Cerrar Docker Desktop con el cluster prendido: primero docker stop bigdata."],
+    how: [
+      ["docker start bigdata", "Prender (esperá el cartel Cluster LISTO)."],
+      ["docker logs -f bigdata", "Ver el arranque. Ctrl+C sale del log, no apaga nada."],
+      ["docker exec -it bigdata bash", "Entrar. Adentro, estado muestra cada proceso."],
+      ["docker stop bigdata", "Apagar en orden. Los datos quedan."],
+      ["docker compose up -d", "Si usás el compose.yaml: crear o actualizar el cluster."]
+    ],
+    see: [],
+    note: "Todos los nodos son procesos dentro de la misma PC. La mecánica de bloques, réplicas y caídas es la real de Hadoop.",
+    rel: ["cli_hdfs", "hdfs"]
+  }
+};
+
+const TASKS = [
+  { id: "subir", label: "Subir un CSV para procesarlo", ids: ["docker", "cli_hdfs", "hdfs"], open: "cli_hdfs",
+    text: "Copiá el CSV a la carpeta datos/ de tu compu. Adentro del contenedor ya está en /datos: subilo con hdfs dfs -mkdir y hdfs dfs -put a su propia carpeta de HDFS." },
+  { id: "bloques", label: "Ver en qué bloques quedó un archivo", ids: ["hdfs", "namenode", "datanode"], open: "hdfs",
+    text: "hdfs fsck <archivo> -files -blocks -locations, o en :9870 → Browse the file system → clic en el archivo → Block information." },
+  { id: "sql", label: "Sumar o contar por grupo, con SQL", ids: ["beeline", "hive", "hs2", "metastore", "tez", "cli_spark", "spark"], open: "hive",
+    text: "Hive: creá una tabla EXTERNAL sobre la carpeta y consultá con beeline. Spark SQL hace lo mismo con spark-sql o spark.sql(...)." },
+  { id: "pasos", label: "Limpiar o transformar paso a paso", ids: ["grunt", "pig", "mapreduce", "cli_spark", "spark"], open: "pig",
+    text: "Pig si es para la materia: LOAD, FILTER, FOREACH, GROUP, STORE. En la industria, lo mismo se hace con DataFrames de Spark." },
+  { id: "python", label: "Programar en Python o hacer ML", ids: ["cli_spark", "spark"], open: "spark",
+    text: "Spark: pyspark para explorar, spark-submit para correr el script entero. Para ML, la librería MLlib de Spark." },
+  { id: "modelo", label: "Entender map, shuffle y reduce", ids: ["mapreduce"], open: "mapreduce",
+    text: "Probá la tubería cat | mapper.py | sort | reducer.py sin Hadoop, y después el mismo mapper y reducer con Hadoop Streaming." },
+  { id: "mysql", label: "Traer una tabla de MySQL", ids: ["sqoop", "mysql", "mapreduce", "hdfs"], open: "sqoop",
+    text: "sqoop import la copia a una carpeta de HDFS. Para devolver un resultado, sqoop export." },
+  { id: "trabajo", label: "Ver si un trabajo terminó o se trabó", ids: ["yarn", "rm", "jobhistory"], open: "yarn",
+    text: ":8088 muestra todos los trabajos y su estado. Los MapReduce terminados están en :19888 y los de Spark en :18080." },
+  { id: "caida", label: "Que HDFS aguante si se cae un nodo", ids: ["datanode", "namenode", "zookeeper"], open: "zookeeper",
+    text: "Si se cae un DataNode, alcanza con REPLICATION de 2 o más. Si se cae el NameNode, hace falta alta disponibilidad: NAMENODES=2 con ZooKeeper." },
+  { id: "bajar", label: "Bajar un resultado a mi compu", ids: ["cli_hdfs", "docker"], open: "cli_hdfs",
+    text: "hdfs dfs -getmerge <carpeta de HDFS> resultado.csv lo deja en /datos, que en tu compu es la carpeta datos/." }
+];
+
+const FLOWS = [
+  { id: "put", label: "Subir un archivo", steps: [
+    ["docker", "El archivo está en datos/ de tu compu, que adentro del contenedor es /datos."],
+    ["cli_hdfs", "Corrés hdfs dfs -put. El comando parte el archivo en bloques del tamaño de BLOCK_SIZE."],
+    ["namenode", "Por cada bloque, el NameNode le dice al comando a qué DataNodes mandarlo."],
+    ["datanode", "El bloque va a un DataNode, y ese DataNode se lo pasa a otro, hasta tener REPLICATION copias."],
+    ["namenode", "El NameNode anota qué bloques forman el archivo y dónde está cada copia. Los datos nunca pasaron por él."]
+  ]},
+  { id: "hiveq", label: "Una consulta en beeline", steps: [
+    ["beeline", "Escribís el SELECT en beeline, que se lo manda a HiveServer2."],
+    ["hs2", "HiveServer2 lee el SQL y lo valida: si una columna está mal escrita, el error sale de acá."],
+    ["metastore", "Le pregunta al Metastore qué es cada tabla: columnas, formato y en qué carpeta de HDFS están los archivos."],
+    ["tez", "Arma el plan entero como un DAG de Tez: Map 1 → Reducer 2 → Reducer 3."],
+    ["yarn", "Tez le pide contenedores a YARN para ejecutar cada paso del plan."],
+    ["hdfs", "Las tareas de Tez leen los bloques de HDFS y se pasan los datos entre pasos sin volver a escribirlos en HDFS."],
+    ["beeline", "El resultado vuelve por HiveServer2 y beeline te lo muestra como tabla."]
+  ]},
+  { id: "pigs", label: "Un script de Pig", steps: [
+    ["grunt", "Corrés pig ejemplos/ventas.pig."],
+    ["pig", "Pig lee los pasos (LOAD, FILTER, GROUP, ORDER, STORE). No ejecuta nada hasta el STORE: ahí arma el plan."],
+    ["mapreduce", "El plan se convierte en varios trabajos MapReduce encadenados: uno por el GROUP y dos por el ORDER."],
+    ["yarn", "Cada trabajo le pide contenedores a YARN y aparece aparte en :8088."],
+    ["hdfs", "Cada trabajo lee de HDFS y escribe su resultado intermedio en HDFS para el siguiente. El último deja el resultado en /user/root/resultados."],
+    ["jobhistory", "Cuando terminan, quedan en :19888 con sus tiempos y logs."]
+  ]},
+  { id: "sparkq", label: "Un script de Spark", steps: [
+    ["cli_spark", "Corrés spark-submit ejemplos/ventas.py."],
+    ["spark", "Spark arranca el driver, que traduce tu código a un plan de stages."],
+    ["yarn", "Le pide a YARN contenedores para los executors: en el sandbox, 2 de 512 MB."],
+    ["hdfs", "Los executors leen los bloques de HDFS y guardan lo intermedio en memoria."],
+    ["metastore", "Si usás tablas (spark.sql, saveAsTable), se las pregunta al Metastore: las mismas que ve Hive."],
+    ["spark", "El resultado se muestra o se guarda en HDFS. Mientras corre, lo ves en :4040; terminado, en :18080."]
+  ]},
+  { id: "mrq", label: "MapReduce con Python", steps: [
+    ["mapreduce", "Corrés hadoop jar …hadoop-streaming…jar con tu mapper.py y reducer.py."],
+    ["yarn", "YARN arranca el ApplicationMaster, el jefe de este trabajo."],
+    ["hdfs", "Hay un mapper por bloque: con 6 bloques, 6 tareas de map, cada una leyendo su bloque."],
+    ["mapreduce", "El shuffle ordena y agrupa por producto; la tarea de reduce corre reducer.py y suma."],
+    ["hdfs", "El resultado queda en HDFS como part-00000, más un _SUCCESS."],
+    ["jobhistory", "En :19888 ves cuánto tardó cada una de las 6 tareas de map."]
+  ]},
+  { id: "sqoopq", label: "Sqoop import", steps: [
+    ["sqoop", "Corrés sqoop import con la conexión a la base tienda."],
+    ["mysql", "Sqoop lee la estructura de la tabla y genera una clase Java para leerla. Por eso queda un .java en tu carpeta."],
+    ["mapreduce", "Lanza un trabajo MapReduce sin reduce: con -m 4, cuatro mappers, cada uno con un rango de id."],
+    ["yarn", "Los mappers corren en contenedores de YARN."],
+    ["hdfs", "Cada mapper escribe su parte en HDFS: part-m-00000 a part-m-00003."]
+  ]}
+];
+
+const PORTS = [
+  ["HDFS", "--i-alm", [["9870", "NameNode"], ["9868", "Secondary NameNode"], ["9901–9909", "DataNodes 1 a 9", "9901"], ["9871–9872", "NameNodes 2 y 3 (alta disp.)", "9871"], ["8480–8482", "JournalNodes (alta disp.)", "8480"]]],
+  ["YARN y MapReduce", "--i-rec", [["8088", "ResourceManager"], ["8042", "NodeManager"], ["19888", "JobHistory"]]],
+  ["Hive y Spark", "--i-tra", [["10002", "HiveServer2 (web)"], ["10000", "HiveServer2 (JDBC)", null], ["9083", "Metastore", null], ["18080", "Spark History"], ["4040", "Spark, trabajo activo"]]],
+  ["Alrededor", "--i-out", [["3306", "MySQL (si lo publicás)", null], ["2181", "ZooKeeper (no se publica)", null]]]
+];
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const state = { sel: "hdfs", task: null, flow: null, step: 0 };
+
+function portLink(p, label, nolink) {
+  if (nolink) return `<span class="portlink nolink" title="${esc(label)}">:${esc(p)} · ${esc(label)}</span>`;
+  return `<a class="portlink" href="http://localhost:${esc(p)}" target="_blank" rel="noopener">:${esc(p)} · ${esc(label)}</a>`;
+}
+
+function renderDetail(id) {
+  const t = TOOLS[id];
+  if (!t) return;
+  const L = LAYERS[t.layer];
+  const parts = [];
+  parts.push(`<div class="d-head"><span class="d-layer" style="background:var(${L[1]});color:var(${L[2]})">${esc(L[0])}</span><h2>${esc(t.name)}</h2><p class="what">${esc(t.what)}</p></div>`);
+  if (t.when && t.when.length) parts.push(`<div class="d-sec when"><h3>Cuándo usarlo</h3><ul class="yes">${t.when.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>`);
+  if (t.not && t.not.length) parts.push(`<div class="d-sec"><h3>Cuándo no, u ojo con</h3><ul class="nope">${t.not.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>`);
+  if (t.how && t.how.length) parts.push(`<div class="d-sec"><h3>Cómo se usa</h3><div class="cmds">${t.how.map(h => `<div class="cmd"><div class="cmd-row"><pre>${esc(h[0])}</pre><button class="copy" type="button" data-copy="${esc(h[0])}" aria-label="Copiar comando">Copiar</button></div><span class="note">${esc(h[1])}</span></div>`).join("")}</div></div>`);
+  if (t.see && t.see.length) parts.push(`<div class="d-sec"><h3>Dónde mirarlo</h3><div class="ports">${t.see.map(s => portLink(s[0], s[1], s[2])).join("")}</div></div>`);
+  if (t.today) parts.push(`<div class="d-sec"><h3>En la industria hoy</h3><p class="d-note">${esc(t.today)}</p></div>`);
+  if (t.note) parts.push(`<div class="d-sec"><h3>Para tener en cuenta</h3><p class="d-note">${esc(t.note)}</p></div>`);
+  if (t.rel && t.rel.length) parts.push(`<div class="d-sec"><h3>Se relaciona con</h3><div class="related">${t.rel.map(r => `<button class="chip" type="button" data-open="${r}">${esc(TOOLS[r].name)}</button>`).join("")}</div></div>`);
+  $("#detail").innerHTML = parts.join("");
+}
+
+function select(id, scroll) {
+  state.sel = id;
+  renderDetail(id);
+  $$("[data-id]").forEach(b => b.classList.toggle("is-selected", b.dataset.id === id));
+  if (scroll && window.matchMedia("(max-width: 1060px)").matches) {
+    $("#detail").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  }
+}
+
+function paint() {
+  const all = $$("[data-id]");
+  all.forEach(b => {
+    b.classList.remove("is-on", "is-dim", "is-current");
+    const old = b.querySelector(".badge");
+    if (old) old.remove();
+  });
+  let on = null, current = null;
+  const nums = {};
+  if (state.task) {
+    on = new Set(TASKS.find(t => t.id === state.task).ids);
+  } else if (state.flow) {
+    const f = FLOWS.find(x => x.id === state.flow);
+    on = new Set(f.steps.map(s => s[0]));
+    f.steps.forEach((s, i) => { (nums[s[0]] = nums[s[0]] || []).push(i + 1); });
+    current = f.steps[state.step][0];
+  }
+  if (on) {
+    all.forEach(b => {
+      const id = b.dataset.id;
+      if (on.has(id)) {
+        b.classList.add(id === current ? "is-current" : "is-on");
+        if (nums[id]) {
+          const s = document.createElement("span");
+          s.className = "badge";
+          s.textContent = nums[id].join("·");
+          b.appendChild(s);
+        }
+      } else {
+        b.classList.add("is-dim");
+      }
+    });
+  }
+  $("#clear").hidden = !(state.task || state.flow);
+}
+
+function renderTaskAnswer() {
+  const box = $("#answer");
+  if (!state.task) { box.hidden = true; box.innerHTML = ""; return; }
+  const t = TASKS.find(x => x.id === state.task);
+  box.hidden = false;
+  box.innerHTML = `<p>${esc(t.text)}</p><div class="go">${t.ids.map(i => `<button class="linkish" type="button" data-open="${i}">${esc(TOOLS[i].name)}</button>`).join(" · ")}</div>`;
+}
+
+function renderFlowBar() {
+  const bar = $("#flowbar");
+  if (!state.flow) { bar.hidden = true; return; }
+  const f = FLOWS.find(x => x.id === state.flow);
+  bar.hidden = false;
+  const s = f.steps[state.step];
+  $("#stepcount").textContent = `Paso ${state.step + 1} de ${f.steps.length} · ${TOOLS[s[0]].name}`;
+  $("#steptext").textContent = s[1];
+  $("#prev").disabled = state.step === 0;
+  $("#next").disabled = state.step === f.steps.length - 1;
+}
+
+function setTask(id) {
+  state.task = state.task === id ? null : id;
+  state.flow = null;
+  $$("#tasks .chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.task === state.task)));
+  $$("#flows .chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+  if (state.task) select(TASKS.find(t => t.id === state.task).open, false);
+  renderTaskAnswer(); renderFlowBar(); paint();
+}
+
+function setFlow(id) {
+  state.flow = state.flow === id ? null : id;
+  state.step = 0;
+  state.task = null;
+  $$("#flows .chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.flow === state.flow)));
+  $$("#tasks .chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+  if (state.flow) select(FLOWS.find(f => f.id === state.flow).steps[0][0], false);
+  renderTaskAnswer(); renderFlowBar(); paint();
+}
+
+function goStep(d) {
+  const f = FLOWS.find(x => x.id === state.flow);
+  if (!f) return;
+  state.step = Math.max(0, Math.min(f.steps.length - 1, state.step + d));
+  select(f.steps[state.step][0], false);
+  renderFlowBar(); paint();
+}
+
+function clearAll() {
+  state.task = null; state.flow = null; state.step = 0;
+  $$(".chip[aria-pressed]").forEach(c => c.setAttribute("aria-pressed", "false"));
+  renderTaskAnswer(); renderFlowBar(); paint();
+}
+
+function renderPorts() {
+  $("#portgrid").innerHTML = PORTS.map(g => `<div class="pg"><h3 style="color:var(${g[1]})">${esc(g[0])}</h3><ul>${g[2].map(p => {
+    const linkPort = p.length > 2 ? p[2] : p[0];
+    const port = linkPort === null ? `<span class="p">:${esc(p[0])}</span>` : `<a class="p" href="http://localhost:${esc(linkPort)}" target="_blank" rel="noopener">:${esc(p[0])}</a>`;
+    return `<li>${port}<span>${esc(p[1])}</span></li>`;
+  }).join("")}</ul></div>`).join("");
+}
+
+function init() {
+  $("#tasks").innerHTML = TASKS.map(t => `<button class="chip" type="button" data-task="${t.id}" aria-pressed="false">${esc(t.label)}</button>`).join("");
+  $("#flows").innerHTML = FLOWS.map(f => `<button class="chip" type="button" data-flow="${f.id}" aria-pressed="false">${esc(f.label)}</button>`).join("");
+  renderPorts();
+
+  document.addEventListener("click", e => {
+    const tool = e.target.closest("[data-id]");
+    if (tool) { select(tool.dataset.id, true); return; }
+    const open = e.target.closest("[data-open]");
+    if (open) { select(open.dataset.open, true); return; }
+    const task = e.target.closest("[data-task]");
+    if (task) { setTask(task.dataset.task); return; }
+    const flow = e.target.closest("[data-flow]");
+    if (flow) { setFlow(flow.dataset.flow); return; }
+    const copy = e.target.closest("[data-copy]");
+    if (copy) {
+      const text = copy.dataset.copy;
+      const done = () => { copy.textContent = "Copiado"; setTimeout(() => { copy.textContent = "Copiar"; }, 1400); };
+      const fallback = () => {
+        const pre = copy.parentElement.querySelector("pre");
+        const r = document.createRange(); r.selectNodeContents(pre);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        copy.textContent = "Ctrl+C";
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+        else fallback();
+      } catch (err) { fallback(); }
+    }
+  });
+  $("#prev").addEventListener("click", () => goStep(-1));
+  $("#next").addEventListener("click", () => goStep(1));
+  $("#clear").addEventListener("click", clearAll);
+  document.addEventListener("keydown", e => {
+    if (!state.flow || e.target.closest("input, textarea")) return;
+    if (e.key === "ArrowRight") goStep(1);
+    if (e.key === "ArrowLeft") goStep(-1);
+  });
+
+  select("hdfs", false);
+  paint();
+}
+init();
+</script>
+</body>
+</html>

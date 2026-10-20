@@ -37,6 +37,11 @@ Python 3.8
   mismo con **tu propio CSV**.
 - El resto del README es la referencia: todos los parámetros, todos los
   comandos, experimentos y problemas comunes.
+- El [**mapa interactivo del stack**](https://franki-678.github.io/bigdata-sandbox/)
+  muestra cada herramienta en su capa: qué hace, cuándo usarla, sus comandos
+  y qué pasa por adentro en cada recorrido (una consulta de Hive, un script de
+  Pig, Spark, Sqoop...). Es un solo archivo, `docs/index.html`: también se
+  puede descargar y abrir con doble clic.
 
 ## Índice
 
