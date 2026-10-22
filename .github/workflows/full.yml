@@ -104,8 +104,10 @@ jobs:
             echo "### AUTOSTART=1 (${{ matrix.arq }})"
             echo "fase: $fase, arrancó en ${arranque} s; docker stop tardó ${apagado} s, código de salida ${codigo}"
           } | tee -a "$S/autostart.md"
-          grep -q "Cluster apagado\|Apagando el cluster" "$S/docker_logs_auto.txt" && echo "apagó en orden" | tee -a "$S/autostart.md"
-          [ "$fase" = running ] && [ "$apagado" -lt 20 ] && [ "$codigo" = 143 -o "$codigo" = 0 ]
+          en_orden=no
+          grep -q "Apagando el cluster en orden" "$S/docker_logs_auto.txt" && grep -q "Cluster apagado" "$S/docker_logs_auto.txt" && en_orden=si
+          echo "apagó en orden (Apagando... y Cluster apagado en docker logs): $en_orden" | tee -a "$S/autostart.md"
+          [ "$fase" = running ] && [ "$apagado" -lt 20 ] && [ "$codigo" = 143 -o "$codigo" = 0 ] && [ "$en_orden" = si ]
 
       - name: Resumen
         if: always()

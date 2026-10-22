@@ -321,10 +321,11 @@ proceso termina con código 143: uvicorn vuelve a levantar la señal que recibi�
 
 ## Probarlo
 
-Sin Hadoop: los tests usan fixtures con el formato de Hadoop 3.3 (JMX, `fsck`,
-WebHDFS, el REST de YARN, JobHistory y Spark History, `yarn logs`, beeline).
-Son sintéticas: se armaron a mano con el formato real, y
-`tests/fixtures/README.md` dice de dónde sale cada una. También hay un
+Sin Hadoop: los tests usan fixtures de Hadoop 3.3.6, Spark 3.5 y Hive 4.0.0
+(JMX, `fsck`, WebHDFS, el REST de YARN, JobHistory y Spark History, `yarn logs`,
+beeline). Casi todas son salidas reales que tomó el humo de la imagen `full`;
+`tests/fixtures/README.md` dice de dónde sale cada una, cuáles siguen
+sintéticas y qué cambió al pasar a las reales. También hay un
 entrypoint falso (`tests/fixtures/entrypoint_falso.sh`). Ese entrypoint escribe los mismos
 mensajes, puede fallar a propósito y tiene el mismo trap de apagado.
 
@@ -359,50 +360,50 @@ SANDBOX_ENTRYPOINT="bash tests/fixtures/entrypoint_falso.sh" SANDBOX_HADOOP_DIR=
   FALSO_VOLUMEN=/tmp/vol PORT=4100 python3 -m sandbox_server
 ```
 
-**Prueba de humo** contra la imagen real (no corre con el resto ni está en el
-CI): `tests/humo/test_humo.py`. Levanta solo HDFS con 1 DataNode y espera que
-NameNode y DataNode estén arriba según el sondeo y el JMX. Después crea una
-carpeta, sube un archivo de 2 bloques desde "la compu" (multipart), lo lista,
-mira el detalle y el `fsck`, lo borra y apaga.
+**Prueba de humo** contra la imagen real: `tests/humo/humo_full.py`, que corre
+el workflow `Full` (`.github/workflows/full.yml`) en cada push a `full`, en amd64
+y arm64. Arma el target `full`, levanta el contenedor (espera «Iniciar») y pasa
+por todo con la API: arranque y apagado (solo HDFS y todo), HDFS (ls, put, file,
+fsck, replicación, DataNodes apagados y prendidos, "put terminado" contra el
+archivo real), YARN (apps, submit, kill, logs), el pipeline de seis etapas con
+sus eventos `step` y las variantes (sqoop con `SANDBOX_SQOOP_*`, pandas,
+sparksql, getmerge, mllib), Datos (catálogo, esquemas, consultas con Tez,
+explain y un error de cada motor) y ML (scikit-learn con la matriz de
+`ejemplos/ml/modelos_sklearn.py`, MLlib con su `appId`). Después prueba
+`AUTOSTART=1` y que `docker stop` apague en orden. No publica nada: deja el
+resumen, los tiempos, las respuestas de la API y las salidas crudas en el
+artifact `humo-full-<arq>`.
+
+```bash
+gh workflow run full.yml --ref full    # o un push a full
+gh run download <run> -n humo-full-amd64
+```
+
+`tests/humo/test_humo.py` es el humo chico de antes (solo HDFS, a mano):
 
 ```bash
 docker run -d --name humo -p 8080:8080 franki678/bigdata-sandbox:full
 SANDBOX_HUMO=1 python3 server/tests/humo/test_humo.py
 ```
 
-Lo que el humo todavía no cubre y tiene que cubrir para Pipeline, Datos y ML,
-con todos los servicios prendidos (el perfil de `:ml` más MySQL, MongoDB y
-HiveServer2):
+Tiempos medidos en el CI (runners de GitHub, segundos, amd64 / arm64):
 
-- **Pipeline completo:** `put` → `pyspark` → `hivetab` → `hive` (por
-  producto) → `sklearn` (clasificación) → `mysql` (sqoop export), esperando
-  cada paso por el evento `step` hasta `done`. Al final:
-  `/user/root/resultados/por_producto` en HDFS, `tienda.resumen_producto` con
-  filas en MySQL y el `modelId` en `GET /api/ml/models`.
-- **Las variantes:** `sqoop` import (que la clave llegue por
-  `SANDBOX_SQOOP_USER`/`SANDBOX_SQOOP_PASS`), `pandas` en ETL y análisis,
-  `sparksql`, `getmerge` y `mllib`.
-- **Datos:** el catálogo trae `default.ventas_limpias`, `tienda.ventas` y una
-  colección de MongoDB. Además, `schema` de cada una, una consulta con
-  `GROUP BY` en Hive que traiga `appId` (Tez), un `explain` de cada fuente y una
-  consulta con error de cada motor, para confirmar que la última línea que se
-  toma es la buena: los formatos de error de los falsos se copiaron a mano.
-- **ML:** `train` de cada motor con `target`, `features` y `params`, y comparar
-  la matriz de confusión con la de `ejemplos/ml/modelos_sklearn.py`. Con MLlib,
-  que el `appId` del evento `model` sea el de YARN.
-- **Tiempos:** cuánto tarda cada paso de verdad. Los falsos no dicen nada de
-  eso, y de ahí salen los tiempos máximos de cada acción.
+| Qué | amd64 | arm64 |
+|---|---|---|
+| Arranque solo HDFS / todo | 15 / 39 | 15 / 39 |
+| DataNode apagado hasta que el NameNode lo da por muerto | 40 | 40 |
+| YARN: MapReduce / Spark / Hive con Tez (total) | 24 / 30 / 26 | 25 / 38 / 31 |
+| Pipeline: put, ETL pyspark, tabla en Hive, análisis Hive | 4, 41, 20, 16 | 4, 47, 22, 21 |
+| Pipeline: sklearn, sqoop export, sqoop import, ETL pandas | 4, 16, 22, 6 | 4, 16, 22, 8 |
+| Pipeline: Spark SQL, pandas, getmerge, MLlib | 24, 8, 2, 30 | 28, 8, 2, 38 |
+| Consulta de Hive con Tez en Datos | 12–19 | 13–18 |
+| ML: scikit-learn / MLlib | 2 / 28 | 2 / 36 |
+
+El `POST /api/yarn/apps` bloquea hasta tener el `appId`: 8 a 13 s.
 
 ## Qué falta
 
-- **Imagen.** Falta un target `full` en el `Dockerfile`, sobre `ml`:
-  - `pip install -r server/requirements.txt`;
-  - copiar `ui/dist` a `/opt/sandbox/ui` y `server/sandbox_server` a `/opt/sandbox/server` (con `PYTHONPATH` apuntando ahí);
-  - `ENTRYPOINT ["/usr/bin/tini", "--", "python3", "-m", "sandbox_server"]` y `EXPOSE 8080`;
-  - `stop_grace_period: 20s` en el compose.
-- **Apagado.** Mover la función `apagar` del entrypoint a `sandbox/lib.sh`, así
-  el servidor la llama en vez de repetir el orden.
-- **Prueba de humo en el CI** contra la imagen `full` recién construida
-  (incluye los casos de HDFS y los de Pipeline, Datos y ML de arriba).
 - **Pig y Hive en el ETL:** quedan como no disponibles hasta que la imagen
   traiga un `etl.pig` y un `etl.hql` para `ventas_sucias.csv`.
+- **Fixtures que siguen sintéticas:** NameNode en standby (HA) y en modo
+  seguro, y el `/proc` de `scan_proc`.

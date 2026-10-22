@@ -155,3 +155,15 @@ def test_cola_llena_descarta_lo_viejo():
 
 def test_formato_sse_en_una_linea():
     assert sse_format("activity", {"t": "a\nb"}) == b'event: activity\ndata: {"t":"a\\nb"}\n\n'
+
+
+def test_la_actividad_sale_en_docker_logs(capsys):
+    """python3 -m sandbox_server prende el eco: docker logs muestra arranque y apagado."""
+    bus = EventBus()
+    bus.log("Cluster", "info", "callado")
+    assert capsys.readouterr().out == ""
+    bus.echo = True
+    bus.log("Cluster", "info", "Apagando el cluster en orden")
+    bus.log("Cluster", "warn", "El apagado tardó demasiado")
+    assert capsys.readouterr().out.splitlines() == [
+        "[Cluster] Apagando el cluster en orden", "[Cluster] WARN: El apagado tardó demasiado"]

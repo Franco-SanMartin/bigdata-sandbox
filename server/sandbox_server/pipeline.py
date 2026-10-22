@@ -495,6 +495,7 @@ class Pipeline:
             input=r["trace"]["input"], action=r["trace"]["action"], source="Vos", env=env, cwd=str(self.dir),
             timeout=timeout))
         seen = {"n": 0}
+        verts: dict[str, dict] = {}
 
         def tick() -> None:
             if r["state"] != "running":
@@ -520,8 +521,10 @@ class Pipeline:
                     p = int(mr.group(1)) / 100 if int(mr.group(2)) == 0 else (int(mr.group(1)) + int(mr.group(2))) / 200
                 tez = parse_tez_progress([t])
                 if tez:
-                    total = sum(v["total"] for v in tez)
-                    p = sum(v["done"] for v in tez) / total if total else 0
+                    # Hive 4 imprime un vértice por línea: se junta lo último de cada uno
+                    verts.update({v["name"]: v for v in tez})
+                    total = sum(v["total"] for v in verts.values())
+                    p = sum(v["done"] for v in verts.values()) / total if total else 0
                 ss = SPARK_STATE.search(t)
                 if ss and r["appIds"]:
                     if ss.group(1) == "ACCEPTED":
@@ -675,7 +678,7 @@ class Pipeline:
                   "echo '== hdfs dfs -put ventas_limpias.parquet|0.9'\n"
                   f"hdfs dfs -rm -r -f -skipTrash {LIMPIAS} >/dev/null\n"
                   f"hdfs dfs -mkdir -p {LIMPIAS}\n"
-                  f"hdfs dfs -put -f ventas_limpias.parquet {LIMPIAS}/\n")
+                  f"hdfs dfs -put -f ventas_limpias.parquet {LIMPIAS}/\n") + await self.resync_hive("pandas")
 
         async def done(run: Run):
             summary = parse_resumen([l["text"] for l in run.lines if l["stream"] == "out"])
@@ -685,6 +688,8 @@ class Pipeline:
                 size = hdfs_mod.mb((self.dir / "ventas_limpias.parquet").stat().st_size)
             read = resumen_rows(summary, "Filas leídas")
             self.hdfs_changed(LIMPIAS)
+            if self.datos is not None:
+                self.datos.invalidate("hive")
             out = {"path": LIMPIAS, "rows": total, "sizeMb": size, "summary": summary}
             msg = (f"{n(read)} → {n(total)} filas, en Parquet" if read is not None and total is not None
                    else "Listo, en Parquet")
@@ -699,7 +704,7 @@ class Pipeline:
                                 "note": "Fechas en tres formatos, productos en mayúsculas, precios con coma y medios "
                                         "de pago escritos de varias formas"}
         script = ("echo '== spark-submit etl_spark.py: pidiendo contenedores a YARN|0.05'\n"
-                  "spark-submit --master yarn ejemplos/ml/etl_spark.py\n")
+                  "spark-submit --master yarn ejemplos/ml/etl_spark.py\n") + await self.resync_hive("spark")
 
         async def done(run: Run):
             summary = parse_resumen([l["text"] for l in run.lines if l["stream"] == "out"])
@@ -708,6 +713,8 @@ class Pipeline:
             parts = [f for f in await self.listing(LIMPIAS) if f["pathSuffix"].endswith(".parquet")]
             size = await self.size_mb(LIMPIAS)
             self.hdfs_changed(LIMPIAS)
+            if self.datos is not None:
+                self.datos.invalidate("hive")
             out = {"path": LIMPIAS, "rows": total, "sizeMb": size, "summary": summary}
             k = len(parts)
             msg = (f"{n(read)} → {n(total)} filas, en {k} archivo{'s' if k != 1 else ''} Parquet"
@@ -723,11 +730,24 @@ class Pipeline:
         names = [f["pathSuffix"] for f in await self.listing(LIMPIAS)]
         return "pandas" if "ventas_limpias.parquet" in names else "spark"
 
+    @staticmethod
+    def hive_ddl(who: str) -> str:
+        cols = ", ".join(f"{c} {t}" for c, t in zip(LIMPIAS_COLS, HIVE_TYPES[who]))
+        return (f"DROP TABLE IF EXISTS default.ventas_limpias; CREATE EXTERNAL TABLE default.ventas_limpias ({cols}) "
+                f"STORED AS PARQUET LOCATION '{LIMPIAS}'")
+
+    async def resync_hive(self, who: str) -> str:
+        """Si la tabla de Hive ya existe, el ETL la vuelve a declarar con los tipos de quien reescribió el Parquet:
+        con la vieja (fecha DATE de Spark sobre un TIMESTAMP de pandas, o al revés) Hive falla al leer
+        (ClassCastException, visto en el humo)."""
+        if not await self.hive_table():
+            return ""
+        return ("echo '== Actualizando la tabla default.ventas_limpias de Hive|0.95'\n"
+                f"beeline -u {shlex.quote(self.datos_url())} --silent=true -e {shlex.quote(self.hive_ddl(who) + ';')}\n")
+
     async def _almacen_hivetab(self, r, info, tool, o, por) -> None:
         who = await self.writer()
-        cols = ", ".join(f"{c} {t}" for c, t in zip(LIMPIAS_COLS, HIVE_TYPES[who]))
-        ddl = (f"DROP TABLE IF EXISTS default.ventas_limpias; CREATE EXTERNAL TABLE default.ventas_limpias ({cols}) "
-               f"STORED AS PARQUET LOCATION '{LIMPIAS}'")
+        ddl = self.hive_ddl(who)
         r["trace"]["input"] = f"{LIMPIAS} (Parquet, escrito por {'pandas' if who == 'pandas' else 'Spark'})"
         r["trace"]["action"] = "Hive anota la tabla en el Metastore: columnas, formato y carpeta. No mueve ni copia nada"
         url = shlex.quote(self.datos_url())

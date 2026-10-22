@@ -23,6 +23,7 @@ class Server(uvicorn.Server):
 
 def main() -> None:
     app = build_app()
+    app.state.bus.echo = True
     config = uvicorn.Config(
         app,
         host=os.environ.get("HOST", "0.0.0.0"),

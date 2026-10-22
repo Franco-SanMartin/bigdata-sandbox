@@ -22,6 +22,8 @@ class EventBus:
         self.closed = False
         self._seq = itertools.count(1)
         self.activity: deque[dict] = deque(maxlen=MAX_ACTIVITY)
+        # python3 -m sandbox_server la prende: la actividad sale también en docker logs
+        self.echo = False
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX)
@@ -60,6 +62,8 @@ class EventBus:
         entry = {"id": f"a{next(self._seq)}", "at": now_ms(), "source": source, "level": level, "title": title}
         entry.update({k: v for k, v in extra.items() if v is not None})
         self.activity.append(entry)
+        if self.echo:
+            print(f"[{source}] {'' if level in ('info', 'ok') else level.upper() + ': '}{title}", flush=True)
         self.publish("activity", {"entry": entry})
         return entry
 

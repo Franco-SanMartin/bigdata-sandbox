@@ -63,6 +63,24 @@ def test_arranca_y_apaga_en_orden(settings):
     assert sin_huerfanos()
 
 
+def test_apagado_no_deja_el_estado_viejo(settings):
+    """Con el sondeo prendido, apenas termina el apagado los procesos ya salen apagados (no 'up' de la última
+    vuelta del sondeo, como vio el humo con SERVICIOS=todo)."""
+    async def main():
+        cl, _ = nuevo(settings)
+        await cl.start(BASE)
+        await esperar(lambda: cl.phase == "running")
+        settings.probe = True
+        settings.proc_dir.mkdir(exist_ok=True)
+        cl.processes = [{**p, "state": "up", "pid": 1} for p in cl.status()["processes"]]
+        await cl.stop()
+        st = cl.status()
+        assert st["phase"] == "stopped"
+        assert [p["id"] for p in st["processes"] if p["state"] == "up"] == ["ui"]
+    asyncio.run(main())
+    assert sin_huerfanos()
+
+
 def test_config_guardada_en_el_volumen(settings):
     async def main():
         cl, _ = nuevo(settings)

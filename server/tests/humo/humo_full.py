@@ -209,9 +209,13 @@ def apagar(nombre: str) -> None:
         s = esperar(lambda: (lambda s: s if s["phase"] == "stopped" else None)(estado()), 120, "stopped")
         TIEMPOS[f"apagado {nombre}"] = round(time.time() - t0, 1)
         vivos = [p["id"] for p in s["processes"] if p["id"] != "ui" and p["state"] == "up"]
-        c.detalle = f"{TIEMPOS[f'apagado {nombre}']} s; vivos: {vivos}"
+        rc, out, _ = en_contenedor("pgrep -a java | cut -c1-160; pgrep -a 'mysqld|mariadbd|mongod'")
+        _, act = pedir("GET", "/api/activity?limit=15")
+        guardar(f"activity_apagado_{nombre}", act)
+        pasos = [(a.get("title"), a.get("output")) for a in (act if isinstance(act, list) else act.get("entries", []))
+                 if a.get("source") == "Cluster"][-6:]
+        c.detalle = f"{TIEMPOS[f'apagado {nombre}']} s; vivos según el estado: {vivos}; actividad: {pasos}"
         assert not vivos
-        rc, out, _ = en_contenedor("pgrep -a java; pgrep -a 'mysqld|mariadbd|mongod'")
         assert not out.strip(), out
 
 
@@ -298,6 +302,7 @@ def solo_hdfs() -> None:
             out = capturar("fsck_escribiendo.txt", "hdfs fsck / -files -blocks -locations -openforwrite")
             if "OPENFORWRITE" in out:
                 visto = True
+                curl("webhdfs_ls_humo_escribiendo.json", f"http://localhost:9870/webhdfs/v1{carpeta}?op=LISTSTATUS")
                 _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(carpeta))
                 guardar("hdfs_ls_escribiendo", ls)
                 break
@@ -305,21 +310,29 @@ def solo_hdfs() -> None:
         t0 = time.time()
         esperar(lambda: put_terminado(carpeta) and "grande.bin" in [x["name"] for x in put_terminado(carpeta)],
                 300, "sin writing", 1)
+        t_ls = round(time.time() - t0, 1)
+        # Lo que dice HDFS en ese mismo momento: -put cierra el archivo (espera el ack de
+        # todos los bloques) y recién ahí lo renombra; la JVM de FsShell tarda un poco más en salir
         _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(carpeta))
-        # [F]sShell: que pgrep no se encuentre a sí mismo (el bash -c lo lleva en la línea)
-        _, out, _ = en_contenedor("cat /tmp/put.log; pgrep -f '[F]sShell' || echo sin-put")
-        largo = next((x.get("sizeMb") for x in ls["entries"] if x["name"] == "grande.bin"), None)
         _, st, _ = en_contenedor(f"curl -s 'http://localhost:9870/webhdfs/v1{carpeta}/grande.bin?op=GETFILESTATUS'")
+        _, abiertos, _ = en_contenedor(f"hdfs fsck {carpeta} -openforwrite 2>/dev/null | grep -c OPENFORWRITE")
         try:
             bytes_hdfs = json.loads(st)["FileStatus"]["length"]
         except (ValueError, KeyError):
             bytes_hdfs = None
-        c.detalle = (f"OPENFORWRITE visto: {visto}; terminó {round(time.time() - t0, 1)} s después; "
-                     f"grande.bin {largo} MB ({bytes_hdfs} bytes); "
-                     f"estados: {[(x['name'], x.get('state')) for x in ls['entries']]}; {out.strip()[-200:]}")
-        assert visto
-        assert "sin-put" in out, "el ls dijo terminado pero el -put seguía corriendo"
+        largo = next((x.get("sizeMb") for x in ls["entries"] if x["name"] == "grande.bin"), None)
+        # [F]sShell: que pgrep no se encuentre a sí mismo (el bash -c lo lleva en la línea)
+        fin = esperar(lambda: "sin-put" in en_contenedor("pgrep -f '[F]sShell' || echo sin-put")[1] or None,
+                      60, "fin del -put", 0.5)
+        _, log, _ = en_contenedor("cat /tmp/put.log")
+        c.detalle = (f"OPENFORWRITE visto: {visto}; el ls dijo terminado a los {t_ls} s y el proceso -put salió "
+                     f"{round(time.time() - t0 - t_ls, 1)} s después; grande.bin {largo} MB ({bytes_hdfs} bytes), "
+                     f"abiertos: {abiertos.strip()}; estados: {[(x['name'], x.get('state')) for x in ls['entries']]}; "
+                     f"log: {log.strip()[-200:]}")
+        assert visto and fin
         assert bytes_hdfs == 300 * 1024 * 1024, "el ls dijo terminado pero grande.bin no tiene los 300 MB"
+        assert abiertos.strip() == "0", "el ls dijo terminado pero el fsck lo tiene abierto"
+        assert "Exception" not in log and "put:" not in log, "el -put dejó errores"
 
     with Chequeo("replicación: setrep 1 y de vuelta a 2") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": archivo, "replication": 1}, timeout=120)
@@ -359,6 +372,7 @@ def solo_hdfs() -> None:
                     f"files stale {[b.get('stale') for b in f['blocks']]}"
         capturar("nn_jmx_dn_muerto.json", "curl -s 'http://localhost:9870/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo'")
         capturar("fsck_dn_muerto.txt", "hdfs fsck / -files -blocks -locations -openforwrite")
+        capturar("dfsadmin_report_dn_muerto.txt", "hdfs dfsadmin -report")
         assert all(b.get("stale") == [2] for b in d["blocks"]), d["blocks"]
         assert all(b.get("stale") == [2] for b in f["blocks"]), f["blocks"]
 
@@ -418,7 +432,7 @@ def yarn() -> None:
         codigo, apps = pedir("GET", "/api/yarn/apps")
         assert codigo == 200, apps
         for n, u in (("rm_metrics.json", "ws/v1/cluster/metrics"), ("rm_nodes.json", "ws/v1/cluster/nodes"),
-                     ("rm_scheduler.json", "ws/v1/cluster/scheduler"), ("rm_conf.json", "conf?format=json")):
+                     ("rm_scheduler.json", "ws/v1/cluster/scheduler"), ("rm_conf.xml", "conf?format=json")):
             curl(n, f"http://localhost:8088/{u}")
 
     ids = {}
@@ -472,10 +486,32 @@ def yarn() -> None:
     with Chequeo("YARN: kill") as c:
         codigo, r = pedir("POST", "/api/yarn/apps", {"example": "spark-ventas"}, timeout=180)
         assert codigo == 202, r
+        a = r["id"]
+        # Antes de cancelarlo, las salidas de una app corriendo (con sus
+        # contenedores en el NodeManager): son las fixtures de los tests.
+
+        def corriendo():
+            _, out, _ = en_contenedor("curl -s http://localhost:8042/ws/v1/node/containers")
+            _, st, _ = en_contenedor(f"curl -s http://localhost:8088/ws/v1/cluster/apps/{a}")
+            return '"container"' in out and '"RUNNING"' in st and out.count("container_") >= 2
+        try:
+            esperar(corriendo, 90, f"{a} corriendo con contenedores", 1)
+        except AssertionError:
+            pass
+        for n, u in (("nm_containers_corriendo.json", "http://localhost:8042/ws/v1/node/containers"),
+                     ("rm_apps_corriendo.json", "http://localhost:8088/ws/v1/cluster/apps"),
+                     ("rm_app_spark_corriendo.json", f"http://localhost:8088/ws/v1/cluster/apps/{a}"),
+                     ("rm_metrics_corriendo.json", "http://localhost:8088/ws/v1/cluster/metrics"),
+                     ("rm_nodes_corriendo.json", "http://localhost:8088/ws/v1/cluster/nodes"),
+                     ("rm_scheduler_corriendo.json", "http://localhost:8088/ws/v1/cluster/scheduler"),
+                     ("driver_stages.json", f"http://localhost:8088/proxy/{a}/api/v1/applications/{a}/stages"),
+                     ("driver_jobs.json", f"http://localhost:8088/proxy/{a}/api/v1/applications/{a}/jobs")):
+            curl(n, u)
         t0 = time.time()
-        codigo, k = pedir("POST", f"/api/yarn/apps/{r['id']}/kill", timeout=120)
+        codigo, k = pedir("POST", f"/api/yarn/apps/{a}/kill", timeout=120)
         assert codigo == 204, (codigo, k)
-        d = esperar_app(r["id"], 120)
+        d = esperar_app(a, 120)
+        curl("rm_app_killed.json", f"http://localhost:8088/ws/v1/cluster/apps/{a}")
         c.detalle = f"{r['id']} {d['state']} a los {round(time.time() - t0, 1)} s"
         assert d["state"] == "KILLED"
 

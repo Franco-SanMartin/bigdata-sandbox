@@ -253,6 +253,28 @@ def test_otras_herramientas(mundo):
 # ------------------------------------------------------------------ rutas
 
 
+def test_el_etl_vuelve_a_declarar_la_tabla_de_hive(mundo):
+    """Humo arm64: ETL con Spark, tabla en Hive (fecha DATE) y otra vez ETL con pandas (TIMESTAMP). Si la tabla no
+    se actualiza, Hive no la puede leer (ClassCastException) y el esquema en Datos da 500."""
+    async def main():
+        p = mundo.pipeline
+        await paso(p, "ingesta", "put")
+        r = await paso(p, "etl", "pandas")
+        assert "default.ventas_limpias" not in r["trace"]["command"] + "".join(
+            json.dumps(x) for x in cli(mundo) if x[0] == "beeline")  # sin tabla no la crea
+        await paso(p, "etl", "pyspark")
+        await paso(p, "almacen", "hivetab")
+        hive = json.loads((mundo.base / "hive.json").read_text())
+        assert hive["default.ventas_limpias"]["columns"][1] == ["fecha", "date"]
+        await mundo.datos.catalog()  # queda en caché
+        await paso(p, "etl", "pandas")
+        hive = json.loads((mundo.base / "hive.json").read_text())
+        assert hive["default.ventas_limpias"]["columns"][1] == ["fecha", "timestamp"]
+        h = await mundo.datos.schema("hive", "default.ventas_limpias")
+        assert h["columns"][1]["type"].upper() == "TIMESTAMP"
+    asyncio.run(main())
+
+
 def test_las_14_rutas(mundo, settings, tmp_path):
     """Pipeline, Datos y ML por HTTP, con la forma de ui/API.md y los errores {error, code}."""
     import time

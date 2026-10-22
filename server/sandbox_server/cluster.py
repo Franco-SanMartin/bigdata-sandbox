@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import signal
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -292,6 +293,7 @@ class Cluster:
                      action="primero Hive y Spark con HDFS arriba; después YARN, HDFS, MySQL y MongoDB")
         proc, tracker = self.proc, self.tracker
         trap_puesto = tracker is not None and tracker.ready
+        t0 = time.monotonic()
         if proc is not None and proc.returncode is None:
             try:
                 proc.send_signal(signal.SIGTERM)
@@ -301,13 +303,21 @@ class Cluster:
                 self.bus.log("Cluster", "warn", "El apagado tardó demasiado: se cortan los que quedan")
                 proc.kill()
                 await exited(proc, 2)
+            else:
+                self.bus.log("Cluster", "info", f"El arranque terminó en {time.monotonic() - t0:.1f} s",
+                             output=f"código {proc.returncode}")
         if tracker is not None and not tracker.ready:
             tracker.fail("apagado durante el arranque")
         if not trap_puesto:
             self.bus.log("Cluster", "info", "Se apagan en orden los procesos que alcanzaron a arrancar")
         # Con el trap ya corrido no queda nada: lo repite por lo que se haya
         # prendido después desde la interfaz (JupyterLab, MongoDB...)
-        await self._shutdown_leftovers()
+        if self.s.probe:
+            vivos = sorted(await asyncio.to_thread(probes.scan_proc, self.s.proc_dir))
+            if vivos and trap_puesto:
+                self.bus.log("Cluster", "warn", "Después del apagado del arranque siguen vivos: " + ", ".join(vivos))
+            if vivos or not trap_puesto:
+                await self._shutdown_leftovers()
         if proc is not None:
             await self._kill_group(proc.pid)
         if self._reader is not None:
@@ -317,7 +327,15 @@ class Cluster:
                 self._reader.cancel()
         self.phase = "stopped"
         self.startedAt = None
-        self.bus.log("Cluster", "ok", "Cluster apagado", output="los datos quedan en el volumen /hadoop")
+        # Sin esto el estado sale con la última lectura del sondeo (todo 'up') hasta
+        # la próxima vuelta: con SERVICIOS=todo el humo lo vio así 2 s después de apagar
+        if self.s.probe:
+            try:
+                await self.refresh()
+            except Exception as e:  # noqa: BLE001 (el apagado ya terminó)
+                self.logs.append(f"[interfaz] error leyendo el estado: {e}")
+        self.bus.log("Cluster", "ok", "Cluster apagado",
+                     output=f"en {time.monotonic() - t0:.1f} s; los datos quedan en el volumen /hadoop")
         self._status_changed()
 
     @staticmethod
