@@ -163,6 +163,11 @@ mysql_start() {
   local _
   for _ in $(seq 1 60); do mysqladmin --silent ping > /dev/null 2>&1 && break; sleep 1; done
   mysqladmin --silent ping > /dev/null 2>&1 || return 1
+  # Pone al dia las tablas internas de MySQL si la base la creo un MariaDB mas
+  # viejo (el volumen de la imagen anterior, con Ubuntu 20.04, trae la 10.3).
+  # Tarda ~10 s una sola vez; despues ve que ya esta al dia y no hace nada.
+  mariadb-upgrade --silent > /tmp/mariadb-upgrade.log 2>&1 \
+    || log "AVISO: mariadb-upgrade fallo (ver /tmp/mariadb-upgrade.log)"
 
   # Usuario para Sqoop y base "tienda"
   if [ ! -f /hadoop/mysql/.sandbox-listo ]; then
