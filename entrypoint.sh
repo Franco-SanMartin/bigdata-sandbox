@@ -300,14 +300,26 @@ estado
 apagar() {
   trap - TERM INT
   log "Apagando el cluster..."
-  # mysqld: en MariaDB 10.5 o mas nuevo el programa se llama mariadbd
-  pkill -TERM -x 'mysqld|mariadbd|mongod' || true
-  pkill -TERM -x java || true
+  # Docker espera unos segundos antes de matar todo (10 de fabrica, 3 en
+  # algunos Docker Desktop): hay que apagar rapido y en orden.
+  # 1. Lo que usa HDFS (Hive y el historial de Spark), mientras HDFS sigue
+  #    arriba: con HDFS ya apagado, HiveServer2 se queda reintentando
+  #    conectarse a los NameNodes y no termina. A la vez, las bases de datos,
+  #    que no dependen de nada (mysqld: en MariaDB 10.5 o mas nuevo se llama
+  #    mariadbd).
+  local usan_hdfs='org.apache.hive.service.server.HiveServer2|hive.metastore.HiveMetaStore|spark.deploy.history.HistoryServer'
   local _
-  # Docker espera 10 s antes de matar todo
-  for _ in $(seq 1 16); do
+  pkill -TERM -f "$usan_hdfs" || true
+  pkill -TERM -x 'mysqld|mariadbd|mongod' || true
+  for _ in $(seq 1 10); do
+    pgrep -f "$usan_hdfs" > /dev/null || break
+    sleep 0.25
+  done
+  # 2. El resto: YARN, HDFS y ZooKeeper
+  pkill -TERM -x java || true
+  for _ in $(seq 1 32); do
     pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || break
-    sleep 0.5
+    sleep 0.25
   done
   exit 0
 }

@@ -75,7 +75,7 @@ subir_ventas() {
       && hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/"
 }
 
-apagar_bien() { # docker stop: tiene que apagar todo en orden y antes de los 10 s
+apagar_bien() { # docker stop: tiene que apagar todo en orden antes de que Docker corte (10 s de fabrica, 3 en algunos Docker Desktop)
   local t0 t
   t0=$(date +%s)
   docker stop "$C" > /dev/null

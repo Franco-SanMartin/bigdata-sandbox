@@ -134,7 +134,7 @@ sección 6):
 Mac / Linux:
 
 ```bash
-docker run -d --name bigdata \
+docker run -d --name bigdata --stop-timeout 20 \
   -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m \
   -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 \
   -p 8088:8088 -p 8042:8042 -p 19888:19888 \
@@ -147,13 +147,13 @@ docker run -d --name bigdata \
 Windows, PowerShell (una sola línea):
 
 ```powershell
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox
+docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox
 ```
 
 Windows, CMD (el que muestra `C:\...>`, una sola línea):
 
 ```bat
-docker run -d --name bigdata -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox
+docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -p 9870-9872:9870-9872 -p 9868:9868 -p 9901-9909:9901-9909 -p 8480-8482:8480-8482 -p 8088:8088 -p 8042:8042 -p 19888:19888 -p 10000:10000 -p 10002:10002 -p 18080:18080 -p 4040:4040 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox
 ```
 
 Docker crea solo la carpeta `datos/` adentro de tu carpeta de trabajo.
@@ -429,6 +429,7 @@ El `docker run` del paso 4, parte por parte:
 |--------------------------------|--------------------------------------------------------------------|
 | `-d`                           | Corre en segundo plano: te devuelve la consola                     |
 | `--name bigdata`               | Nombre del **contenedor**. Con ese nombre lo manejás de acá en más (`start`, `stop`, `exec`, `logs`) |
+| `--stop-timeout 20`            | Hasta 20 segundos para apagarse en orden con `docker stop` (MySQL, Hive, HDFS). Sin esto, algunas versiones de Docker Desktop cortan todo a los 3 segundos |
 | `-e DATANODES=3` …             | La arquitectura del cluster (tabla de abajo). Los que no pongas toman su valor por defecto |
 | `-p 9870-9872:9870-9872` …     | Expone cada página web en tu compu (`localhost:9870`, etc.). Van todos los puertos posibles, uses o no esos nodos. Formato `-p <puerto en tu compu>:<puerto adentro>` |
 | `-v bigdata_hadoop:/hadoop`    | Volumen donde viven HDFS, el metastore y la base MySQL: **tus datos persisten** |
@@ -477,7 +478,7 @@ tampoco es un servicio: copia con trabajos MapReduce, así que necesita
 
 ### Combinaciones típicas
 
-En lugar de `<...>` van los `-p` y `-v` del paso 4.
+En lugar de `<...>` van el `--stop-timeout`, los `-p` y los `-v` del paso 4.
 
 ```bash
 # Todo por defecto: 1 NameNode (+ Secondary), 1 DataNode, replicación 1, bloque 128m
