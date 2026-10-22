@@ -55,9 +55,11 @@ export function processSpecs(c: ClusterConfig): ProcSpec[] {
   const ha = c.namenodes > 1;
   if (ha) {
     s.push({ id: 'zk', kind: 'zookeeper', name: 'ZooKeeper', layer: 'hdfs', ports: [2181], memMb: 92, controllable: false });
+    // JournalNode k: RPC 8484+k, web 8479+k
     for (let i = 1; i <= 3; i++) s.push({ id: `jn${i}`, kind: 'journalnode', name: `JournalNode ${i}`, layer: 'hdfs', ports: [8484 + i, 8479 + i], web: 8479 + i, memMb: 148, controllable: false });
   }
-  for (let i = 1; i <= c.namenodes; i++) s.push({ id: `nn${i}`, kind: 'namenode', name: ha ? `NameNode ${i}` : 'NameNode', layer: 'hdfs', ports: [9869 + i, ha ? 9000 + i * 10 : 9000], web: 9869 + i, memMb: 384, controllable: true });
+  // Puertos como en sandbox/lib.sh: RPC 8999+n, web 9869+n y, en HA, ZKFC 8018+n
+  for (let i = 1; i <= c.namenodes; i++) s.push({ id: `nn${i}`, kind: 'namenode', name: ha ? `NameNode ${i}` : 'NameNode', layer: 'hdfs', ports: ha ? [9869 + i, 8999 + i, 8018 + i] : [9870, 9000], web: 9869 + i, memMb: 384, controllable: true });
   if (!ha) s.push({ id: 'snn', kind: 'secondarynamenode', name: 'Secondary NameNode', layer: 'hdfs', ports: [9868], web: 9868, memMb: 256, controllable: false });
   for (let i = 1; i <= c.datanodes; i++) s.push({ id: `dn${i}`, kind: 'datanode', name: `DataNode ${i}`, layer: 'hdfs', ports: [9900 + i, 9910 + i], web: 9900 + i, memMb: 236, controllable: true });
   if (c.services !== 'hdfs') {
@@ -86,6 +88,7 @@ export function composeYaml(c: ClusterConfig): string {
     '#   docker compose up -d        crear y prender',
     '#   docker compose logs -f      seguir el arranque hasta "Cluster LISTO"',
     '#   docker compose stop         apagar en orden (los datos quedan)',
+    '# Las mismas variables sirven con :base y :ml (sin interfaz): esas arrancan siempre solas.',
     '',
     'name: bigdata',
     '',
@@ -94,6 +97,7 @@ export function composeYaml(c: ClusterConfig): string {
     '    image: franki678/bigdata-sandbox:full',
     '    container_name: bigdata',
     '    environment:',
+    '      AUTOSTART: "1"                 # arranca solo con estas variables; sin ella espera «Iniciar» en la interfaz',
     `      DATANODES: "${c.datanodes}"`,
     `      REPLICATION: "${c.replication}"${c.replication > c.datanodes ? '   # mayor que DATANODES: sub-replicado' : ''}`,
     `      BLOCK_SIZE: "${c.blockSize}"`,
