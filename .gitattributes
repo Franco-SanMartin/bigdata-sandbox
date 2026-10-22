@@ -1,2 +1,4 @@
 # Forzar LF: con CRLF (clon en Windows) el entrypoint del contenedor no arranca
 * text=auto eol=lf
+# Los .cmd de la sonda se corren en Windows: con LF cmd.exe se confunde con los saltos
+*.cmd text eol=crlf

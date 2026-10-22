@@ -1,0 +1,13 @@
+#!/bin/sh
+# shellcheck disable=SC2018
+# POST del dia siguiente: nombre, imagen_cargada_antes, carpeta_resultados
+# shellcheck source=../../cgi.sh
+. /sonda/cgi.sh
+c=$(cuerpo 4096)
+nombre=$(limpiar "$(echo "$c" | valor nombre)")
+[ -n "$nombre" ] || { echo "error=falta el nombre"; exit 0; }
+imagen=$(echo "$c" | valor imagen_cargada_antes | tr -cd 'a-z')  # si / no
+carpeta=$(echo "$c" | valor carpeta_resultados | tr -cd 'a-z')  # si / no
+printf 'fecha=%s\nimagen_cargada_antes=%s\ncarpeta_resultados=%s\n' "$(ahora)" "$imagen" "$carpeta" > "$DATOS/dia2/$nombre.txt"
+evento "$nombre: dia siguiente, imagen todavia cargada: ${imagen:-?}"
+echo ok
