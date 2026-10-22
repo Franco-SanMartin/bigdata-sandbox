@@ -401,3 +401,27 @@ def test_rutas_hdfs(settings, tmp_path, fake_hdfs):
         while h.uploads and __import__("time").time() < fin:
             __import__("time").sleep(0.05)
         assert not any(h.tmp_root.glob("*/mis_datos.csv"))
+
+
+def test_copias_en_datanode_caido(settings, tmp_path, fake_hdfs, monkeypatch):
+    """blocks[].stale: los DataNodes muertos que tenían copia del bloque. El fsck
+    real deja de listarlos cuando el NameNode los da por muertos; el servidor se
+    acuerda de dónde estaban."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        await h.files()                       # dn1 y dn2 vivos: toma nota de las ubicaciones
+        sin_dn2 = "\n".join(
+            l.replace(", DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]", "")
+             .replace("DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK], ", "")
+             .replace("Live_repl=2", "Live_repl=1")
+            for l in fixture_text("fsck_escribiendo.txt").splitlines())
+        fake_hdfs["fsck"].write_text(sin_dn2)
+        vivos = h.datanodes()
+        monkeypatch.setattr(h, "datanodes", lambda: [dict(d, state="dead") if d["id"] == 2 else d for d in vivos])
+        d = await h.detail("/user/root/numeros.txt")
+        assert [b["locations"] for b in d["blocks"]] == [[1]] * 7
+        assert [b["stale"] for b in d["blocks"]] == [[2]] * 7
+        h._fsck = None                        # sin la caché corta del fsck
+        files = {f["path"]: f for f in await h.files()}
+        assert files["/user/root/numeros.txt"]["blocks"][0]["stale"] == [2]
+    asyncio.run(main())

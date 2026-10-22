@@ -11,6 +11,8 @@ import os
 import re
 from pathlib import Path
 
+from .specs import jn_http, nn_http
+
 SERVICES = ("hdfs", "mapreduce", "todo")
 PIG_HEAPS = (256, 512, 1024, 2048)
 DOCKER_LIMIT_MB = 7884  # lo que Docker Desktop le da por defecto en una PC de 16 GB
@@ -187,8 +189,8 @@ def compose_yaml(c: dict) -> str:
         '      - "127.0.0.1:9870:9870"             # NameNode 1',
     ]
     if nn > 1:
-        L.append(f'      - "127.0.0.1:9871-{9869 + nn}:9871-{9869 + nn}"   # NameNodes 2{" y 3" if nn > 2 else ""}')
-        L.append('      - "127.0.0.1:8480-8482:8480-8482"   # JournalNodes')
+        L.append(f'      - "127.0.0.1:{nn_http(2)}-{nn_http(nn)}:{nn_http(2)}-{nn_http(nn)}"   # NameNodes 2{" y 3" if nn > 2 else ""}')
+        L.append(f'      - "127.0.0.1:{jn_http(1)}-{jn_http(3)}:{jn_http(1)}-{jn_http(3)}"   # JournalNodes')
     else:
         L.append('      - "127.0.0.1:9868:9868"             # Secondary NameNode')
     L.append('      - "127.0.0.1:9901-9909:9901-9909"   # DataNode N en 990N')

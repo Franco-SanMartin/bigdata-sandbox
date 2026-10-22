@@ -423,14 +423,24 @@ class Yarn:
 
     # ------------------------------------------------------------ consultas
 
-    async def apps(self) -> list[dict]:
+    def _need_rm(self) -> None:
+        """El ResourceManager arriba. Con SERVICIOS=hdfs YARN no está en la
+        configuración, pero para la interfaz es lo mismo que caído ("falta YARN"):
+        service_down, no unsupported."""
+        self.c.need_running()
+        if self.c.config.get("services") == "hdfs":
+            raise ApiError("YARN no está prendido: esta configuración es solo HDFS (SERVICIOS=hdfs)",
+                           "service_down")
         self.c.need_proc("rm", "El ResourceManager")
+
+    async def apps(self) -> list[dict]:
+        self._need_rm()
         rm, nm = await asyncio.gather(self.rm_apps(), self.nm_containers())
         rm.sort(key=lambda a: int(a.get("startedTime", 0)), reverse=True)
         return [self.app_json(a, nm) for a in rm]
 
     async def cluster(self) -> dict:
-        self.c.need_proc("rm", "El ResourceManager")
+        self._need_rm()
         metrics, nodes, sched, nm, conf = await asyncio.gather(
             self.get(f"{RM}/ws/v1/cluster/metrics"), self.get(f"{RM}/ws/v1/cluster/nodes"),
             self.get(f"{RM}/ws/v1/cluster/scheduler"), self.nm_containers(), self.conf())
@@ -483,7 +493,7 @@ class Yarn:
                 "minAllocationMb": conf["min"], "maxAllocationMb": conf["max"], "nodes": out_nodes, "queues": queues}
 
     async def detail(self, app_id: str) -> dict:
-        self.c.need_proc("rm", "El ResourceManager")
+        self._need_rm()
         a, nm = await asyncio.gather(self.rm_app(app_id), self.nm_containers())
         typ = a.get("applicationType", "").upper()
         state = app_state(a)
@@ -579,7 +589,7 @@ class Yarn:
         return detail
 
     async def logs(self, app_id: str, container: str | None) -> dict:
-        self.c.need_proc("rm", "El ResourceManager")
+        self._need_rm()
         a, nm = await asyncio.gather(self.rm_app(app_id), self.nm_containers())
         typ = a.get("applicationType", "MAPREDUCE").upper()
         state = app_state(a)
@@ -633,7 +643,7 @@ class Yarn:
             raise ApiError("El trabajo es mr-ventas, hive-ventas o spark-ventas", "invalid")
         job = JOBS[str(example)]
         self.c.need_hdfs()
-        self.c.need_proc("rm", "El ResourceManager")
+        self._need_rm()
         self.c.need_proc("nm", "El NodeManager")
         if job["type"] == "TEZ":
             self.c.need_proc(*job["proc"])
@@ -705,7 +715,7 @@ class Yarn:
         return new[0]["id"] if new else None
 
     async def kill(self, app_id: str) -> None:
-        self.c.need_proc("rm", "El ResourceManager")
+        self._need_rm()
         a = await self.rm_app(app_id)
         if app_state(a) in ("FINISHED", "FAILED", "KILLED"):
             return

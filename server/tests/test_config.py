@@ -79,3 +79,33 @@ def test_puertos_como_lib_sh():
     assert uno["nn1"] == [9870, 9000]
     ha = {s.id: s.ports for s in process_specs({**BASE, "namenodes": 3})}
     assert ha["nn2"] == [9871, 9001, 8020] and ha["jn3"] == [8487, 8482] and "snn" not in ha
+
+
+def test_formulas_de_puertos_iguales_a_lib_sh():
+    """specs.py repite las cuentas de sandbox/lib.sh (nn_rpc() { echo $((8999 + $1)); }):
+    si alguien cambia un puerto en lib.sh, este test lo avisa."""
+    import re
+    from pathlib import Path
+    from sandbox_server import specs
+    lib = (Path(__file__).resolve().parents[2] / "sandbox" / "lib.sh").read_text()
+    formulas = dict(re.findall(r"^(\w+)\(\)\s*\{\s*echo \$\(\(\s*(\d+) \+ \$1\s*\)\);", lib, re.M))
+    nombres = {"nn_rpc": "nn_rpc", "nn_http": "nn_http", "dn_http": "dn_http", "dn_data": "dn_data",
+               "jn_rpc": "jn_rpc", "jn_http": "jn_http", "zkfc_port": "zkfc_rpc"}
+    for en_lib, en_py in nombres.items():
+        assert en_lib in formulas, en_lib
+        for n in (1, 2, 3):
+            assert getattr(specs, en_py)(n) == int(formulas[en_lib]) + n, (en_lib, n)
+
+
+@pytest.mark.parametrize("nn,services", [(1, "todo"), (3, "hdfs")])
+def test_compose_de_la_version_full(nn, services):
+    y = cfg.compose_yaml(cfg.normalize({"namenodes": nn, "services": services, "datanodes": 3, "replication": 3}))
+    assert "image: franki678/bigdata-sandbox:full" in y
+    assert 'AUTOSTART: "1"' in y
+    assert '"127.0.0.1:8080:8080"' in y
+    assert "stop_grace_period: 20s" in y
+    if nn == 3:
+        assert '"127.0.0.1:9871-9872:9871-9872"' in y and '"127.0.0.1:8480-8482:8480-8482"' in y
+        assert "8088" not in y
+    else:
+        assert "9868:9868" in y and "8088:8088" in y

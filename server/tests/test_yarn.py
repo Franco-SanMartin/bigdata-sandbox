@@ -374,3 +374,19 @@ def test_autostart(settings, tmp_path, monkeypatch):
     settings.autostart = False
     with TestClient(build_app(settings, ui_dir=ui)) as c:
         assert c.get("/api/status").json()["phase"] == "stopped"
+
+
+def test_yarn_con_solo_hdfs_es_service_down(settings, tmp_path):
+    """Con SERVICIOS=hdfs la interfaz muestra "falta YARN": espera service_down."""
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        cl.config = {**cl.config, "services": "hdfs"}
+        cl.processes = []
+        for llamada in (y.cluster, y.apps):
+            with pytest.raises(ApiError) as e:
+                await llamada()
+            assert e.value.code == "service_down"
+        with pytest.raises(ApiError) as e:
+            await y.submit("mr-ventas")
+        assert e.value.code == "service_down"
+    asyncio.run(main())
