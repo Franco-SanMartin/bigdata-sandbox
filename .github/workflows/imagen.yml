@@ -1,55 +1,80 @@
-# Arma la imagen, la PRUEBA de punta a punta (pruebas/probar.sh: el paso a paso
-# de TUTORIAL.md con MapReduce, Pig, Hive, Spark y Sqoop) y, si todo da bien, la
-# publica en Docker Hub (franki678/bigdata-sandbox) para bajarla con 'docker pull'.
-# Necesita en el repo (Settings > Secrets and variables > Actions) la variable
-# DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token de Docker Hub con
-# permiso Read & Write; cuando vence, hay que generar otro y reemplazarlo).
-# Corre sola cuando cambia el codigo en main, o a mano desde la pestaña Actions
-# ("Run workflow").
+# Arma las versiones de la imagen (cada una es un --target del Dockerfile),
+# las PRUEBA de punta a punta y, solo desde main y si todo da bien, las
+# publica en Docker Hub:
+#
+#   franki678/bigdata-sandbox:base    Hadoop + Pig + Hive + Spark + Sqoop/MySQL + MongoDB
+#   franki678/bigdata-sandbox:ml      base + pandas, scikit-learn, Spark MLlib y JupyterLab
+#   franki678/bigdata-sandbox:latest  LA DE LA CLASE: este workflow NO la cambia
+#                                     solo. Hoy es la imagen de antes de las
+#                                     versiones (Ubuntu 20.04, sin MongoDB).
+#
+# Pasar latest (y el archivo del aula de Releases) a la version base es una
+# decision aparte: se corre a mano desde main (pestaña Actions > "Imagen" >
+# "Run workflow") tildando "latest = base".
+#
+# Las pruebas: pruebas/probar.sh (el paso a paso de TUTORIAL.md con MapReduce,
+# Pig, Hive, Spark y Sqoop) en las dos, mas pruebas/probar_mongodb.sh en la
+# base y pruebas/probar_ml.sh en la ml.
+# Corre sola cuando cambia el codigo en main o en la rama versiones (en
+# versiones solo arma y prueba), o a mano desde la pestaña Actions.
+# Para publicar necesita en el repo (Settings > Secrets and variables >
+# Actions) la variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token
+# de Docker Hub con permiso Read & Write; cuando vence, hay que generar otro).
 name: Imagen
 
 on:
   push:
-    branches: [main]
+    branches: [main, versiones]
     paths-ignore: ['**.md']
   workflow_dispatch:
+    inputs:
+      latest_es_base:
+        description: "latest = base: pasar la imagen de la clase (latest) y el archivo del aula a la version base"
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # para subir el archivo del aula a Releases
 
 env:
-  IMAGEN: docker.io/franki678/bigdata-sandbox:latest
+  REPO: docker.io/franki678/bigdata-sandbox
 
 jobs:
-  imagen:
+  # -------------------------------------------------------------------------
+  # 1. Armar y probar cada version, en paralelo (amd64)
+  # -------------------------------------------------------------------------
+  probar:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [base, ml]
     steps:
       - uses: actions/checkout@v4
-
-      # QEMU: para armar tambien la version ARM64 (Mac M1-M4)
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      # 1. Armar la version amd64 y cargarla en el Docker del runner
-      - name: Armar (amd64)
+      - name: Armar ${{ matrix.version }} (amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.version }}
           platforms: linux/amd64
           load: true
-          tags: franki678/bigdata-sandbox
-          # Cache de capas en GitHub: si solo cambian scripts o ejemplos, no
-          # vuelve a bajar todo de Apache (lo que mas tarda)
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: franki678/bigdata-sandbox:${{ matrix.version }}
+          # Cache de capas en GitHub (una por version): si solo cambian
+          # scripts o ejemplos, no vuelve a bajar todo de Apache
+          cache-from: |
+            type=gha,scope=base
+            type=gha,scope=${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.version }}
 
-      # 2. Prenderla como lo haria un alumno y esperar el cartel LISTO
+      # Prenderla como lo haria un alumno (con MongoDB) y esperar el cartel LISTO
       - name: Prender el cluster
         run: |
           docker run -d --name bigdata \
-            -e DATANODES=2 -e REPLICATION=2 -e BLOCK_SIZE=1m \
-            -v "$PWD/datos-prueba:/datos" franki678/bigdata-sandbox
+            -e DATANODES=2 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si \
+            -v "$PWD/datos-prueba:/datos" franki678/bigdata-sandbox:${{ matrix.version }}
           for i in $(seq 1 60); do
             if docker logs bigdata 2>&1 | grep -q 'Cluster LISTO'; then exit 0; fi
             if [ "$(docker inspect -f '{{.State.Running}}' bigdata)" != true ]; then break; fi
@@ -58,63 +83,123 @@ jobs:
           docker logs bigdata
           exit 1
 
-      # 3. El paso a paso del tutorial, verificando los resultados
       - name: Probar MapReduce, Pig, Hive, Spark y Sqoop
         run: |
           docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
           docker exec bigdata bash /tmp/probar.sh
 
+      - name: Probar MongoDB
+        if: matrix.version == 'base'
+        run: |
+          docker cp pruebas/probar_mongodb.sh bigdata:/tmp/probar_mongodb.sh
+          docker exec bigdata bash /tmp/probar_mongodb.sh
+
+      - name: Probar Python para datos (librerias, JupyterLab, ETL y modelos)
+        if: matrix.version == 'ml'
+        run: |
+          docker cp pruebas/probar_ml.sh bigdata:/tmp/probar_ml.sh
+          docker exec bigdata bash /tmp/probar_ml.sh
+
+      - name: Tamaño y memoria
+        if: always()
+        run: |
+          docker image ls franki678/bigdata-sandbox
+          docker stats --no-stream bigdata || true
+
       - name: Logs si algo fallo
         if: failure()
         run: |
           docker logs bigdata || true
-          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log /var/log/mysql/error.log' || true
+          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log /var/log/mysql/error.log /var/log/mongodb/mongod.log /var/log/jupyter.log' || true
 
-      # 4. Recien ahora, publicar amd64 + arm64 (reusa lo ya armado)
+  # -------------------------------------------------------------------------
+  # 2. Publicar amd64 + arm64, SOLO desde main y con las dos versiones probadas
+  # -------------------------------------------------------------------------
+  publicar:
+    needs: probar
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      # QEMU: para armar tambien la version ARM64 (Mac M1-M4)
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Publicar (amd64 + arm64)
+      - name: Publicar base (amd64 + arm64)${{ inputs.latest_es_base && ' y latest' || '' }}
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: base
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
-          cache-from: type=gha
-          tags: ${{ env.IMAGEN }}
+          cache-from: type=gha,scope=base
+          # latest solo con "latest = base" tildado a mano (ver arriba)
+          tags: |
+            ${{ env.REPO }}:base
+            ${{ inputs.latest_es_base && format('{0}:latest', env.REPO) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop en un solo contenedor
+            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
 
-      # 5. La misma imagen (amd64) en un solo archivo, para bajarla una vez y
-      #    repartirla en el aula (README seccion 5B). Queda en el release
-      #    'imagen' y se reemplaza en cada publicacion.
+      - name: Publicar ml (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ml
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          cache-from: |
+            type=gha,scope=base
+            type=gha,scope=ml
+          tags: ${{ env.REPO }}:ml
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
+
+      # 3. Solo con "latest = base": la misma imagen (amd64) en un solo archivo,
+      #    para bajarla una vez y repartirla en el aula (README seccion 5B).
+      #    Queda en el release 'imagen' y reemplaza al anterior.
+      - name: Armar la del aula (amd64)
+        if: inputs.latest_es_base
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: base
+          platforms: linux/amd64
+          load: true
+          cache-from: type=gha,scope=base
+          tags: franki678/bigdata-sandbox:latest
+
       - name: Archivo para el aula
+        if: inputs.latest_es_base
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          docker rm -f bigdata
-          docker save franki678/bigdata-sandbox | gzip > bigdata-sandbox.tar.gz
+          docker save franki678/bigdata-sandbox:latest | gzip > bigdata-sandbox.tar.gz
           ls -lh bigdata-sandbox.tar.gz
           # Releases acepta hasta 2 GiB por archivo
           [ "$(stat -c %s bigdata-sandbox.tar.gz)" -lt 2147483648 ]
           # Probar lo que hace el aula: compartirlo como la PC del profesor,
           # bajarlo como un alumno y cargarlo
           docker run -d --rm --name compartir -p 8000:8000 -v "$PWD:/srv:ro" -w /srv \
-            --entrypoint python3 franki678/bigdata-sandbox -m http.server 8000
+            --entrypoint python3 franki678/bigdata-sandbox:latest -m http.server 8000
           sleep 3
           curl -sf -o /tmp/bajado.tar.gz http://localhost:8000/bigdata-sandbox.tar.gz
           docker stop compartir
           cmp bigdata-sandbox.tar.gz /tmp/bajado.tar.gz
-          docker image rm franki678/bigdata-sandbox
+          docker image rm franki678/bigdata-sandbox:latest
           docker load -i /tmp/bajado.tar.gz
           docker image inspect -f '{{.Architecture}}' franki678/bigdata-sandbox:latest
           # Subirlo
           if ! gh release view imagen > /dev/null 2>&1; then
             gh release create imagen --title "Imagen para el aula" \
-              --notes "La imagen en un solo archivo, para bajarla una vez y repartirla (README, seccion 5B). Se actualiza sola en cada publicacion."
+              --notes "La imagen en un solo archivo, para bajarla una vez y repartirla (README, seccion 5B). Se actualiza cuando cambia latest."
           fi
           gh release upload imagen bigdata-sandbox.tar.gz --clobber

@@ -1,8 +1,8 @@
-# Prueba la imagen publicada en Docker Hub (la misma que baja cualquiera con
+# Prueba una version publicada en Docker Hub (la misma que baja cualquiera con
 # 'docker pull') en los escenarios de pruebas/escenarios.sh: reinicios, alta
 # disponibilidad, cada SERVICIOS, cambios de parametros, volumenes de
-# versiones anteriores y primeros arranques cortados. Cada escenario corre en
-# una maquina aparte, en paralelo.
+# versiones anteriores, primeros arranques cortados, MongoDB y la version ml.
+# Cada escenario corre en una maquina aparte, en paralelo.
 # Se corre a mano desde la pestaña Actions ("Escenarios" > "Run workflow"),
 # despues de que "Imagen" publico.
 name: Escenarios
@@ -10,6 +10,11 @@ name: Escenarios
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: Version a probar (latest es la de la clase)
+        type: choice
+        options: [latest, base, ml]
+        default: latest
       arm64:
         description: Probar tambien el arranque en ARM64 (Mac M1-M4)
         type: boolean
@@ -19,7 +24,7 @@ permissions:
   contents: read
 
 env:
-  IMAGEN: franki678/bigdata-sandbox
+  IMAGEN: franki678/bigdata-sandbox:${{ inputs.version }}
 
 jobs:
   escenario:
@@ -28,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte]
+        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, ml, desde-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Bajar la imagen
@@ -36,7 +41,14 @@ jobs:
           docker pull "$IMAGEN"
           docker image ls "$IMAGEN"
       - name: Escenario ${{ matrix.escenario }}
-        run: bash pruebas/escenarios.sh ${{ matrix.escenario }}
+        run: |
+          # latest todavia es la de antes de las versiones: no tiene MongoDB y
+          # no tiene sentido pasar su volumen a ella misma (desde-latest). El
+          # escenario ml es solo para la version ml.
+          case "${{ matrix.escenario }}-${{ inputs.version }}" in
+            mongodb-latest|ml-latest|ml-base|desde-latest-latest) echo "No aplica a la version ${{ inputs.version }}"; exit 0 ;;
+          esac
+          bash pruebas/escenarios.sh ${{ matrix.escenario }}
 
   arm64:
     if: inputs.arm64
@@ -50,3 +62,6 @@ jobs:
           docker image inspect -f '{{.Architecture}}' "$IMAGEN"
       - name: Escenario reinicio (prueba completa, apagar y prender)
         run: bash pruebas/escenarios.sh reinicio
+      - name: Escenario ${{ inputs.version == 'ml' && 'ml' || 'mongodb' }}
+        if: inputs.version != 'latest'
+        run: bash pruebas/escenarios.sh ${{ inputs.version == 'ml' && 'ml' || 'mongodb' }}

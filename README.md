@@ -1,4 +1,4 @@
-# BigData Sandbox — Hadoop + Pig + Hive + Spark + Sqoop en un solo contenedor
+# BigData Sandbox — Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
 
 Una **sola imagen** y un **solo contenedor**, pero con un **cluster Hadoop real**
 adentro: cada componente corre como proceso separado y tiene su propia página
@@ -16,14 +16,39 @@ bloque. Nada de caja negra.
 | **Hive 4** (Metastore + HiveServer2, sobre Tez) | SQL sobre HDFS                    |
 | **Spark 3.5** + PySpark + History Server | Procesamiento en memoria, corre sobre YARN |
 | **Sqoop** + **MySQL** (MariaDB) con una base de ejemplo | Copiar tablas de una base relacional a HDFS y de vuelta |
+| **MongoDB** (opcional) con una base de ejemplo | Base NoSQL de documentos: datos con campos variables (versiones `base` y `ml`) |
+| **Python para datos** + **JupyterLab** | pandas, numpy, scikit-learn, Spark MLlib, matplotlib: ETL y machine learning en notebooks (versión `ml`) |
 
 Hive y Spark comparten el mismo metastore: una tabla creada en uno se ve en el
 otro. Todos los datos viven en HDFS. Sqoop trae datos de afuera (de la base
 MySQL `tienda`, que viene cargada) y devuelve resultados.
 
 Versiones: Hadoop 3.3.6 · Pig 0.18.0 · Hive 4.0.0 · Tez 0.10.3 · Spark 3.5.9 ·
-Sqoop 1.4.7 · MariaDB 10.3 (compatible MySQL) · ZooKeeper 3.8.7 · Java 8 ·
-Python 3.8
+Sqoop 1.4.7 · MariaDB 10.11 (compatible MySQL) · MongoDB 8.0 · ZooKeeper 3.8.7 ·
+Java 8 · Python 3.12 · Ubuntu 24.04. En `ml`: numpy 1.26 · pandas 2.3 ·
+pyarrow 25 · scikit-learn 1.9 · matplotlib 3.11 · pymongo 4.19 · JupyterLab 4.6.
+
+### Versiones de la imagen
+
+La imagen viene en versiones, que se eligen con el *tag* (lo que va después
+de los dos puntos en el nombre):
+
+| Imagen                            | Qué trae                                               | Descarga / en disco | RAM para Docker |
+|-----------------------------------|--------------------------------------------------------|---------------------|-----------------|
+| `franki678/bigdata-sandbox` (es `:latest`) | **La de la clase**: Hadoop, Pig, Hive, Spark, Sqoop y MySQL, sobre Ubuntu 20.04 | 1,2 GB / 3,0 GB | 6 GB |
+| `franki678/bigdata-sandbox:base`  | Lo mismo sobre Ubuntu 24.04, + MongoDB (se prende con `-e MONGODB=si`) | 1,4 GB / 3,6 GB | 6 GB |
+| `franki678/bigdata-sandbox:ml`    | `base` + Python para datos y JupyterLab                | 1,6 GB / 4,6 GB     | 7 GB |
+
+- `latest` no cambia sola: pasa a ser `base` recién cuando se decida (y con
+  ella el archivo del aula, sección 5B).
+- Para usar otra versión, el tag va en el `docker pull` y en el `docker run`:
+  `franki678/bigdata-sandbox:ml`. El resto de esta guía vale igual para las
+  tres; lo que es de una sola versión lo dice.
+- Las tres usan el mismo volumen: se puede pasar de `latest` a `base` o `ml`
+  (y entre esas dos) sin perder HDFS, las tablas de Hive ni la base MySQL
+  (`docker rm -f bigdata` y `docker run` con la otra). Al revés, de `base` o
+  `ml` a `latest`, no: el MySQL de `latest` es más viejo y no abre la base ya
+  actualizada (lo demás sí anda).
 
 **Cómo leer esta guía**
 
@@ -54,7 +79,7 @@ Python 3.8
 7. [Uso diario](#7-uso-diario)
 8. [Ver la arquitectura](#8-ver-la-arquitectura)
 9. [Experimentos de arquitectura](#9-experimentos-de-arquitectura)
-10. [Ejemplos: MapReduce, Pig, Hive, Spark y Sqoop](#10-ejemplos-mapreduce-pig-hive-spark-y-sqoop)
+10. [Ejemplos: MapReduce, Pig, Hive, Spark, Sqoop, MongoDB y Python](#10-ejemplos-mapreduce-pig-hive-spark-sqoop-mongodb-y-python)
 11. [Referencia de comandos](#11-referencia-de-comandos)
 12. [Empezar de cero](#12-empezar-de-cero)
 13. [Problemas comunes](#13-problemas-comunes)
@@ -191,7 +216,7 @@ Los comandos `docker ...` van en la terminal de **tu compu**. El resto
 | **Cada vez** que terminás                | `exit` (salir) y `docker stop bigdata` (apagar)              |
 | Para **cambiar parámetros** (DataNodes, replicación, bloque, servicios) | `docker rm -f bigdata` y de nuevo `docker run` con otros `-e`. HDFS y las tablas se conservan |
 | Para **actualizar** la imagen            | `docker pull franki678/bigdata-sandbox` de nuevo, `docker rm -f bigdata` y `docker run`. HDFS y las tablas se conservan |
-| Para **empezar de cero** (borrar todo HDFS, Hive y MySQL) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
+| Para **empezar de cero** (borrar todo HDFS, Hive, MySQL y MongoDB) | `docker rm -f bigdata` + `docker volume rm bigdata_hadoop` y de nuevo `docker run` |
 | Para mirar qué pasa                      | `docker logs bigdata` (arranque) · `docker stats bigdata` (RAM/CPU) · `docker ps -a` (si está prendido) |
 
 Errores típicos:
@@ -221,8 +246,18 @@ bigdata/                   <- tu carpeta de trabajo (paso 3), el nombre que quie
     │   ├── tienda.sql          la base MySQL "tienda" (ya viene cargada)
     │   ├── tienda.hql          JOIN en Hive de las tablas que trajo Sqoop
     │   ├── texto.txt           texto para el wordcount
-    │   └── wordcount.pig       wordcount en Pig
-    └── (tus archivos)     <- tus CSV, scripts y lo que bajes de HDFS
+    │   ├── wordcount.pig       wordcount en Pig
+    │   ├── tienda_mongo.js     la base MongoDB "tienda" (base y ml, con MONGODB=si)
+    │   ├── consultas_mongo.js  consultas de ejemplo en MongoDB
+    │   └── ml/                 solo en la versión ml:
+    │       ├── generar_sucios.py   ventas con errores a propósito (nulos, duplicados...)
+    │       ├── etl_pandas.py       limpiarlas con pandas
+    │       ├── etl_spark.py        lo mismo con Spark
+    │       ├── generar_senal.py    clientes generados con reglas conocidas
+    │       ├── modelos_sklearn.py  modelos de scikit-learn al lado de la regla real
+    │       ├── modelos_spark.py    lo mismo con Spark MLlib
+    │       └── mongo_pandas.py     de MongoDB a una tabla de pandas
+    └── (tus archivos)     <- tus CSV, scripts, notebooks y lo que bajes de HDFS
 ```
 
 - Todo lo que pongas en `datos/` (con el Explorador, Finder o un editor) se ve
@@ -239,9 +274,10 @@ bigdata/                   <- tu carpeta de trabajo (paso 3), el nombre que quie
 |------------------------|-------------------------------------------------------------|
 | `/datos`               | Tu carpeta `datos/`. Ahí arrancás al entrar                 |
 | HDFS `/user/root/...`  | El sistema de archivos distribuido: se ve con `hdfs dfs -ls`, no con `ls`. Es lo que leen MapReduce, Pig, Hive y Spark |
-| `/hadoop`              | Disco del cluster: los bloques de cada DataNode, metadatos del NameNode, el metastore de Hive y la base MySQL. Vive en el **volumen** `bigdata_hadoop`: sobrevive a `docker stop`, `docker rm` y a actualizar la imagen. Solo se borra con `docker volume rm` |
+| `/hadoop`              | Disco del cluster: los bloques de cada DataNode, metadatos del NameNode, el metastore de Hive y las bases MySQL y MongoDB. Vive en el **volumen** `bigdata_hadoop`: sobrevive a `docker stop`, `docker rm` y a actualizar la imagen. Solo se borra con `docker volume rm` |
 | `/opt/hadoop`, `/opt/pig`, `/opt/hive`, `/opt/spark`, `/opt/sqoop`... | Los programas y sus logs |
 | MySQL `tienda`         | Base relacional de ejemplo (fuera de HDFS): se ve con `mysql tienda`. Es de donde Sqoop trae y adonde devuelve |
+| MongoDB `tienda`       | Base NoSQL de ejemplo (con `MONGODB=si`): se ve con `mongosh tienda` |
 
 Un archivo pasa de tu compu al cluster así: lo dejás en `datos/` →
 `hdfs dfs -put` lo sube de `/datos` a HDFS → se procesa → `hdfs dfs -get` baja
@@ -254,16 +290,18 @@ hecha. Para usarla, no.
 
 | Archivo                      | Qué es                                                  |
 |------------------------------|---------------------------------------------------------|
-| `Dockerfile`                 | Cómo se arma la imagen: baja Hadoop, Pig, Hive, Tez, Spark, Sqoop y ZooKeeper de Apache, e instala MariaDB |
+| `Dockerfile`                 | Cómo se arma cada versión de la imagen (`--target base` o `ml`): baja Hadoop, Pig, Hive, Tez, Spark, Sqoop y ZooKeeper de Apache, instala MariaDB y MongoDB y, en `ml`, las librerías de Python |
 | `entrypoint.sh`              | Lo que corre al prender el contenedor: genera la configuración según los `-e` y arranca cada proceso en orden |
 | `sandbox/lib.sh`             | Funciones comunes: generar el `hdfs-site.xml`, prender/apagar nodos, memoria de cada daemon |
 | `sandbox/bin/`               | Los comandos `estado`, `datanode`, `namenode` y `jps`   |
-| `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark, ZooKeeper y MySQL |
-| `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen               |
+| `conf/`                      | Configuración fija de YARN, MapReduce, Hive, Tez, Spark, ZooKeeper, MySQL, MongoDB y JupyterLab, y las librerías de Python de `ml` (`requirements-ml.txt`) |
+| `datos/ejemplos/`            | Los ejemplos que van adentro de la imagen (`ml/`, solo en la versión ml) |
 | `pruebas/probar.sh`          | Prueba de punta a punta: el tutorial entero, comparando los resultados |
-| `pruebas/escenarios.sh`      | Reinicios, alta disponibilidad, cada `SERVICIOS`, cambios de parámetros, arranques cortados |
-| `.github/workflows/imagen.yml` | GitHub arma la imagen, corre la prueba y, si da bien, la publica en Docker Hub y deja el archivo para el aula en Releases (sección 5B) |
-| `.github/workflows/escenarios.yml` | Corre `escenarios.sh` con la imagen ya publicada (a mano, desde la pestaña Actions) |
+| `pruebas/probar_mongodb.sh`  | Prueba de MongoDB: la base de ejemplo, las consultas, la memoria |
+| `pruebas/probar_ml.sh`       | Prueba de la versión ml: librerías, JupyterLab, que el ETL de pandas y el de Spark den lo mismo y que los modelos aprendan las reglas |
+| `pruebas/escenarios.sh`      | Reinicios, alta disponibilidad, cada `SERVICIOS`, cambios de parámetros, arranques cortados, MongoDB, la versión ml y pasar el volumen de la imagen anterior a la nueva |
+| `.github/workflows/imagen.yml` | GitHub arma `base` y `ml`, corre las pruebas y, solo desde `main` y si dan bien, las publica en Docker Hub. `latest` (y el archivo del aula en Releases, sección 5B) se cambia solo a mano |
+| `.github/workflows/escenarios.yml` | Corre `escenarios.sh` con una versión ya publicada (a mano, desde la pestaña Actions) |
 | `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
 
 ## 4. Requisitos
@@ -274,8 +312,14 @@ hecha. Para usarla, no.
   - Con alta disponibilidad (`NAMENODES=2` o más): **8 GB**.
   - Solo HDFS (`SERVICIOS=hdfs`, ver sección 6): **4 GB** alcanzan.
   - Cada DataNode extra suma ~250 MB.
+  - MongoDB (`MONGODB=si`) suma ~250 MB.
+  - La versión `ml`: **7 GB** (JupyterLab y Python suman poco prendidos;
+    lo que pesa es entrenar modelos o cargar tablas grandes en pandas).
   - Lo que usa en cada momento: `docker stats bigdata`.
-- ~3 GB de disco para la imagen.
+- Disco para la imagen: ~3 GB (`latest`), ~3,6 GB (`base`), ~4,6 GB (`ml`).
+- MongoDB necesita un procesador Intel/AMD con AVX (casi todos desde 2011;
+  no lo tienen algunos Celeron y Pentium) o un ARM moderno (Mac M1–M4). Sin
+  eso, MongoDB no prende y avisa; el resto anda igual.
 
 ## 5. Conseguir la imagen (una sola vez)
 
@@ -295,6 +339,8 @@ docker pull franki678/bigdata-sandbox
 - Si te salteás el `pull`, el `docker run` la baja solo la primera vez.
 - No hace falta tener el repo: los ejemplos (datasets y scripts) vienen
   adentro de la imagen y aparecen solos en `datos/ejemplos/`.
+- Otra versión (sección "Versiones de la imagen", al principio):
+  `docker pull franki678/bigdata-sandbox:base` o `...:ml`.
 - Para actualizarla más adelante: el mismo `docker pull`, y después recreás el
   contenedor (`docker rm -f bigdata` + `docker run`; tus datos quedan en el
   volumen).
@@ -360,16 +406,20 @@ bigdata-sandbox.tar`.
 
 ### C) Armarla desde el código
 
-Desde la carpeta del repo:
+Desde la carpeta del repo, eligiendo la versión con `--target`:
 
 ```bash
-docker build -t franki678/bigdata-sandbox .
+docker build --target base -t franki678/bigdata-sandbox:base .
+docker build --target ml -t franki678/bigdata-sandbox:ml .
 ```
 
-- Tarda ~5-10 min la primera vez (baja ~1,6 GB de Apache). Si cambiás algo y
-  la volvés a buildear, reusa lo ya bajado.
-- Es lo que hace GitHub cada vez que cambia el código: la arma, la prueba y la
-  publica en Docker Hub para la opción A (`.github/workflows/imagen.yml`).
+- Tarda ~5-10 min la primera vez (baja ~1,6 GB de Apache, más MongoDB y, en
+  `ml`, las librerías de Python). Si cambiás algo y la volvés a buildear,
+  reusa lo ya bajado. `ml` reusa todo lo de `base`.
+- Sin `--target` se arma la `base`.
+- Es lo que hace GitHub cada vez que cambia el código: arma las dos, las
+  prueba y, desde `main`, las publica en Docker Hub para la opción A
+  (`.github/workflows/imagen.yml`).
 
 ## 6. Crear el contenedor y todos sus parámetros
 
@@ -398,9 +448,17 @@ otra consola, Docker se queja de `invalid characters for a local volume name`.
 | `REPLICATION` | Copias de cada bloque, cada una en un DataNode distinto. Si es mayor que `DATANODES`, los bloques quedan sub-replicados (`estado` lo avisa) | 1 | 1 a 9 |
 | `BLOCK_SIZE`  | Tamaño de bloque: un archivo se parte en bloques de este tamaño. Chico (`1m`) para ver muchos bloques con archivos chicos; `128m` es el de un cluster real | 128m | número + `m` o `g`: `1m`, `32m`, `128m`, `1g`… (mínimo 1m) |
 | `SERVICIOS`   | Qué se prende además de HDFS (ver abajo)    | todo        | `hdfs`, `mapreduce`, `todo` |
+| `MONGODB`     | Prender MongoDB con la base de ejemplo `tienda` (versiones `base` y `ml`). Anda con cualquier `SERVICIOS` | no | `si`, `no` |
+| `JUPYTER`     | Prender JupyterLab en el puerto 8888 (solo versión `ml`) | si | `si`, `no` |
 
 Si un valor está mal escrito, el contenedor se apaga y `docker logs bigdata`
 dice cuál (`[sandbox] ERROR: ...`).
+
+MongoDB y JupyterLab se ven desde tu compu sumando sus puertos al `docker
+run`: `-p 127.0.0.1:27017:27017` (MongoDB Compass) y `-p 127.0.0.1:8888:8888`
+(JupyterLab en el navegador). El `127.0.0.1` los deja ver **solo desde tu
+compu**: ninguno de los dos pide contraseña, y JupyterLab abierto a la red del
+aula dejaría a cualquiera correr programas en tu contenedor.
 
 `SERVICIOS` elige qué capas del stack se prenden, para no gastar memoria en lo
 que la clase no usa:
@@ -439,6 +497,12 @@ docker run -d --name bigdata -e SERVICIOS=hdfs -e DATANODES=3 -e REPLICATION=2 <
 
 # Clase de MapReduce, Pig y Sqoop, sin Hive ni Spark
 docker run -d --name bigdata -e SERVICIOS=mapreduce -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m <...> franki678/bigdata-sandbox
+
+# Clase de NoSQL: solo HDFS + MongoDB (versión base)
+docker run -d --name bigdata -e SERVICIOS=hdfs -e MONGODB=si -p 127.0.0.1:27017:27017 <...> franki678/bigdata-sandbox:base
+
+# Clase de ETL y machine learning: todo + MongoDB + JupyterLab (versión ml)
+docker run -d --name bigdata -e MONGODB=si -p 127.0.0.1:8888:8888 <...> franki678/bigdata-sandbox:ml
 ```
 
 ### Cambiar los parámetros
@@ -462,7 +526,12 @@ docker run -d --name bigdata -e DATANODES=4 <...> franki678/bigdata-sandbox
   en un cluster de verdad. Acá no se borran: siguen en `/hadoop/dfs/dnN` y
   vuelven si prendés ese nodo (`datanode start N`) o subís `DATANODES` otra vez.
 - Con `SERVICIOS=hdfs` o `mapreduce`, las tablas de Hive no se borran: vuelven
-  cuando prendés `todo` otra vez. Lo mismo la base MySQL con `SERVICIOS=hdfs`.
+  cuando prendés `todo` otra vez. Lo mismo la base MySQL con `SERVICIOS=hdfs`,
+  y la de MongoDB con `MONGODB=no`.
+- Pasar a otra versión de la imagen es lo mismo: `docker rm -f bigdata` y
+  `docker run` con `franki678/bigdata-sandbox:base` (o `:ml`). La primera vez
+  que la `base` abre un volumen de `latest`, pone al día la base MySQL
+  (~10 s, una sola vez).
 
 ### Seguir el arranque
 
@@ -522,6 +591,8 @@ jps             # los procesos Java, uno por nodo: DataNode (dn2), NameNode (nn1
 | Spark History         | http://localhost:18080      | Trabajos de Spark terminados                 |
 | Spark (trabajo activo)| http://localhost:4040       | Solo mientras corre un spark-shell/pyspark/spark-submit |
 | MySQL                 | `localhost:3306` (no es web) | Solo si agregaste `-p 3306:3306` (sección 6). Desde DBeaver: `jdbc:mysql://localhost:3306/tienda`, usuario `alumno`, clave `alumno` |
+| MongoDB               | `localhost:27017` (no es web) | Con `MONGODB=si` y `-p 127.0.0.1:27017:27017`. Desde MongoDB Compass: `mongodb://localhost:27017`, sin usuario |
+| JupyterLab (`ml`)     | http://localhost:8888       | Con `-p 127.0.0.1:8888:8888`. Notebooks, terminal y editor; lo que guardes queda en tu carpeta `datos/` |
 
 Los links entre páginas (por ejemplo, de la lista de DataNodes del NameNode a
 la página de cada DataNode) apuntan a `localhost` y funcionan desde el
@@ -629,7 +700,7 @@ cat $HADOOP_CONF_DIR/hdfs-site.xml           # replicación, bloque, NameNodes..
 cat /opt/sandbox/run/dn2/hdfs-site.xml       # lo propio del DataNode 2 (carpeta y puertos)
 ```
 
-## 10. Ejemplos: MapReduce, Pig, Hive, Spark y Sqoop
+## 10. Ejemplos: MapReduce, Pig, Hive, Spark, Sqoop, MongoDB y Python
 
 Todos se corren **adentro** del contenedor (`docker exec -it bigdata bash`),
 parado en `/datos`. Los archivos están en `datos/ejemplos/` (sección 3). El
@@ -641,6 +712,7 @@ Los cuatro ejemplos de ventas (`mapper.py`+`reducer.py`, `ventas.pig`,
 por producto) sobre los mismos archivos de HDFS, y tienen que dar el mismo
 resultado. Cada uno guarda el suyo en `/user/root/resultados/`. El de Sqoop
 (`sqoop.sh`) es otro caso: datos que están en una base MySQL (más abajo).
+Al final, MongoDB (versiones `base` y `ml`) y Python para datos (versión `ml`).
 
 ### Orden recomendado
 
@@ -860,6 +932,160 @@ Para tener en cuenta:
   1.4.7 es anterior a Hive 4. Se hace como en `tienda.hql`: importar a una
   carpeta y crear encima una tabla EXTERNAL.
 
+### MongoDB (versiones base y ml)
+
+MongoDB es una base **NoSQL de documentos**: en lugar de tablas con columnas
+fijas guarda *documentos* (como JSON) en *colecciones*, y cada documento
+puede tener sus propios campos, subdocumentos y listas. Se prende con
+`-e MONGODB=si` y trae la base `tienda` cargada: la misma empresa que la de
+MySQL, pero con lo que a una base relacional le cuesta guardar:
+
+| Colección   | Documentos | Qué tiene                                                 |
+|-------------|-----------:|-----------------------------------------------------------|
+| `productos` | 9          | Los 8 de MySQL, cada uno con **sus** datos: el termo tiene capacidad, colores y reseñas; la yerba, origen y variedades. Y uno nuevo, con campos que ninguno tenía |
+| `clientes`  | 2.000      | Cada uno con lo que dejó: email, teléfono, una o dos direcciones, datos de mayorista... Lo que no tiene, **no está** (no es un NULL) |
+| `pedidos`   | 20.000     | Pedidos online con sus **items adentro** (en MySQL sería otra tabla y un JOIN), y la entrega con datos distintos si es envío o retiro |
+
+```bash
+mongosh tienda                              # consola (salir: exit)
+mongosh --quiet tienda ejemplos/consultas_mongo.js   # las consultas de ejemplo
+```
+
+```javascript
+show collections
+db.productos.findOne({_id: "termo"})                          // un documento entero
+db.clientes.countDocuments({email: {$exists: true}})          // los que tienen email
+db.clientes.find({"direcciones.ciudad": "Quilmes"}).limit(3)  // adentro de una lista
+db.pedidos.aggregate([{$unwind: "$items"},                    // GROUP BY de los items
+  {$group: {_id: "$items.producto", unidades: {$sum: "$items.cantidad"}}}])
+```
+
+`consultas_mongo.js` tiene cada consulta con su equivalente en SQL al lado:
+campos que solo algunos tienen, buscar adentro de subdocumentos y listas,
+agregaciones, un JOIN con `$lookup`, índices (`explain`) y agregar un campo a
+un solo documento.
+
+**¿Cuándo conviene una base NoSQL de documentos?**
+
+- Cuando cada registro tiene **forma distinta**: catálogos con atributos
+  propios de cada producto, formularios que cambian, datos que llegan como
+  JSON de otras aplicaciones, eventos y logs. En SQL harían falta decenas de
+  columnas casi siempre vacías, o una tabla de "atributos" difícil de consultar.
+- Cuando lo que se **lee junto se guarda junto**: un pedido con sus items se
+  trae en una sola lectura, sin JOIN.
+- Cuando la estructura **cambia seguido**: agregar un campo es escribirlo en
+  los documentos nuevos, sin `ALTER TABLE` ni migrar lo que ya estaba.
+- Cuando hay que repartir muchísimas escrituras entre varios servidores
+  (*sharding*). Eso es en clusters grandes; acá no se ve.
+
+**¿Cuándo no?**
+
+- Cuando los datos están **muy relacionados** y se cruzan de muchas formas
+  (contabilidad, reportes ad hoc): SQL lo hace natural; en MongoDB, `$lookup`
+  existe pero es más incómodo y más caro.
+- Cuando importa que la base **no deje guardar datos inconsistentes**: MySQL
+  rechaza una venta de un producto que no existe (clave foránea) o un precio
+  que no es número. MongoDB, salvo que se le configure una validación, guarda
+  lo que le manden.
+- Cuando un mismo dato está **copiado** en muchos documentos (el precio dentro
+  de cada item): cambiarlo es actualizar miles. A veces eso es lo que se
+  quiere (el precio al que se vendió), a veces no.
+
+**¿Es más rápida?** No en general. Es rápida para lo que está diseñada: leer
+o escribir un documento entero por su `_id` o por un índice. Para un `GROUP BY`
+o un JOIN sobre toda una tabla, una base relacional con buenos índices anda
+igual o mejor. Lo que decide no es "SQL o NoSQL" sino si la forma de guardar
+los datos coincide con las consultas que se van a hacer. Y "sin esquema" no
+quiere decir sin diseño: el esquema pasa a estar en el programa que lee los
+datos.
+
+Y frente a Hadoop: MongoDB (como MySQL) es una base **operativa**, la que usa
+una aplicación para guardar y buscar registros de a uno, al instante. Hive y
+Spark son **analíticos**: recorren archivos enteros en HDFS para calcular
+resúmenes. En una empresa conviven: los datos nacen en la base operativa y se
+copian al cluster para analizarlos (es lo que hace Sqoop con MySQL).
+
+### Python para datos: ETL y machine learning (versión ml)
+
+La versión `ml` agrega **pandas** y **numpy** (tablas en memoria y cálculo),
+**pyarrow** (Parquet), **scikit-learn** (modelos), **matplotlib** (gráficos),
+**pymongo** (MongoDB desde Python) y **JupyterLab**: notebooks en el navegador
+en http://localhost:8888 (con `-p 127.0.0.1:8888:8888`), que se guardan en tu
+carpeta `datos/`. JupyterLab también trae una terminal (*File → New →
+Terminal*) que es como el `docker exec`.
+
+Spark se usa desde cualquier `python3` o notebook, no solo con
+`spark-submit`, y corre en el YARN del contenedor:
+
+```python
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("mi notebook").getOrCreate()
+ventas = spark.read.csv("hdfs:///user/root/ventas", header=True, inferSchema=True)
+ventas.groupBy("producto").count().toPandas()   # resultado chico -> tabla de pandas
+```
+
+Los ejemplos están en `ejemplos/ml/`, y cada uno explica lo que hace adentro.
+Primero, **ETL** (limpiar datos sucios), el mismo en pandas y en Spark:
+
+```bash
+python3 ejemplos/ml/generar_sucios.py    # ventas_sucias.csv: 100.000 tickets con errores a propósito
+python3 ejemplos/ml/etl_pandas.py        # -> ventas_limpias.parquet, y cuánto arregló de cada cosa
+
+hdfs dfs -mkdir -p /user/root/ml
+hdfs dfs -put -f ventas_sucias.csv /user/root/ml/
+spark-submit ejemplos/ml/etl_spark.py    # lo mismo en Spark -> /user/root/ml/ventas_limpias
+```
+
+El generador mete duplicados, fechas en tres formatos, texto con mayúsculas,
+espacios y tildes, precios escritos `2.575,00`, celdas vacías y errores de
+tipeo, y dice cuántos de cada uno. Los dos ETL tienen que encontrar
+exactamente esos y terminar con el mismo resumen, número por número:
+
+| Paso                                  | Filas  |
+|---------------------------------------|-------:|
+| filas leídas                          | 103.000 |
+| duplicados eliminados                 | 3.000  |
+| sin cantidad (fuera)                  | 2.000  |
+| cantidad imposible (fuera)            | 800    |
+| precio sin la coma decimal (/100)     | 500    |
+| sin precio (→ mediana del producto)   | 1.000  |
+| sin medio de pago (→ desconocido)     | 5.000  |
+| **filas limpias**                     | **97.200** |
+
+pandas lo hace en menos de un segundo; Spark tarda más (reparte el trabajo
+entre executors, aunque sean pocos datos). pandas sirve mientras la tabla
+entre en la memoria de una compu; Spark, cuando no.
+
+Después, **machine learning** con datos generados con **reglas conocidas**
+(están escritas en `generar_senal.py`), para comparar lo que aprende cada
+modelo con la regla real:
+
+```bash
+python3 ejemplos/ml/generar_senal.py     # clientes_senal.csv: 20.000 clientes
+python3 ejemplos/ml/modelos_sklearn.py   # scikit-learn -> metricas_sklearn.json y clusters_sklearn.png
+
+hdfs dfs -put -f clientes_senal.csv /user/root/ml/
+spark-submit ejemplos/ml/modelos_spark.py   # Spark MLlib -> metricas_spark.json
+```
+
+| Modelo                         | Qué tiene que descubrir                      | Lo que da           |
+|--------------------------------|----------------------------------------------|---------------------|
+| Regresión lineal               | `gasto = 5000 + 1500·visitas + 0,8·ticket − 1500·reclamos + 50·antigüedad` (y que la edad no influye) | Los coeficientes, a ±1% |
+| Árbol de decisión              | Vuelve si `(visitas ≥ 4 y reclamos ≤ 1) o antigüedad ≥ 36`, con 10% de ruido | Las mismas preguntas, con los mismos cortes; ~90% de aciertos (el techo, por el ruido) |
+| Regresión logística            | La misma regla                               | ~82%: es una recta, y la regla no |
+| Red neuronal (MLPClassifier)   | La misma regla                               | ~90%                |
+| KMeans (no supervisado)        | Los 3 segmentos de clientes, sin decírselos  | Parecido 0,83 (1 = idénticos) |
+
+De cada uno muestra además la validación cruzada, cuánto tarda en entrenar y
+cuánta memoria usa. Con 20.000 filas scikit-learn entrena en milisegundos y
+Spark en segundos: MLlib existe para cuando los datos no entran en una compu.
+
+Y para juntar las dos cosas, `mongo_pandas.py` lee los pedidos de MongoDB y
+los convierte en tablas de pandas (necesita `MONGODB=si`).
+
+Para instalar otra librería: `pip install <libreria>` adentro del contenedor
+(se pierde si recreás el contenedor; lo que guardes en `datos/`, no).
+
 ### Con tu propio dataset
 
 1. Copiá tu CSV a `datos/` en tu compu.
@@ -891,7 +1117,7 @@ Detalle y ejemplos de cada herramienta (Sqoop incluido): [TUTORIAL, paso 15](TUT
 | `docker stats bigdata`                   | RAM y CPU que está usando                              |
 | `docker cp archivo.csv bigdata:/datos/`  | Copiar un archivo adentro (alternativa a la carpeta `datos/`) |
 | `docker rm -f bigdata`                   | Borrar el contenedor (los datos del volumen quedan)    |
-| `docker volume rm bigdata_hadoop`        | Borrar los datos de HDFS, Hive y MySQL (con el contenedor ya borrado) |
+| `docker volume rm bigdata_hadoop`        | Borrar los datos de HDFS, Hive, MySQL y MongoDB (con el contenedor ya borrado) |
 
 ### Adentro: el cluster
 
@@ -1020,6 +1246,34 @@ LOAD DATA LOCAL INFILE '/datos/notas.csv' INTO TABLE tienda.notas
   FIELDS TERMINATED BY ',' IGNORE 1 LINES;     -- IGNORE: saltea el encabezado
 ```
 
+### Adentro: MongoDB (con `MONGODB=si`)
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `mongosh tienda`                            | Consola en la base `tienda` (salir: `exit`)  |
+| `mongosh --quiet tienda --eval 'db.pedidos.countDocuments()'` | Una consulta suelta  |
+| `mongosh --quiet tienda script.js`          | Corre un archivo de JavaScript (los resultados se muestran con `printjson(...)`) |
+| `mongosh --quiet ejemplos/tienda_mongo.js`  | Recrea la base `tienda` de cero              |
+| `mongoimport` / `mongoexport`               | No vienen: para cargar un CSV o JSON propio, `pymongo` en la versión `ml`, o `insertMany` desde `mongosh` |
+
+Adentro de `mongosh`: `show dbs`, `use <base>`, `show collections`,
+`db.<coleccion>.find({filtro}, {campos})`, `.findOne()`, `.countDocuments()`,
+`.insertOne({...})` / `.insertMany([...])`, `.updateOne({filtro}, {$set: {...}})`,
+`.deleteOne({filtro})`, `.aggregate([...])`, `.createIndex({campo: 1})`,
+`.find(...).explain("executionStats")`. Los avisos que aparecen al entrar
+(*Access control is not enabled*, *vm.max_map_count*...) son normales en un
+sandbox.
+
+### Adentro: Python para datos (versión `ml`)
+
+| Comando                                     | Qué hace                                     |
+|---------------------------------------------|----------------------------------------------|
+| `python3 script.py`                         | Corre un script (pandas, scikit-learn, y también Spark: `import pyspark` anda) |
+| `python3`                                   | Consola de Python (salir: `exit()`)          |
+| `pip install <libreria>`                    | Agrega una librería (hasta que se recree el contenedor) |
+| `pip list`                                  | Librerías instaladas y sus versiones         |
+| `jupyter nbconvert --to notebook --execute nb.ipynb` | Corre un notebook entero sin abrirlo |
+
 ### Adentro: el generador de datos
 
 | Comando                                               | Qué hace                         |
@@ -1033,8 +1287,8 @@ a todos les da el mismo resultado.
 
 ## 12. Empezar de cero
 
-Borra el contenedor y **todos los datos** de HDFS, Hive y MySQL (tu carpeta
-`datos/` no se toca):
+Borra el contenedor y **todos los datos** de HDFS, Hive, MySQL y MongoDB (tu
+carpeta `datos/` no se toca):
 
 ```bash
 docker rm -f bigdata
@@ -1067,6 +1321,11 @@ Después repetís el `docker run` (con los `-e` que quieras).
 | `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 1, paso 4) |
 | `docker pull` dice `toomanyrequests`             | Se llegó al límite de descargas de Docker Hub sin cuenta (~100 cada 6 h por conexión). Esperá, entrá con una cuenta gratis (`docker login`) o pasala por pendrive (sección 5B) |
 | `docker pull` dice `denied` o `not found`        | Revisá el nombre: `franki678/bigdata-sandbox` (sin guion en `franki678`) |
+| `mongosh` dice `ECONNREFUSED` o `estado` no muestra MongoDB | No lo prendiste (`-e MONGODB=si`, sección 6), o la imagen es `latest`, que no lo trae: usá `:base` o `:ml` |
+| `AVISO: este procesador no tiene AVX`            | MongoDB 5 o más nuevo necesita AVX (sección 4): en esa compu no hay MongoDB. Lo demás anda |
+| `ModuleNotFoundError: No module named 'pandas'` (o `sklearn`) | Es la versión `base`: las librerías vienen en `franki678/bigdata-sandbox:ml` |
+| http://localhost:8888 no abre                   | Falta `-p 127.0.0.1:8888:8888` en el `docker run`, la imagen no es `:ml`, o `JUPYTER=no`. Mirá `estado` |
+| Un notebook con Spark se queda esperando         | YARN está lleno (otra sesión de Spark abierta): `spark.stop()` en el notebook que ya no usás, o *Kernel → Shut Down* |
 
 ## Notas
 
@@ -1081,15 +1340,23 @@ Después repetís el `docker run` (con los `-e` que quieras).
   - `/opt/spark/logs/`
   - `/opt/zookeeper/logs/`
   - `/var/log/mysql/error.log`
-- Se buildea desde los binarios oficiales de Apache, sin imágenes de terceros:
-  sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4). La imagen publicada trae
-  las dos y Docker baja sola la que corresponde.
+  - `/var/log/mongodb/mongod.log`
+  - `/var/log/jupyter.log` (versión `ml`)
+- Se buildea desde los binarios oficiales de Apache, MongoDB desde su
+  repositorio oficial y las librerías de Python desde PyPI, sin imágenes de
+  terceros: sirve para amd64 (Intel/AMD) y ARM64 (Mac M1–M4). La imagen
+  publicada trae las dos y Docker baja sola la que corresponde.
 - Antes de publicar cada versión de la imagen, GitHub prende un cluster y corre
   `pruebas/probar.sh`: el tutorial entero, verificando que MapReduce, Pig, Hive
   y Spark den el resultado esperado, y que Sqoop traiga la tabla `ventas`
-  completa y devuelva el resumen por categoría. Si algo falla, no se publica.
+  completa y devuelva el resumen por categoría. En `base` corre además
+  `pruebas/probar_mongodb.sh` y en `ml`, `pruebas/probar_ml.sh` (los ETL de
+  pandas y Spark tienen que dar lo mismo y los modelos aprender las reglas).
+  Si algo falla, no se publica.
 - Para que entre en una notebook:
   - Cada daemon tiene un tope de memoria chico y una JVM liviana (`sandbox/lib.sh`).
   - La imagen no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C, la copia de Hadoop que trae Pig (`Dockerfile`). Trae el JDK completo (y no solo el JRE) porque Sqoop compila una clase Java por cada tabla que copia.
   - MySQL arranca con poca memoria (`conf/mysql.cnf`): alcanza para la base de ejemplo y tablas de unos cientos de miles de filas.
+  - MongoDB usa 256 MB de caché (`conf/mongod.conf`; de fábrica tomaría la mitad de la RAM) y viene apagado. Sin `mongoimport`/`mongoexport` ni la librería de cifrado de `mongosh` (~370 MB que acá no se usan).
+  - En `ml`, las librerías van sin sus tests (~150 MB) y con versiones fijas (`conf/requirements-ml.txt`). numpy queda en 1.26 a propósito: Spark 3.5 no anda con numpy 2.
   - `jps` es una versión propia, que además muestra la instancia de cada proceso (nn1, dn2...).

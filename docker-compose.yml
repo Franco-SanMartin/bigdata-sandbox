@@ -17,7 +17,7 @@
 #                                      contenedor con los cambios (los datos quedan)
 #   docker compose down                borrar el contenedor (los datos QUEDAN en el volumen)
 #   docker compose down -v             borrar contenedor Y volumen: se pierde todo
-#                                      HDFS, las tablas de Hive y la base MySQL
+#                                      HDFS, las tablas de Hive y las bases MySQL y MongoDB
 #
 # No mezclar con el "docker run" del README: los dos crean un contenedor
 # llamado "bigdata". Si ya existe uno, antes: docker rm -f bigdata
@@ -29,12 +29,19 @@ services:
   bigdata:
 
     # --- La imagen ------------------------------------------------------------
-    # La publicada en Docker Hub (o la cargada con "docker load").
+    # La publicada en Docker Hub (o la cargada con "docker load"). Sin tag es
+    # "latest", la de la clase. Las otras versiones (README, "Versiones de la
+    # imagen"): ":base" (+ MongoDB) y ":ml" (+ Python para datos y JupyterLab).
     image: franki678/bigdata-sandbox
+    # image: franki678/bigdata-sandbox:base
+    # image: franki678/bigdata-sandbox:ml
 
     # En lugar de usar la publicada, armarla desde el Dockerfile de esta
     # carpeta (5-10 min la primera vez). Se usa con: docker compose up -d --build
-    # build: .
+    # (target: la version, base o ml)
+    # build:
+    #   context: .
+    #   target: base
 
     # Bajar la imagen de nuevo en cada "up" para tener siempre la ultima.
     # NO usar en el aula: 20 PCs bajando 1,3 GB a la vez saturan la red.
@@ -76,6 +83,15 @@ services:
       #   todo       lo anterior + Hive + Spark (6 GB)
       # SERVICIOS: "todo"
 
+      # MongoDB con la base de ejemplo "tienda" (solo imagenes :base y :ml).
+      # Anda con cualquier SERVICIOS y suma ~250 MB de RAM. Por defecto: "no".
+      # Para verlo desde la compu (MongoDB Compass), prender su puerto abajo.
+      # MONGODB: "si"
+
+      # JupyterLab en http://localhost:8888 (solo imagen :ml). Por defecto:
+      # "si". Para verlo, prender su puerto abajo.
+      # JUPYTER: "no"
+
       # Avanzado: memoria (en MB) del comando "pig" mismo, no de sus trabajos.
       # Por defecto: "512".
       # PIG_HEAPSIZE: "1024"
@@ -116,6 +132,13 @@ services:
       # Workbench: localhost:3306, usuario alumno, clave alumno
       # - "127.0.0.1:3306:3306"
 
+      # MongoDB (con MONGODB: "si"), para MongoDB Compass: mongodb://localhost:27017
+      # - "127.0.0.1:27017:27017"
+
+      # JupyterLab (imagen :ml): http://localhost:8888. Sin contrasena: dejar
+      # el 127.0.0.1, que lo deja ver solo desde esta compu
+      # - "127.0.0.1:8888:8888"
+
       # HDFS por RPC (hdfs://localhost:9000) para un cliente de Hadoop de
       # afuera. Para leer o escribir archivos haria falta exponer tambien los
       # puertos de transferencia de los DataNodes: queda solo como referencia.
@@ -123,7 +146,7 @@ services:
 
     # --- Donde se guardan los datos -------------------------------------------
     volumes:
-      # Volumen con nombre (definido al final): HDFS, metastore de Hive y MySQL.
+      # Volumen con nombre (definido al final): HDFS, metastore de Hive, MySQL y MongoDB.
       # Vive adentro de Docker y sobrevive a "down"; solo lo borra "down -v".
       - bigdata_hadoop:/hadoop
       # La carpeta datos/ al lado de este archivo = /datos adentro. Para pasar
