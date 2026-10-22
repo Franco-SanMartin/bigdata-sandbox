@@ -138,7 +138,7 @@ export function ConfigPage() {
             {ram && <>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
                 <div className="ram-big">{nf(ram.totalMb / 1024, 1)}<small>GB de {nf(ram.limitMb / 1024, 1)}</small></div>
-                <span style={{ fontSize: 12, color: ramK === 'bad' ? '#F2867F' : ramK === 'run' ? 'var(--run)' : 'var(--ok)' }}>{ramK === 'ok' ? 'Entra con margen' : ramK === 'run' ? 'Entra justo' : 'No entra'}</span>
+                <span style={{ fontSize: 12, color: ramK === 'bad' ? 'var(--bad-text)' : ramK === 'run' ? 'var(--run)' : 'var(--ok)' }}>{ramK === 'ok' ? 'Entra con margen' : ramK === 'run' ? 'Entra justo' : 'No entra'}</span>
               </div>
               <Meter value={ram.totalMb} max={ram.limitMb * 1.3} mark={ram.limitMb} kind={ramK} label="RAM estimada" />
               <details className="ram-det"><summary>Ver de dónde sale</summary><ul className="ram-parts">{ram.parts.map(p => <li key={p.label}><span>{p.label}</span><span>{nf(p.mb / 1024, 2)} GB</span></li>)}</ul></details>

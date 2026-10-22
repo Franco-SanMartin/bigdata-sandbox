@@ -169,8 +169,8 @@ function dnState(p: Process, dns: DataNode[]) {
 function StateText({ p, dataNodes, now }: { p: Process; dataNodes: DataNode[]; now: number }) {
   const d = p.kind === 'datanode' ? dataNodes.find(x => `dn${x.id}` === p.id) : null;
   if (d?.state === 'stale') return <span style={{ color: 'var(--run)' }}>sin latidos · muerto en {Math.max(0, Math.ceil(((d.deadAt || 0) - now) / 1000))} s</span>;
-  if (d?.state === 'dead') return <span style={{ color: '#F2867F' }}>muerto</span>;
-  return <span className={p.state === 'up' ? 'dim' : undefined} style={p.state === 'down' ? { color: '#F2867F' } : p.state === 'starting' || p.state === 'stopping' ? { color: 'var(--run)' } : undefined}>{STATE_LABEL[p.state]}{p.role ? ` · ${p.role === 'active' ? 'activo' : 'en espera'}` : ''}</span>;
+  if (d?.state === 'dead') return <span style={{ color: 'var(--bad-text)' }}>muerto</span>;
+  return <span className={p.state === 'up' ? 'dim' : undefined} style={p.state === 'down' ? { color: 'var(--bad-text)' } : p.state === 'starting' || p.state === 'stopping' ? { color: 'var(--run)' } : undefined}>{STATE_LABEL[p.state]}{p.role ? ` · ${p.role === 'active' ? 'activo' : 'en espera'}` : ''}</span>;
 }
 
 function RowMenu({ p }: { p: Process }) {

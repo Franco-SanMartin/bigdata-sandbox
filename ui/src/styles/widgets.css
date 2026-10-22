@@ -74,7 +74,7 @@
 .mimic-svg .m-t { font-size: 13px; font-weight: 600; }
 .mimic-svg .m-s { font-family: var(--f-mono); font-size: 10.5px; fill: var(--text-3); }
 .mimic-svg .m-s.warn { fill: var(--run); }
-.mimic-svg .m-s.bad { fill: #F2867F; }
+.mimic-svg .m-s.bad { fill: var(--bad-text); }
 .mimic-svg .m-role { font-size: 10px; font-weight: 600; letter-spacing: .08em; fill: var(--text-3); }
 .mimic-svg .m-role.act { fill: var(--ok); }
 .mimic-svg .m-wire { stroke: var(--n-9); stroke-width: 1.5; fill: none; }
