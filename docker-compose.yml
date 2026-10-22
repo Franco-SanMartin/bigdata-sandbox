@@ -30,11 +30,12 @@ services:
 
     # --- La imagen ------------------------------------------------------------
     # La publicada en Docker Hub (o la cargada con "docker load"). Sin tag es
-    # "latest", la de la clase. Las otras versiones (README, "Versiones de la
-    # imagen"): ":base" (+ MongoDB) y ":ml" (+ Python para datos y JupyterLab).
+    # "latest", la de la clase (= ":base", con MongoDB). Las otras versiones
+    # (README, "Versiones de la imagen"): ":ml" (+ Python para datos y
+    # JupyterLab) y ":ubuntu20" (la de antes, sin MongoDB).
     image: franki678/bigdata-sandbox
-    # image: franki678/bigdata-sandbox:base
     # image: franki678/bigdata-sandbox:ml
+    # image: franki678/bigdata-sandbox:ubuntu20
 
     # En lugar de usar la publicada, armarla desde el Dockerfile de esta
     # carpeta (5-10 min la primera vez). Se usa con: docker compose up -d --build
@@ -83,7 +84,7 @@ services:
       #   todo       lo anterior + Hive + Spark (6 GB)
       # SERVICIOS: "todo"
 
-      # MongoDB con la base de ejemplo "tienda" (solo imagenes :base y :ml).
+      # MongoDB con la base de ejemplo "tienda" (no en :ubuntu20).
       # Anda con cualquier SERVICIOS; con todo prendido, darle 7 GB a Docker.
       # Por defecto: "no". Para verlo desde la compu (MongoDB Compass),
       # prender su puerto abajo.

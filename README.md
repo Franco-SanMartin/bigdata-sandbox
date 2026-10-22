@@ -33,22 +33,30 @@ pyarrow 25 · scikit-learn 1.9 · matplotlib 3.11 · pymongo 4.19 · JupyterLab 
 La imagen viene en versiones, que se eligen con el *tag* (lo que va después
 de los dos puntos en el nombre):
 
-| Imagen                            | Qué trae                                               | Descarga / en disco | RAM para Docker |
-|-----------------------------------|--------------------------------------------------------|---------------------|-----------------|
-| `franki678/bigdata-sandbox` (es `:latest`) | **La de la clase**: Hadoop, Pig, Hive, Spark, Sqoop y MySQL, sobre Ubuntu 20.04 | 1,2 GB / 3,0 GB | 6 GB |
-| `franki678/bigdata-sandbox:base`  | Lo mismo sobre Ubuntu 24.04, + MongoDB (se prende con `-e MONGODB=si`) | 1,4 GB / 3,6 GB | 6 GB (7 GB con MongoDB) |
-| `franki678/bigdata-sandbox:ml`    | `base` + Python para datos y JupyterLab                | 1,6 GB / 4,6 GB     | 7 GB |
+| Imagen                            | Qué trae                                               | Descarga | RAM para Docker |
+|-----------------------------------|--------------------------------------------------------|---------:|-----------------|
+| `franki678/bigdata-sandbox` (es `:latest` = `:base`) | **La de la clase**: Hadoop, Pig, Hive, Spark, Sqoop y MySQL sobre Ubuntu 24.04, + MongoDB (se prende con `-e MONGODB=si`) | 1,36 GB | 6 GB (7 GB con MongoDB) |
+| `franki678/bigdata-sandbox:ml`    | `base` + Python para datos y JupyterLab                | 1,58 GB | 7 GB |
+| `franki678/bigdata-sandbox:ubuntu20` | La de antes (hasta octubre de 2026): lo mismo que `base` sobre Ubuntu 20.04, sin MongoDB | 1,23 GB | 6 GB |
 
-- `latest` no cambia sola: pasa a ser `base` recién cuando se decida (y con
-  ella el archivo del aula, sección 5B).
+Lo que ocupa en disco cada una está en la sección 4.
+
+- `latest` y `base` son la misma imagen: sin tag (`franki678/bigdata-sandbox`)
+  se usa esa.
 - Para usar otra versión, el tag va en el `docker pull` y en el `docker run`:
-  `franki678/bigdata-sandbox:ml`. El resto de esta guía vale igual para las
-  tres; lo que es de una sola versión lo dice.
-- Las tres usan el mismo volumen: se puede pasar de `latest` a `base` o `ml`
+  `franki678/bigdata-sandbox:ml`. El resto de esta guía vale igual para todas;
+  lo que es de una sola versión lo dice.
+- Todas usan el mismo volumen: se puede pasar de `ubuntu20` a `base` o `ml`
   (y entre esas dos) sin perder HDFS, las tablas de Hive ni la base MySQL
-  (`docker rm -f bigdata` y `docker run` con la otra). Al revés, de `base` o
-  `ml` a `latest`, no: el MySQL de `latest` es más viejo y no abre la base ya
-  actualizada (lo demás sí anda).
+  (`docker rm -f bigdata` y `docker run` con la otra). La primera vez que
+  `base` o `ml` abren un volumen de `ubuntu20`, ponen al día la base MySQL
+  (~10 s, una sola vez).
+- **Volver a la de antes** (`:ubuntu20`): `docker rm -f bigdata` y el mismo
+  `docker run` con `franki678/bigdata-sandbox:ubuntu20`. Con un volumen
+  **nuevo** anda todo. Con el **mismo** volumen que ya abrió `base` o `ml`,
+  MySQL no prende (su MariaDB es más vieja y no abre la base ya puesta al
+  día): HDFS, Hive y Spark andan, Sqoop no. Para tener todo de vuelta,
+  empezá de cero (sección 12) o usá otro volumen (`-v otro_volumen:/hadoop`).
 
 **Cómo leer esta guía**
 
@@ -300,7 +308,8 @@ hecha. Para usarla, no.
 | `pruebas/probar_mongodb.sh`  | Prueba de MongoDB: la base de ejemplo, las consultas, la memoria |
 | `pruebas/probar_ml.sh`       | Prueba de la versión ml: librerías, JupyterLab, que el ETL de pandas y el de Spark den lo mismo y que los modelos aprendan las reglas |
 | `pruebas/escenarios.sh`      | Reinicios, alta disponibilidad, cada `SERVICIOS`, cambios de parámetros, arranques cortados, MongoDB, la versión ml y pasar el volumen de la imagen anterior a la nueva |
-| `.github/workflows/imagen.yml` | GitHub arma `base` y `ml`, corre las pruebas y, solo desde `main` y si dan bien, las publica en Docker Hub. `latest` (y el archivo del aula en Releases, sección 5B) se cambia solo a mano |
+| `.github/workflows/imagen.yml` | GitHub arma `base` y `ml` para Intel/AMD y para ARM, corre las pruebas y `escenarios.sh` con esas mismas imágenes y, solo desde `main` y si todo da bien, las publica en Docker Hub (`base`, `ml` y `latest` = `base`). En el resumen de cada corrida deja lo que pesan y la RAM que usan |
+| `.github/workflows/aula.yml` | Arma el archivo del aula (sección 5B) con la `latest` publicada y lo sube a Releases (a mano, desde la pestaña Actions) |
 | `.github/workflows/escenarios.yml` | Corre `escenarios.sh` con una versión ya publicada (a mano, desde la pestaña Actions) |
 | `TUTORIAL.md`                | Paso a paso con un dataset de prueba y con uno propio   |
 
@@ -316,24 +325,36 @@ hecha. Para usarla, no.
   - La versión `ml`: **7 GB**.
   - Lo que usa en cada momento: `docker stats bigdata`.
 
-  Lo que usa de verdad (medido con `docker stats`, 2 DataNodes): en reposo es
-  lo que ocupa recién prendido; el pico, mientras corren trabajos de
-  MapReduce, Pig, Hive y Spark (y en `ml`, el ETL y los modelos de Spark).
-  Los trabajos tienen un tope de 4 GB en YARN: por eso el pico no pasa de ~6 GB.
+  Lo que usa de verdad (medido con `docker stats` por GitHub en cada versión
+  nueva, en Intel/AMD y en ARM, con 2 DataNodes; está en el resumen de cada
+  corrida de `imagen.yml`): en reposo es lo que ocupa 30 s después del cartel
+  LISTO; el pico, mientras corren trabajos de MapReduce, Pig, Hive y Spark (y
+  en `ml`, el ETL y los modelos). Los trabajos tienen un tope de 4 GB en YARN:
+  por eso el pico no pasa de ~6 GB.
 
   | Versión y parámetros                     | En reposo | Pico con trabajos |
   |------------------------------------------|----------:|------------------:|
-  | `latest`, todo                           | 1,9 GB    | 5,6 GB            |
-  | `base`, todo                             | 1,8 GB    | 5,9 GB            |
-  | `base`, todo + MongoDB                   | 2,3 GB    | 6,1 GB            |
-  | `base`, `SERVICIOS=hdfs` + MongoDB       | 0,7 GB    | —                 |
-  | `ml`, todo + JupyterLab                  | 2,2 GB    | —                 |
-  | `ml`, todo + JupyterLab + MongoDB        | 2,0 GB    | 6,2 GB            |
+  | `base` (= `latest`), todo                | 2,0 GB    | 5,8 GB            |
+  | `base` (= `latest`), todo + MongoDB      | 2,1 GB    | 5,8 GB            |
+  | `ml`, todo + MongoDB + JupyterLab        | 2,2 GB    | 6,0 GB            |
+  | `ubuntu20`, todo                         | 2,0 GB    | 5,6 GB            |
 
-  En reposo varía ±0,3 GB según el momento. JupyterLab prendido suma poco
-  (queda dentro de esa variación); lo que pesa en `ml` son los trabajos de
-  Spark y las tablas grandes en pandas, que van aparte de los 4 GB de YARN.
-- Disco para la imagen: ~3 GB (`latest`), ~3,6 GB (`base`), ~4,6 GB (`ml`).
+  En reposo varía ±0,3 GB según el momento; en ARM da lo mismo ±0,1 GB. Lo
+  que pesa en `ml` son los trabajos de Spark y las tablas grandes en pandas,
+  que van aparte de los 4 GB de YARN.
+- **Disco para la imagen.** Hay tres números distintos, según qué se mide:
+
+  | Versión              | Descarga (`docker pull`, comprimida) | Descomprimida (Docker Engine en Linux) | Docker Desktop (Windows/Mac) |
+  |----------------------|-------------:|------------:|------------:|
+  | `base` (= `latest`)  | 1,36 GB      | 2,23 GB     | ~3,6 GB     |
+  | `ml`                 | 1,58 GB      | 2,93 GB     | ~4,5 GB     |
+  | `ubuntu20`           | 1,23 GB      | 1,78 GB     | ~3,0 GB     |
+
+  - La descarga es lo que baja `docker pull` (y lo que pesa el archivo del
+    aula, sección 5B). Las dos primeras columnas las mide GitHub en cada
+    versión nueva; en ARM dan lo mismo ±0,03 GB.
+  - Docker Desktop guarda la imagen comprimida **y** descomprimida, por eso
+    ahí `docker images` muestra la suma (~3,6 GB para `base`).
 - MongoDB necesita un procesador Intel/AMD con AVX (casi todos desde 2011;
   no lo tienen algunos Celeron y Pentium) o un ARM moderno (Mac M1–M4). Sin
   eso, MongoDB no prende y avisa; el resto anda igual.
@@ -350,14 +371,14 @@ Hay tres formas de tenerla; las tres terminan igual: una imagen llamada
 docker pull franki678/bigdata-sandbox
 ```
 
-- Baja ~1,3 GB y sirve para Windows, Linux y Mac (Intel o M1–M4): Docker elige
-  sola la versión de tu compu.
+- Baja 1,36 GB y sirve para Windows, Linux y Mac (Intel o M1–M4): Docker
+  elige sola la versión de tu compu.
 - No hace falta cuenta de Docker Hub ni `docker login`.
 - Si te salteás el `pull`, el `docker run` la baja solo la primera vez.
 - No hace falta tener el repo: los ejemplos (datasets y scripts) vienen
   adentro de la imagen y aparecen solos en `datos/ejemplos/`.
 - Otra versión (sección "Versiones de la imagen", al principio):
-  `docker pull franki678/bigdata-sandbox:base` o `...:ml`.
+  `docker pull franki678/bigdata-sandbox:ml` o `...:ubuntu20`.
 - Para actualizarla más adelante: el mismo `docker pull`, y después recreás el
   contenedor (`docker rm -f bigdata` + `docker run`; tus datos quedan en el
   volumen).
@@ -367,9 +388,9 @@ docker pull franki678/bigdata-sandbox
 Si 20 PCs bajan la imagen a la vez, se satura la internet de la facultad (puede
 tardar una hora) y Docker Hub limita las descargas sin cuenta por conexión.
 Mejor bajarla **una sola vez** y repartirla por la red del aula o por pendrive.
-Para eso está lista en un solo archivo, `bigdata-sandbox.tar.gz` (~1,2 GB,
-para PCs Intel/AMD con Windows o Linux), que se actualiza solo cada vez que se
-publica la imagen:
+Para eso está lista en un solo archivo, `bigdata-sandbox.tar.gz` (~1,4 GB,
+para PCs Intel/AMD con Windows o Linux), que se actualiza cada vez que cambia
+`latest`:
 
 https://github.com/Franki-678/bigdata-sandbox/releases/download/imagen/bigdata-sandbox.tar.gz
 
@@ -418,8 +439,27 @@ Al terminar, el profesor lo corta con `docker stop compartir`.
 
 **Para pasarla entre compañeros** (sin el archivo de GitHub): el que la tiene
 la guarda con `docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar`
-(1,2 a 3 GB según el Docker) y los demás la cargan con `docker load -i
+(1,4 a 3,6 GB según el Docker) y los demás la cargan con `docker load -i
 bigdata-sandbox.tar`.
+
+**Qué cambia para la clase desde que `latest` es `base`** (octubre de 2026):
+
+- El archivo de arriba ahora trae la de Ubuntu 24.04 con MongoDB. Los
+  comandos son los mismos: `docker load` y el `docker run` de siempre.
+- Las PCs que ya tenían la de antes cargada la siguen usando hasta que
+  carguen el archivo nuevo (o hagan `docker pull`).
+- Si un alumno trae un volumen de la de antes, la primera vez se pone al día
+  solo (~10 s). Si ese volumen se había apagado de golpe, `docker logs
+  bigdata` avisa `MySQL NO ARRANCO` con los pasos (sección 13).
+- **Para volver atrás**, la de antes quedó en el mismo release:
+  https://github.com/Franki-678/bigdata-sandbox/releases/download/imagen/bigdata-sandbox-ubuntu20.tar.gz
+  (~1,2 GB). Se reparte igual, y con `docker load -i
+  bigdata-sandbox-ubuntu20.tar.gz` queda cargada como
+  `franki678/bigdata-sandbox` (o sea `latest`): el `docker run` de siempre
+  usa esa. Con internet, lo mismo es `docker pull
+  franki678/bigdata-sandbox:ubuntu20` y usar ese nombre en el `docker run`.
+  En las dos, con un volumen nuevo o borrado (sección 12): uno que ya abrió
+  la nueva deja a MySQL sin prender.
 
 ### C) Armarla desde el código
 
@@ -434,9 +474,10 @@ docker build --target ml -t franki678/bigdata-sandbox:ml .
   `ml`, las librerías de Python). Si cambiás algo y la volvés a buildear,
   reusa lo ya bajado. `ml` reusa todo lo de `base`.
 - Sin `--target` se arma la `base`.
-- Es lo que hace GitHub cada vez que cambia el código: arma las dos, las
-  prueba y, desde `main`, las publica en Docker Hub para la opción A
-  (`.github/workflows/imagen.yml`).
+- Es lo que hace GitHub cada vez que cambia el código: arma las dos (para
+  Intel/AMD y para ARM), las prueba con `probar.sh` y con todos los escenarios
+  de `escenarios.sh` y, desde `main` y solo si todo dio bien, publica esas
+  mismas imágenes en Docker Hub para la opción A (`.github/workflows/imagen.yml`).
 
 ## 6. Crear el contenedor y todos sus parámetros
 
@@ -547,9 +588,11 @@ docker run -d --name bigdata -e DATANODES=4 <...> franki678/bigdata-sandbox
   cuando prendés `todo` otra vez. Lo mismo la base MySQL con `SERVICIOS=hdfs`,
   y la de MongoDB con `MONGODB=no`.
 - Pasar a otra versión de la imagen es lo mismo: `docker rm -f bigdata` y
-  `docker run` con `franki678/bigdata-sandbox:base` (o `:ml`). La primera vez
-  que la `base` abre un volumen de `latest`, pone al día la base MySQL
-  (~10 s, una sola vez).
+  `docker run` con `franki678/bigdata-sandbox:ml` (o `:base`, o `:ubuntu20`).
+  La primera vez que `base` o `ml` abren un volumen de `ubuntu20`, ponen al
+  día la base MySQL (~10 s, una sola vez); después ese volumen ya no sirve
+  para el MySQL de `ubuntu20` (sección "Versiones de la imagen", al
+  principio).
 
 ### Seguir el arranque
 
@@ -1332,6 +1375,8 @@ Después repetís el `docker run` (con los `-e` que quieras).
 | `pig` se queda en `Connecting to ResourceManager` | YARN está apagado (`SERVICIOS=hdfs`): usá `pig -x local`, o recreá el contenedor con `SERVICIOS=mapreduce` o `todo` |
 | `beeline` dice `Connection refused`             | HiveServer2 todavía arranca (~1 min) o `SERVICIOS` no es `todo`. Mirá `estado` |
 | `sqoop` dice `Communications link failure`      | MySQL no está corriendo: recién prendido, o `SERVICIOS=hdfs`. Mirá `estado` y `/var/log/mysql/error.log` |
+| `MySQL NO ARRANCO: este volumen es de la imagen anterior` | El volumen viene de `:ubuntu20` y la última vez se apagó de golpe (sin `--stop-timeout`, se cortó la luz...): la MariaDB nueva no puede ordenar eso. `docker logs bigdata` dice los pasos: prenderlo una vez con `:ubuntu20`, apagarlo con `docker stop -t 20` y volver a esta. Lo demás anda igual |
+| MySQL no prende después de volver a `:ubuntu20` | Ese volumen ya lo abrió `base` o `ml` (sección "Versiones de la imagen", al principio): usá un volumen nuevo o empezá de cero (sección 12) |
 | `sqoop import` dice `No primary key could be found` | La tabla no tiene clave primaria: usá `-m 1` o `--split-by <columna>` |
 | `sqoop export` falla con `Duplicate entry`      | La tabla ya tiene esas filas: vaciala antes (`TRUNCATE TABLE ...`) |
 | Muchos `WARN` al correr `sqoop`                 | Normales (avisos de Hadoop y de la contraseña en la línea de comandos). Lo que importa es el final: `Transferred ...` / `Exported N records` |
@@ -1339,7 +1384,7 @@ Después repetís el `docker run` (con los `-e` que quieras).
 | `invalid characters for a local volume name`    | El `docker run` es de otra consola: usá el de tu consola (sección 1, paso 4) |
 | `docker pull` dice `toomanyrequests`             | Se llegó al límite de descargas de Docker Hub sin cuenta (~100 cada 6 h por conexión). Esperá, entrá con una cuenta gratis (`docker login`) o pasala por pendrive (sección 5B) |
 | `docker pull` dice `denied` o `not found`        | Revisá el nombre: `franki678/bigdata-sandbox` (sin guion en `franki678`) |
-| `mongosh` dice `ECONNREFUSED` o `estado` no muestra MongoDB | No lo prendiste (`-e MONGODB=si`, sección 6), o la imagen es `latest`, que no lo trae: usá `:base` o `:ml` |
+| `mongosh` dice `ECONNREFUSED` o `estado` no muestra MongoDB | No lo prendiste (`-e MONGODB=si`, sección 6), o la imagen es `:ubuntu20`, que no lo trae |
 | `AVISO: este procesador no tiene AVX`            | MongoDB 5 o más nuevo necesita AVX (sección 4): en esa compu no hay MongoDB. Lo demás anda |
 | `ModuleNotFoundError: No module named 'pandas'` (o `sklearn`) | Es la versión `base`: las librerías vienen en `franki678/bigdata-sandbox:ml` |
 | http://localhost:8888 no abre                   | Falta `-p 127.0.0.1:8888:8888` en el `docker run`, la imagen no es `:ml`, o `JUPYTER=no`. Mirá `estado` |
@@ -1370,7 +1415,10 @@ Después repetís el `docker run` (con los `-e` que quieras).
   completa y devuelva el resumen por categoría. En `base` corre además
   `pruebas/probar_mongodb.sh` y en `ml`, `pruebas/probar_ml.sh` (los ETL de
   pandas y Spark tienen que dar lo mismo y los modelos aprender las reglas).
-  Si algo falla, no se publica.
+  También corre todos los escenarios de `pruebas/escenarios.sh` (reinicios,
+  alta disponibilidad, cortes, volúmenes de la imagen anterior), en Intel/AMD
+  y en ARM, con las mismas imágenes que después se publican. Si algo falla,
+  no se publica.
 - Para que entre en una notebook:
   - Cada daemon tiene un tope de memoria chico y una JVM liviana (`sandbox/lib.sh`).
   - La imagen no trae lo que el cluster no usa: documentación, conectores a la nube, librerías de C, la copia de Hadoop que trae Pig (`Dockerfile`). Trae el JDK completo (y no solo el JRE) porque Sqoop compila una clase Java por cada tabla que copia.
