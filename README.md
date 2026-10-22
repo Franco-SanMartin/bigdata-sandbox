@@ -36,7 +36,7 @@ de los dos puntos en el nombre):
 | Imagen                            | Qué trae                                               | Descarga / en disco | RAM para Docker |
 |-----------------------------------|--------------------------------------------------------|---------------------|-----------------|
 | `franki678/bigdata-sandbox` (es `:latest`) | **La de la clase**: Hadoop, Pig, Hive, Spark, Sqoop y MySQL, sobre Ubuntu 20.04 | 1,2 GB / 3,0 GB | 6 GB |
-| `franki678/bigdata-sandbox:base`  | Lo mismo sobre Ubuntu 24.04, + MongoDB (se prende con `-e MONGODB=si`) | 1,4 GB / 3,6 GB | 6 GB |
+| `franki678/bigdata-sandbox:base`  | Lo mismo sobre Ubuntu 24.04, + MongoDB (se prende con `-e MONGODB=si`) | 1,4 GB / 3,6 GB | 6 GB (7 GB con MongoDB) |
 | `franki678/bigdata-sandbox:ml`    | `base` + Python para datos y JupyterLab                | 1,6 GB / 4,6 GB     | 7 GB |
 
 - `latest` no cambia sola: pasa a ser `base` recién cuando se decida (y con
@@ -312,10 +312,27 @@ hecha. Para usarla, no.
   - Con alta disponibilidad (`NAMENODES=2` o más): **8 GB**.
   - Solo HDFS (`SERVICIOS=hdfs`, ver sección 6): **4 GB** alcanzan.
   - Cada DataNode extra suma ~250 MB.
-  - MongoDB (`MONGODB=si`) suma ~250 MB.
-  - La versión `ml`: **7 GB** (JupyterLab y Python suman poco prendidos;
-    lo que pesa es entrenar modelos o cargar tablas grandes en pandas).
+  - Con MongoDB (`MONGODB=si`): **7 GB**.
+  - La versión `ml`: **7 GB**.
   - Lo que usa en cada momento: `docker stats bigdata`.
+
+  Lo que usa de verdad (medido con `docker stats`, 2 DataNodes): en reposo es
+  lo que ocupa recién prendido; el pico, mientras corren trabajos de
+  MapReduce, Pig, Hive y Spark (y en `ml`, el ETL y los modelos de Spark).
+  Los trabajos tienen un tope de 4 GB en YARN: por eso el pico no pasa de ~6 GB.
+
+  | Versión y parámetros                     | En reposo | Pico con trabajos |
+  |------------------------------------------|----------:|------------------:|
+  | `latest`, todo                           | 1,9 GB    | 5,6 GB            |
+  | `base`, todo                             | 1,8 GB    | 5,9 GB            |
+  | `base`, todo + MongoDB                   | 2,3 GB    | 6,1 GB            |
+  | `base`, `SERVICIOS=hdfs` + MongoDB       | 0,7 GB    | —                 |
+  | `ml`, todo + JupyterLab                  | 2,2 GB    | —                 |
+  | `ml`, todo + JupyterLab + MongoDB        | 2,0 GB    | 6,2 GB            |
+
+  En reposo varía ±0,3 GB según el momento. JupyterLab prendido suma poco
+  (queda dentro de esa variación); lo que pesa en `ml` son los trabajos de
+  Spark y las tablas grandes en pandas, que van aparte de los 4 GB de YARN.
 - Disco para la imagen: ~3 GB (`latest`), ~3,6 GB (`base`), ~4,6 GB (`ml`).
 - MongoDB necesita un procesador Intel/AMD con AVX (casi todos desde 2011;
   no lo tienen algunos Celeron y Pentium) o un ARM moderno (Mac M1–M4). Sin

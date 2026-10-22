@@ -84,8 +84,9 @@ services:
       # SERVICIOS: "todo"
 
       # MongoDB con la base de ejemplo "tienda" (solo imagenes :base y :ml).
-      # Anda con cualquier SERVICIOS y suma ~250 MB de RAM. Por defecto: "no".
-      # Para verlo desde la compu (MongoDB Compass), prender su puerto abajo.
+      # Anda con cualquier SERVICIOS; con todo prendido, darle 7 GB a Docker.
+      # Por defecto: "no". Para verlo desde la compu (MongoDB Compass),
+      # prender su puerto abajo.
       # MONGODB: "si"
 
       # JupyterLab en http://localhost:8888 (solo imagen :ml). Por defecto:
