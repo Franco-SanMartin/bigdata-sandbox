@@ -24,6 +24,12 @@ las líneas), con números inventados: los tests no levantan un cluster.
 | `proc/` | un `/proc` de mentira para `scan_proc` | sintética |
 | `entrypoint_falso.sh` | reemplazo del entrypoint para los tests de arranque | — |
 
+Pipeline, Datos y ML no usan archivos de acá: `tests/falsos.py` arma las CLIs
+falsas (`hdfs dfs`, `beeline`, `mysql`, `mongosh`, `sqoop`, `spark-submit`,
+`spark-sql`) con su estado en una carpeta. Las salidas y los mensajes de error
+copian el formato de beeline (Hive con Tez), el cliente `mysql` (MariaDB,
+la de la imagen), `mongosh` y Sqoop 1.4.7, y también son **sintéticos**.
+
 Cuando haya una corrida contra la imagen (`tests/humo`, `SANDBOX_HUMO=1`),
 conviene reemplazar las sintéticas por salidas reales y ver que los tests
 sigan pasando.
