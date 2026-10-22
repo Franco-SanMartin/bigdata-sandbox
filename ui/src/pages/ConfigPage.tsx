@@ -8,7 +8,7 @@ import { applyConfig, resetVolume, startCluster } from '../state/actions';
 import { Meter, Seg, Stepper, Switch, Tip } from '../components/ui';
 import { BLOCK_PRESETS, blockSizeLabel, configSummary, processSpecs } from '../lib/cluster';
 import { nf } from '../lib/format';
-import { ArchitecturePreview, type Highlight } from '../widgets/ArchitecturePreview';
+import { Mimic, MimicLegend, type Highlight } from '../widgets/Mimic';
 
 const SERVICES: { value: Services; title: string; ram: string; text: string }[] = [
   { value: 'hdfs', title: 'hdfs', ram: '4 GB', text: 'Solo HDFS. El más liviano y el que más rápido arranca.' },
@@ -44,14 +44,15 @@ export function ConfigPage() {
   const hlp = (k: keyof ClusterConfig) => ({ onMouseEnter: () => setHl(k), onMouseLeave: () => setHl(null), onFocus: () => setHl(k), onBlur: () => setHl(null) });
   const ramK = ram ? (ram.totalMb > ram.limitMb ? 'bad' : ram.totalMb > ram.limitMb * .85 ? 'run' : 'ok') : undefined;
   return (
+    <div className="split">
+    <div className="split-main">
     <div className="page-in">
       <div className="page-head">
         <div><h1>Configuración</h1><p>Las variables de entorno del contenedor. Se aplican reiniciando el cluster; los datos quedan en el volumen.</p></div>
         <div className="page-actions"><button className="btn" type="button" onClick={() => composeOpen.set(true)}><FileCode2 size={15} />Ver docker-compose.yml</button></div>
       </div>
       {busy && <div className="callout" data-k="run"><AlertTriangle size={14} /><span>El cluster está {s.phase === 'starting' ? 'arrancando' : 'apagándose'}. Podés preparar cambios, pero se aplican cuando termine.</span></div>}
-      <div className="grid cols-12" style={{ alignItems: 'start' }}>
-        <div className="span-7" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <section className="panel" aria-labelledby="h-hdfs">
             <div className="panel-h"><h2 id="h-hdfs">HDFS</h2><span className="sub">almacenamiento distribuido</span></div>
             <div className="panel-b" style={{ paddingTop: 0, paddingBottom: 0 }}>
@@ -61,7 +62,7 @@ export function ConfigPage() {
               <Field hlProps={hlp('replication')} id="f-rep" label="Réplicas por bloque" env="REPLICATION" hint="Copias de cada bloque, cada una en un DataNode distinto. Con 2 o más, si se cae un nodo no se pierde nada." issue={issue('replication')} note={draft.replication > 1 && draft.replication <= draft.datanodes ? `Aguanta ${draft.replication - 1} DataNode${draft.replication > 2 ? 's' : ''} caído${draft.replication > 2 ? 's' : ''}` : undefined}>
                 <Stepper id="f-rep" value={draft.replication} min={1} max={9} onChange={v => set('replication', v)} label="réplicas" />
               </Field>
-              <Field hlProps={hlp('blockSize')} id="f-bs" label="Tamaño de bloque" env="BLOCK_SIZE" hint="HDFS corta cada archivo en bloques de este tamaño. 1 MB para ver muchos bloques con archivos chicos; 128 MB es el de un cluster real." issue={issue('blockSize')} note={`ventas_grandes.csv (5,9 MB) → ${Math.ceil(5.93 / (parseInt(draft.blockSize, 10) * (/g$/i.test(draft.blockSize) ? 1024 : 1) || 128))} bloque(s)`}>
+               <Field stack hlProps={hlp('blockSize')} id="f-bs" label="Tamaño de bloque" env="BLOCK_SIZE" hint="HDFS corta cada archivo en bloques de este tamaño. 1 MB para ver muchos bloques con archivos chicos; 128 MB es el de un cluster real." issue={issue('blockSize')} note={`ventas_grandes.csv (5,9 MB) → ${Math.ceil(5.93 / (parseInt(draft.blockSize, 10) * (/g$/i.test(draft.blockSize) ? 1024 : 1) || 128))} bloque(s)`}>
                 <Seg value={BLOCK_PRESETS.includes(draft.blockSize) && ['1m', '16m', '128m', '1g'].includes(draft.blockSize) ? draft.blockSize : 'otro'} onChange={v => { if (v !== 'otro') { set('blockSize', v); setCustomBs(''); } }} label="Tamaño de bloque"
                   options={[{ value: '1m', label: '1 MB' }, { value: '16m', label: '16 MB' }, { value: '128m', label: '128 MB' }, { value: '1g', label: '1 GB' }, { value: 'otro', label: 'otro' }]} />
                 <span className="inline-input"><input className="input" aria-label="Otro tamaño de bloque" placeholder="ej. 8m" value={customBs || (['1m', '16m', '128m', '1g'].includes(draft.blockSize) ? '' : draft.blockSize)} aria-invalid={issue('blockSize')?.level === 'error'}
@@ -106,28 +107,7 @@ export function ConfigPage() {
             </div>
           </section>
         </div>
-        <aside className="span-5" style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 16 }}>
-          <section className="panel" aria-labelledby="h-arq">
-            <div className="panel-h"><h2 id="h-arq">Arquitectura</h2><span className="sub">{dirty && s.phase !== 'stopped' ? 'cómo queda con tus cambios' : 'cómo queda armado'}</span>{dirty && <span className="end"><span className="badge" data-k="run">sin aplicar</span></span>}</div>
-            <div className="panel-b"><ArchitecturePreview config={draft} base={s.phase === 'running' || s.phase === 'starting' ? base : null} highlight={hl} /></div>
-          </section>
-          <section className="panel" aria-labelledby="h-sum">
-            <div className="panel-h"><h2 id="h-sum">Memoria</h2><span className="sub">estimada para Docker · {procs.length - 1} procesos</span></div>
-            <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {ram && <>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-                  <div className="ram-big">{nf(ram.totalMb / 1024, 1)}<small>GB de {nf(ram.limitMb / 1024, 1)}</small></div>
-                  <span style={{ fontSize: 12, color: ramK === 'bad' ? '#F2867F' : ramK === 'run' ? 'var(--run)' : 'var(--ok)' }}>{ramK === 'ok' ? 'Entra con margen' : ramK === 'run' ? 'Entra justo' : 'No entra'}</span>
-                </div>
-                <Meter value={ram.totalMb} max={ram.limitMb * 1.3} mark={ram.limitMb} kind={ramK} label="RAM estimada" />
-                <details className="ram-det"><summary>Ver de dónde sale</summary><ul className="ram-parts">{ram.parts.map(p => <li key={p.label}><span>{p.label}</span><span>{nf(p.mb / 1024, 2)} GB</span></li>)}</ul></details>
-              </>}
-              <p className="muted" style={{ fontSize: 12 }}>{configSummary(draft)} · bloque {blockSizeLabel(draft.blockSize)}</p>
-            </div>
-          </section>
-          {s.phase === 'stopped' && !dirty && <button className="btn btn-primary" type="button" onClick={() => startCluster(draft)} disabled={errors.length > 0}><Play size={15} />Iniciar con esta configuración</button>}
-        </aside>
-      </div>
+
       {dirty && (
         <div className="savebar" role="region" aria-label="Cambios sin aplicar">
           <AlertCircle size={16} className="muted" />
@@ -141,12 +121,41 @@ export function ConfigPage() {
         </div>
       )}
     </div>
+    </div>
+    <aside className="split-side" aria-label="Arquitectura">
+      <div className="split-side-in">
+        <section className="panel" aria-labelledby="h-arq">
+          <div className="panel-h"><h2 id="h-arq">Arquitectura</h2><span className="sub">{dirty && s.phase !== 'stopped' ? 'cómo queda con tus cambios' : 'cómo queda armado'}</span>{dirty && <span className="end"><span className="badge" data-k="run">sin aplicar</span></span>}</div>
+          <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <MimicLegend />
+            <Mimic config={draft} base={s.phase === 'running' || s.phase === 'starting' ? base : null} highlight={hl} />
+            <p className="muted" style={{ fontSize: 12 }}>Pasá el mouse por un campo de la izquierda para ver qué parte cambia, o por un bloque para ver dónde están sus copias.</p>
+          </div>
+        </section>
+        <section className="panel" aria-labelledby="h-sum">
+          <div className="panel-h"><h2 id="h-sum">Memoria</h2><span className="sub">estimada para Docker · {procs.length - 1} procesos</span></div>
+          <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ram && <>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                <div className="ram-big">{nf(ram.totalMb / 1024, 1)}<small>GB de {nf(ram.limitMb / 1024, 1)}</small></div>
+                <span style={{ fontSize: 12, color: ramK === 'bad' ? '#F2867F' : ramK === 'run' ? 'var(--run)' : 'var(--ok)' }}>{ramK === 'ok' ? 'Entra con margen' : ramK === 'run' ? 'Entra justo' : 'No entra'}</span>
+              </div>
+              <Meter value={ram.totalMb} max={ram.limitMb * 1.3} mark={ram.limitMb} kind={ramK} label="RAM estimada" />
+              <details className="ram-det"><summary>Ver de dónde sale</summary><ul className="ram-parts">{ram.parts.map(p => <li key={p.label}><span>{p.label}</span><span>{nf(p.mb / 1024, 2)} GB</span></li>)}</ul></details>
+            </>}
+            <p className="muted" style={{ fontSize: 12 }}>{configSummary(draft)} · bloque {blockSizeLabel(draft.blockSize)}</p>
+          </div>
+        </section>
+        {s.phase === 'stopped' && !dirty && <button className="btn btn-primary" type="button" onClick={() => startCluster(draft)} disabled={errors.length > 0}><Play size={15} />Iniciar con esta configuración</button>}
+      </div>
+    </aside>
+    </div>
   );
 }
 
-function Field({ id, label, env, hint, issue, note, children, hlProps }: { id: string; label: string; env: string; hint: string; issue?: ConfigIssue; note?: string; children: ReactNode; hlProps?: HTMLAttributes<HTMLDivElement> }) {
+function Field({ id, label, env, hint, issue, note, children, hlProps, stack }: { id: string; label: string; env: string; hint: string; issue?: ConfigIssue; note?: string; children: ReactNode; hlProps?: HTMLAttributes<HTMLDivElement>; stack?: boolean }) {
   return (
-    <div className="field" {...hlProps}>
+    <div className={`field${stack ? ' stack' : ''}`} {...hlProps}>
       <div className="field-l"><label htmlFor={id}>{label} <span className="env">{env}</span></label><span className="hint">{hint}</span></div>
       <div className="field-c">{children}</div>
       {issue ? <p className="field-msg" data-k={issue.level} role={issue.level === 'error' ? 'alert' : undefined}>{issue.level === 'error' ? <AlertCircle size={13} /> : <AlertTriangle size={13} />}{issue.message}</p>
