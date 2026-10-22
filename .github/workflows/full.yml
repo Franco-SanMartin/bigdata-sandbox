@@ -1,0 +1,121 @@
+# Versión full: arma la imagen (target full del Dockerfile, sobre ml) y le
+# corre el humo de verdad: el servidor de server/ manejando Hadoop, YARN, Hive,
+# MySQL y MongoDB reales (server/tests/humo/humo_full.py).
+#
+# NO publica nada: no hay login a Docker Hub ni push. La imagen queda solo en
+# la máquina del run. Lo que sale es un artifact por arquitectura
+# (humo-full-<arq>) con el resumen, las respuestas del servidor y las salidas
+# crudas de cada servicio, que sirven de fixtures para los tests de server/.
+name: Full
+
+on:
+  push:
+    branches: [full]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGEN: bigdata-sandbox-ci:full
+
+jobs:
+  humo:
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        arq: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lugar en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Usa el cache de capas de base y ml que deja el workflow Imagen; full
+      # son pocas capas (el servidor y sus dependencias) y no guarda cache
+      # propio, para no gastar el lugar que usan las otras.
+      - name: Armar full (${{ matrix.arq }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.IMAGEN }}
+          cache-from: |
+            type=gha,scope=base-${{ matrix.arq }}
+            type=gha,scope=ml-${{ matrix.arq }}
+
+      - name: Tamaño
+        run: docker image ls "$IMAGEN"
+
+      - name: Levantar el contenedor (espera «Iniciar»)
+        run: |
+          docker run -d --name humo -p 127.0.0.1:8080:8080 -v humo_hadoop:/hadoop "$IMAGEN"
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/api/status > /dev/null && break
+            sleep 1
+          done
+          echo "el servidor contestó a los ${i} s"
+          curl -sf http://localhost:8080/api/status | python3 -c 'import json,sys; s=json.load(sys.stdin); print(s["phase"]); assert s["phase"] == "stopped"'
+
+      - name: Humo
+        id: humo
+        env:
+          HUMO_CONTENEDOR: humo
+          HUMO_SALIDAS: ${{ runner.temp }}/humo-salidas
+        run: python3 server/tests/humo/humo_full.py
+
+      - name: AUTOSTART=1 arranca solo y docker stop apaga en orden
+        if: always()
+        run: |
+          set -u
+          S="$RUNNER_TEMP/humo-salidas"; mkdir -p "$S"
+          docker logs humo > "$S/docker_logs_humo.txt" 2>&1 || true
+          docker rm -f humo > /dev/null 2>&1 || true
+          docker volume rm humo_hadoop > /dev/null 2>&1 || true
+          t0=$(date +%s)
+          docker run -d --name auto -p 127.0.0.1:8081:8080 -e AUTOSTART=1 -e SERVICIOS=hdfs -e DATANODES=1 "$IMAGEN"
+          fase=""
+          for i in $(seq 1 150); do
+            fase=$(curl -s http://localhost:8081/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["phase"])' 2>/dev/null || true)
+            [ "$fase" = running ] && break
+            sleep 2
+          done
+          arranque=$(( $(date +%s) - t0 ))
+          t1=$(date +%s)
+          docker stop -t 20 auto > /dev/null
+          apagado=$(( $(date +%s) - t1 ))
+          codigo=$(docker inspect -f '{{.State.ExitCode}}' auto)
+          docker logs auto > "$S/docker_logs_auto.txt" 2>&1 || true
+          {
+            echo "### AUTOSTART=1 (${{ matrix.arq }})"
+            echo "fase: $fase, arrancó en ${arranque} s; docker stop tardó ${apagado} s, código de salida ${codigo}"
+          } | tee -a "$S/autostart.md"
+          grep -q "Cluster apagado\|Apagando el cluster" "$S/docker_logs_auto.txt" && echo "apagó en orden" | tee -a "$S/autostart.md"
+          [ "$fase" = running ] && [ "$apagado" -lt 20 ] && [ "$codigo" = 143 -o "$codigo" = 0 ]
+
+      - name: Resumen
+        if: always()
+        run: |
+          S="$RUNNER_TEMP/humo-salidas"
+          { echo "# ${{ matrix.arq }}"; cat "$S/resumen.md" "$S/autostart.md" 2>/dev/null; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: humo-full-${{ matrix.arq }}
+          path: ${{ runner.temp }}/humo-salidas
+          retention-days: 14
