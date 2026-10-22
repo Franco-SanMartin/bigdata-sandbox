@@ -7,15 +7,20 @@
 #                                    cada pantalla sin errores de consola, y
 #                                    pipeline, consulta y entrenamiento desde ahí
 #
-# NO publica nada en Docker Hub: la imagen queda solo en la máquina del run.
 # Lo que sale es un artifact por arquitectura (humo-full-<arq>) con los
 # resúmenes, las respuestas del servidor, las salidas crudas de cada servicio
-# (sirven de fixtures para los tests de server/) y las capturas de la interfaz.
+# (sirven de fixtures para los tests de server/), y otro con las capturas de la
+# interfaz (capturas-full-<arq>).
+#
+# Solo en main, y solo si el humo dio bien en las dos arquitecturas, publica
+# franki678/bigdata-sandbox:full (amd64 + arm64). No toca latest, base ni ml:
+# esos los publica el workflow Imagen. Necesita lo mismo que Imagen: la
+# variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN.
 name: Full
 
 on:
   push:
-    branches: [full]
+    branches: [full, main]
     paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**']
   workflow_dispatch:
 
@@ -25,11 +30,13 @@ permissions:
 
 concurrency:
   group: full-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   IMAGEN: bigdata-sandbox-ci:full
   CACHE: ghcr.io/franki-678/bigdata-sandbox-cache
+  REPO: docker.io/franki678/bigdata-sandbox
+  PUBLICA: ${{ github.ref == 'refs/heads/main' && 'si' || 'no' }}
 
 jobs:
   humo:
@@ -47,7 +54,17 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           df -h /
 
+      # Fecha fija (la del commit): armada de nuevo con todo del cache, la
+      # imagen que se sube es la misma que se probó
+      - name: Fecha del commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUBLICA == 'si'
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -145,6 +162,37 @@ jobs:
           echo "apagó en orden (Apagando... y Cluster apagado en docker logs): $en_orden" | tee -a "$S/autostart.md"
           [ "$fase" = running ] && [ "$apagado" -lt 20 ] && [ "$codigo" = 143 -o "$codigo" = 0 ] && [ "$en_orden" = si ]
 
+      # Solo main: sube por digest, sin tag (sale todo del cache de arriba). El
+      # tag full se pone en "publicar", con las dos arquitecturas en verde. En
+      # full corre igual sin subir, para probar el paso antes de llegar a main.
+      - name: Subir full por digest (sin tag)
+        id: subir
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          platforms: linux/${{ matrix.arq }}
+          provenance: false
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ env.PUBLICA == 'si' }}
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:full-${{ matrix.arq }}
+            type=gha,scope=base-${{ matrix.arq }}
+            type=gha,scope=ml-${{ matrix.arq }}
+
+      - name: Digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "${{ steps.subir.outputs.digest }}" | tee "$RUNNER_TEMP/digests/full-${{ matrix.arq }}"
+          grep -q '^sha256:' "$RUNNER_TEMP/digests/full-${{ matrix.arq }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-full-${{ matrix.arq }}
+          path: ${{ runner.temp }}/digests
+          retention-days: 7
+
       - name: Resumen
         if: always()
         run: |
@@ -164,3 +212,40 @@ jobs:
           name: capturas-full-${{ matrix.arq }}
           path: ${{ runner.temp }}/humo-salidas/capturas
           retention-days: 30
+
+  publicar:
+    needs: humo
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-full-*
+          path: digests
+          merge-multiple: true
+
+      - name: Tag full, amd64 + arm64
+        run: |
+          docker buildx imagetools create -t "$REPO:full" \
+            "$REPO@$(cat digests/full-amd64)" "$REPO@$(cat digests/full-arm64)"
+
+      - name: Verificar lo publicado
+        run: |
+          m=$(docker buildx imagetools inspect "$REPO:full" --format '{{json .Manifest}}')
+          {
+            echo "## Publicado"
+            echo
+            echo "| Tag | Digest | Arquitectura | Digest de la arquitectura |"
+            echo "|---|---|---|---|"
+            jq -r --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
+              | "| full | \($d) | \(.platform.os)/\(.platform.architecture) | \(.digest) |"' <<< "$m"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for a in amd64 arm64; do
+            [ "$(jq -r --arg a "$a" '.manifests[] | select(.platform.architecture == $a) | .digest' <<< "$m")" = "$(cat digests/full-$a)" ]
+          done
