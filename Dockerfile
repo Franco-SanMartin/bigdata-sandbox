@@ -20,7 +20,7 @@ ARG SQOOP_VERSION=1.4.7
 # imagen para las dos arquitecturas se bajan una sola vez y no se desarman
 # emulando el otro procesador (lo que mas tarda).
 # ===========================================================================
-FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-focal AS descargas
+FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-noble AS descargas
 ARG HADOOP_VERSION
 ARG HIVE_VERSION
 ARG TEZ_VERSION
@@ -127,11 +127,12 @@ RUN curl -fSL "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQ
         bin/configure-sqoop
 
 # ===========================================================================
-# Etapa 2: la imagen final (una por arquitectura)
+# Etapa 2: la imagen final (una por arquitectura), sobre Ubuntu 24.04 (noble)
 # JDK y no solo el runtime (JRE): Sqoop genera y compila una clase Java por
 # cada tabla que copia.
 # ===========================================================================
-FROM eclipse-temurin:8-jdk-focal
+FROM eclipse-temurin:8-jdk-noble
+ARG DEBIAN_FRONTEND=noninteractive
 
 ENV HADOOP_HOME=/opt/hadoop \
     HIVE_HOME=/opt/hive \
@@ -198,7 +199,8 @@ COPY entrypoint.sh             /opt/entrypoint.sh
 # quien baja la imagen ya armada y no tiene el repo
 COPY datos/ejemplos/           /opt/sandbox/ejemplos/
 # sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan
-RUN sed -i 's/\r$//' /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin/* /opt/sandbox/ejemplos/* \
+RUN find /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin /opt/sandbox/ejemplos -type f \
+      -exec sed -i 's/\r$//' {} + \
  && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* && mkdir -p /datos
 
 # HDFS: NameNodes 9870-9872, Secondary 9868, DataNodes 9901-9909, RPC 9000

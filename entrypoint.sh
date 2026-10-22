@@ -251,12 +251,13 @@ estado
 apagar() {
   trap - TERM INT
   log "Apagando el cluster..."
-  pkill -TERM -x mysqld || true
+  # mysqld: en MariaDB 10.5 o mas nuevo el programa se llama mariadbd
+  pkill -TERM -x 'mysqld|mariadbd' || true
   pkill -TERM -x java || true
   local _
   # Docker espera 10 s antes de matar todo
   for _ in $(seq 1 16); do
-    pgrep -x java > /dev/null || pgrep -x mysqld > /dev/null || break
+    pgrep -x 'java|mysqld|mariadbd' > /dev/null || break
     sleep 0.5
   done
   exit 0
