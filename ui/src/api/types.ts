@@ -713,6 +713,10 @@ export interface TrainRequest {
   dataset?: string;
   /** Hiperparámetros (profundidad del árbol, k de KMeans, capas de la red…) */
   params?: Record<string, number | string>;
+  /** Columna objetivo (null en clustering). Si no viene, la de targets que corresponde a task */
+  target?: string | null;
+  /** Columnas de entrada. Si no viene, las que tienen role 'entrada' en el dataset */
+  features?: string[];
 }
 
 export interface ModelRun {
@@ -742,6 +746,10 @@ export interface ModelRun {
   confusion?: { labels: string[]; matrix: number[][] };
   /** Algunas filas de prueba con lo real y lo predicho */
   predictions?: DataSample;
+  /** Con qué se entrenó: objetivo, columnas de entrada e hiperparámetros (eco de TrainRequest con los valores por defecto aplicados) */
+  target?: string | null;
+  features?: string[];
+  params?: Record<string, number | string>;
   trace?: ActionTrace;
   error?: string;
 }

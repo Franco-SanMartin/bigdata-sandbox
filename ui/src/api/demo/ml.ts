@@ -15,6 +15,40 @@ export const MODEL_LABEL: Record<string, string> = {
 };
 const TASK_LABEL: Record<MlTask, string> = { regresion: 'regresión', clasificacion: 'clasificación', clustering: 'agrupamiento (clustering)' };
 const METRIC: Record<MlTask, string> = { regresion: 'r2', clasificacion: 'aciertos', clustering: 'rand_ajustado' };
+const TARGET: Record<MlTask, string | null> = { regresion: 'gasto_mes_siguiente', clasificacion: 'vuelve', clustering: null };
+const FEATURES = ['antiguedad_meses', 'visitas_mes', 'ticket_promedio', 'reclamos', 'edad'];
+/** Hiperparámetros de modelos_sklearn.py */
+export const DEFAULT_PARAMS: Record<string, Record<string, number | string>> = {
+  lineal: {}, tonto: { strategy: 'most_frequent' }, arbol: { max_depth: 3 }, logistica: { C: 1 },
+  mlp: { hidden_layer_sizes: '16,8', max_iter: 500 }, kmeans: { n_clusters: 3, n_init: 10 },
+};
+
+/* Matriz de confusión con 4.000 filas de prueba (1.708 no vuelven, 2.292 vuelven), coherente con los aciertos medidos */
+const CONFUSION: Record<string, number[][]> = {
+  'sklearn:tonto': [[0, 1708], [0, 2292]], 'sklearn:arbol': [[1528, 180], [184, 2108]], 'sklearn:logistica': [[1310, 398], [334, 1958]], 'sklearn:mlp': [[1522, 186], [190, 2102]],
+  'mllib:arbol': [[1526, 182], [186, 2106]], 'mllib:logistica': [[1308, 400], [336, 1956]], 'mllib:mlp': [[1518, 190], [198, 2094]],
+};
+const col = (r: (string | number | null)[], name: string) => Number(r[CLIENTES_COLS.indexOf(name)]);
+/** Lo que predice cada modelo sobre las primeras filas, con lo que aprendió (coeficientes, reglas del árbol, grupos) */
+function predictions(model: string): ModelRun['predictions'] {
+  const rows = CLIENTES_HEAD;
+  const note = 'Primeras filas del archivo, predichas con lo aprendido';
+  if (model === 'lineal') return { columns: ['visitas_mes', 'ticket_promedio', 'reclamos', 'real', 'predicho', 'diferencia'], note, rows: rows.map(r => {
+    const p = Math.round(4972.4 + 50.24 * col(r, 'antiguedad_meses') + 1507.16 * col(r, 'visitas_mes') + .8 * col(r, 'ticket_promedio') - 1503.02 * col(r, 'reclamos') + .16 * col(r, 'edad'));
+    const real = col(r, 'gasto_mes_siguiente');
+    return [col(r, 'visitas_mes'), col(r, 'ticket_promedio'), col(r, 'reclamos'), real, p, p - real];
+  }) };
+  if (model === 'arbol' || model === 'tonto') return { columns: ['antiguedad_meses', 'visitas_mes', 'reclamos', 'real', 'predicho'], note, rows: rows.map(r => {
+    const p = model === 'tonto' || col(r, 'antiguedad_meses') > 35.5 || (col(r, 'visitas_mes') > 3.5 && col(r, 'reclamos') <= 1.5) ? 1 : 0;
+    return [col(r, 'antiguedad_meses'), col(r, 'visitas_mes'), col(r, 'reclamos'), col(r, 'vuelve'), p];
+  }) };
+  if (model === 'kmeans') {
+    const g: Record<string, number> = { mayorista: 0, ocasional: 1, frecuente: 2 };
+    const seg = (r: (string | number | null)[]) => String(r[CLIENTES_COLS.indexOf('segmento_real')]);
+    return { columns: ['visitas_mes', 'ticket_promedio', 'segmento_real', 'grupo'], note: 'Primeras filas del archivo con el grupo que les tocó', rows: rows.map(r => [col(r, 'visitas_mes'), col(r, 'ticket_promedio'), seg(r), g[seg(r)]]) };
+  }
+  return undefined;
+}
 
 export class DemoMl {
   runs: ModelRun[] = [];
@@ -86,6 +120,14 @@ export class DemoMl {
     if (this.e.applied?.services !== 'todo') fail('unsupported', 'Machine Learning necesita los servicios completos (Spark y Python)');
     if (req.engine === 'mllib') { needProc(this.e, 'rm', 'YARN'); needHdfs(this.e); }
     if (this.runs.some(r => r.state === 'running')) fail('busy', 'Ya hay un entrenamiento corriendo');
+    const target = req.target === undefined ? TARGET[req.task] : req.target;
+    if (target !== TARGET[req.task]) fail('invalid', req.task === 'clustering' ? 'Clustering no usa columna objetivo' : `Para ${TASK_LABEL[req.task]} el objetivo es ${TARGET[req.task]}`);
+    const features = req.features ?? FEATURES;
+    if (!features.length) fail('invalid', 'Elegí al menos una columna de entrada');
+    const bad = features.find(f => !FEATURES.includes(f));
+    if (bad) fail('invalid', `${bad} no se puede usar como entrada`);
+    const params = { ...DEFAULT_PARAMS[req.model], ...req.params };
+    const sameAsMeasured = req.trainPct === 80 && features.length === FEATURES.length && Object.entries(params).every(([k, v]) => String(DEFAULT_PARAMS[req.model][k]) === String(v));
 
     const res = table[key];
     const trainRows = Math.round(ROWS * req.trainPct / 100);
@@ -94,7 +136,7 @@ export class DemoMl {
     const command = sk ? `python3 ejemplos/ml/modelos_sklearn.py   # ${MODEL_LABEL[req.model]}` : `spark-submit ejemplos/ml/modelos_spark.py   # ${MODEL_LABEL[req.model]}`;
     const r: ModelRun = {
       id, task: req.task, model: req.model, engine: req.engine, dataset: 'senal', state: 'running', startedAt: this.e.now(), progress: 0,
-      message: sk ? 'Leyendo clientes_senal.csv' : 'Pidiendo contenedores a YARN', trainRows, testRows: ROWS - trainRows, metrics: {}, reference: !sk,
+      message: sk ? 'Leyendo clientes_senal.csv' : 'Pidiendo contenedores a YARN', trainRows, testRows: ROWS - trainRows, metrics: {}, reference: !sk || !sameAsMeasured, target, features, params,
       trace: trace(command, `clientes_senal.csv · ${n(ROWS)} filas · ${n(trainRows)} para entrenar y ${n(ROWS - trainRows)} para probar`,
         `${MODEL_LABEL[req.model]} (${TASK_LABEL[req.task]}) con ${sk ? 'scikit-learn, en una sola máquina' : 'Spark MLlib, repartido en executors de YARN'}`,
         'Todavía entrenando', { engine: sk ? 'uno' : 'spark', before: { columns: CLIENTES_COLS, rows: CLIENTES_HEAD, total: ROWS, format: 'csv' } }),
@@ -105,10 +147,13 @@ export class DemoMl {
     const finish = () => {
       r.state = 'done'; r.progress = 1; r.finishedAt = this.e.now();
       r.metrics = { ...res.metrics }; r.seconds = res.seconds; r.memoryMb = res.memoryMb; r.learned = res.learned;
+      const cm = CONFUSION[`${req.engine}:${req.model}`];
+      if (cm) { const k = r.testRows / 4000; r.confusion = { labels: ['no vuelve', 'vuelve'], matrix: cm.map(row => row.map(v => Math.round(v * k))) }; }
+      r.predictions = predictions(req.model);
       const m = METRIC[req.task];
-      r.message = `${m} = ${String(res.metrics[m]).replace('.', ',')}${req.trainPct !== 80 ? ' (medido con 80/20)' : ''}`;
-      r.trace = { ...r.trace!, output: `${r.message} · ${res.seconds} s · ${n(res.memoryMb!)} MB${sk ? '' : ' · valores de referencia'}`,
-        after: { columns: ['métrica', 'valor'], rows: Object.entries(res.metrics).map(([k, v]) => [k, v]), note: sk ? 'Medido con modelos_sklearn.py (16.000 filas para entrenar y 4.000 para probar)' : 'Valores de referencia: medilos con modelos_spark.py en el sandbox' } };
+      r.message = `${m} = ${String(res.metrics[m]).replace('.', ',')}${sameAsMeasured ? '' : ' (medido con 80/20, todas las columnas y los parámetros por defecto)'}`;
+      r.trace = { ...r.trace!, output: `${r.message} · ${res.seconds} s · ${n(res.memoryMb!)} MB${r.reference ? ' · valores de referencia' : ''}`,
+        after: { columns: ['métrica', 'valor'], rows: Object.entries(res.metrics).map(([k, v]) => [k, v]), note: !r.reference ? 'Medido con modelos_sklearn.py (16.000 filas para entrenar y 4.000 para probar)' : sk ? 'Valores de referencia: medidos con 80/20, todas las columnas y los parámetros por defecto' : 'Valores de referencia: medilos con modelos_spark.py en el sandbox' } };
       this.e.act(sk ? 'scikit-learn' : 'Spark MLlib', 'ok', `${MODEL_LABEL[req.model]}: ${r.message}`, { output: r.trace.output, appId: r.appId });
       this.emit(r); onEnd?.(r);
     };

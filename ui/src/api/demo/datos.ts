@@ -104,12 +104,32 @@ export class DemoData {
     const one = text.trim().replace(/\s+/g, ' ');
     return source === 'hive' ? `beeline -u jdbc:hive2://localhost:10000 -e "${one}"` : source === 'mysql' ? `mysql tienda -e "${one}"` : `mongosh --quiet tienda --eval '${one}'`;
   }
+  /** Lo que contesta el motor si la consulta no compila o la tabla no existe (la última línea de su salida) */
+  private check(source: DataSource, text: string) {
+    const t = text.trim();
+    const first = t.split(/\s+/)[0];
+    if (source === 'mongodb') {
+      if (!/^(db\.|show\s)/.test(t)) fail('failed', `SyntaxError: Unexpected token (1:${first.length}) · mongosh espera db.<colección>.find(…) o db.<colección>.aggregate([…])`);
+      return;
+    }
+    if (!/^(select|with|show|describe|desc|explain|insert|create|drop|use)$/i.test(first)) {
+      fail('failed', source === 'hive' ? `Error: Error while compiling statement: FAILED: ParseException line 1:0 cannot recognize input near '${first}' '${t.split(/\s+/)[1] ?? '<EOF>'}'`
+        : `ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '${t.slice(0, 30)}' at line 1`);
+    }
+    const known = this.catalog().filter(c => c.source === source).map(c => c.name.split('.')[1]);
+    for (const m of t.matchAll(/\b(?:from|join)\s+(\w+)(?:\.(\w+))?/gi)) {
+      const tab = (m[2] ?? m[1]).toLowerCase();
+      if (!known.includes(tab)) fail('failed', source === 'hive' ? `Error: Error while compiling statement: FAILED: SemanticException [Error 10001]: Line 1:${m.index} Table not found '${tab}'` : `ERROR 1146 (42S02): Table 'tienda.${tab}' doesn't exist`);
+    }
+  }
+
   /** Hive lanza un trabajo Tez si hay que agrupar, unir u ordenar; un SELECT con LIMIT lo resuelve solo (fetch task) */
   private needsJob(text: string) { return /group by|join|order by|count\(|sum\(|insert/i.test(text); }
 
   query(source: DataSource, text: string): Promise<QueryResult> {
     if (!text.trim()) fail('invalid', 'La consulta está vacía');
     needProc(this.e, ...PROC[source]);
+    this.check(source, text);
     const t0 = this.e.now();
     const r = this.resolve(source, text);
     const command = this.command(source, text);
@@ -142,6 +162,7 @@ export class DemoData {
   explain(source: DataSource, text: string): QueryPlan {
     if (!text.trim()) fail('invalid', 'La consulta está vacía');
     needProc(this.e, ...PROC[source]);
+    this.check(source, text);
     const q = text.toLowerCase().replace(/\s+/g, ' ');
     const table = /from (\w+)/.exec(q)?.[1] || /db\.(\w+)/.exec(q)?.[1] || '?';
     if (source === 'hive') {
