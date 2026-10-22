@@ -523,6 +523,9 @@ export interface ToolOption {
   default: string | number | boolean;
   choices?: { value: string; label: string }[];
   help?: string;
+  /** Solo kind number: límites del valor */
+  min?: number;
+  max?: number;
 }
 
 /** Una herramienta que se puede elegir en una etapa, con cuándo conviene */
@@ -552,6 +555,10 @@ export interface PipelineStageInfo {
   description: string;
   /** Qué tiene que existir antes (lo deja la etapa anterior) */
   needs: string;
+  /** El dato que entra a esta etapa, en una línea (ventas_sucias.csv en HDFS) */
+  input?: string;
+  /** El dato que deja para la siguiente, en una línea (ventas_limpias, Parquet) */
+  output?: string;
   tools: PipelineTool[];
 }
 
