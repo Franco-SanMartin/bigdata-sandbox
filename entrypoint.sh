@@ -157,7 +157,7 @@ mysql_cortado() {
       "\n    1. docker rm -f <contenedor>          (el volumen queda)" \
       "\n    2. el mismo docker run de siempre (mismo -v ...:/hadoop), pero con la imagen" \
       "\n       franki678/bigdata-sandbox@sha256:ec227d9e0559b4294a708a73a91f0e2218871ab0c2ffc3a4f77f347c10f67ce1" \
-      "\n    3. cuando diga 'Cluster LISTO': docker stop -t 20 <contenedor>" \
+      "\n    3. cuando termine de arrancar (el cartel del final): docker stop -t 20 <contenedor>" \
       "\n    4. docker rm <contenedor> y volver a crearlo con esta imagen: MySQL se" \
       "\n       pone al dia solo." \
       "\n  Mientras tanto, todo lo demas (HDFS, YARN, Hive, Spark) anda; Sqoop no."

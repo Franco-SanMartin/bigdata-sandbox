@@ -43,7 +43,7 @@ prender() { # crea el contenedor con el volumen de prueba; args = -e ...
 listo() { # espera el "Cluster LISTO" numero $1 en el log (1 por arranque)
   local n=$1 i
   for i in $(seq 1 150); do
-    [ "$(docker logs "$C" 2>&1 | grep -c 'Cluster LISTO')" -ge "$n" ] && return 0
+    [ "$(docker logs "$C" 2>&1 | grep -cx ' *Cluster LISTO')" -ge "$n" ] && return 0
     [ "$(docker inspect -f '{{.State.Running}}' "$C")" = true ] || falla "el contenedor se apago solo"
     sleep 4
   done
