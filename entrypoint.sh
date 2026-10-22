@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Arranca TODOS los daemons del cluster dentro de este contenedor, con la
 # arquitectura pedida en el docker run (DATANODES, NAMENODES, REPLICATION,
-# BLOCK_SIZE) y los servicios pedidos (SERVICIOS), y mantiene el proceso vivo
-# tail-eando logs.
+# BLOCK_SIZE) y los servicios pedidos (SERVICIOS, MONGODB, JUPYTER), y mantiene
+# el proceso vivo tail-eando logs.
 set -e
 . /opt/sandbox/lib.sh
 
@@ -27,6 +27,8 @@ entre "$REPLICATION" 1 9      || error "REPLICATION=$REPLICATION: tiene que ser 
   || error "BLOCK_SIZE=$BLOCK_SIZE: numero + m o g (ej. 1m, 32m, 128m, 1g). Minimo 1m"
 [[ "$SERVICIOS" =~ ^(hdfs|mapreduce|todo)$ ]] \
   || error "SERVICIOS=$SERVICIOS: tiene que ser hdfs, mapreduce o todo"
+[[ "$MONGODB" =~ ^(si|no)$ ]] || error "MONGODB=$MONGODB: tiene que ser si o no"
+[[ "$JUPYTER" =~ ^(si|no)$ ]] || error "JUPYTER=$JUPYTER: tiene que ser si o no"
 
 # La cantidad de NameNodes se graba en el volumen la primera vez
 if [ ! -f "$NN_FILE" ]; then
@@ -185,6 +187,36 @@ if con_yarn; then
 fi
 
 # ---------------------------------------------------------------------------
+# 3c) MongoDB con la base de ejemplo "tienda" (MONGODB=si). No depende de
+#     Hadoop: anda con cualquier SERVICIOS. Vive en el volumen.
+# ---------------------------------------------------------------------------
+mongodb_start() {
+  # MongoDB 5 o mas nuevo necesita un procesador con AVX (en Intel/AMD): sin
+  # eso, mongod se cae apenas arranca ("Illegal instruction")
+  if [ "$(uname -m)" = x86_64 ] && ! grep -qw avx /proc/cpuinfo; then
+    log "AVISO: este procesador no tiene AVX, y MongoDB lo necesita."
+    return 1
+  fi
+  # mongod corre como el usuario 'mongodb' (no como root): sus carpetas son de el
+  mkdir -p /hadoop/mongodb /var/log/mongodb
+  chown -R mongodb:mongodb /hadoop/mongodb /var/log/mongodb
+  log "Arrancando MongoDB..."
+  runuser -u mongodb -- mongod --config /etc/mongod.conf > /dev/null 2>&1 &
+  esperar_puerto "$MONGODB_PORT" 60 || return 1
+  # La primera vez (o si un primer arranque se corto a la mitad: el script
+  # borra lo que haya y carga todo de cero)
+  if [ ! -f /hadoop/mongodb/.sandbox-listo ]; then
+    log "Primer arranque: cargando la base de ejemplo 'tienda' en MongoDB (20.000 pedidos)..."
+    mongosh --quiet /opt/sandbox/ejemplos/tienda_mongo.js > /tmp/mongo-carga.log 2>&1 \
+      || { cat /tmp/mongo-carga.log; return 1; }
+    touch /hadoop/mongodb/.sandbox-listo
+  fi
+}
+if con_mongodb; then
+  mongodb_start || log "AVISO: MongoDB no levanto. Revisar /var/log/mongodb/mongod.log"
+fi
+
+# ---------------------------------------------------------------------------
 # 4) Hive + Spark (SERVICIOS=todo)
 # ---------------------------------------------------------------------------
 if con_hive_spark; then
@@ -236,6 +268,18 @@ z.close()' "${SPARK_HOME}/jars" /tmp/spark-libs.jar
   esperar_puerto 10000 180 || log "HiveServer2 no levanto: revisar ${HIVE_HOME}/hiveserver2.log"
 fi
 
+# ---------------------------------------------------------------------------
+# 4b) JupyterLab: notebooks de Python en el navegador (solo en la version ml
+#     de la imagen; JUPYTER=si por defecto). Configuracion en /etc/jupyter.
+# ---------------------------------------------------------------------------
+if con_jupyter; then
+  log "Arrancando JupyterLab..."
+  jupyter lab > /var/log/jupyter.log 2>&1 &
+  esperar_puerto "$JUPYTER_PORT" 60 || log "AVISO: JupyterLab no levanto: revisar /var/log/jupyter.log"
+elif [ "$JUPYTER" = si ] && [ -n "${JUPYTER_PEDIDO:-}" ]; then
+  log "AVISO: JUPYTER=si, pero esta version de la imagen ($SANDBOX_VERSION) no trae JupyterLab: viene en la version ml"
+fi
+
 echo
 echo "  ============================================================"
 echo "   Cluster LISTO"
@@ -252,12 +296,12 @@ apagar() {
   trap - TERM INT
   log "Apagando el cluster..."
   # mysqld: en MariaDB 10.5 o mas nuevo el programa se llama mariadbd
-  pkill -TERM -x 'mysqld|mariadbd' || true
+  pkill -TERM -x 'mysqld|mariadbd|mongod' || true
   pkill -TERM -x java || true
   local _
   # Docker espera 10 s antes de matar todo
   for _ in $(seq 1 16); do
-    pgrep -x 'java|mysqld|mariadbd' > /dev/null || break
+    pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || break
     sleep 0.5
   done
   exit 0

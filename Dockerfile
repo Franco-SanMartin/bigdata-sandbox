@@ -1,9 +1,17 @@
 # BigData sandbox: HDFS + YARN + MapReduce + Pig + Hive (sobre Tez) + Spark +
-# Sqoop (con una base MySQL de ejemplo), todo en UNA imagen / UN contenedor, pero con cada daemon como proceso
-# separado y su UI web navegable. La arquitectura de HDFS (DataNodes,
-# NameNodes, replicacion, tamano de bloque) se elige en el docker run.
+# Sqoop (con una base MySQL de ejemplo) + MongoDB, todo en UNA imagen / UN
+# contenedor, pero con cada daemon como proceso separado y su UI web
+# navegable. La arquitectura de HDFS (DataNodes, NameNodes, replicacion,
+# tamano de bloque) se elige en el docker run.
 # Buildea desde los tarballs oficiales de Apache sobre base Java -> corre en
 # amd64 y ARM64.
+#
+# Versiones de la imagen (cada una es un --target):
+#   base   el stack de Hadoop + MySQL + MongoDB
+#            docker build --target base -t franki678/bigdata-sandbox:base .
+#   ml     base + pandas, scikit-learn, Spark MLlib y JupyterLab
+#            docker build --target ml -t franki678/bigdata-sandbox:ml .
+# Sin --target se arma la base.
 
 ARG HADOOP_VERSION=3.3.6
 ARG HIVE_VERSION=4.0.0
@@ -12,6 +20,7 @@ ARG SPARK_VERSION=3.5.9
 ARG ZOOKEEPER_VERSION=3.8.7
 ARG PIG_VERSION=0.18.0
 ARG SQOOP_VERSION=1.4.7
+ARG MONGODB_VERSION=8.0
 
 # ===========================================================================
 # Etapa 1: bajar y desarmar los paquetes de Apache.
@@ -127,14 +136,17 @@ RUN curl -fSL "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQ
         bin/configure-sqoop
 
 # ===========================================================================
-# Etapa 2: la imagen final (una por arquitectura), sobre Ubuntu 24.04 (noble)
+# Version "base" (franki678/bigdata-sandbox:base): todo el stack de Hadoop,
+# MySQL para Sqoop y MongoDB. Una imagen por arquitectura, sobre Ubuntu 24.04.
 # JDK y no solo el runtime (JRE): Sqoop genera y compila una clase Java por
 # cada tabla que copia.
 # ===========================================================================
-FROM eclipse-temurin:8-jdk-noble
+FROM eclipse-temurin:8-jdk-noble AS base
 ARG DEBIAN_FRONTEND=noninteractive
+ARG MONGODB_VERSION
 
-ENV HADOOP_HOME=/opt/hadoop \
+ENV SANDBOX_VERSION=base \
+    HADOOP_HOME=/opt/hadoop \
     HIVE_HOME=/opt/hive \
     TEZ_HOME=/opt/tez \
     SPARK_HOME=/opt/spark \
@@ -173,6 +185,18 @@ RUN apt-get update \
       mariadb-server \
  && rm -rf /var/lib/apt/lists/* /var/lib/mysql/*
 
+# MongoDB (se prende con MONGODB=si): el servidor (mongod) y la consola
+# (mongosh), del repositorio oficial de MongoDB porque Ubuntu no lo trae. Se
+# saca la libreria de cifrado de mongosh (95 MB, para cifrar campos del lado
+# del cliente, que aca no se usa). Su base vacia se crea en el volumen
+# (/hadoop/mongodb) al arrancar por primera vez.
+RUN curl -fsSL "https://pgp.mongodb.com/server-${MONGODB_VERSION}.asc" -o /usr/share/keyrings/mongodb.asc \
+ && echo "deb [signed-by=/usr/share/keyrings/mongodb.asc] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/${MONGODB_VERSION} multiverse" \
+      > /etc/apt/sources.list.d/mongodb-org.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends mongodb-org-server mongodb-mongosh \
+ && rm -rf /var/lib/apt/lists/* /var/lib/mongodb/* /usr/lib/mongosh_crypt_v1.so
+
 COPY --from=descargas /opt/hadoop    ${HADOOP_HOME}
 COPY --from=descargas /opt/hive      ${HIVE_HOME}
 COPY --from=descargas /opt/tez       ${TEZ_HOME}
@@ -193,13 +217,17 @@ COPY conf/hive-site.xml        ${HIVE_CONF_DIR}/hive-site.xml
 COPY conf/spark-hive-site.xml  ${SPARK_HOME}/conf/hive-site.xml
 COPY conf/zoo.cfg              ${ZK_HOME}/conf/zoo.cfg
 COPY conf/mysql.cnf            /etc/mysql/mariadb.conf.d/99-sandbox.cnf
+COPY conf/mongod.conf          /etc/mongod.conf
+COPY conf/mongosh.conf         /etc/mongosh.conf
 COPY sandbox/                  /opt/sandbox/
 COPY entrypoint.sh             /opt/entrypoint.sh
 # Ejemplos (datasets y scripts): se copian a /datos/ejemplos al arrancar, para
-# quien baja la imagen ya armada y no tiene el repo
+# quien baja la imagen ya armada y no tiene el repo. Los de ejemplos/ml
+# necesitan las librerias de la version ml: van recien ahi.
 COPY datos/ejemplos/           /opt/sandbox/ejemplos/
 # sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan
-RUN find /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin /opt/sandbox/ejemplos -type f \
+RUN rm -rf /opt/sandbox/ejemplos/ml \
+ && find /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin /opt/sandbox/ejemplos -type f \
       -exec sed -i 's/\r$//' {} + \
  && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* && mkdir -p /datos
 
@@ -207,12 +235,61 @@ RUN find /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin /opt/sandbox/ej
 #       JournalNodes 8480-8482 (solo HA)
 # YARN: RM 8088, NM 8042 | MR JobHistory 19888
 # Hive: Metastore 9083, HiveServer2 JDBC 10000 y UI 10002 | Spark: 18080, 4040
-# MySQL (base de ejemplo para Sqoop): 3306
-EXPOSE 9870-9872 9868 9901-9909 9000 8480-8482 8088 8042 19888 9083 10000 10002 18080 4040 3306
+# MySQL (base de ejemplo para Sqoop): 3306 | MongoDB: 27017
+EXPOSE 9870-9872 9868 9901-9909 9000 8480-8482 8088 8042 19888 9083 10000 10002 18080 4040 3306 27017
 
-# /hadoop: datos de HDFS + metastore + base MySQL (persisten entre reinicios)
+# /hadoop: datos de HDFS + metastore + bases MySQL y MongoDB (persisten entre reinicios)
 # /datos:  carpeta para compartir archivos con la compu (CSV, scripts, etc.)
 VOLUME ["/hadoop"]
 WORKDIR /datos
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/entrypoint.sh"]
+
+# ===========================================================================
+# Version "ml" (franki678/bigdata-sandbox:ml): la base + Python para datos:
+# pandas y numpy para ETL, scikit-learn y Spark MLlib para modelos, graficos
+# con matplotlib, pymongo para MongoDB y JupyterLab (notebooks en :8888).
+# ===========================================================================
+FROM base AS ml
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3-pip \
+ && rm -rf /var/lib/apt/lists/*
+
+# Las librerias, con versiones fijas (conf/requirements-ml.txt dice por que
+# cada una). Ubuntu no deja instalar con pip "encima" de su Python
+# (--break-system-packages): en un contenedor que es solo para esto, no hay
+# nada que romper. Se sacan los tests de cada libreria (~150 MB que solo
+# sirven para desarrollarlas) y los archivos para compilar extensiones de pyarrow.
+COPY conf/requirements-ml.txt /opt/sandbox/requirements-ml.txt
+RUN pip install --no-cache-dir --break-system-packages -r /opt/sandbox/requirements-ml.txt \
+ && cd /usr/local/lib/python3.12/dist-packages \
+ && find numpy pandas pyarrow scipy sklearn matplotlib -depth -type d \( -name tests -o -name test \) \
+      -exec rm -rf {} + \
+ && rm -rf pyarrow/include pyarrow/src \
+ && find pyarrow -name '*.pyx' -o -name '*.pxd' -o -name '*.h' | xargs rm -f
+
+# PYTHONPATH: que "import pyspark" ande en cualquier python3 (JupyterLab, un
+# script suelto), no solo con spark-submit o pyspark.
+# PIP_BREAK_SYSTEM_PACKAGES: que "pip install <libreria>" ande adentro sin
+# tener que agregar la opcion.
+ENV SANDBOX_VERSION=ml \
+    PYTHONPATH=/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+# JupyterLab sin contrasena y sin el cartel de noticias de Jupyter. El primer
+# import de matplotlib arma la lista de fuentes (tarda): se hace ahora.
+COPY conf/jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
+RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements" \
+ && python3 -c "import pyspark, py4j, numpy, pandas, pyarrow, sklearn, pymongo, matplotlib.pyplot"
+
+COPY datos/ejemplos/ml/ /opt/sandbox/ejemplos/ml/
+RUN find /opt/sandbox/ejemplos/ml -type f -exec sed -i 's/\r$//' {} +
+
+EXPOSE 8888
+
+# ===========================================================================
+# Sin --target, "docker build ." arma la version base
+# ===========================================================================
+FROM base

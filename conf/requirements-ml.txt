@@ -1,0 +1,33 @@
+# Librerias de Python de la version ml de la imagen (Dockerfile, target ml).
+# Versiones fijas: la imagen se arma igual hoy y dentro de un año, y todos los
+# alumnos tienen exactamente lo mismo. Para actualizarlas, cambiar el numero
+# y correr las pruebas (pruebas/probar_ml.sh).
+#
+# Peso instalado aproximado (sin los tests de cada libreria), ~800 MB en total:
+
+# numpy: arrays y calculo numerico. La ultima 1.x a proposito: Spark 3.5
+# (PySpark y MLlib) no anda con numpy 2.  ~75 MB
+numpy==1.26.4
+
+# pandas: tablas (DataFrames) en memoria, para el ETL. Antes de la 3.0, que
+# cambia cosas que Spark 3.5 usa al pasar datos entre Spark y pandas.  ~60 MB
+pandas==2.3.3
+
+# pyarrow: formato Parquet y pasaje rapido de datos entre Spark y pandas
+# (toPandas). La 25 es la ultima que anda con numpy 1.x (la 26 pide numpy 2).
+# ~140 MB, la mas pesada
+pyarrow==25.0.0
+
+# scikit-learn: modelos de machine learning (trae scipy, ~140 MB).  ~45 MB
+scikit-learn==1.9.1
+scipy==1.17.1
+
+# matplotlib: graficos.  ~80 MB con sus fuentes y pillow
+matplotlib==3.11.2
+
+# pymongo: conectarse a MongoDB desde Python.  ~10 MB
+pymongo==4.19.0
+
+# JupyterLab: notebooks en el navegador (trae ipykernel, el servidor y ~70
+# librerias chicas).  ~190 MB
+jupyterlab==4.6.4

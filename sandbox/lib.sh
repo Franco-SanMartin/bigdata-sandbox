@@ -15,6 +15,14 @@ NAMENODES_PEDIDO=${NAMENODES:-1}
 NAMENODES=$(cat "$NN_FILE" 2>/dev/null || echo "$NAMENODES_PEDIDO")
 # Que se prende ademas de HDFS: hdfs (nada), mapreduce (YARN + MapReduce) o todo
 SERVICIOS=${SERVICIOS:-todo}
+# Servicios aparte de Hadoop, que se prenden o no con cualquier SERVICIOS: si o
+# no (tambien vale "sí" o "SI"). JupyterLab viene solo en la version ml de la
+# imagen: en las demas no hay nada que prender.
+MONGODB=${MONGODB:-no};  MONGODB=${MONGODB,,};  MONGODB=${MONGODB//í/i}
+JUPYTER_PEDIDO=${JUPYTER:-}   # para avisar si se pidio en una version sin Jupyter
+JUPYTER=${JUPYTER:-si};  JUPYTER=${JUPYTER,,};  JUPYTER=${JUPYTER//í/i}
+# Version de la imagen (base, ml...): la graba el Dockerfile
+SANDBOX_VERSION=${SANDBOX_VERSION:-base}
 
 export HADOOP_CLASSPATH="${TEZ_HOME}/*:${TEZ_HOME}/lib/*:${HADOOP_CLASSPATH}"
 # Muchos procesos Java conviven en el mismo contenedor: a cada daemon un tope
@@ -38,6 +46,9 @@ export HDFS_NAMENODE_OPTS="-Xmx384m $JVM_LIVIANA" \
 ha() { [ "$NAMENODES" -gt 1 ]; }
 con_yarn() { [ "$SERVICIOS" != hdfs ]; }
 con_hive_spark() { [ "$SERVICIOS" = todo ]; }
+con_mongodb() { [ "$MONGODB" = si ]; }
+hay_jupyter() { command -v jupyter-lab > /dev/null; }
+con_jupyter() { [ "$JUPYTER" = si ] && hay_jupyter; }
 fs_uri() { if ha; then echo hdfs://sandbox; else echo hdfs://localhost:9000; fi; }
 
 # Puertos de cada instancia (N = numero de nodo)
@@ -51,6 +62,8 @@ jn_http()   { echo $((8479 + $1)); }   # JournalNode UI: 8480, 8481, 8482
 zkfc_port() { echo $((8018 + $1)); }   # ZKFC:         8019, 8020, 8021
 SNN_HTTP=9868
 ZK_PORT=2181
+MONGODB_PORT=27017
+JUPYTER_PORT=8888
 
 # --- Generacion de configuracion ---------------------------------------------
 

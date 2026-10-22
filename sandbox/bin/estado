@@ -87,5 +87,22 @@ elif con_yarn; then
   echo "  ${GRIS}Hive y Spark: apagados (SERVICIOS=mapreduce)${FIN}"
 fi
 echo
-echo "  ${GRIS}Comandos: estado | datanode [stop|start N] | namenode [stop|start N]${FIN}"
+if con_mongodb; then
+  echo "  ${NEGRITA}MongoDB${FIN}"
+  fila "MongoDB (base tienda)" "$MONGODB_PORT" "mongodb://localhost:$MONGODB_PORT" "${GRIS}consola: mongosh tienda${FIN}"
+else
+  echo "  ${GRIS}MongoDB: apagado (se prende con -e MONGODB=si)${FIN}"
+fi
+if hay_jupyter; then
+  echo
+  echo "  ${NEGRITA}Python para datos${FIN}"
+  if con_jupyter; then
+    fila "JupyterLab" "$JUPYTER_PORT" "http://localhost:$JUPYTER_PORT" "${GRIS}notebooks en /datos${FIN}"
+  else
+    echo "  ${GRIS}JupyterLab: apagado (JUPYTER=no)${FIN}"
+  fi
+  printf '   %-22s %-29s %s\n' "pandas, scikit-learn" "comando: python3" "${GRIS}(ejemplos en /datos/ejemplos/ml)${FIN}"
+fi
+echo
+echo "  ${GRIS}Version de la imagen: $SANDBOX_VERSION | Comandos: estado | datanode [stop|start N] | namenode [stop|start N]${FIN}"
 echo
