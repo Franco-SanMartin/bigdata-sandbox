@@ -28,7 +28,7 @@ function layers(vs: DagVertex[], es: DagEdge[]): DagVertex[][] {
   return out.filter(Boolean);
 }
 
-function Dag({ app }: { app: YarnAppDetail }) {
+function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
   const cols = layers(app.dag.vertices, app.dag.edges);
   const stage = (id: string): YarnStage | undefined => app.stages.find(s => s.id === id);
   if (!app.dag.vertices.length) return <p className="muted">Todavía no hay etapas: el trabajo espera su ApplicationMaster.</p>;
@@ -38,7 +38,7 @@ function Dag({ app }: { app: YarnAppDetail }) {
         const into = i ? app.dag.edges.find(e => col.some(v => v.id === e.to)) : undefined;
         return (
           <div key={i} className="dag-step">
-            {into && <div className="dag-edge" aria-hidden="true"><span className="mono">{into.kind}</span><ArrowRight size={14} /></div>}
+            {into && <div className="dag-edge" aria-hidden="true" title={into.kind}><ArrowRight size={14} /><span className="mono">{into.kind.replace('_', ' ')}</span></div>}
             <div className="dag-col">
               {col.map(v => {
                 const tasks = stage(v.id)?.tasks ?? [];
@@ -60,7 +60,7 @@ function Dag({ app }: { app: YarnAppDetail }) {
                       {v.recordsOut != null && <span>salen {nf(v.recordsOut)}</span>}
                       {v.bytesReadMb != null && <span>lee {mbLabel(v.bytesReadMb)}</span>}
                       {v.bytesWrittenMb != null && <span>escribe {mbLabel(v.bytesWrittenMb)}</span>}
-                      {v.startedAt && <span>{duration(((v.finishedAt ?? app.finishedAt ?? Date.now()) - v.startedAt) / 1000)}</span>}
+                      {v.startedAt && <span>{duration((Math.max(0, (v.finishedAt ?? app.finishedAt ?? now) - v.startedAt)) / 1000)}</span>}
                     </div>
                   </div>
                 );
@@ -139,10 +139,12 @@ export function AppDetail({ id, res, logs, onContainer, onKill, onClose, now }: 
       <div className="panel-b">
         {res.err ? <ErrorLine err={res.err} onRetry={res.reload} /> : !a ? <Loading /> : (
           <div className="ad">
+            <div className="ops-col">
+              <div className="ops-sub-h"><h3>DAG</h3><span className="muted">{a.dag.vertices.length} {a.engine === 'tez' ? 'vértices' : a.engine === 'spark' ? 'etapas' : 'fases'}</span></div>
+              <Dag app={a} now={now} />
+            </div>
             <div className="ad-top">
               <div className="ops-col">
-                <div className="ops-sub-h"><h3>DAG</h3><span className="muted">{a.dag.vertices.length} {a.engine === 'tez' ? 'vértices' : a.engine === 'spark' ? 'etapas' : 'fases'}</span></div>
-                <Dag app={a} />
                 {a.counters.length > 0 && (
                   <div className="tbl-wrap ad-counters">
                     <table className="tbl" aria-label="Contadores">

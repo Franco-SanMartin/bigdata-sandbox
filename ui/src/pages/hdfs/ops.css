@@ -59,15 +59,16 @@
 
 /* DataNodes */
 .ops-dns { list-style: none; margin: 0; padding: 0; }
-.ops-dns li { display: grid; grid-template-columns: 10px minmax(0, 1fr) minmax(0, 1.1fr) auto auto; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-sm); min-height: 46px; }
+.ops-dns li { display: grid; grid-template-columns: 10px minmax(0, 1fr) minmax(0, 1.3fr) auto; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-sm); min-height: 46px; }
 .ops-dns li:last-child { border-bottom: 0; }
 .ops-dns li[data-s="dead"], .ops-dns li[data-s="off"] { background: var(--n-1); }
-.ops-dns li > span:nth-child(4) { white-space: nowrap; font-size: var(--fs-xs); }
 .ops-dn-n { display: flex; flex-direction: column; min-width: 0; }
 .ops-dn-n b { font-weight: 500; font-size: var(--fs-md); }
-.ops-dn-n span { font-size: var(--fs-xs); }
+.ops-dn-n span { font-size: var(--fs-xs); white-space: nowrap; }
+.ops-dn-n b { cursor: default; }
 .ops-dn-m { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ops-dn-m .meter { height: 4px; }
+.ops-dn-u { white-space: nowrap; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; }
 
 /* Re-replicación */
 .ops-repl { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }

@@ -1,6 +1,6 @@
 /* YARN: memoria por NodeManager partida en contenedores, colas, trabajos en vivo y el detalle de cada uno. */
 import { useMemo, useState } from 'react';
-import { Cpu, Loader2, Play, Search, Square } from 'lucide-react';
+import { Cpu, Loader2, Play, Search } from 'lucide-react';
 import { api } from '../../api';
 import type { ApiEvent, ExampleJob, YarnApp } from '../../api/types';
 import { EngineTag } from '../../components/Trace';
@@ -139,7 +139,7 @@ export function YarnPage() {
                               <td><span className="yr-prog"><span className="meter" data-k={APP_STATE[a.state] === 'bad' ? 'bad' : live(a) ? 'run' : 'ok'} role="meter" aria-label={`Avance de ${shortId(a.id)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(a.progress * 100)}><i style={{ width: `${a.progress * 100}%` }} /></span><span className="num">{nf(a.progress * 100)} %</span></span></td>
                               <td className="r">{a.containers.length || <span className="muted">0</span>}</td>
                               <td className="muted">{clock(a.submittedAt)}</td>
-                              <td className="r">{live(a) && <button className="btn btn-sm btn-ghost btn-icon ops-del" type="button" aria-label={`Cancelar ${shortId(a.id)}`} onClick={e => { e.stopPropagation(); kill(a); }}><Square size={12} /></button>}</td>
+                              <td className="r">{live(a) && <button className="btn btn-sm btn-ghost yr-kill" type="button" aria-label={`Cancelar ${shortId(a.id)}`} onClick={e => { e.stopPropagation(); kill(a); }}>cancelar</button>}</td>
                             </tr>
                           ))}
                         </tbody>
