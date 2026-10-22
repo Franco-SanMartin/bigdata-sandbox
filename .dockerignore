@@ -5,3 +5,6 @@ pruebas
 # datos/ no entra a la imagen, salvo los ejemplos
 datos/*
 !datos/ejemplos
+# la interfaz se compila dentro de la imagen (etapa interfaz del Dockerfile)
+ui/node_modules
+ui/dist

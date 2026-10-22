@@ -304,6 +304,16 @@ EXPOSE 8888
 # de las otras versiones. Con -e AUTOSTART=1 arranca solo, con las variables
 # de siempre (DATANODES, SERVICIOS...).
 # ===========================================================================
+# La interfaz (ui/) se compila en una etapa con Node, en el procesador de la
+# maquina que buildea (el resultado es HTML/JS/CSS, igual en amd64 y ARM64).
+# A la imagen final solo pasa ui/dist: no lleva Node.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS interfaz
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY ui/ ./
+RUN npm run build
+
 FROM ml AS full
 
 # Starlette + uvicorn: todo Python puro (el mismo wheel en amd64 y ARM64).
@@ -315,8 +325,9 @@ COPY server/sandbox_server/ /opt/sandbox/server/sandbox_server/
 RUN find /opt/sandbox/server -name '*.py' -exec sed -i 's/\r$//' {} + \
  && python3 -c "import sys; sys.path.insert(0, '/opt/sandbox/server'); import sandbox_server.app"
 
-# UI_DIR: la interfaz compilada (ui/dist). Si no esta, el servidor anda igual
-# (la API en /api) y en / avisa que falta.
+# UI_DIR: la interfaz compilada (ui/dist), que el servidor sirve en :8080.
+# Si no esta, el servidor anda igual (la API en /api) y en / avisa que falta.
+COPY --from=interfaz /ui/dist/ /opt/sandbox/ui/
 ENV SANDBOX_VERSION=full \
     PYTHONPATH=/opt/sandbox/server:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
     UI_DIR=/opt/sandbox/ui \

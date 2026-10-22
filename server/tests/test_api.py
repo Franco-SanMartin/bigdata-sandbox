@@ -111,6 +111,13 @@ def test_interfaz_estatica(client):
     assert r.status_code == 200 and "sandbox" in r.text
 
 
+def test_interfaz_spa(client):
+    r = client.get("/hdfs/algo")
+    assert r.status_code == 200 and "sandbox" in r.text
+    assert client.get("/assets/no-esta.js").status_code == 404
+    assert client.get("/api/no-esta").json()["code"] == "not_found"
+
+
 def test_sin_interfaz(settings, tmp_path):
     with TestClient(build_app(settings, ui_dir=tmp_path / "no-hay")) as c:
         assert "no encuentra la interfaz" in c.get("/").text

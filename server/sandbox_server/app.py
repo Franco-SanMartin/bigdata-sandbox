@@ -44,6 +44,19 @@ async def _config_from(request: Request) -> object:
 ACCEPTED = Response(status_code=202)
 
 
+class SpaFiles(StaticFiles):
+    """Los archivos de ui/dist. Una ruta que no es un archivo (un enlace a una
+    pantalla, una recarga) devuelve index.html y la interfaz decide qué mostrar."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as e:
+            if e.status_code != 404 or "." in path.rsplit("/", 1)[-1]:
+                raise
+            return await super().get_response("index.html", scope)
+
+
 def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None) -> Starlette:
     bus = EventBus()
     runner = ActionRunner(bus)
@@ -167,7 +180,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     if ui.is_dir():
-        api.append(Mount("/", StaticFiles(directory=ui, html=True), name="ui"))
+        api.append(Mount("/", SpaFiles(directory=ui, html=True), name="ui"))
     else:
         async def no_ui(_: Request) -> HTMLResponse:
             return HTMLResponse("<p>El servidor anda, pero no encuentra la interfaz en "
