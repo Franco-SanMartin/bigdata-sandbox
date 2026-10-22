@@ -1,6 +1,8 @@
 """YARN: ResourceManager, NodeManager, JobHistory y Spark History simulados con
-las fixtures; 'yarn' y 'spark-submit' falsos en el PATH."""
+las fixtures (salidas reales de Hadoop 3.3.6 y Spark 3.5 tomadas por el humo);
+'yarn' y 'spark-submit' falsos en el PATH."""
 import asyncio
+import json
 import os
 import time
 import urllib.parse
@@ -16,10 +18,44 @@ from sandbox_server.cluster import Cluster
 from sandbox_server.errors import ApiError
 from sandbox_server.events import EventBus
 
-MR = "application_1792041277726_0001"
-TEZ = "application_1792041277726_0002"
-SPARK = "application_1792041277726_0003"
-KILLED = "application_1792041277726_0004"
+# Las tres que mandó el humo (terminadas)
+MR = "application_1792695340081_0001"
+SPARK = "application_1792695340081_0002"
+TEZ = "application_1792695340081_0003"
+# Derivadas de la de Spark real: una corriendo, una cancelada y una esperando
+CORRIENDO = "application_1792695340081_0004"
+KILLED = "application_1792695340081_0005"
+ACEPTADA = "application_1792695340081_0006"
+NUEVA = "application_1792695340081_0009"
+NODO = "localhost:39943"
+
+
+def derivada(app_id: str, **cambios) -> dict:
+    a = json.loads(fixture_text("rm_app_spark.json"))["app"]
+    return {**a, "id": app_id, "trackingUrl": f"http://3e3807a224b1:8088/proxy/{app_id}/",
+            "amContainerLogs": f"http://localhost:8042/node/containerlogs/container_{app_id[12:]}_01_000001/root",
+            **cambios}
+
+
+def contenedores(app_id: str, n: int) -> list[dict]:
+    """Como los lista el NodeManager mientras la app corre."""
+    out = []
+    for i in range(1, n + 1):
+        cid = f"container_{app_id[12:]}_01_{i:06d}"
+        out.append({"id": cid, "state": "RUNNING", "exitCode": -1000, "diagnostics": "", "user": "root",
+                    "totalMemoryNeededMB": 1024, "totalVCoresNeeded": 1, "nodeId": NODO,
+                    "containerLogsLink": f"http://localhost:8042/node/containerlogs/{cid}/root",
+                    "containerLogFiles": ["stdout", "prelaunch.err", "stderr", "prelaunch.out"]})
+    return out
+
+
+def etapas_corriendo() -> bytes:
+    """Las etapas reales de Spark History con la última todavía en marcha."""
+    st = json.loads(fixture_text("shs_stages.json"))
+    for s in st:
+        if s["stageId"] == 12:
+            s.update(status="ACTIVE", numCompleteTasks=0, numActiveTasks=1)
+    return json.dumps(st).encode()
 
 
 class Rest:
@@ -28,7 +64,15 @@ class Rest:
     def __init__(self):
         self.calls: list[str] = []
         self.down: set[str] = set()      # 'host:puerto' que no contestan
-        apps = Y.json.loads(fixture_text("rm_apps.json"))["apps"]["app"]
+        self.nm: list[dict] = []         # real: sin apps corriendo el NodeManager no lista nada
+        apps = json.loads(fixture_text("rm_apps.json"))["apps"]["app"]
+        apps += [derivada(CORRIENDO, state="RUNNING", finalStatus="UNDEFINED", progress=10.0,
+                          startedTime=1792695500000, launchTime=1792695500500, finishedTime=0,
+                          allocatedMB=3072, runningContainers=3),
+                 derivada(KILLED, state="KILLED", finalStatus="KILLED", diagnostics="Application killed by user.",
+                          startedTime=1792695510000, launchTime=1792695510400, finishedTime=1792695515000),
+                 derivada(ACEPTADA, state="ACCEPTED", finalStatus="UNDEFINED", progress=0.0,
+                          startedTime=1792695520000, launchTime=0, finishedTime=0, allocatedMB=-1)]
         self.apps = {a["id"]: a for a in apps}
 
     def __call__(self, url, timeout=5.0, limit=None):
@@ -41,15 +85,19 @@ class Rest:
             "localhost:8088/ws/v1/cluster/metrics": "rm_metrics.json",
             "localhost:8088/ws/v1/cluster/nodes": "rm_nodes.json",
             "localhost:8088/ws/v1/cluster/scheduler": "rm_scheduler.json",
-            "localhost:8088/conf": "rm_conf.json",
-            "localhost:8042/ws/v1/node/containers": "nm_containers.json",
-            f"localhost:19888/ws/v1/history/mapreduce/jobs/job_1792041277726_0001/tasks": "jhs_tasks.json",
-            f"localhost:19888/ws/v1/history/mapreduce/jobs/job_1792041277726_0001/counters": "jhs_counters.json",
-            f"localhost:8088/proxy/{SPARK}/api/v1/applications/{SPARK}/stages": "shs_stages.json",
-            f"localhost:8088/proxy/{SPARK}/api/v1/applications/{SPARK}/jobs": "shs_jobs.json",
+            "localhost:8088/conf": "rm_conf.xml",
+            "localhost:19888/ws/v1/history/mapreduce/jobs/job_1792695340081_0001/tasks": "jhs_tasks.json",
+            "localhost:19888/ws/v1/history/mapreduce/jobs/job_1792695340081_0001/counters": "jhs_counters.json",
+            f"localhost:18080/api/v1/applications/{SPARK}/stages": "shs_stages.json",
+            f"localhost:18080/api/v1/applications/{SPARK}/jobs": "shs_jobs.json",
+            f"localhost:8088/proxy/{CORRIENDO}/api/v1/applications/{CORRIENDO}/jobs": "shs_jobs.json",
         }
         if u.netloc + p == "localhost:8088/ws/v1/cluster/apps":
-            return 200, Y.json.dumps({"apps": {"app": list(self.apps.values())}}).encode()
+            return 200, json.dumps({"apps": {"app": list(self.apps.values())}}).encode()
+        if u.netloc + p == "localhost:8042/ws/v1/node/containers":
+            return 200, json.dumps({"containers": {"container": self.nm} if self.nm else {}}).encode()
+        if u.netloc + p == f"localhost:8088/proxy/{CORRIENDO}/api/v1/applications/{CORRIENDO}/stages":
+            return 200, etapas_corriendo()
         name = files.get(u.netloc + p)
         if name:
             return 200, (FIX / name).read_bytes()
@@ -57,7 +105,7 @@ class Rest:
             a = self.apps.get(p.rsplit("/", 1)[1])
             if a is None:
                 return 404, b'{"RemoteException":{"exception":"NotFoundException"}}'
-            return 200, Y.json.dumps({"app": a}).encode()
+            return 200, json.dumps({"app": a}).encode()
         if u.netloc == "localhost:8042" and p.startswith("/ws/v1/node/containerlogs/"):
             f = p.rsplit("/", 1)[1]
             return 200, f"línea de {f} 1\nlínea de {f} 2\n".encode()
@@ -78,9 +126,9 @@ case "$*" in
   *-kill*) echo "Killing application $3"; echo "Killed application $3" ;;
 esac""",
         "spark-submit": f"""echo "spark-submit $*" >> {log}
-echo "INFO Client: Submitted application application_1792041277726_0009"
+echo "INFO Client: Submitted application {NUEVA}"
 sleep 0.2
-echo "INFO Client: Application report for application_1792041277726_0009 (state: FINISHED)" """,
+echo "INFO Client: Application report for {NUEVA} (state: FINISHED)" """,
         "hdfs": f'echo "hdfs $*" >> {log}',
     }
     for name, body in scripts.items():
@@ -120,30 +168,44 @@ def test_formatos():
     assert Y.app_state({"state": "FINISHED", "finalStatus": "KILLED"}) == "KILLED"
     assert Y.app_state({"state": "FINISHED", "finalStatus": "FAILED"}) == "FAILED"
     assert Y.app_state({"state": "NEW_SAVING"}) == "ACCEPTED"
-    assert Y.app_of_container("container_e05_1792041277726_0003_01_000002") == SPARK
-    assert Y.container_label("container_1792041277726_0003_01_000001", "SPARK") == "AM (driver)"
-    assert Y.container_label("container_1792041277726_0003_01_000003", "SPARK") == "exec 2"
-    assert Y.container_label("container_1792041277726_0001_01_000004", "MAPREDUCE") == "contenedor 3"
+    assert Y.app_of_container("container_e05_1792695340081_0002_01_000002") == SPARK
+    assert Y.container_label("container_1792695340081_0002_01_000001", "SPARK") == "AM (driver)"
+    assert Y.container_label("container_1792695340081_0002_01_000003", "SPARK") == "exec 2"
+    assert Y.container_label("container_1792695340081_0001_01_000004", "MAPREDUCE") == "contenedor 3"
     assert Y.level_of("2026 WARN algo") == "WARN" and Y.level_of("java.io.IOException: ERROR") == "ERROR"
     assert Y.level_of("Map 1: 6/6 0 FAILED") == "INFO"
 
 
+def test_conf_del_rm_viene_en_xml():
+    """Real: :8088/conf?format=json contesta XML en Hadoop 3.3.6."""
+    props = Y.parse_conf(fixture_text("rm_conf.xml"))
+    assert props["yarn.scheduler.minimum-allocation-mb"] == "512"
+    assert props["yarn.scheduler.maximum-allocation-mb"] == "4096"
+    assert Y.parse_conf('{"properties":[{"key":"a","value":"1"}]}') == {"a": "1"}
+    assert Y.parse_conf("") == {}
+
+
 def test_avance_de_tez_de_beeline():
-    v = Y.parse_tez_progress(fixture_text("beeline_tez.txt").splitlines())
-    assert [x["name"] for x in v] == ["Map 1", "Reducer 2", "Reducer 3"]
-    assert v[0] == {"name": "Map 1", "total": 6, "done": 6, "running": 0}
+    """Real (Hive 4.0): una tabla con una fila por vértice y códigos ANSI; vale el último cuadro."""
+    lineas = fixture_text("beeline_tez.txt").splitlines()
+    v = Y.parse_tez_progress(lineas)
+    assert v == [{"name": "Map 1", "total": 1, "done": 1, "running": 0},
+                 {"name": "Reducer 2", "total": 1, "done": 1, "running": 0}]
+    corriendo = next(i for i, l in enumerate(lineas) if "RUNNING" in l and l.lstrip("\x1b[2K").startswith("Map 1"))
+    assert Y.parse_tez_progress(lineas[:corriendo + 2])[0] == {"name": "Map 1", "total": 1, "done": 0, "running": 1}
+    # El formato de una línea de Hive 3
     assert Y.parse_tez_progress(["INFO  : Map 1: 0(+3)/6\tReducer 2: 0/2"])[0]["running"] == 3
     assert Y.parse_tez_progress(["nada que ver"]) == []
 
 
 def test_logs_agregados():
     files = Y.parse_yarn_logs(fixture_text("yarn_logs.txt"))
-    assert files["stdout"] == [""] or files["stdout"] == []
-    assert files["syslog"][0].startswith("2026-10-22 14:03:21,612 INFO")
-    assert "Job finished cleanly" in files["syslog"][-1]
+    assert files["stdout"] == []
+    assert files["syslog"][0].startswith("2026-10-22 18:56:26,318 INFO [main]")
+    assert any("Job finished cleanly" in l for l in files["syslog"])
+    assert files["stderr"][-1].startswith("log4j:WARN See http://logging.apache.org")
     ids = Y.parse_log_containers(fixture_text("yarn_logs_info.txt"))
-    assert ids == ["container_1792041277726_0001_01_000001", "container_1792041277726_0001_01_000002",
-                   "container_1792041277726_0001_01_000008"]
+    assert ids == [f"container_1792695340081_0001_01_00000{i}" for i in (1, 2, 3, 4)]
 
 
 # ------------------------------------------------------------------ consultas
@@ -152,17 +214,23 @@ def test_logs_agregados():
 def test_lista_de_trabajos(settings, tmp_path):
     async def main():
         cl, y, _ = make(settings, tmp_path)
+        y.http.nm = contenedores(CORRIENDO, 3)
         apps = await y.apps()
-        assert [a["id"][-4:] for a in apps] == ["0005", "0004", "0003", "0002", "0001"]
+        assert [a["id"][-4:] for a in apps] == ["0006", "0005", "0004", "0003", "0002", "0001"]
         by = {a["id"]: a for a in apps}
-        s = by[SPARK]
+        m = by[MR]
+        assert m["type"] == "MAPREDUCE" and m["name"] == "streamjob9041584852475164204.jar"
+        assert m["state"] == "FINISHED" and m["progress"] == 1.0 and m["containers"] == []
+        assert m["submittedAt"] == 1792695383301 and m["startedAt"] == 1792695384292
+        assert m["finishedAt"] == 1792695401946 and m["amMemoryMb"] == 512
+        assert by[TEZ]["type"] == "TEZ" and by[SPARK]["name"] == "ventas por producto"
+        s = by[CORRIENDO]
         assert s["state"] == "RUNNING" and s["progress"] == 0.1 and s["type"] == "SPARK"
         assert [c["label"] for c in s["containers"]] == ["AM (driver)", "exec 1", "exec 2"]
-        assert s["amMemoryMb"] == 1024 and s["startedAt"] == 1792041601000
+        assert s["amMemoryMb"] == 1024
         assert by[KILLED]["state"] == "KILLED" and by[KILLED]["log"][-1]["level"] == "ERROR"
         assert "killed by user" in by[KILLED]["log"][-1]["text"]
-        assert by[MR]["progress"] == 1.0 and by[MR]["containers"] == [] and by[MR]["finishedAt"] == 1792041431000
-        assert by["application_1792041277726_0005"]["state"] == "ACCEPTED"
+        assert by[ACEPTADA]["state"] == "ACCEPTED"
         cl.processes = up("nm")
         with pytest.raises(ApiError) as e:
             await y.apps()
@@ -179,12 +247,17 @@ def test_memoria_del_cluster(settings, tmp_path):
     async def main():
         cl, y, _ = make(settings, tmp_path)
         c = await y.cluster()
+        # El mínimo y el máximo salen del XML de /conf (antes caían a los de por defecto)
         assert c["totalMb"] == 4096 and c["minAllocationMb"] == 512 and c["maxAllocationMb"] == 4096
+        assert c["totalVcores"] == 8 and c["usedMb"] == 0
         n = c["nodes"][0]
-        assert n["id"] == "localhost:45454" and n["memTotalMb"] == 4096 and n["memUsedMb"] == 3072
-        assert {x["appId"] for x in n["containers"]} == {SPARK}
+        assert n["id"] == NODO and n["memTotalMb"] == 4096 and n["memUsedMb"] == 0 and n["containers"] == []
+        assert n["vcoresTotal"] == 8 and n["lastHealthUpdate"] == 1792695337020
+        assert c["queues"] == [{"name": "default", "capacity": 100.0, "usedMb": 0, "running": 0, "pending": 0}]
+        y.http.nm = contenedores(CORRIENDO, 3)
+        n = (await y.cluster())["nodes"][0]
+        assert {x["appId"] for x in n["containers"]} == {CORRIENDO}
         assert [x["kind"] for x in n["containers"]] == ["am", "executor", "executor"]
-        assert c["queues"] == [{"name": "default", "capacity": 100.0, "usedMb": 3072, "running": 1, "pending": 1}]
     asyncio.run(main())
 
 
@@ -194,34 +267,49 @@ def test_detalle_mapreduce_de_jobhistory(settings, tmp_path):
         d = await y.detail(MR)
         assert d["engine"] == "mr" and d["state"] == "FINISHED"
         assert [s["id"] for s in d["stages"]] == ["map", "reduce"]
-        assert len(d["stages"][0]["tasks"]) == 6 and len(d["stages"][1]["tasks"]) == 1
+        # Real: 2 maps (uno por bloque de ventas) y 1 reduce
+        assert len(d["stages"][0]["tasks"]) == 2 and len(d["stages"][1]["tasks"]) == 1
         assert d["stages"][1]["dependsOn"] == ["map"]
-        m = d["dag"]["vertices"][0]
-        assert m["recordsIn"] == 200001 and m["tasksDone"] == 6 and m["bytesReadMb"] == 5.931868
+        m, r = d["dag"]["vertices"]
+        assert m["recordsIn"] == 200001 and m["recordsOut"] == 200000 and m["tasksDone"] == 2
+        assert m["bytesReadMb"] == 5.929475 and m["startedAt"] == 1792695392269
+        assert r["recordsOut"] == 8 and r["finishedAt"] == 1792695401680
         assert d["dag"]["edges"] == [{"from": "map", "to": "reduce", "kind": "shuffle + sort"}]
-        assert {"group": "YARN", "name": "TASKS_DONE", "value": 7} in d["counters"]
-        assert d["trackingUrl"] == "http://localhost:19888/jobhistory/job/job_1792041277726_0001"
-        assert d["trace"]["output"] == "Terminó en 31 s · 8 filas"
-        assert any("19888/ws/v1/history/mapreduce/jobs/job_1792041277726_0001/tasks" in u for u in y.http.calls)
+        assert {"group": "YARN", "name": "TASKS_DONE", "value": 3} in d["counters"]
+        assert d["trackingUrl"] == "http://localhost:19888/jobhistory/job/job_1792695340081_0001"
+        assert d["trace"]["output"] == "Terminó en 19 s · 8 filas"
+        assert any("19888/ws/v1/history/mapreduce/jobs/job_1792695340081_0001/tasks" in u for u in y.http.calls)
+    asyncio.run(main())
+
+
+def test_detalle_spark_de_history(settings, tmp_path):
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        d = await y.detail(SPARK)
+        assert d["engine"] == "spark" and d["state"] == "FINISHED"
+        # Real: las etapas SKIPPED (shuffles reusados) no aparecen
+        assert [s["id"] for s in d["stages"]] == ["s0", "s1", "s2", "s4", "s5", "s7", "s9", "s12"]
+        assert all(s["state"] == "done" for s in d["stages"])
+        v1 = next(v for v in d["dag"]["vertices"] if v["id"] == "s1")
+        assert v1["recordsIn"] == 200001 and v1["startedAt"] > 0 and v1["finishedAt"] >= v1["startedAt"]
+        assert d["trackingUrl"] == f"http://localhost:18080/history/{SPARK}/"
+        assert d["trace"]["output"] == "Terminó en 28 s · 8 filas"
     asyncio.run(main())
 
 
 def test_detalle_spark_corriendo(settings, tmp_path):
     async def main():
         cl, y, _ = make(settings, tmp_path)
+        y.http.nm = contenedores(CORRIENDO, 3)
         y.http.down.add("localhost:4040")     # el driver no contesta: va por el proxy del RM
-        d = await y.detail(SPARK)
+        d = await y.detail(CORRIENDO)
         assert d["engine"] == "spark" and d["state"] == "RUNNING"
-        ids = [s["id"] for s in d["stages"]]
-        assert ids == ["s1", "s2", "s3"]
-        s3 = d["stages"][2]
-        assert s3["dependsOn"] == ["s2"] and s3["state"] == "running"
-        assert [t["state"] for t in s3["tasks"]].count("done") == 2
-        assert [t["state"] for t in s3["tasks"]].count("running") == 2
-        v2 = d["dag"]["vertices"][1]
-        assert v2["recordsIn"] == 200001 and v2["startedAt"] > 0
-        assert d["trackingUrl"] == f"http://localhost:8088/proxy/{SPARK}/"
+        s12 = d["stages"][-1]
+        assert s12["id"] == "s12" and s12["state"] == "running"
+        assert [t["state"] for t in s12["tasks"]] == ["running"]
+        assert d["trackingUrl"] == f"http://localhost:8088/proxy/{CORRIENDO}/"
         assert d["trace"]["output"] == "Todavía corriendo"
+        assert any(f"8088/proxy/{CORRIENDO}/api/v1" in u for u in y.http.calls)
     asyncio.run(main())
 
 
@@ -231,14 +319,16 @@ def test_detalle_tez(settings, tmp_path):
         # Sin Timeline Server y sin la salida de beeline: una sola etapa
         d = await y.detail(TEZ)
         assert d["engine"] == "tez" and [s["name"] for s in d["stages"]] == ["DAG de Tez"]
-        assert d["stages"][0]["state"] == "done"
+        assert d["stages"][0]["state"] == "done" and d["trace"]["output"] == "Terminó en 18 s"
+        assert d["trackingUrl"] == f"http://localhost:8088/cluster/app/{TEZ}"
         # Si lo mandó esta interfaz, el DAG sale de las líneas de avance de beeline
         lines = [{"t": 0, "stream": "stderr", "text": l} for l in fixture_text("beeline_tez.txt").splitlines()]
         run = type("R", (), {"lines": lines})()
         y.submitted[TEZ] = {"example": "hive-ventas", "run": run, "shown": "beeline -f ventas.hql",
                             "out": Y.JOBS["hive-ventas"]["out"]}
         d = await y.detail(TEZ)
-        assert [s["id"] for s in d["stages"]] == ["map1", "reducer2", "reducer3"]
+        assert [s["id"] for s in d["stages"]] == ["map1", "reducer2"]
+        assert [s["state"] for s in d["stages"]] == ["done", "done"]
         assert d["dag"]["vertices"][0]["operators"][0] == "TableScan"
         assert d["dag"]["edges"][0] == {"from": "map1", "to": "reducer2", "kind": "SCATTER_GATHER"}
         assert d["outputPath"] == "/user/root/resultados/hive_por_producto"
@@ -256,26 +346,29 @@ def test_detalle_errores(settings, tmp_path):
         d = await y.detail(KILLED)
         assert d["diagnostics"] == "Application killed by user."
         assert d["trace"]["output"] == "Cancelado: no dejó resultado"
+        # La de Tez real trae diagnostics aunque terminó bien: no se muestran
+        assert "diagnostics" not in await y.detail(TEZ)
     asyncio.run(main())
 
 
 def test_logs(settings, tmp_path, fake_bin):
     async def main():
         cl, y, _ = make(settings, tmp_path)
+        y.http.nm = contenedores(CORRIENDO, 3)
         # Corriendo: los archivos del contenedor por el NodeManager
-        r = await y.logs(SPARK, None)
-        assert r["container"] == "container_1792041277726_0003_01_000001"
+        r = await y.logs(CORRIENDO, None)
+        assert r["container"] == f"container_{CORRIENDO[12:]}_01_000001"
         assert [c["label"] for c in r["containers"]] == ["AM (driver)", "exec 1", "exec 2"]
         assert r["files"][0] == {"name": "stdout", "lines": ["línea de stdout 1", "línea de stdout 2"]}
         # Terminado: yarn logs (los agregados en HDFS), una sola vez por contenedor
-        r = await y.logs(MR, "container_1792041277726_0001_01_000001")
-        assert len(r["containers"]) == 3 and r["containers"][0]["kind"] == "am"
+        r = await y.logs(MR, "container_1792695340081_0001_01_000001")
+        assert len(r["containers"]) == 4 and r["containers"][0]["kind"] == "am"
         syslog = next(f for f in r["files"] if f["name"] == "syslog")
-        assert "Job finished cleanly" in syslog["lines"][-1]
-        await y.logs(MR, "container_1792041277726_0001_01_000001")
+        assert any("Job finished cleanly" in l for l in syslog["lines"])
+        await y.logs(MR, "container_1792695340081_0001_01_000001")
         cmds = fake_bin.read_text().splitlines()
         assert sum("-containerId" in c for c in cmds) == 1
-        assert f"yarn logs -applicationId {MR} -containerId container_1792041277726_0001_01_000001 " \
+        assert f"yarn logs -applicationId {MR} -containerId container_1792695340081_0001_01_000001 " \
                "-log_files stdout,stderr,syslog -size -65536" in cmds
     asyncio.run(main())
 
@@ -294,7 +387,7 @@ def test_mandar_y_cancelar(settings, tmp_path, fake_bin):
             await y.submit("hive-ventas")      # HiveServer2 no está arriba
         assert e.value.code in ("service_down", "unsupported")
         app = await y.submit("spark-ventas")
-        assert app == "application_1792041277726_0009"
+        assert app == NUEVA
         assert y.submitted[app]["example"] == "spark-ventas"
         await y.runner.wait_all()
         cmds = fake_bin.read_text().splitlines()
@@ -307,8 +400,8 @@ def test_mandar_y_cancelar(settings, tmp_path, fake_bin):
         assert ("yarn", {"appId": app}) in events
         # Cancelar uno que ya terminó no hace nada; uno corriendo, el comando real
         await y.kill(MR)
-        await y.kill(SPARK)
-        assert f"yarn application -kill {SPARK}" in fake_bin.read_text().splitlines()
+        await y.kill(CORRIENDO)
+        assert f"yarn application -kill {CORRIENDO}" in fake_bin.read_text().splitlines()
         assert not any(MR in c and "-kill" in c for c in fake_bin.read_text().splitlines())
         bus.unsubscribe(q)
     asyncio.run(main())
@@ -323,12 +416,12 @@ def test_eventos_yarn_cuando_cambia_algo(settings, tmp_path):
         while not q.empty():
             first.append(q.get_nowait())
         # La primera vez solo avisa de los que están en marcha
-        assert sorted(d["appId"] for t, d in first if t == "yarn") == [SPARK, "application_1792041277726_0005"]
+        assert sorted(d["appId"] for t, d in first if t == "yarn") == [CORRIENDO, ACEPTADA]
         await y.watch()
         assert q.empty()
-        y.http.apps[SPARK]["progress"] = 55.0
+        y.http.apps[CORRIENDO]["progress"] = 55.0
         await y.watch()
-        assert q.get_nowait() == ("yarn", {"appId": SPARK}) and q.empty()
+        assert q.get_nowait() == ("yarn", {"appId": CORRIENDO}) and q.empty()
         bus.unsubscribe(q)
     asyncio.run(main())
 
@@ -346,19 +439,21 @@ def test_rutas_yarn(settings, tmp_path, fake_bin):
         cl.phase, cl.processes = "running", up("rm", "nm")
         cl.hdfs = {**cl.hdfs, "available": True}
         y.http = Rest()
+        y.http.nm = contenedores(CORRIENDO, 3)
         r = c.get("/api/yarn/apps")
-        assert r.status_code == 200 and len(r.json()) == 5
-        assert c.get("/api/yarn/cluster").json()["nodes"][0]["id"] == "localhost:45454"
+        assert r.status_code == 200 and len(r.json()) == 6
+        assert c.get("/api/yarn/cluster").json()["nodes"][0]["id"] == NODO
         assert c.get(f"/api/yarn/apps/{MR}").json()["engine"] == "mr"
         r = c.get("/api/yarn/apps/application_1_1")
         assert r.status_code == 404 and r.json()["code"] == "not_found"
-        r = c.get(f"/api/yarn/apps/{SPARK}/logs", params={"container": "container_1792041277726_0003_01_000002"})
-        assert r.json()["container"] == "container_1792041277726_0003_01_000002"
+        cont = f"container_{CORRIENDO[12:]}_01_000002"
+        r = c.get(f"/api/yarn/apps/{CORRIENDO}/logs", params={"container": cont})
+        assert r.json()["container"] == cont
         r = c.post("/api/yarn/apps", json={"example": "spark-ventas"})
-        assert r.status_code == 202 and r.json() == {"id": "application_1792041277726_0009"}
+        assert r.status_code == 202 and r.json() == {"id": NUEVA}
         r = c.post("/api/yarn/apps", json={"example": "nada"})
         assert r.status_code == 400 and r.json()["code"] == "invalid"
-        assert c.post(f"/api/yarn/apps/{SPARK}/kill").status_code == 204
+        assert c.post(f"/api/yarn/apps/{CORRIENDO}/kill").status_code == 204
 
 
 def test_autostart(settings, tmp_path, monkeypatch):
@@ -397,7 +492,7 @@ def test_kill_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, monkeypatch)
     real): el kill de una app que mandamos nosotros reintenta en vez de dar 404."""
     async def main():
         cl, y, _ = make(settings, tmp_path)
-        nueva = "application_1792041277726_0042"
+        nueva = "application_1792695340081_0042"
         y.submitted[nueva] = {"example": "spark-ventas"}
         llamadas = []
 
@@ -412,6 +507,6 @@ def test_kill_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, monkeypatch)
         # Una que no mandamos nosotros da 404 enseguida
         llamadas.clear()
         with pytest.raises(ApiError) as e:
-            await y.kill("application_1792041277726_0099")
+            await y.kill("application_1792695340081_0099")
         assert e.value.code == "not_found" and len(llamadas) == 1
     asyncio.run(main())

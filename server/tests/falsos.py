@@ -340,9 +340,17 @@ def hive_filas(t: dict) -> list[dict]:
 def tez(app: str) -> None:
     err("INFO  : Tez session hasn't been created yet. Opening session",
         f"INFO  : Status: Running (Executing on YARN cluster with App id {app})", "")
-    for l in ("Map 1: -/-\tReducer 2: 0/1\t", "Map 1: 0(+1)/2\tReducer 2: 0/1\t", "Map 1: 2/2\tReducer 2: 0(+1)/1\t",
-              "Map 1: 2/2\tReducer 2: 1/1\t"):
-        err(f"INFO  : {l}")
+    # La tabla de vértices de Hive 4.0, con los códigos ANSI (como fixtures/beeline_tez.txt)
+    raya = "\x1b[2K" + "-" * 94
+    for m, r, pct in ((("INITED", 0, 0), ("INITED", 0, 0), 0), (("RUNNING", 0, 1), ("INITED", 0, 0), 0),
+                      (("SUCCEEDED", 2, 0), ("RUNNING", 0, 1), 66), (("SUCCEEDED", 2, 0), ("SUCCEEDED", 1, 0), 100)):
+        fila = "{:<16} container {:>13} {:>6} {:>10} {:>8} {:>8} {:>7} {:>7}  "
+        err(raya, "\x1b[2K\x1b[36;1m        VERTICES      MODE        STATUS  TOTAL  COMPLETED  RUNNING  PENDING  FAILED  "
+                  "KILLED  ", "\x1b[22;0m" + raya,
+            "\x1b[2K" + fila.format("Map 1", m[0], 2, m[1], m[2], 2 - m[1] - m[2], 0, 0),
+            fila.format("Reducer 2", r[0], 1, r[1], r[2], 1 - r[1] - r[2], 0, 0), raya,
+            f"\x1b[2K\x1b[31;1mVERTICES: 0{(m[1] == 2) + (r[1] == 1)}/02  [>>---] {pct}%    ELAPSED TIME: 2.05 s     ",
+            "\x1b[22;0m" + raya)
         pausa()
 
 

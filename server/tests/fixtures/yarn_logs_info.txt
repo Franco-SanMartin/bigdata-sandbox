@@ -1,4 +1,7 @@
 Application State: Completed.
-Container: container_1792041277726_0001_01_000001 on localhost_45454
-Container: container_1792041277726_0001_01_000002 on localhost_45454
-Container: container_1792041277726_0001_01_000008 on localhost_45454
+Container: container_1792695340081_0001_01_000001 on localhost_39943
+Container: container_1792695340081_0001_01_000002 on localhost_39943
+Container: container_1792695340081_0001_01_000003 on localhost_39943
+Container: container_1792695340081_0001_01_000004 on localhost_39943
+WARNING: YARN_CONF_DIR has been replaced by HADOOP_CONF_DIR. Using value of YARN_CONF_DIR.
+2026-10-22 18:57:56,216 INFO client.DefaultNoHARMFailoverProxyProvider: Connecting to ResourceManager at localhost/127.0.0.1:8032

@@ -1,0 +1,1 @@
+MongoServerError: unknown top level operator: $nada. If you have a field name that starts with a '$' symbol, consider using $getField or $setField.

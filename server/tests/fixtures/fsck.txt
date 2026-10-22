@@ -1,45 +1,56 @@
-Connecting to namenode via http://localhost:9870/fsck?ugi=root&files=1&blocks=1&locations=1&path=%2F
-FSCK started by root (auth:SIMPLE) from /127.0.0.1 for path / at Thu Oct 22 14:03:11 UTC 2026
+FSCK started by root (auth:SIMPLE) from /127.0.0.1 for path / at Thu Oct 22 18:54:21 UTC 2026
+
 / <dir>
-/datos <dir>
-/datos/numeros.csv 2621440 bytes, replicated: replication=2, 3 block(s):  OK
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741825_1001 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
-1. BP-1146582837-172.17.0.2-1792040000000:blk_1073741826_1002 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK], DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK]]
-2. BP-1146582837-172.17.0.2-1792040000000:blk_1073741827_1003 len=524288 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
+/apps <dir>
+/apps/spark <dir>
+/apps/tez <dir>
+/spark-logs <dir>
+/tmp <dir>
+/user <dir>
+/user/hive <dir>
+/user/hive/warehouse <dir>
+/user/root <dir>
+/user/root/humo <dir>
+/user/root/humo/humo.csv 1068911 bytes, replicated: replication=2, 2 block(s):  OK
+0. BP-1325415372-172.17.0.3-1792695233636:blk_1073741825_1001 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-5eac9965-37cf-409b-a4e7-270cfd549239,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-8afe0183-3a3d-4fce-9603-8a792e32a693,DISK]]
+1. BP-1325415372-172.17.0.3-1792695233636:blk_1073741826_1002 len=20335 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-5eac9965-37cf-409b-a4e7-270cfd549239,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-8afe0183-3a3d-4fce-9603-8a792e32a693,DISK]]
 
-/datos/ventas.csv 1048576 bytes, replicated: replication=3, 1 block(s):  Under replicated BP-1146582837-172.17.0.2-1792040000000:blk_1073741828_1004. Target Replicas is 3 but found 2 live replica(s), 0 decommissioned replica(s), 0 decommissioning replica(s).
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741828_1004 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
 
-/datos/sucias.csv 1024 bytes, replicated: replication=1, 1 block(s): 
-/datos/sucias.csv: CORRUPT blockpool BP-1146582837-172.17.0.2-1792040000000 block blk_1073741829
- MISSING 1 blocks of total size 1024 B
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741829_1005 len=1024 MISSING!
-
-Status: CORRUPT
+Status: HEALTHY
  Number of data-nodes:	2
  Number of racks:		1
- Total dirs:			2
+ Total dirs:			11
  Total symlinks:		0
 
 Replicated Blocks:
- Total size:	3671040 B
- Total files:	3
- Total blocks (validated):	5 (avg. block size 734208 B)
-  ********************************
-  UNDER MIN REPL'D BLOCKS:	1 (20.0 %)
-  MISSING BLOCKS:		1
-  MISSING SIZE:		1024 B
-  ********************************
- Minimally replicated blocks:	4 (80.0 %)
+ Total size:	1068911 B
+ Total files:	1
+ Total blocks (validated):	2 (avg. block size 534455 B)
+ Minimally replicated blocks:	2 (100.0 %)
  Over-replicated blocks:	0 (0.0 %)
- Under-replicated blocks:	1 (20.0 %)
+ Under-replicated blocks:	0 (0.0 %)
  Mis-replicated blocks:		0 (0.0 %)
  Default replication factor:	2
- Average block replication:	1.8
- Missing blocks:		1
+ Average block replication:	2.0
+ Missing blocks:		0
  Corrupt blocks:		0
- Missing replicas:		1 (10.0 %)
-FSCK ended at Thu Oct 22 14:03:11 UTC 2026 in 9 milliseconds
+ Missing replicas:		0 (0.0 %)
+ Blocks queued for replication:	0
+
+Erasure Coded Block Groups:
+ Total size:	0 B
+ Total files:	0
+ Total block groups (validated):	0
+ Minimally erasure-coded block groups:	0
+ Over-erasure-coded block groups:	0
+ Under-erasure-coded block groups:	0
+ Unsatisfactory placement block groups:	0
+ Average block group size:	0.0
+ Missing block groups:		0
+ Corrupt block groups:		0
+ Missing internal blocks:	0
+ Blocks queued for replication:	0
+FSCK ended at Thu Oct 22 18:54:21 UTC 2026 in 2 milliseconds
 
 
-The filesystem under path '/' is CORRUPT
+The filesystem under path '/' is HEALTHY

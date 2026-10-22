@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+from conftest import fixture_text
 from sandbox_server import datos as D
 from sandbox_server.errors import ApiError
 
@@ -120,6 +121,19 @@ def test_errores_de_consulta_con_la_ultima_linea_del_motor(mundo):
             await mundo.datos.query("mysql", "SELECT 1")
         assert e.value.code == "service_down"
     asyncio.run(main())
+
+
+def test_errores_reales_de_cada_motor():
+    """Con las salidas reales del humo (Hive 4.0.0 por beeline, MariaDB, mongosh)."""
+    esperado = {
+        "hive": "FAILED: SemanticException [Error 10001]: Line 1:14 Table not found 'no_existe_humo'",
+        "mysql": "ERROR 1146 (42S02) at line 1: Table 'tienda.no_existe_humo' doesn't exist",
+        "mongodb": "MongoServerError: unknown top level operator: $nada. If you have a field name that starts "
+                   "with a '$' symbol, consider using $getField or $setField.",
+    }
+    for src, msg in esperado.items():
+        e = D.Datos.error_of(src, 1, "", fixture_text(f"error_{src}.txt"))
+        assert (e.code, str(e)) == ("failed", msg)
 
 
 def test_planes(mundo):

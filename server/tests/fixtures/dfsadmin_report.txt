@@ -1,14 +1,14 @@
-Configured Capacity: 300000000000 (279.40 GB)
-Present Capacity: 270020971520 (251.48 GB)
-DFS Remaining: 270000000000 (251.46 GB)
-DFS Used: 20971520 (20 MB)
-DFS Used%: 0.01%
+Configured Capacity: 309788377088 (288.51 GB)
+Present Capacity: 205553770554 (191.44 GB)
+DFS Remaining: 205551566848 (191.43 GB)
+DFS Used: 2203706 (2.10 MB)
+DFS Used%: 0.00%
 Replicated Blocks:
-	Under replicated blocks: 2
+	Under replicated blocks: 0
 	Blocks with corrupt replicas: 0
-	Missing blocks: 1
-	Missing blocks (with replication factor 1): 1
-	Low redundancy blocks with highest priority to recover: 1
+	Missing blocks: 0
+	Missing blocks (with replication factor 1): 0
+	Low redundancy blocks with highest priority to recover: 0
 	Pending deletion blocks: 0
 Erasure Coded Block Groups: 
 	Low redundancy block groups: 0
@@ -21,51 +21,42 @@ Erasure Coded Block Groups:
 Live datanodes (2):
 
 Name: 127.0.0.1:9911 (localhost)
-Hostname: sandbox
+Hostname: localhost
 Decommission Status : Normal
-Configured Capacity: 100000000000 (93.13 GB)
-DFS Used: 12582912 (12 MB)
-Non DFS Used: 0 (0 B)
-DFS Remaining: 90000000000 (83.82 GB)
-DFS Used%: 0.01%
-DFS Remaining%: 90.00%
+Configured Capacity: 154894188544 (144.26 GB)
+DFS Used: 1101853 (1.05 MB)
+Non DFS Used: 52100526051 (48.52 GB)
+DFS Remaining: 102775783424 (95.72 GB)
+DFS Used%: 0.00%
+DFS Remaining%: 66.35%
 Configured Cache Capacity: 0 (0 B)
 Cache Used: 0 (0 B)
 Cache Remaining: 0 (0 B)
 Cache Used%: 100.00%
 Cache Remaining%: 0.00%
-Xceivers: 1
-Last contact: Thu Oct 22 14:03:10 UTC 2026
-Last Block Report: Thu Oct 22 14:01:02 UTC 2026
-Num of Blocks: 12
+Xceivers: 0
+Last contact: Thu Oct 22 18:54:21 UTC 2026
+Last Block Report: Thu Oct 22 18:54:00 UTC 2026
+Num of Blocks: 2
 
 
 Name: 127.0.0.1:9912 (localhost)
-Hostname: sandbox
+Hostname: localhost
 Decommission Status : Normal
-Configured Capacity: 100000000000 (93.13 GB)
-DFS Used: 8388608 (8 MB)
-Non DFS Used: 0 (0 B)
-DFS Remaining: 90000000000 (83.82 GB)
-DFS Used%: 0.01%
-DFS Remaining%: 90.00%
-Xceivers: 1
-Last contact: Thu Oct 22 14:03:09 UTC 2026
-Last Block Report: Thu Oct 22 14:01:02 UTC 2026
-Num of Blocks: 8
-
-
-Dead datanodes (1):
-
-Name: 127.0.0.1:9913 (localhost)
-Hostname: sandbox
-Decommission Status : Normal
-Configured Capacity: 0 (0 B)
-DFS Used: 0 (0 B)
-Non DFS Used: 0 (0 B)
-DFS Remaining: 0 (0 B)
+Configured Capacity: 154894188544 (144.26 GB)
+DFS Used: 1101853 (1.05 MB)
+Non DFS Used: 52100526051 (48.52 GB)
+DFS Remaining: 102775783424 (95.72 GB)
+DFS Used%: 0.00%
+DFS Remaining%: 66.35%
+Configured Cache Capacity: 0 (0 B)
+Cache Used: 0 (0 B)
+Cache Remaining: 0 (0 B)
+Cache Used%: 100.00%
+Cache Remaining%: 0.00%
 Xceivers: 0
-Last contact: Thu Oct 22 14:01:10 UTC 2026
-Last Block Report: Never
-Num of Blocks: 0
+Last contact: Thu Oct 22 18:54:21 UTC 2026
+Last Block Report: Thu Oct 22 18:54:00 UTC 2026
+Num of Blocks: 2
+
 

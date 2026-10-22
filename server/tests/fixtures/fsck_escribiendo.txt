@@ -1,45 +1,44 @@
-Connecting to namenode via http://localhost:9870/fsck?ugi=root&files=1&blocks=1&locations=1&openforwrite=1&path=%2F
-FSCK started by root (auth:SIMPLE) from /127.0.0.1 for path / at Thu Oct 22 14:05:40 UTC 2026
+FSCK started by root (auth:SIMPLE) from /127.0.0.1 for path / at Thu Oct 22 18:54:27 UTC 2026
 
 / <dir>
+/apps <dir>
+/apps/spark <dir>
+/apps/tez <dir>
+/spark-logs <dir>
+/tmp <dir>
 /user <dir>
+/user/hive <dir>
+/user/hive/warehouse <dir>
 /user/root <dir>
-/user/root/numeros.txt 6888896 bytes, replicated: replication=2, 7 block(s):  OK
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741830_1006 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
-1. BP-1146582837-172.17.0.2-1792040000000:blk_1073741831_1007 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK], DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK]]
-2. BP-1146582837-172.17.0.2-1792040000000:blk_1073741832_1008 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
-3. BP-1146582837-172.17.0.2-1792040000000:blk_1073741833_1009 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK], DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK]]
-4. BP-1146582837-172.17.0.2-1792040000000:blk_1073741834_1010 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
-5. BP-1146582837-172.17.0.2-1792040000000:blk_1073741835_1011 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK], DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK]]
-6. BP-1146582837-172.17.0.2-1792040000000:blk_1073741836_1012 len=597440 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
+/user/root/humo <dir>
+/user/root/humo/grande.bin._COPYING_ 0 bytes, replicated: replication=2, 1 block(s), OPENFORWRITE:  OK
 
-/user/root/subida.csv._COPYING_ 1048576 bytes, replicated: replication=2, 2 block(s), OPENFORWRITE:  OK
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741840_1016 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
-1. BP-1146582837-172.17.0.2-1792040000000:blk_1073741841_1017 len=0 Live_repl=0  [DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
+Under Construction Block:
+0. BP-1325415372-172.17.0.3-1792695233636:blk_1073741827_1003 len=0 Expected_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-5eac9965-37cf-409b-a4e7-270cfd549239,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-8afe0183-3a3d-4fce-9603-8a792e32a693,DISK]]
+/user/root/humo/humo.csv 1068911 bytes, replicated: replication=2, 2 block(s):  OK
+0. BP-1325415372-172.17.0.3-1792695233636:blk_1073741825_1001 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-5eac9965-37cf-409b-a4e7-270cfd549239,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-8afe0183-3a3d-4fce-9603-8a792e32a693,DISK]]
+1. BP-1325415372-172.17.0.3-1792695233636:blk_1073741826_1002 len=20335 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-5eac9965-37cf-409b-a4e7-270cfd549239,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-8afe0183-3a3d-4fce-9603-8a792e32a693,DISK]]
 
-/user/root/ventas <dir>
-/user/root/ventas/ventas_grandes.csv 6219354 bytes, replicated: replication=3, 6 block(s):  Under replicated BP-1146582837-172.17.0.2-1792040000000:blk_1073741824_1000. Target Replicas is 3 but found 2 live replica(s), 0 decommissioned replica(s), 0 decommissioning replica(s).
-0. BP-1146582837-172.17.0.2-1792040000000:blk_1073741824_1000 len=1048576 Live_repl=2  [DatanodeInfoWithStorage[127.0.0.1:9911,DS-7c1e9d2a-55b0-4c1f-8d5e-2f4a6b8c0d1e,DISK], DatanodeInfoWithStorage[127.0.0.1:9912,DS-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d,DISK]]
 
 Status: HEALTHY
  Number of data-nodes:	2
  Number of racks:		1
- Total dirs:			4
+ Total dirs:			11
  Total symlinks:		0
 
 Replicated Blocks:
- Total size:	14156826 B
- Total files:	3
- Total blocks (validated):	15 (avg. block size 943788 B)
- Minimally replicated blocks:	15 (100.0 %)
+ Total size:	1068911 B
+ Total files:	2
+ Total blocks (validated):	3 (avg. block size 356303 B)
+ Minimally replicated blocks:	2 (66.666664 %)
  Over-replicated blocks:	0 (0.0 %)
- Under-replicated blocks:	1 (6.666667 %)
+ Under-replicated blocks:	0 (0.0 %)
  Mis-replicated blocks:		0 (0.0 %)
  Default replication factor:	2
- Average block replication:	2.0
+ Average block replication:	1.3333334
  Missing blocks:		0
  Corrupt blocks:		0
- Missing replicas:		1 (3.2258065 %)
+ Missing replicas:		0 (0.0 %)
  Blocks queued for replication:	0
 
 Erasure Coded Block Groups:
@@ -55,7 +54,7 @@ Erasure Coded Block Groups:
  Corrupt block groups:		0
  Missing internal blocks:	0
  Blocks queued for replication:	0
-FSCK ended at Thu Oct 22 14:05:40 UTC 2026 in 14 milliseconds
+FSCK ended at Thu Oct 22 18:54:27 UTC 2026 in 3 milliseconds
 
 
 The filesystem under path '/' is HEALTHY

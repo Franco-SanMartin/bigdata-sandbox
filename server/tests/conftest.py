@@ -18,6 +18,27 @@ def fixture_text(name: str) -> str:
     return (FIX / name).read_text()
 
 
+def fsck_con_bloque_perdido() -> str:
+    """No hay salida real de un bloque perdido: se arma desde fsck.txt (real) con
+    el formato de Hadoop 3.3 (el archivo con MISSING, el bloque con MISSING! y el
+    resumen CORRUPT)."""
+    texto = fixture_text("fsck.txt").replace(
+        "/user/root/humo/humo.csv 1068911 bytes, replicated: replication=2, 2 block(s):  OK",
+        "/user/root/humo/humo.csv 1068911 bytes, replicated: replication=2, 2 block(s):  MISSING 1 blocks of total size 20335 B")
+    lineas = []
+    for l in texto.splitlines():
+        if "blk_1073741826_1002 len=" in l:
+            l = l.split(" Live_repl")[0] + " MISSING!"
+        elif l.startswith(" Missing blocks:"):
+            l = " Missing blocks:\t\t1"
+        elif l == "Status: HEALTHY":
+            l = "Status: CORRUPT"
+        elif l.startswith("The filesystem under path"):
+            l = "The filesystem under path '/' is CORRUPT"
+        lineas.append(l)
+    return "\n".join(lineas) + "\n"
+
+
 def fixture_json(name: str) -> dict:
     return json.loads(fixture_text(name))
 

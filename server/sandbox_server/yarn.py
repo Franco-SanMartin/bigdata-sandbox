@@ -25,6 +25,7 @@ De dónde sale cada cosa (todo REST, sin JVM, salvo los logs ya agregados):
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import re
 import shlex
@@ -93,6 +94,13 @@ VENTAS = "/user/root/ventas"
 
 # beeline imprime el avance de Tez así: "Map 1: 1/2	Reducer 2: 0(+1)/1"
 _TEZ_VERTEX = re.compile(r"((?:Map|Reducer) \d+): (-|\d+)(?:\(\+(\d+)\))?(?:\(-(\d+)\))?(?:\(-\d+\))?/(-|\d+)")
+# Hive 4.0 (visto en el humo): beeline dibuja una tabla, una fila por vértice y con
+# códigos ANSI aunque la salida no sea una terminal:
+#   Map 1 .......... container     SUCCEEDED      1          1        0        0       0       0
+# (TOTAL COMPLETED RUNNING PENDING FAILED KILLED)
+_TEZ_ROW = re.compile(r"^\s*((?:Map|Reducer|Union) \d+)[ .]+?\s(?:container|llap|uber)\s+[A-Z_]+"
+                      r"\s+(\d+)\s+(\d+)\s+(\d+)\s+\d+\s+\d+\s+\d+\s*$")
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def short_container(cid: str) -> str:
@@ -144,8 +152,18 @@ def level_of(text: str) -> str:
 
 
 def parse_tez_progress(lines: list[str]) -> list[dict]:
-    """Vértices de Tez de la última línea de avance de beeline."""
+    """Vértices de Tez del último avance que imprimió beeline: la tabla de Hive 4
+    (una fila por vértice) o la línea 'Map 1: 0(+3)/6  Reducer 2: 0/2' de antes."""
+    rows: list[dict] = []
     for line in reversed(lines):
+        line = _ANSI.sub("", line)
+        m = _TEZ_ROW.match(line)
+        if m:
+            rows.insert(0, {"name": m.group(1), "total": int(m.group(2)), "done": int(m.group(3)),
+                            "running": int(m.group(4))})
+            continue
+        if rows:
+            return rows
         found = _TEZ_VERTEX.findall(line)
         if found:
             out = []
@@ -154,7 +172,7 @@ def parse_tez_progress(lines: list[str]) -> list[dict]:
                 d = int(done) if done != "-" else 0
                 out.append({"name": name, "total": t, "done": d, "running": int(running or 0)})
             return out
-    return []
+    return rows
 
 
 def parse_yarn_logs(text: str) -> dict[str, list[str]]:
@@ -173,6 +191,9 @@ def parse_yarn_logs(text: str) -> dict[str, list[str]]:
             body = True
             continue
         if line.startswith("End of LogType:"):
+            # yarn logs deja una línea en blanco antes del cierre: no es del archivo
+            while files[cur] and not files[cur][-1].strip():
+                files[cur].pop()
             cur, body = None, False
             continue
         if body:
@@ -187,6 +208,18 @@ def parse_log_containers(text: str) -> list[str]:
         if m.group(1) not in seen:
             seen.append(m.group(1))
     return seen
+
+
+def parse_conf(text: str) -> dict[str, str]:
+    """Las propiedades de :8088/conf. Pide format=json, pero el RM de Hadoop
+    3.3.6 contesta XML igual (visto en el humo): se aceptan los dos."""
+    try:
+        doc = json.loads(text)
+        return {p.get("key"): p.get("value") for p in doc.get("properties", []) if isinstance(p, dict)}
+    except (ValueError, AttributeError):
+        pass
+    return {m.group(1): html.unescape(m.group(2))
+            for m in re.finditer(r"<name>([^<]*)</name>\s*<value>([^<]*)</value>", text)}
 
 
 def iso(t: int) -> str:
@@ -249,8 +282,7 @@ class Yarn:
     async def conf(self) -> dict[str, int]:
         """Mínimo y máximo de memoria por contenedor (de :8088/conf)."""
         if self._conf is None:
-            doc = await self.get(f"{RM}/conf?format=json")
-            props = {p.get("key"): p.get("value") for p in (doc or {}).get("properties", [])}
+            props = parse_conf(await self.text(f"{RM}/conf?format=json") or "")
             if props:
                 def num(k: str, d: int) -> int:
                     try:

@@ -1,15 +1,17 @@
 """Parsers de lo que devuelve Hadoop 3.x (JMX, REST de YARN, jps, fsck, dfsadmin, /proc)."""
+import json
 from pathlib import Path
 
-from conftest import FIX, fixture_json, fixture_text
+from conftest import FIX, fixture_json, fixture_text, fsck_con_bloque_perdido
 from sandbox_server import probes
 
 
 def test_hdfs_summary_desde_jmx():
+    # Real (Hadoop 3.3.6): 2 DataNodes, humo.csv de 2 bloques con replicación 2
     h = probes.hdfs_summary(fixture_json("nn_jmx.json"))
-    assert h == {"available": True, "safeMode": False, "liveDataNodes": 2, "staleDataNodes": 1, "deadDataNodes": 1,
-                 "files": 9, "blocks": 12, "replicas": 20, "underReplicated": 2, "missing": 1, "overReplicated": 3,
-                 "usedMb": 20.0}
+    assert h == {"available": True, "safeMode": False, "liveDataNodes": 2, "staleDataNodes": 0, "deadDataNodes": 0,
+                 "files": 12, "blocks": 2, "replicas": 4, "underReplicated": 0, "missing": 0, "overReplicated": 0,
+                 "usedMb": 2.1}
 
 
 def test_hdfs_summary_en_safe_mode():
@@ -28,35 +30,45 @@ def test_rol_del_namenode():
 
 
 def test_datanodes_vivos_lentos_y_muertos():
-    now = 1_792_040_100_000
-    dns = probes.datanodes_from_jmx(fixture_json("nn_jmx.json"), now, expected=3, running={1, 2})
+    now = 1_792_695_317_000
+    # Real: dn2 apagado, el NameNode lo pasó a DeadNodes (lastContact 44 s)
+    dns = probes.datanodes_from_jmx(fixture_json("nn_jmx_dn_muerto.json"), now, expected=2, running={1})
     by = {d["id"]: d for d in dns}
-    assert [d["id"] for d in dns] == [1, 2, 3]
-    assert by[1]["state"] == "live" and by[1]["blocks"] == 12 and by[1]["usedMb"] == 12.0
+    assert [d["id"] for d in dns] == [1, 2]
+    assert by[1]["state"] == "live" and by[1]["blocks"] == 300 and by[1]["usedMb"] == 302.37
     assert by[1]["httpPort"] == 9901 and by[1]["dataPort"] == 9911
-    # 25 s sin latido: stale, y el NameNode lo da por muerto 40 s después del último
+    assert by[1]["lastHeartbeat"] == now - 2_000
+    assert by[2]["state"] == "dead" and by[2]["lastHeartbeat"] == now - 44_000
+    # 25 s sin latido (todavía en LiveNodes): stale, y muerto 40 s después del último
+    jmx = fixture_json("nn_jmx.json")
+    info = next(b for b in jmx["beans"] if b["name"].endswith("NameNodeInfo"))
+    live = json.loads(info["LiveNodes"])
+    live["localhost:9912"]["lastContact"] = 25
+    info["LiveNodes"] = json.dumps(live)
+    by = {d["id"]: d for d in probes.datanodes_from_jmx(jmx, now, expected=2, running={1, 2})}
+    assert by[1]["state"] == "live" and by[1]["blocks"] == 2
     assert by[2]["state"] == "stale" and by[2]["deadAt"] == now - 25_000 + 40_000
-    assert by[3]["state"] == "dead"
 
 
 def test_datanode_recien_prendido_y_apagados():
-    dns = probes.datanodes_from_jmx(fixture_json("nn_jmx.json"), 0, expected=4, running={1, 2, 3, 5})
+    dns = probes.datanodes_from_jmx(fixture_json("nn_jmx_dn_muerto.json"), 0, expected=4, running={1, 2, 3, 5})
     by = {d["id"]: d for d in dns}
-    assert by[3]["state"] == "starting"     # el NameNode todavía lo tiene muerto
+    assert by[2]["state"] == "starting"     # el NameNode todavía lo tiene muerto
+    assert by[3]["state"] == "starting"     # todavía no se registró
     assert by[4]["state"] == "off"
     assert by[5]["state"] == "starting"     # agregado en caliente
 
 
 def test_yarn_desde_rest():
+    # Real: el RM recién arrancado, sin trabajos
     assert probes.yarn_summary(fixture_json("rm_metrics.json")) == {
-        "totalMb": 4096, "usedMb": 2048, "running": 1, "pending": 1, "finished": 4}
+        "totalMb": 4096, "usedMb": 0, "running": 0, "pending": 0, "finished": 0}
     assert probes.yarn_summary(None)["totalMb"] == 0
 
 
 def test_jps_del_sandbox():
-    assert probes.parse_jps(fixture_text("jps.txt")) == {
-        "nn1": 412, "snn": 455, "dn1": 523, "dn2": 524, "rm": 611, "nm": 640, "jh": 702,
-        "hiveserver2": 901, "metastore": 915, "sparkhistory": 933}
+    # Real, con SERVICIOS=hdfs: el jps del sandbox ya trae el id entre paréntesis
+    assert probes.parse_jps(fixture_text("jps.txt")) == {"nn1": 97, "snn": 194, "dn2": 299, "dn1": 300}
 
 
 def test_clasificar_lineas_de_comando():
@@ -102,24 +114,37 @@ def test_scan_proc(tmp_path: Path):
 
 def test_fsck_archivos_bloques_y_ubicaciones():
     files = probes.parse_fsck(fixture_text("fsck.txt"), block_size_mb=1)
-    assert [f["path"] for f in files] == ["/datos/numeros.csv", "/datos/ventas.csv", "/datos/sucias.csv"]
-    num, ven, suc = files
-    assert num["state"] == "ok" and num["replication"] == 2 and num["sizeMb"] == 2.5
-    assert [b["name"] for b in num["blocks"]] == ["blk_1073741825_1001", "blk_1073741826_1002", "blk_1073741827_1003"]
-    assert [b["index"] for b in num["blocks"]] == [1, 2, 3]
-    assert num["blocks"][0]["locations"] == [1, 2] and num["blocks"][1]["locations"] == [2, 1]
-    assert num["blocks"][2]["sizeMb"] == 0.5
-    assert ven["state"] == "under" and ven["blocks"][0]["locations"] == [1, 2]
-    assert suc["state"] == "missing" and suc["blocks"][0]["locations"] == []
+    assert [f["path"] for f in files] == ["/user/root/humo/humo.csv"]
+    (humo,) = files
+    assert humo["state"] == "ok" and humo["replication"] == 2 and humo["sizeMb"] == 1.019
+    assert [b["name"] for b in humo["blocks"]] == ["blk_1073741825_1001", "blk_1073741826_1002"]
+    assert [b["index"] for b in humo["blocks"]] == [1, 2]
+    assert [b["locations"] for b in humo["blocks"]] == [[1, 2], [1, 2]]
+    assert humo["blocks"][1]["sizeMb"] == 0.019
+
+
+def test_fsck_con_un_datanode_muerto():
+    """Real: humo.csv con una sola copia viva (Under replicated)."""
+    files = {f["path"]: f for f in probes.parse_fsck(fixture_text("fsck_dn_muerto.txt"))}
+    humo = files["/user/root/humo/humo.csv"]
+    assert humo["state"] == "under" and [b["locations"] for b in humo["blocks"]] == [[2], [2]]
+    grande = files["/user/root/humo/grande.bin"]
+    assert grande["state"] == "ok" and len(grande["blocks"]) == 300 and grande["sizeMb"] == 300.0
+    assert grande["blockSizeMb"] == 1.0
+
+
+def test_fsck_con_bloques_perdidos():
+    texto = fsck_con_bloque_perdido()
+    (humo,) = probes.parse_fsck(texto)
+    assert humo["state"] == "missing" and humo["blocks"][1]["locations"] == []
 
 
 def test_dfsadmin_report():
     r = probes.parse_dfsadmin_report(fixture_text("dfsadmin_report.txt"))
-    assert r["summary"]["Under replicated blocks"] == 2
-    assert r["summary"]["Missing blocks"] == 1
-    assert r["summary"]["DFS Used"] == 20971520
-    assert [(d["id"], d["state"], d["Num of Blocks"]) for d in r["datanodes"]] == [
-        (1, "live", 12), (2, "live", 8), (3, "dead", 0)]
+    assert r["summary"]["Under replicated blocks"] == 0
+    assert r["summary"]["Missing blocks"] == 0
+    assert r["summary"]["DFS Used"] == 2203706
+    assert [(d["id"], d["state"], d["Num of Blocks"]) for d in r["datanodes"]] == [(1, "live", 2), (2, "live", 2)]
 
 
 def test_memoria_cgroup_v2_y_meminfo(tmp_path: Path):
