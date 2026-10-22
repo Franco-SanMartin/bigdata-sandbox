@@ -11,6 +11,8 @@
 #            docker build --target base -t franki678/bigdata-sandbox:base .
 #   ml     base + pandas, scikit-learn, Spark MLlib y JupyterLab
 #            docker build --target ml -t franki678/bigdata-sandbox:ml .
+#   full   ml + el servidor de la interfaz web (:8080), que prende el cluster
+#            docker build --target full -t franki678/bigdata-sandbox:full .
 # Sin --target se arma la base.
 
 ARG HADOOP_VERSION=3.3.6
@@ -294,6 +296,37 @@ COPY datos/ejemplos/ml/ /opt/sandbox/ejemplos/ml/
 RUN find /opt/sandbox/ejemplos/ml -type f -exec sed -i 's/\r$//' {} +
 
 EXPOSE 8888
+
+# ===========================================================================
+# Version "full" (franki678/bigdata-sandbox:full): ml + el servidor de la
+# interfaz web en :8080 (server/). El contenedor arranca solo el servidor; el
+# cluster se prende desde la interfaz («Iniciar»), con el mismo entrypoint.sh
+# de las otras versiones. Con -e AUTOSTART=1 arranca solo, con las variables
+# de siempre (DATANODES, SERVICIOS...).
+# ===========================================================================
+FROM ml AS full
+
+# Starlette + uvicorn: todo Python puro (el mismo wheel en amd64 y ARM64).
+# Resuelven junto con JupyterLab sin cambiar ninguna version de ml.
+COPY server/requirements.txt /opt/sandbox/server/requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r /opt/sandbox/server/requirements.txt
+
+COPY server/sandbox_server/ /opt/sandbox/server/sandbox_server/
+RUN find /opt/sandbox/server -name '*.py' -exec sed -i 's/\r$//' {} + \
+ && python3 -c "import sys; sys.path.insert(0, '/opt/sandbox/server'); import sandbox_server.app"
+
+# UI_DIR: la interfaz compilada (ui/dist). Si no esta, el servidor anda igual
+# (la API en /api) y en / avisa que falta.
+ENV SANDBOX_VERSION=full \
+    PYTHONPATH=/opt/sandbox/server:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
+    UI_DIR=/opt/sandbox/ui \
+    AUTOSTART=0
+EXPOSE 8080
+
+# docker stop: tini le pasa el SIGTERM al servidor, que apaga el cluster en
+# orden (apagar_en_orden de sandbox/lib.sh) antes de salir. Conviene darle
+# 20 s (docker stop -t 20, o stop_grace_period: 20s en el compose).
+ENTRYPOINT ["/usr/bin/tini", "--", "python3", "-m", "sandbox_server"]
 
 # ===========================================================================
 # Sin --target, "docker build ." arma la version base
