@@ -66,23 +66,20 @@ class Settings:
     autostart: bool = field(default_factory=lambda: os.environ.get("AUTOSTART", "0").strip() in ("1", "si", "true"))
     # Carpeta de trabajo de los ejemplos (/datos, con ejemplos/ adentro)
     datos_dir: Path = field(default_factory=lambda: _env_path("SANDBOX_DATOS", "/datos"))
+    # Las funciones del entrypoint (apagar_en_orden)
+    lib: Path = field(default_factory=lambda: _env_path("SANDBOX_LIB", "/opt/sandbox/lib.sh"))
 
     def __post_init__(self) -> None:
         if self.state_file is None:
             self.state_file = self.hadoop_dir / "interfaz.json"
 
 
-# El mismo orden que el trap 'apagar' del entrypoint (commit afe12f4). Se usa
-# solo si piden apagar en medio del arranque, cuando ese trap todavía no está.
-APAGAR_EN_ORDEN = r"""
-usan_hdfs='org.apache.hive.service.server.HiveServer2|hive.metastore.HiveMetaStore|spark.deploy.history.HistoryServer'
-pkill -TERM -f "$usan_hdfs" || true
-pkill -TERM -x 'mysqld|mariadbd|mongod' || true
-for _ in $(seq 1 10); do pgrep -f "$usan_hdfs" > /dev/null || break; sleep 0.25; done
-pkill -TERM -x java || true
-pkill -TERM -f 'jupyter-lab' || true
-for _ in $(seq 1 32); do pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || break; sleep 0.25; done
-"""
+# El apagado en orden es la función apagar_en_orden de sandbox/lib.sh, la misma
+# que corre el trap 'apagar' del entrypoint con docker stop. Se usa si piden
+# apagar en medio del arranque (cuando ese trap todavía no está) y después de
+# apagar, por lo que se haya prendido desde la interfaz (JupyterLab, MongoDB...).
+APAGAR_EN_ORDEN = '. "$SANDBOX_LIB" && apagar_en_orden'
+
 
 MEM_HISTORY = 60     # muestras (10 min)
 MEM_EVERY_MS = 10_000
@@ -344,7 +341,8 @@ class Cluster:
         if not self.s.probe:
             return
         p = await asyncio.create_subprocess_exec("bash", "-c", APAGAR_EN_ORDEN, stdin=asyncio.subprocess.DEVNULL,
-                                                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                                                 env={**os.environ, "SANDBOX_LIB": str(self.s.lib)})
         try:
             await asyncio.wait_for(p.wait(), timeout=self.s.stop_timeout)
         except asyncio.TimeoutError:

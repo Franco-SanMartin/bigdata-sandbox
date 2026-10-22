@@ -72,9 +72,10 @@ tini (PID 1)
 - **Apagado ordenado.** *Apagar* manda `SIGTERM` al entrypoint, que corre su
   trap `apagar`: primero lo que usa HDFS (Hive, Spark History), después las
   bases y al final los Java. Pasa lo mismo con `docker stop`: tini le da la señal
-  al servidor, y el servidor apaga el cluster antes de salir. Si se apaga en
-  medio del arranque (el trap todavía no está), el servidor aplica el mismo
-  orden (`APAGAR_EN_ORDEN` en `cluster.py`). Al final mata todo el grupo de
+  al servidor, y el servidor apaga el cluster antes de salir. El orden vive en
+  un solo lugar, `apagar_en_orden` de `sandbox/lib.sh`: lo usa el trap del
+  entrypoint y lo usa el servidor cuando se apaga en medio del arranque (el trap
+  todavía no está) o quedan procesos sueltos. Al final mata todo el grupo de
   procesos, incluido el `tail -F`, así no quedan huérfanos.
 - **Estado de cada proceso.** Cada 2 s (1 s durante el arranque), el servidor
   sondea:
@@ -304,6 +305,7 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 | `SANDBOX_ENTRYPOINT` | `/opt/entrypoint.sh` | Qué arranca el cluster |
 | `SANDBOX_HADOOP_DIR` | `/hadoop` | El volumen |
 | `SANDBOX_BIN` | `/opt/sandbox/bin` | `datanode`, `namenode`, `estado` |
+| `SANDBOX_LIB` | `/opt/sandbox/lib.sh` | De donde sale `apagar_en_orden` |
 | `SANDBOX_STOP_TIMEOUT` | `18` | Segundos que espera el apagado ordenado antes de matar |
 | `SANDBOX_VERSION` | `full` | Tag que muestra la interfaz |
 | `LOG_LEVEL` | `warning` | Log de uvicorn |

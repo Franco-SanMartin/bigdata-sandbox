@@ -219,3 +219,26 @@ def test_acciones_sobre_procesos(settings):
         with pytest.raises(Invalid):
             cl.process_action_for("dn1", "reiniciar")
     asyncio.run(main())
+
+
+def test_apagado_en_orden_es_el_de_lib_sh(settings, tmp_path, monkeypatch):
+    """El servidor no repite el orden: llama a apagar_en_orden de sandbox/lib.sh
+    (la misma del trap del entrypoint). pkill y pgrep son falsos que anotan."""
+    from pathlib import Path
+    bin_ = tmp_path / "pk"
+    bin_.mkdir()
+    anotado = tmp_path / "pkill.txt"
+    for nombre, rc in (("pkill", 0), ("pgrep", 1)):
+        f = bin_ / nombre
+        f.write_text(f'#!/bin/sh\necho "{nombre} $*" >> "{anotado}"\nexit {rc}\n')
+        f.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}:{os.environ['PATH']}")
+    settings.lib = Path(__file__).resolve().parents[2] / "sandbox" / "lib.sh"
+    settings.probe = True
+    cl, _ = nuevo(settings)
+    asyncio.run(cl._shutdown_leftovers())
+    pkills = [l for l in anotado.read_text().splitlines() if l.startswith("pkill")]
+    assert "HiveServer2" in pkills[0] and "HistoryServer" in pkills[0]
+    assert pkills[1] == "pkill -TERM -x mysqld|mariadbd|mongod"
+    assert "jupyter" in pkills[2]
+    assert pkills[-1] == "pkill -TERM -x java"

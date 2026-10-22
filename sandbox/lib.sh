@@ -239,3 +239,36 @@ nn_activo() { # numero del NameNode activo (vacio si no hay)
   done
   return 1
 }
+
+# --- Apagado --------------------------------------------------------------------
+
+# Apaga todo en orden. La usan el trap del entrypoint (docker stop) y el
+# servidor de la version full (boton Apagar, o apagar en medio del arranque),
+# asi el orden esta en un solo lugar.
+# Docker espera unos segundos antes de matar todo (10 de fabrica, 3 en algunos
+# Docker Desktop): hay que apagar rapido y en orden.
+# 1. Lo que usa HDFS (Hive y el historial de Spark), mientras HDFS sigue
+#    arriba: con HDFS ya apagado, HiveServer2 se queda reintentando
+#    conectarse a los NameNodes y no termina. A la vez, las bases de datos,
+#    que no dependen de nada (mysqld: en MariaDB 10.5 o mas nuevo se llama
+#    mariadbd), y JupyterLab (que cierra sus notebooks abiertos).
+# 2. El resto: YARN, HDFS y ZooKeeper.
+# Termina cuando ya no queda ninguno (o a los ~10 s, lo que pase primero).
+apagar_en_orden() {
+  local usan_hdfs='org.apache.hive.service.server.HiveServer2|hive.metastore.HiveMetaStore|spark.deploy.history.HistoryServer'
+  local jupyter='/jupyter-lab|jupyter lab'
+  local _
+  pkill -TERM -f "$usan_hdfs" || true
+  pkill -TERM -x 'mysqld|mariadbd|mongod' || true
+  pkill -TERM -f "$jupyter" || true
+  for _ in $(seq 1 10); do
+    pgrep -f "$usan_hdfs" > /dev/null || break
+    sleep 0.25
+  done
+  pkill -TERM -x java || true
+  for _ in $(seq 1 32); do
+    pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || pgrep -f "$jupyter" > /dev/null || break
+    sleep 0.25
+  done
+  return 0
+}
