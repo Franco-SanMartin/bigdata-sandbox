@@ -1,0 +1,259 @@
+[
+ {
+  "config": {
+   "datanodes": 2,
+   "replication": 2,
+   "blockSize": "1m",
+   "namenodes": 1,
+   "services": "todo",
+   "mongodb": false,
+   "jupyter": true,
+   "pigHeapsize": 512
+  },
+  "volume": null,
+  "validate": [],
+  "estimate": {
+   "totalMb": 6912,
+   "parts": [
+    {
+     "label": "HDFS y sistema",
+     "mb": 4096
+    },
+    {
+     "label": "1 DataNode más",
+     "mb": 256
+    },
+    {
+     "label": "YARN, MapReduce y MySQL",
+     "mb": 1024
+    },
+    {
+     "label": "Hive y Spark",
+     "mb": 1024
+    },
+    {
+     "label": "JupyterLab",
+     "mb": 384
+    },
+    {
+     "label": "Esta interfaz",
+     "mb": 128
+    }
+   ],
+   "limitMb": 7884
+  },
+  "compose": "# BigData Sandbox :full, generado desde la interfaz (localhost:8080)\n#   docker compose up -d        crear y prender\n#   docker compose logs -f      seguir el arranque hasta \"Cluster LISTO\"\n#   docker compose stop         apagar en orden (los datos quedan)\n\nname: bigdata\n\nservices:\n  bigdata:\n    image: franki678/bigdata-sandbox:full\n    container_name: bigdata\n    environment:\n      DATANODES: \"2\"\n      REPLICATION: \"2\"\n      BLOCK_SIZE: \"1m\"\n      NAMENODES: \"1\"\n      SERVICIOS: \"todo\"\n      MONGODB: \"no\"\n      JUPYTER: \"si\"\n      # PIG_HEAPSIZE: \"512\"\n    ports:\n      - \"127.0.0.1:8080:8080\"             # esta interfaz\n      - \"127.0.0.1:9870:9870\"             # NameNode 1\n      - \"127.0.0.1:9868:9868\"             # Secondary NameNode\n      - \"127.0.0.1:9901-9909:9901-9909\"   # DataNode N en 990N\n      - \"127.0.0.1:8088:8088\"             # YARN ResourceManager\n      - \"127.0.0.1:8042:8042\"             # NodeManager\n      - \"127.0.0.1:19888:19888\"           # JobHistory\n      - \"127.0.0.1:10000:10000\"           # HiveServer2 (JDBC)\n      - \"127.0.0.1:10002:10002\"           # HiveServer2 (web)\n      - \"127.0.0.1:18080:18080\"           # Spark History\n      - \"127.0.0.1:4040:4040\"             # trabajo de Spark activo\n      - \"127.0.0.1:8888:8888\"             # JupyterLab\n    volumes:\n      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB\n      - ./datos:/datos                      # tu carpeta datos/ adentro\n    stop_grace_period: 20s\n\nvolumes:\n  bigdata_hadoop:\n    name: bigdata_hadoop\n"
+ },
+ {
+  "config": {
+   "datanodes": 1,
+   "replication": 3,
+   "blockSize": "128m",
+   "namenodes": 1,
+   "services": "todo",
+   "mongodb": false,
+   "jupyter": true,
+   "pigHeapsize": 512
+  },
+  "volume": null,
+  "validate": [
+   {
+    "field": "replication",
+    "level": "warning",
+    "message": "Hay 1 DataNode: cada bloque va a quedar con 1 copia y HDFS lo marca sub-replicado."
+   }
+  ],
+  "estimate": {
+   "totalMb": 6656,
+   "parts": [
+    {
+     "label": "HDFS y sistema",
+     "mb": 4096
+    },
+    {
+     "label": "YARN, MapReduce y MySQL",
+     "mb": 1024
+    },
+    {
+     "label": "Hive y Spark",
+     "mb": 1024
+    },
+    {
+     "label": "JupyterLab",
+     "mb": 384
+    },
+    {
+     "label": "Esta interfaz",
+     "mb": 128
+    }
+   ],
+   "limitMb": 7884
+  },
+  "compose": "# BigData Sandbox :full, generado desde la interfaz (localhost:8080)\n#   docker compose up -d        crear y prender\n#   docker compose logs -f      seguir el arranque hasta \"Cluster LISTO\"\n#   docker compose stop         apagar en orden (los datos quedan)\n\nname: bigdata\n\nservices:\n  bigdata:\n    image: franki678/bigdata-sandbox:full\n    container_name: bigdata\n    environment:\n      DATANODES: \"1\"\n      REPLICATION: \"3\"   # mayor que DATANODES: sub-replicado\n      BLOCK_SIZE: \"128m\"\n      NAMENODES: \"1\"\n      SERVICIOS: \"todo\"\n      MONGODB: \"no\"\n      JUPYTER: \"si\"\n      # PIG_HEAPSIZE: \"512\"\n    ports:\n      - \"127.0.0.1:8080:8080\"             # esta interfaz\n      - \"127.0.0.1:9870:9870\"             # NameNode 1\n      - \"127.0.0.1:9868:9868\"             # Secondary NameNode\n      - \"127.0.0.1:9901-9909:9901-9909\"   # DataNode N en 990N\n      - \"127.0.0.1:8088:8088\"             # YARN ResourceManager\n      - \"127.0.0.1:8042:8042\"             # NodeManager\n      - \"127.0.0.1:19888:19888\"           # JobHistory\n      - \"127.0.0.1:10000:10000\"           # HiveServer2 (JDBC)\n      - \"127.0.0.1:10002:10002\"           # HiveServer2 (web)\n      - \"127.0.0.1:18080:18080\"           # Spark History\n      - \"127.0.0.1:4040:4040\"             # trabajo de Spark activo\n      - \"127.0.0.1:8888:8888\"             # JupyterLab\n    volumes:\n      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB\n      - ./datos:/datos                      # tu carpeta datos/ adentro\n    stop_grace_period: 20s\n\nvolumes:\n  bigdata_hadoop:\n    name: bigdata_hadoop\n"
+ },
+ {
+  "config": {
+   "datanodes": 2,
+   "replication": 1,
+   "blockSize": "1m",
+   "namenodes": 3,
+   "services": "todo",
+   "mongodb": true,
+   "jupyter": true,
+   "pigHeapsize": 1024
+  },
+  "volume": null,
+  "validate": [
+   {
+    "field": "replication",
+    "level": "warning",
+    "message": "Con una sola copia, si se cae un DataNode sus bloques quedan perdidos hasta que vuelva."
+   }
+  ],
+  "estimate": {
+   "totalMb": 9984,
+   "parts": [
+    {
+     "label": "HDFS y sistema",
+     "mb": 4096
+    },
+    {
+     "label": "1 DataNode más",
+     "mb": 256
+    },
+    {
+     "label": "YARN, MapReduce y MySQL",
+     "mb": 1024
+    },
+    {
+     "label": "Hive y Spark",
+     "mb": 1024
+    },
+    {
+     "label": "Alta disponibilidad (3 NameNodes)",
+     "mb": 2560
+    },
+    {
+     "label": "MongoDB",
+     "mb": 512
+    },
+    {
+     "label": "JupyterLab",
+     "mb": 384
+    },
+    {
+     "label": "Esta interfaz",
+     "mb": 128
+    }
+   ],
+   "limitMb": 7884
+  },
+  "compose": "# BigData Sandbox :full, generado desde la interfaz (localhost:8080)\n#   docker compose up -d        crear y prender\n#   docker compose logs -f      seguir el arranque hasta \"Cluster LISTO\"\n#   docker compose stop         apagar en orden (los datos quedan)\n\nname: bigdata\n\nservices:\n  bigdata:\n    image: franki678/bigdata-sandbox:full\n    container_name: bigdata\n    environment:\n      DATANODES: \"2\"\n      REPLICATION: \"1\"\n      BLOCK_SIZE: \"1m\"\n      NAMENODES: \"3\"   # alta disponibilidad: queda fijo en el volumen\n      SERVICIOS: \"todo\"\n      MONGODB: \"si\"\n      JUPYTER: \"si\"\n      PIG_HEAPSIZE: \"1024\"\n    ports:\n      - \"127.0.0.1:8080:8080\"             # esta interfaz\n      - \"127.0.0.1:9870:9870\"             # NameNode 1\n      - \"127.0.0.1:9871-9872:9871-9872\"   # NameNodes 2 y 3\n      - \"127.0.0.1:8480-8482:8480-8482\"   # JournalNodes\n      - \"127.0.0.1:9901-9909:9901-9909\"   # DataNode N en 990N\n      - \"127.0.0.1:8088:8088\"             # YARN ResourceManager\n      - \"127.0.0.1:8042:8042\"             # NodeManager\n      - \"127.0.0.1:19888:19888\"           # JobHistory\n      - \"127.0.0.1:10000:10000\"           # HiveServer2 (JDBC)\n      - \"127.0.0.1:10002:10002\"           # HiveServer2 (web)\n      - \"127.0.0.1:18080:18080\"           # Spark History\n      - \"127.0.0.1:4040:4040\"             # trabajo de Spark activo\n      - \"127.0.0.1:27017:27017\"           # MongoDB\n      - \"127.0.0.1:8888:8888\"             # JupyterLab\n    volumes:\n      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB\n      - ./datos:/datos                      # tu carpeta datos/ adentro\n    stop_grace_period: 20s\n\nvolumes:\n  bigdata_hadoop:\n    name: bigdata_hadoop\n"
+ },
+ {
+  "config": {
+   "datanodes": 2,
+   "replication": 2,
+   "blockSize": "1m",
+   "namenodes": 2,
+   "services": "hdfs",
+   "mongodb": false,
+   "jupyter": true,
+   "pigHeapsize": 512
+  },
+  "volume": 1,
+  "validate": [
+   {
+    "field": "namenodes",
+    "level": "error",
+    "message": "El volumen se creó con 1 NameNode. Para cambiarlo hay que borrar el volumen."
+   },
+   {
+    "field": "jupyter",
+    "level": "warning",
+    "message": "Sin YARN, los notebooks solo pueden usar pandas y PySpark local."
+   }
+  ],
+  "estimate": null,
+  "compose": null
+ },
+ {
+  "config": {
+   "datanodes": 9,
+   "replication": 9,
+   "blockSize": "1g",
+   "namenodes": 1,
+   "services": "mapreduce",
+   "mongodb": false,
+   "jupyter": false,
+   "pigHeapsize": 512
+  },
+  "volume": null,
+  "validate": [],
+  "estimate": {
+   "totalMb": 7296,
+   "parts": [
+    {
+     "label": "HDFS y sistema",
+     "mb": 4096
+    },
+    {
+     "label": "8 DataNodes más",
+     "mb": 2048
+    },
+    {
+     "label": "YARN, MapReduce y MySQL",
+     "mb": 1024
+    },
+    {
+     "label": "Esta interfaz",
+     "mb": 128
+    }
+   ],
+   "limitMb": 7884
+  },
+  "compose": "# BigData Sandbox :full, generado desde la interfaz (localhost:8080)\n#   docker compose up -d        crear y prender\n#   docker compose logs -f      seguir el arranque hasta \"Cluster LISTO\"\n#   docker compose stop         apagar en orden (los datos quedan)\n\nname: bigdata\n\nservices:\n  bigdata:\n    image: franki678/bigdata-sandbox:full\n    container_name: bigdata\n    environment:\n      DATANODES: \"9\"\n      REPLICATION: \"9\"\n      BLOCK_SIZE: \"1g\"\n      NAMENODES: \"1\"\n      SERVICIOS: \"mapreduce\"\n      MONGODB: \"no\"\n      JUPYTER: \"no\"\n      # PIG_HEAPSIZE: \"512\"\n    ports:\n      - \"127.0.0.1:8080:8080\"             # esta interfaz\n      - \"127.0.0.1:9870:9870\"             # NameNode 1\n      - \"127.0.0.1:9868:9868\"             # Secondary NameNode\n      - \"127.0.0.1:9901-9909:9901-9909\"   # DataNode N en 990N\n      - \"127.0.0.1:8088:8088\"             # YARN ResourceManager\n      - \"127.0.0.1:8042:8042\"             # NodeManager\n      - \"127.0.0.1:19888:19888\"           # JobHistory\n    volumes:\n      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB\n      - ./datos:/datos                      # tu carpeta datos/ adentro\n    stop_grace_period: 20s\n\nvolumes:\n  bigdata_hadoop:\n    name: bigdata_hadoop\n"
+ },
+ {
+  "config": {
+   "datanodes": 0,
+   "replication": 10,
+   "blockSize": "0m",
+   "namenodes": 4,
+   "services": "x",
+   "mongodb": false,
+   "jupyter": true,
+   "pigHeapsize": 100
+  },
+  "volume": null,
+  "validate": [
+   {
+    "field": "datanodes",
+    "level": "error",
+    "message": "Tiene que ser un número de 1 a 9."
+   },
+   {
+    "field": "replication",
+    "level": "error",
+    "message": "Tiene que ser un número de 1 a 9."
+   },
+   {
+    "field": "blockSize",
+    "level": "error",
+    "message": "Número seguido de m o g: 1m, 32m, 128m, 1g. Mínimo 1m."
+   },
+   {
+    "field": "namenodes",
+    "level": "error",
+    "message": "Tiene que ser 1, 2 o 3."
+   },
+   {
+    "field": "pigHeapsize",
+    "level": "error",
+    "message": "Elegí 256, 512, 1024 o 2048 MB."
+   }
+  ],
+  "estimate": null,
+  "compose": null
+ }
+]

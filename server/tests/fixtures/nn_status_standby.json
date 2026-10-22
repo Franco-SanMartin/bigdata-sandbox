@@ -1,0 +1,16 @@
+{
+ "beans": [
+  {
+   "name": "Hadoop:service=NameNode,name=NameNodeStatus",
+   "modelerType": "org.apache.hadoop.hdfs.server.namenode.NameNode",
+   "NNRole": "NameNode",
+   "HostAndPort": "localhost:9000",
+   "SecurityEnabled": false,
+   "LastHATransitionTime": 0,
+   "BytesWithFutureGenerationStamps": 0,
+   "SlowPeersReport": null,
+   "SlowDisksReport": null,
+   "State": "standby"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+412 NameNode (nn1)
+455 SecondaryNameNode
+523 DataNode (dn1)
+524 DataNode (dn2)
+611 ResourceManager
+640 NodeManager
+702 JobHistoryServer
+880 RunJar
+901 HiveServer2
+915 HiveMetaStore
+933 HistoryServer
+1001 Jps
