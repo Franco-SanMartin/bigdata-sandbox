@@ -1,3 +1,7 @@
 datos/*
 !datos/README.md
 !datos/ejemplos/
+
+# Interfaz web (ui/)
+ui/node_modules/
+ui/dist/

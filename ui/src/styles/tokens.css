@@ -1,0 +1,73 @@
+/* Tokens del sistema. Escala neutra de negro a blanco; el color solo para estados
+   (arriba, en curso, caído) y, muy apagado, para distinguir motores.
+   Tipografía: IBM Plex, hecha para software de ingeniería, con números tabulares claros
+   y una mono de la misma familia para comandos, puertos e ids. */
+:root {
+  color-scheme: dark;
+
+  /* Neutros, de fondo a texto */
+  --n-0: #090909;
+  --n-1: #0E0E0E;
+  --n-2: #131313;
+  --n-3: #181818;
+  --n-4: #1E1E1E;
+  --n-5: #262626;
+  --n-6: #2F2F2F;
+  --n-7: #3B3B3B;
+  --n-8: #4F4F4F;
+  --n-9: #6E6E6E;
+  --n-10: #8F8F8F;
+  --n-11: #B4B4B4;
+  --n-12: #EDEDED;
+
+  --bg: var(--n-0);
+  --bg-side: var(--n-1);
+  --surface: var(--n-2);
+  --surface-2: var(--n-3);
+  --surface-3: var(--n-4);
+  --popover: #151515;
+  --line: var(--n-5);
+  --line-soft: #1C1C1C;
+  --line-strong: var(--n-7);
+  --text: var(--n-12);
+  --text-2: var(--n-11);
+  --text-3: var(--n-10);
+  --text-4: var(--n-9);
+
+  /* Estados */
+  --ok: #4CB782;
+  --ok-bg: rgba(76, 183, 130, .12);
+  --run: #D9A43F;
+  --run-bg: rgba(217, 164, 63, .12);
+  --bad: #E5534B;
+  --bad-bg: rgba(229, 83, 75, .12);
+  --bad-line: rgba(229, 83, 75, .38);
+
+  /* Motores, apagados */
+  --eng-mr: #A69E8A;
+  --eng-tez: #9389C4;
+  --eng-spark: #C38C64;
+  --eng-uno: #B48AA2;
+
+  --focus: rgba(237, 237, 237, .55);
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, .06), 0 12px 32px -8px rgba(0, 0, 0, .8);
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+
+  --f-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 16px;
+  --fs-2xl: 20px;
+  --fs-3xl: 26px;
+
+  --h-ctl: 32px;
+  --h-ctl-sm: 28px;
+  --side-w: 232px;
+  --top-h: 48px;
+}
