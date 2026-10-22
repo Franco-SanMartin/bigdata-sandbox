@@ -135,7 +135,7 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
     for (let j = 0; j < n; j++) {
       const x = X0 + j * (w + 12), id = `nn${j + 1}`;
       const r = live ? roleOf(id) : j === 0 ? 'active' : 'standby';
-      box(id, x, y, w, 54, `NameNode ${j + 1}`, `nn${j + 1} · :${9870 + j}`, { role: r === 'active' ? 'ACTIVO' : r === 'standby' ? 'EN ESPERA' : undefined, act: r === 'active', tag: tagOf(id) });
+      box(id, x, y, w, 54, `NameNode ${j + 1}`, `:${9870 + j} · RPC :${9000 + j}`, { role: r === 'active' ? 'ACTIVO' : r === 'standby' ? 'EN ESPERA' : undefined, act: r === 'active', tag: tagOf(id) });
       wire(`w-nnup${j}`, `M${x + w / 2} ${bus}V${y}`); dot(`d-nnup${j}`, x + w / 2, bus);
       nnCenters.push(x + w / 2);
     }
