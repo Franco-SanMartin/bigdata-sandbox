@@ -26,7 +26,7 @@ export class DemoYarn {
     const vUsed = Math.min(VCORES, containers.length);
     return {
       totalMb: YARN_MB, usedMb: used, totalVcores: VCORES, usedVcores: vUsed, minAllocationMb: 512, maxAllocationMb: YARN_MB,
-      nodes: [{ id: 'bigdata:45454', state: nm?.state === 'up' ? 'RUNNING' : 'LOST', memTotalMb: YARN_MB, memUsedMb: used, vcoresTotal: VCORES, vcoresUsed: vUsed, containers, lastHealthUpdate: this.e.now() - (this.e.now() % 1000) }],
+      nodes: [{ id: 'localhost:45454', state: nm?.state === 'up' ? 'RUNNING' : 'LOST', memTotalMb: YARN_MB, memUsedMb: used, vcoresTotal: VCORES, vcoresUsed: vUsed, containers, lastHealthUpdate: this.e.now() - (this.e.now() % 1000) }],
       queues: [{ name: 'default', capacity: 100, usedMb: used, running: this.e.jobs.filter(a => a.state === 'RUNNING').length, pending: this.e.jobs.filter(a => a.state === 'ACCEPTED').length }],
     };
   }
