@@ -1,5 +1,7 @@
 # BigData Sandbox
 
+**Castellano** · [English](README.en.md)
+
 Un cluster de Big Data entero en **una imagen de Docker**: Hadoop (HDFS, YARN,
 MapReduce), Hive, Spark, Pig, Sqoop con MySQL, ZooKeeper y MongoDB. Cada
 componente corre como un proceso aparte, con su propia página web, y la
@@ -11,6 +13,10 @@ caja negra: es el Hadoop de verdad, en tu compu.
 - **[Mapa de la arquitectura](https://franki-678.github.io/bigdata-sandbox/)**:
   cada módulo del cluster, qué hace, cómo se conecta con los demás y sus
   comandos (también está en el repo: `docs/index.html`).
+- **[Demo de la interfaz `full`](https://franki-678.github.io/bigdata-sandbox/demo/)**:
+  la interfaz web en el navegador, con un cluster simulado (sin Docker).
+
+![La interfaz de la versión full: el cluster en marcha con su arquitectura en vivo](docs/capturas/cluster.png)
 
 ## Arranque rápido
 
@@ -78,7 +84,19 @@ cluster se elige y se prende desde ahí (*Iniciar*). Con `-e AUTOSTART=1`
 arranca solo, con las variables de siempre (`DATANODES`, `REPLICATION`,
 `SERVICIOS`...). Para entrar a las páginas web de cada servicio, agregá sus
 puertos como en el [arranque rápido](#arranque-rápido). Detalle del servidor y
-su API en [server/README.md](server/README.md).
+su API en [server/README.md](server/README.md). Para mirarla sin instalar nada,
+está la [demo](https://franki-678.github.io/bigdata-sandbox/demo/) (un cluster
+simulado en el navegador).
+
+| | |
+|---|---|
+| ![Pipeline: la ingesta con hdfs dfs -put, la corrida y el riel de las seis etapas](docs/capturas/pipeline.png) | ![YARN: el NodeManager, la cola y los trabajos de MapReduce, Tez y Spark](docs/capturas/yarn.png) |
+| **Pipeline**: de un CSV sucio a un resumen y un modelo, eligiendo la herramienta de cada etapa | **YARN**: memoria, contenedores y cada trabajo con su motor |
+| ![Machine Learning: entrenamientos con scikit-learn y Spark MLlib, y el detalle de un modelo](docs/capturas/ml.png) | |
+| **Machine Learning**: el mismo modelo con scikit-learn o con Spark MLlib, comparados | |
+
+Las capturas son del humo del CI (`server/tests/humo/humo_ui.py`), contra la
+imagen de verdad.
 
 ### Qué hay en `base`
 
@@ -148,7 +166,8 @@ falta clonar este repo.
 | `datos/ejemplos/` | Los ejemplos que van adentro de la imagen |
 | `docker-compose.yml` | El mismo cluster de la guía 2, con `docker compose up -d` |
 | `guias/` | Las guías |
-| `docs/` | El mapa de la arquitectura (GitHub Pages) |
+| `docs/` | El mapa de la arquitectura (GitHub Pages), la demo de la interfaz (`docs/demo/`, se arma con `npm run build:demo` en `ui/`) y las capturas |
+| `server/`, `ui/` | El servidor y la interfaz web de la versión `full` |
 | `pruebas/` | Lo que corre GitHub antes de publicar |
 
 ## Cómo se prueba
@@ -162,8 +181,13 @@ Cada cambio pasa por GitHub Actions antes de llegar a Docker Hub:
   luz y volúmenes de la imagen anterior. También corre **todos los comandos
   de las guías** (`pruebas/tutoriales.py`) y compara la salida con la que
   muestran. Si algo falla, no se publica.
-- **`docs.yml`**: cuando cambian solo las guías o el mapa, revisa los links y
-  vuelve a correr las guías contra la imagen publicada.
+- **`full.yml`** arma `full` y le corre el humo de la API y de la interfaz
+  (Playwright, pantalla por pantalla, también con el cluster apagado) contra
+  Hadoop, YARN, Hive, MySQL y MongoDB reales. `server.yml` corre los tests del
+  servidor.
+- **`docs.yml`**: cuando cambian solo las guías o el mapa, revisa los links,
+  que la demo de `docs/demo/` sea la de `ui/` y vuelve a correr las guías
+  contra la imagen publicada.
 - **`aula.yml`** deja la imagen como archivo en el release
   [`imagen`](https://github.com/Franki-678/bigdata-sandbox/releases/tag/imagen),
   para repartirla en el aula sin que cada compu la baje de internet.
@@ -178,3 +202,8 @@ Cada cambio pasa por GitHub Actions antes de llegar a Docker Hub:
 - Para que entre en una notebook, cada proceso tiene un tope de memoria chico
   (`sandbox/lib.sh`), MySQL y MongoDB usan poca caché (`conf/`) y la imagen
   no trae lo que el cluster no usa.
+
+## Licencia
+
+[Apache 2.0](LICENSE). Los cambios de cada versión, en el
+[CHANGELOG](CHANGELOG.md).
