@@ -306,11 +306,20 @@ def solo_hdfs() -> None:
         esperar(lambda: put_terminado(carpeta) and "grande.bin" in [x["name"] for x in put_terminado(carpeta)],
                 300, "sin writing", 1)
         _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(carpeta))
-        _, out, _ = en_contenedor("cat /tmp/put.log; pgrep -f 'FsShell' || echo sin-put")
+        # [F]sShell: que pgrep no se encuentre a sí mismo (el bash -c lo lleva en la línea)
+        _, out, _ = en_contenedor("cat /tmp/put.log; pgrep -f '[F]sShell' || echo sin-put")
+        largo = next((x.get("sizeMb") for x in ls["entries"] if x["name"] == "grande.bin"), None)
+        _, st, _ = en_contenedor(f"curl -s 'http://localhost:9870/webhdfs/v1{carpeta}/grande.bin?op=GETFILESTATUS'")
+        try:
+            bytes_hdfs = json.loads(st)["FileStatus"]["length"]
+        except (ValueError, KeyError):
+            bytes_hdfs = None
         c.detalle = (f"OPENFORWRITE visto: {visto}; terminó {round(time.time() - t0, 1)} s después; "
+                     f"grande.bin {largo} MB ({bytes_hdfs} bytes); "
                      f"estados: {[(x['name'], x.get('state')) for x in ls['entries']]}; {out.strip()[-200:]}")
         assert visto
         assert "sin-put" in out, "el ls dijo terminado pero el -put seguía corriendo"
+        assert bytes_hdfs == 300 * 1024 * 1024, "el ls dijo terminado pero grande.bin no tiene los 300 MB"
 
     with Chequeo("replicación: setrep 1 y de vuelta a 2") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": archivo, "replication": 1}, timeout=120)
@@ -332,10 +341,20 @@ def solo_hdfs() -> None:
         guardar("hdfs_datanodes_dn2_muerto", dns)
         muerto = round(time.time() - t0, 1)
         TIEMPOS["DataNode muerto para el NameNode"] = muerto
-        codigo, d = pedir("GET", "/api/hdfs/file?path=" + q(archivo))
+
+        def con_stale():
+            _, d = pedir("GET", "/api/hdfs/file?path=" + q(archivo))
+            _, files = pedir("GET", "/api/hdfs/files")
+            f = next(x for x in files if x["path"] == archivo)
+            listo = all(b.get("stale") == [2] and 2 not in b["locations"] for b in d["blocks"] + f["blocks"])
+            return (d, f) if listo else None
+        try:
+            d, f = esperar(con_stale, 60, "stale [2]", 2)
+        except AssertionError:
+            _, d = pedir("GET", "/api/hdfs/file?path=" + q(archivo))
+            _, files = pedir("GET", "/api/hdfs/files")
+            f = next(x for x in files if x["path"] == archivo)
         guardar("hdfs_file_dn2_muerto", d)
-        codigo, files = pedir("GET", "/api/hdfs/files")
-        f = next(x for x in files if x["path"] == archivo)
         c.detalle = f"dead a los {muerto} s; detail stale {[b.get('stale') for b in d['blocks']]}; " \
                     f"files stale {[b.get('stale') for b in f['blocks']]}"
         capturar("nn_jmx_dn_muerto.json", "curl -s 'http://localhost:9870/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo'")
@@ -467,6 +486,12 @@ def paso(stage: str, tool: str, opciones: dict | None = None, segundos=1200) -> 
     with Chequeo(f"pipeline {nombre}") as c:
         t0 = time.time()
         codigo, r = pedir("POST", "/api/pipeline/steps", {"stage": stage, "tool": tool, "options": opciones or {}})
+        if codigo == 409:
+            # Quedó corriendo el paso de un chequeo anterior que falló: se espera
+            # a que termine para no arrastrar la falla a todos los que siguen.
+            esperar(lambda: not any(x["state"] == "running" for x in pedir("GET", "/api/pipeline/steps")[1]),
+                    segundos, "que termine el paso anterior", 5)
+            codigo, r = pedir("POST", "/api/pipeline/steps", {"stage": stage, "tool": tool, "options": opciones or {}})
         assert codigo == 202, (codigo, r)
         sid = r["id"]
 
@@ -543,6 +568,14 @@ def datos() -> None:
         assert any("ventas_limpias" in n for s, n in nombres if s == "hive"), "falta ventas_limpias en Hive"
         assert any(s == "mysql" for s, _ in nombres) and any(s == "mongodb" for s, _ in nombres)
         assert not fallas, fallas
+
+    with Chequeo("ejemplos/sqoop.sh de punta a punta (deja las tablas tienda_* del JOIN de Hive)") as c:
+        t0 = time.time()
+        rc, out, err = en_contenedor("cd /datos && bash ejemplos/sqoop.sh > /tmp/sqoop_sh.log 2>&1; echo rc=$?; "
+                                     "tail -5 /tmp/sqoop_sh.log", timeout=1800)
+        TIEMPOS["ejemplos/sqoop.sh"] = round(time.time() - t0, 1)
+        c.detalle = out.strip()[-400:]
+        assert "rc=0" in out, out
 
     with Chequeo("datos: los ejemplos") as c:
         codigo, ej = pedir("GET", "/api/data/examples")

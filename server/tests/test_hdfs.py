@@ -195,9 +195,10 @@ def test_archivos_y_detalle(settings, tmp_path, fake_hdfs):
     asyncio.run(main())
 
 
-def test_transferencias_entre_dos_fsck(settings, tmp_path, fake_hdfs):
+def test_transferencias_entre_dos_fsck(settings, tmp_path, fake_hdfs, monkeypatch):
     async def main():
         cl, h, bus = make(settings, tmp_path)
+        monkeypatch.setattr(h, "datanodes", lambda: [{"id": i, "state": "live"} for i in (1, 2, 3)])
         q = bus.subscribe()
         before = probes.parse_fsck(fixture_text("fsck.txt"))
         assert h.observe(before) == []          # la primera vez solo toma nota
@@ -423,5 +424,21 @@ def test_copias_en_datanode_caido(settings, tmp_path, fake_hdfs, monkeypatch):
         assert [b["stale"] for b in d["blocks"]] == [[2]] * 7
         h._fsck = None                        # sin la caché corta del fsck
         files = {f["path"]: f for f in await h.files()}
+        assert files["/user/root/numeros.txt"]["blocks"][0]["stale"] == [2]
+    asyncio.run(main())
+
+
+def test_fsck_que_todavia_lista_al_datanode_muerto(settings, tmp_path, fake_hdfs, monkeypatch):
+    """Con Hadoop 3.3.6, apenas el NameNode da por muerto a dn2 el fsck lo sigue
+    listando como ubicación: esa copia va a stale y no a locations."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        vivos = h.datanodes()
+        monkeypatch.setattr(h, "datanodes", lambda: [dict(d, state="dead") if d["id"] == 2 else d for d in vivos])
+        d = await h.detail("/user/root/numeros.txt")
+        assert [b["locations"] for b in d["blocks"]] == [[1]] * 7
+        assert [b["stale"] for b in d["blocks"]] == [[2]] * 7
+        files = {f["path"]: f for f in await h.files()}
+        assert files["/user/root/numeros.txt"]["blocks"][0]["locations"] == [1]
         assert files["/user/root/numeros.txt"]["blocks"][0]["stale"] == [2]
     asyncio.run(main())

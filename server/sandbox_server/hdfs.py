@@ -446,15 +446,29 @@ class Hdfs:
             self._fsck = (time.monotonic(), files, out)
             return files
 
+    def _down(self) -> set[int]:
+        return {d["id"] for d in self.datanodes() if d["state"] == "dead"}
+
+    def _drop_down(self, b: dict, down: set[int]) -> None:
+        """Justo después de que el NameNode da por muerto a un DataNode, el fsck
+        lo sigue listando un rato como ubicación (visto con Hadoop 3.3.6): esas
+        copias van a 'stale', no a 'locations'."""
+        gone = [x for x in b["locations"] if x in down]
+        if gone:
+            b["locations"] = [x for x in b["locations"] if x not in down]
+            self.known.setdefault(b["id"], set()).update(gone)
+
     def observe(self, files: list[dict]) -> list[dict]:
         """Compara las ubicaciones de cada bloque con las de la vez anterior y
         publica las copias nuevas (evento 'transfer'). Devuelve las copias."""
         dns = {d["id"]: d["state"] for d in self.datanodes()}
         alive = {i for i, s in dns.items() if s in ("live", "stale", "starting")}
+        down = {i for i, s in dns.items() if s == "dead"}
         moved: list[dict] = []
         current: dict[int, set[int]] = {}
         for f in files:
             for b in f["blocks"]:
+                self._drop_down(b, down)
                 locs = list(b["locations"])
                 current[b["id"]] = set(locs)
                 self.block_names[b["id"]] = (f["path"], b["name"])
@@ -582,7 +596,9 @@ class Hdfs:
             f = {"path": path, "sizeMb": mb(size), "replication": int(st.get("replication", 0)), "blocks": [],
                  "state": "ok"}
         f["blockSizeMb"] = mb(bs)
+        down = self._down()
         for b in f["blocks"]:
+            self._drop_down(b, down)
             b["stale"] = sorted(self.known.get(b["id"], set()) - set(b["locations"]))
         if path in self.uploads or path.endswith(COPYING) or "OPENFORWRITE" in out:
             f["state"] = "writing"

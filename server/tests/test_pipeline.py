@@ -275,7 +275,7 @@ def test_las_14_rutas(mundo, settings, tmp_path):
         r = c.post("/api/pipeline/steps", json={"stage": "almacen", "tool": "hivetab"})
         assert r.status_code == 400 and r.json()["code"] == "invalid" and r.json()["error"]
         r = c.post("/api/pipeline/step", json={"stage": "ingesta", "tool": "put"})
-        assert r.status_code == 200 and r.json() == {"id": "p1"}
+        assert r.status_code == 202 and r.json() == {"id": "p1"}
         fin = time.time() + 15
         while c.get("/api/pipeline/steps").json()[0]["state"] == "running" and time.time() < fin:
             time.sleep(0.05)

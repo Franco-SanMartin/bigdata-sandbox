@@ -390,3 +390,28 @@ def test_yarn_con_solo_hdfs_es_service_down(settings, tmp_path):
             await y.submit("mr-ventas")
         assert e.value.code == "service_down"
     asyncio.run(main())
+
+
+def test_kill_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, monkeypatch):
+    """spark-submit imprime el id antes de que el RM lo acepte (visto en el humo
+    real): el kill de una app que mandamos nosotros reintenta en vez de dar 404."""
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        nueva = "application_1792041277726_0042"
+        y.submitted[nueva] = {"example": "spark-ventas"}
+        llamadas = []
+
+        async def rm_app(app_id):
+            llamadas.append(app_id)
+            if len(llamadas) < 3:
+                raise ApiError(f"No existe el trabajo {app_id}", "not_found")
+            return {"id": app_id, "state": "FINISHED"}
+        monkeypatch.setattr(y, "rm_app", rm_app)
+        await y.kill(nueva)
+        assert len(llamadas) == 3
+        # Una que no mandamos nosotros da 404 enseguida
+        llamadas.clear()
+        with pytest.raises(ApiError) as e:
+            await y.kill("application_1792041277726_0099")
+        assert e.value.code == "not_found" and len(llamadas) == 1
+    asyncio.run(main())

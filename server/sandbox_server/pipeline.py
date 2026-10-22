@@ -946,7 +946,7 @@ class Pipeline:
 
         async def run_step(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
-            return JSONResponse({"id": await self.run(b)})
+            return JSONResponse({"id": await self.run(b)}, status_code=202)
 
         async def steps(_: Request) -> JSONResponse:
             return JSONResponse(self.steps())

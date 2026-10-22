@@ -716,7 +716,17 @@ class Yarn:
 
     async def kill(self, app_id: str) -> None:
         self._need_rm()
-        a = await self.rm_app(app_id)
+        # spark-submit imprime "Submitting application <id>" antes de que el RM
+        # la acepte: si la mandamos nosotros, se espera un poco a que el RM la conozca.
+        deadline = time.monotonic() + (30 if app_id in self.submitted else 0)
+        while True:
+            try:
+                a = await self.rm_app(app_id)
+                break
+            except ApiError as e:
+                if e.code != "not_found" or time.monotonic() >= deadline:
+                    raise
+                await asyncio.sleep(0.5)
         if app_state(a) in ("FINISHED", "FAILED", "KILLED"):
             return
         cmd = ["yarn", "application", "-kill", app_id]
