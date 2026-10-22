@@ -1,0 +1,36 @@
+# Pruebas del servidor de la version full (server/): pytest con Python 3.12,
+# el mismo de la imagen. No usa Docker ni Hadoop: el cluster es un entrypoint
+# falso y los servicios (WebHDFS, ResourceManager, JobHistory...) responden con
+# las fixtures de server/tests/fixtures. La prueba de humo contra la imagen de
+# verdad (server/tests/humo) se saltea sola sin SANDBOX_HUMO=1.
+name: Servidor
+
+on:
+  push:
+    branches: [full, main]
+    paths:
+      - "server/**"
+      - ".github/workflows/server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements*.txt
+      - name: Dependencias
+        run: pip install -r requirements-test.txt
+      - name: pytest
+        run: python -m pytest -q
