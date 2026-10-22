@@ -42,6 +42,8 @@
   --bad: #E5534B;
   --bad-bg: rgba(229, 83, 75, .12);
   --bad-line: rgba(229, 83, 75, .38);
+  /* Texto sobre fondo oscuro en estado de error: más claro que --bad para que se lea */
+  --bad-text: #F2867F;
 
   /* Motores, apagados */
   --eng-mr: #A69E8A;
