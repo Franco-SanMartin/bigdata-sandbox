@@ -150,16 +150,16 @@ fi
 mysql_cortado() {
   log "MySQL NO ARRANCO: este volumen es de la imagen anterior (Ubuntu 20.04," \
       "MariaDB 10.3) y la ultima vez se apago de golpe (sin 'docker stop')." \
-      "\n  El MariaDB de esta imagen (10.11) no puede abrir una base que quedo asi;" \
-      "primero la tiene que cerrar bien la imagen que la creo. No se pierde nada:" \
+      "\n  El MariaDB de esta imagen (10.11) no puede abrir una base que quedo asi." \
+      "\n  Si lo que habia en MySQL no importa: docker exec <contenedor> rm -rf /hadoop/mysql" \
+      "\n  y docker restart <contenedor>: se crea de cero con la base de ejemplo 'tienda'." \
+      "\n  Para no perder nada, la tiene que cerrar bien la imagen que la creo:" \
       "\n    1. docker rm -f <contenedor>          (el volumen queda)" \
-      "\n    2. el mismo docker run de siempre (mismo -v ...:/hadoop), pero con la" \
-      "\n       imagen franki678/bigdata-sandbox:ubuntu20" \
+      "\n    2. el mismo docker run de siempre (mismo -v ...:/hadoop), pero con la imagen" \
+      "\n       franki678/bigdata-sandbox@sha256:ec227d9e0559b4294a708a73a91f0e2218871ab0c2ffc3a4f77f347c10f67ce1" \
       "\n    3. cuando diga 'Cluster LISTO': docker stop -t 20 <contenedor>" \
       "\n    4. docker rm <contenedor> y volver a crearlo con esta imagen: MySQL se" \
       "\n       pone al dia solo." \
-      "\n  Si lo que habia en MySQL no importa: docker exec <contenedor> rm -rf /hadoop/mysql" \
-      "\n  y docker restart <contenedor>: se crea de cero con la base de ejemplo 'tienda'." \
       "\n  Mientras tanto, todo lo demas (HDFS, YARN, Hive, Spark) anda; Sqoop no."
 }
 mysql_start() {
@@ -185,7 +185,7 @@ mysql_start() {
     # Volumen de la imagen anterior (MariaDB 10.3) que se apago de golpe: el
     # MariaDB de esta imagen no sabe terminar lo que quedo a medias en ese
     # formato viejo. No hay arreglo automatico seguro: lo tiene que cerrar
-    # bien el MariaDB que lo creo (la imagen :ubuntu20).
+    # bien el MariaDB que lo creo (la imagen anterior, por digest).
     if grep -q 'Upgrade after a crash is not supported' /var/log/mysql/error.log 2> /dev/null; then
       mysql_cortado
     fi

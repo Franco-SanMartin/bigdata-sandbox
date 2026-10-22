@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Escenarios que probar.sh no cubre: reinicios, alta disponibilidad, cada
 # valor de SERVICIOS, cambiar parametros sobre un volumen que ya existe,
-# parametros invalidos, volumenes de versiones anteriores, un primer
-# arranque cortado a la mitad, MongoDB y la version ml. Corre en la compu
+# parametros invalidos, volumenes de la imagen anterior, un primer
+# arranque cortado a la mitad, MongoDB, la version ml y los comandos de las
+# guias (tutoriales). Corre en la compu
 # (necesita docker), con la imagen ya bajada o armada:
 #   bash pruebas/escenarios.sh <escenario>      (sin argumento: los lista)
 #   IMAGEN=franki678/bigdata-sandbox:ml bash pruebas/escenarios.sh ml
@@ -126,18 +127,19 @@ medir_hasta() {
   fi
 }
 
-# La imagen de antes de las versiones (Ubuntu 20.04, MariaDB 10.3): desde que
-# latest es la base, quedo como :ubuntu20. Si todavia no existe, latest.
+# La imagen de antes de las versiones (Ubuntu 20.04, MariaDB 10.3), la que se
+# uso hasta octubre de 2026. Ya no tiene tag: se baja por su digest, que es lo
+# que hace quien trae un volumen de esa epoca. Vacio si ya no se puede bajar.
+ANTERIOR_DIGEST=franki678/bigdata-sandbox@sha256:ec227d9e0559b4294a708a73a91f0e2218871ab0c2ffc3a4f77f347c10f67ce1
 imagen_anterior() {
-  local i
-  for i in ${IMAGEN_ANTERIOR:-franki678/bigdata-sandbox:ubuntu20 franki678/bigdata-sandbox:latest}; do
-    docker image inspect "$i" > /dev/null 2>&1 || docker pull -q "$i" > /dev/null 2>&1 || continue
-    if ! docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$i" | grep -q '^SANDBOX_VERSION='; then
-      echo "$i"; return 0
-    fi
-  done
-  falla "no encontre la imagen anterior (Ubuntu 20.04) ni como :ubuntu20 ni como :latest"
+  local i=${IMAGEN_ANTERIOR:-$ANTERIOR_DIGEST}
+  docker image inspect "$i" > /dev/null 2>&1 || docker pull -q "$i" > /dev/null 2>&1 || return 0
+  # Tiene que ser la de antes de las versiones (sin SANDBOX_VERSION)
+  docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$i" | grep -q '^SANDBOX_VERSION=' \
+    && falla "$i no es la imagen anterior (tiene SANDBOX_VERSION)"
+  echo "$i"
 }
+no_aplica() { echo; echo "ESCENARIO $ESCENARIO: NO APLICA ($*)"; exit 0; }
 
 hive_sql() { en "beeline -u jdbc:hive2://localhost:10000 --silent=true --outputformat=csv2 -e \"$1\" 2>/dev/null"; }
 
@@ -145,7 +147,7 @@ hive_sql() { en "beeline -u jdbc:hive2://localhost:10000 --silent=true --outputf
 reinicio() {
   paso "Arranque + prueba completa"
   prender "${CHICO[@]}"; listo 1
-  medir_desde "${VERSION:-ubuntu20}, todo"
+  medir_desde "${VERSION:-anterior}, todo"
   probar
   medir_hasta
   en "ls /datos" | grep -q derby.log && falla "quedo un derby.log en /datos"
@@ -396,13 +398,14 @@ ml() { # IMAGEN tiene que ser la version ml
 }
 
 # ---------------------------------------------------------------------------
-desde_latest() { # el volumen de un alumno que usaba la imagen de antes de las versiones
+imagen_vieja() { # el volumen de un alumno que usaba la imagen de antes de las versiones, apagado bien
   [ -n "$VERSION" ] || falla "IMAGEN=$IMAGEN es la de antes de las versiones: no hay a que pasar"
   local anterior
   anterior=$(imagen_anterior)
-  paso "Volumen creado con $anterior (Ubuntu 20.04, MariaDB 10.3) + prueba completa"
+  [ -n "$anterior" ] || no_aplica "no se pudo bajar la imagen anterior"
+  paso "Volumen creado con la imagen anterior (Ubuntu 20.04, MariaDB 10.3) + prueba completa"
   docker run -d --name "$C" -v "$V:/hadoop" "${CHICO[@]}" "$anterior" > /dev/null; listo 1
-  medir_desde "ubuntu20 (la anterior), todo"
+  medir_desde "anterior (Ubuntu 20.04), todo"
   probar
   medir_hasta
   subir_ventas
@@ -431,20 +434,26 @@ volumen_cortado() { # un volumen de la imagen anterior que se apago de golpe (si
   [ -n "$VERSION" ] || falla "IMAGEN=$IMAGEN es la de antes de las versiones"
   local anterior
   anterior=$(imagen_anterior)
-  paso "Volumen creado con $anterior, cortado con docker kill mientras escribe en MySQL"
-  docker run -d --name "$C" -v "$V:/hadoop" -e SERVICIOS=mapreduce "$anterior" > /dev/null; listo 1
-  en "mysql tienda -e 'CREATE TABLE propia (x INT); INSERT INTO propia VALUES (1)'"
-  # Escrituras en curso al momento del corte: el registro de MySQL queda a medias
-  docker exec -d "$C" bash -c 'while true; do mysql tienda -e "INSERT INTO propia VALUES (2)"; done'
-  sleep 3; docker kill "$C" > /dev/null
+  [ -n "$anterior" ] || no_aplica "no se pudo bajar la imagen anterior"
+  cortar_con_anterior() {
+    docker rm -f "$C" > /dev/null 2>&1 || true
+    docker run -d --name "$C" -v "$V:/hadoop" -e SERVICIOS=mapreduce "$anterior" > /dev/null; listo 1
+    en "mysql tienda -e 'CREATE TABLE propia (x INT); INSERT INTO propia VALUES (1)'"
+    # Escrituras en curso al momento del corte: el registro de MySQL queda a medias
+    docker exec -d "$C" bash -c 'while true; do mysql tienda -e "INSERT INTO propia VALUES (2)"; done'
+    sleep 3; docker kill "$C" > /dev/null
+  }
+  paso "Volumen creado con la imagen anterior, cortado con docker kill mientras escribe en MySQL"
+  cortar_con_anterior
 
   paso "Con $IMAGEN: avisa con los pasos y el resto del cluster arranca igual"
   prender -e SERVICIOS=mapreduce; listo 1
   docker logs "$C" 2>&1 | grep -q 'MySQL NO ARRANCO' || falla "no aviso por que no arranca MySQL"
   docker logs "$C" 2>&1 | sed -n '/MySQL NO ARRANCO/,/Sqoop no/p'
+  docker logs "$C" 2>&1 | grep -q "${ANTERIOR_DIGEST#*@}" || falla "el aviso no dice con que imagen cerrarlo"
   subir_ventas; leer_ok
 
-  paso "Los pasos del aviso: la anterior lo cierra bien y esta lo pone al dia"
+  paso "Arreglo sin perder nada: la imagen anterior (por digest) lo cierra bien y esta lo pone al dia"
   docker rm -f "$C" > /dev/null
   docker run -d --name "$C" -v "$V:/hadoop" -e SERVICIOS=mapreduce "$anterior" > /dev/null; listo 1
   apagar_bien
@@ -454,14 +463,35 @@ volumen_cortado() { # un volumen de la imagen anterior que se apago de golpe (si
     || falla "se perdio lo que se escribio en MySQL antes del corte"
   en "cat /hadoop/mysql/mysql_upgrade_info" | grep -q '^10\.11' || falla "no se pusieron al dia las tablas de MySQL"
   leer_ok
+
+  paso "Arreglo rapido (se pierde lo de MySQL): borrar /hadoop/mysql y reiniciar"
+  limpiar
+  cortar_con_anterior
+  prender -e SERVICIOS=mapreduce; listo 1
+  docker logs "$C" 2>&1 | grep -q 'MySQL NO ARRANCO' || falla "no aviso por que no arranca MySQL"
+  subir_ventas
+  en "rm -rf /hadoop/mysql"
+  docker restart "$C" > /dev/null; listo 2
+  en "mysql -N -B -e 'SELECT COUNT(*) FROM tienda.ventas'" | grep -qx 200000 || falla "no se rehizo la base tienda"
+  leer_ok
+}
+
+tutoriales() { # los comandos de las guias (guias/*.md), en orden, como los haria un alumno
+  [ "$VERSION" = base ] || no_aplica "las guias son de la version base"
+  # Las guias usan franki678/bigdata-sandbox (= latest) y el contenedor 'bigdata'
+  docker tag "$IMAGEN" franki678/bigdata-sandbox:latest
+  local pisar=no; [ -n "${GITHUB_ACTIONS:-}" ] && pisar=si
+  TUTORIALES_PISAR=$pisar TUTORIALES_LIMPIAR=si python3 -I pruebas/tutoriales.py guias/[0-9]*.md
 }
 
 # ---------------------------------------------------------------------------
-case "${1:-}" in
+ESCENARIO=${1:-}
+case "$ESCENARIO" in
   reinicio|ha|servicios|parametros|corte|mongodb|ml) limpiar; "$1" ;;
   volumen-viejo) limpiar; volumen_viejo ;;
-  desde-latest) limpiar; desde_latest ;;
+  imagen-vieja) limpiar; imagen_vieja ;;
+  tutoriales) tutoriales ;;
   volumen-cortado) limpiar; volumen_cortado ;;
-  *) echo "Uso: $0 reinicio|ha|servicios|parametros|volumen-viejo|corte|mongodb|ml|desde-latest|volumen-cortado"; exit 1 ;;
+  *) echo "Uso: $0 reinicio|ha|servicios|parametros|volumen-viejo|corte|mongodb|ml|imagen-vieja|volumen-cortado|tutoriales"; exit 1 ;;
 esac
 echo; echo "ESCENARIO $1: OK"

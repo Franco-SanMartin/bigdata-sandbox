@@ -5,15 +5,19 @@
 #   franki678/bigdata-sandbox:base      Hadoop + Pig + Hive + Spark + Sqoop/MySQL + MongoDB (Ubuntu 24.04)
 #   franki678/bigdata-sandbox:latest    = base (la misma imagen, mismo digest)
 #   franki678/bigdata-sandbox:ml        base + pandas, scikit-learn, Spark MLlib y JupyterLab
-#   franki678/bigdata-sandbox:ubuntu20  la latest de antes (Ubuntu 20.04, sin MongoDB). Se copio
-#                                       una sola vez, antes de que latest pasara a ser base; este
-#                                       workflow no la vuelve a tocar.
 #
 # Como sigue:
+#   0. previo     en un push a main: si ESTE MISMO commit ya paso en verde en
+#                 otra rama (p.ej. versiones, y main avanzo hasta ahi), no se
+#                 vuelve a armar ni a probar: se publica lo que subio ese run.
 #   1. armar      una maquina por procesador (Intel/AMD y ARM64, las dos
 #                 nativas, sin emular): arma base y ml, mide su tamaño y las
-#                 deja como artifact del run. En main, ademas, las sube a
-#                 Docker Hub SIN tag (solo por digest: nadie las baja asi).
+#                 deja como artifact del run. Ademas las sube a Docker Hub
+#                 SIN tag (solo por digest: nadie las baja asi), para que
+#                 "publicar" (aca o en el run de main) les ponga los tags.
+#                 Cache de capas en ghcr.io/franki-678/bigdata-sandbox-cache,
+#                 la misma para todas las ramas: si solo cambian scripts o
+#                 ejemplos, no vuelve a bajar todo de Apache.
 #   2. escenarios cada escenario de pruebas/escenarios.sh en una maquina
 #                 aparte, en las dos arquitecturas, con la imagen del paso 1
 #                 (la de este commit, no la publicada).
@@ -21,21 +25,34 @@
 #   4. publicar   solo en main y solo si pasaron TODOS los escenarios: pone
 #                 los tags base, latest y ml a lo que subio el paso 1.
 #
-# El archivo del aula (Releases, README seccion 5B) NO se arma aca: es el
-# workflow "Aula", a mano, despues de que este publico.
-# Para publicar necesita en el repo (Settings > Secrets and variables >
-# Actions) la variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token
-# de Docker Hub con permiso Read & Write; cuando vence, hay que generar otro).
+# El archivo del aula (Releases, guias/01-instalacion.md) NO se arma aca: es
+# el workflow "Aula", a mano, despues de que este publico.
+# Necesita en el repo (Settings > Secrets and variables > Actions) la
+# variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token de Docker
+# Hub con permiso Read & Write; cuando vence, hay que generar otro).
 name: Imagen
 
 on:
   push:
     branches: [main, versiones]
-    paths-ignore: ['**.md']
+    # Solo documentacion o workflows que no arman nada: no hace falta rearmar
+    # la imagen (las guias se prueban en el workflow "Documentacion")
+    paths-ignore:
+      - '**.md'
+      - 'guias/**'
+      - 'docs/**'
+      - 'pruebas/tutoriales.py'
+      - 'pruebas/enlaces.py'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/aula.yml'
+      - '.github/workflows/escenarios.yml'
+      - '.github/workflows/borrar-tag.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write   # cache de capas en ghcr.io
+  actions: read     # buscar el run verde de este commit y bajar sus digests
 
 # Un solo run por rama; en las demas ramas, uno nuevo cancela el anterior
 concurrency:
@@ -45,13 +62,45 @@ concurrency:
 env:
   REPO: docker.io/franki678/bigdata-sandbox
   LOCAL: franki678/bigdata-sandbox
-  PUBLICA: ${{ github.ref == 'refs/heads/main' && 'si' || 'no' }}
+  CACHE: ghcr.io/franki-678/bigdata-sandbox-cache
 
 jobs:
+  # -------------------------------------------------------------------------
+  # 0. Este commit ya paso en verde en otra rama? Entonces no se rearma
+  # -------------------------------------------------------------------------
+  previo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.buscar.outputs.run }}
+    steps:
+      - name: Run verde de este mismo commit en otra rama
+        id: buscar
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/imagen.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=50" \
+                 --jq '.workflow_runs[] | select(.head_branch != "main" and .event == "push") | "\(.id) \(.head_branch)"')
+          while read -r run rama; do
+            [ -n "$run" ] || continue
+            # Tiene que tener los digests de las dos arquitecturas (y que no hayan vencido)
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts" \
+                --jq '[.artifacts[] | select(.expired == false and (.name == "digests-amd64" or .name == "digests-arm64"))] | length')
+            if [ "$n" = 2 ]; then
+              echo "run=$run" >> "$GITHUB_OUTPUT"
+              echo "$GITHUB_SHA ya paso en verde en $rama (run $run): se publica eso, sin rearmar" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done <<< "$runs"
+          echo "No hay un run verde de $GITHUB_SHA con digests: se arma y se prueba todo"
+
   # -------------------------------------------------------------------------
   # 1. Armar base y ml, una maquina por arquitectura
   # -------------------------------------------------------------------------
   armar:
+    needs: previo
+    if: needs.previo.outputs.run == ''
     runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 120
     strategy:
@@ -75,10 +124,14 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
-        if: env.PUBLICA == 'si'
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Armar base (${{ matrix.arq }})
         id: base
@@ -90,10 +143,12 @@ jobs:
           load: true
           provenance: false
           tags: ${{ env.LOCAL }}:base
-          # Cache de capas en GitHub (una por version y arquitectura): si solo
-          # cambian scripts o ejemplos, no vuelve a bajar todo de Apache
-          cache-from: type=gha,scope=base-${{ matrix.arq }}
-          cache-to: type=gha,mode=max,scope=base-${{ matrix.arq }}
+          # Cache de capas (una por version y arquitectura) en ghcr.io: la ven
+          # todas las ramas. La de GitHub (gha) queda solo para leer la vieja.
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=gha,scope=base-${{ matrix.arq }}
+          cache-to: type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
@@ -109,18 +164,18 @@ jobs:
           provenance: false
           tags: ${{ env.LOCAL }}:ml
           cache-from: |
-            type=gha,scope=base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
             type=gha,scope=ml-${{ matrix.arq }}
-          cache-to: type=gha,mode=max,scope=ml-${{ matrix.arq }}
+          cache-to: type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
 
-      # Solo main: subir por digest, sin tag. Sale todo del cache del paso de
-      # arriba (no se vuelve a armar nada). Los tags se ponen recien en
-      # "publicar", si pasaron todos los escenarios. En las otras ramas corre
-      # igual pero sin subir, para que la verificacion de abajo se pruebe antes
-      # de llegar a main.
+      # Subir por digest, sin tag. Sale todo del cache del paso de arriba (no
+      # se vuelve a armar nada). Los tags se ponen recien en "publicar", solo
+      # en main y si pasaron todos los escenarios (en este run o en el de otra
+      # rama con el mismo commit).
       - name: Subir base por digest (sin tag)
         id: base_push
         uses: docker/build-push-action@v6
@@ -129,8 +184,8 @@ jobs:
           target: base
           platforms: linux/${{ matrix.arq }}
           provenance: false
-          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ env.PUBLICA == 'si' }}
-          cache-from: type=gha,scope=base-${{ matrix.arq }}
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
@@ -143,10 +198,10 @@ jobs:
           target: ml
           platforms: linux/${{ matrix.arq }}
           provenance: false
-          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ env.PUBLICA == 'si' }}
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
           cache-from: |
-            type=gha,scope=base-${{ matrix.arq }}
-            type=gha,scope=ml-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
@@ -162,14 +217,22 @@ jobs:
           echo "ml:   armada $ML_PROBADA / subida $ML_SUBIDA"
           [ -n "$BASE_PROBADA" ] && [ "$BASE_PROBADA" = "$BASE_SUBIDA" ]
           [ -n "$ML_PROBADA" ] && [ "$ML_PROBADA" = "$ML_SUBIDA" ]
-          [ "$PUBLICA" = si ] || exit 0
           mkdir -p digests
           echo "${{ steps.base_push.outputs.digest }}" > digests/base-${{ matrix.arq }}
           echo "${{ steps.ml_push.outputs.digest }}" > digests/ml-${{ matrix.arq }}
           cat digests/*
 
+      - name: Cache de capas en ghcr.io
+        run: |
+          for v in base ml; do
+            if docker buildx imagetools inspect "$CACHE:$v-${{ matrix.arq }}" > /dev/null 2>&1; then
+              echo "cache $v-${{ matrix.arq }}: ok"
+            else
+              echo "::warning::no quedo la cache $v-${{ matrix.arq }} en ghcr.io (el proximo run arma de cero)"
+            fi
+          done
+
       - uses: actions/upload-artifact@v4
-        if: env.PUBLICA == 'si'
         with:
           name: digests-${{ matrix.arq }}
           path: digests/
@@ -220,7 +283,11 @@ jobs:
       fail-fast: false
       matrix:
         arq: [amd64, arm64]
-        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, desde-latest, volumen-cortado, ml]
+        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, imagen-vieja, volumen-cortado, ml, tutoriales]
+        # Los comandos de las guias son los mismos en las dos: alcanza con una
+        exclude:
+          - arq: arm64
+            escenario: tutoriales
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -258,7 +325,7 @@ jobs:
   # -------------------------------------------------------------------------
   resumen:
     needs: [armar, escenarios]
-    if: always()
+    if: always() && needs.armar.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -285,8 +352,12 @@ jobs:
   # 4. Publicar: SOLO desde main y con TODOS los escenarios en verde
   # -------------------------------------------------------------------------
   publicar:
-    needs: [armar, escenarios]
-    if: github.ref == 'refs/heads/main'
+    needs: [previo, armar, escenarios]
+    # Lo armado y probado en este run, o lo de un run verde del mismo commit
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      (needs.previo.outputs.run != '' ||
+       (needs.armar.result == 'success' && needs.escenarios.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -300,25 +371,8 @@ jobs:
           pattern: digests-*
           path: digests
           merge-multiple: true
-
-      # Antes de que latest pase a ser base: la latest de antes (Ubuntu 20.04)
-      # queda como :ubuntu20, con sus dos arquitecturas. Una sola vez: si
-      # :ubuntu20 ya existe, no se toca.
-      - name: Guardar la latest de antes como ubuntu20
-        run: |
-          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r .digest; }
-          if docker buildx imagetools inspect "$REPO:ubuntu20" > /dev/null 2>&1; then
-            echo ":ubuntu20 ya existe ($(digest "$REPO:ubuntu20")): no se toca"
-            exit 0
-          fi
-          # latest tiene que ser todavia la de antes de las versiones (sin SANDBOX_VERSION)
-          if docker buildx imagetools inspect "$REPO:latest" --format '{{json .Image}}' | grep -q SANDBOX_VERSION; then
-            echo "latest ya no es la de Ubuntu 20.04 y no existe :ubuntu20: no hay que copiar nada" >&2
-            exit 1
-          fi
-          docker buildx imagetools create -t "$REPO:ubuntu20" "$REPO:latest"
-          [ "$(digest "$REPO:ubuntu20")" = "$(digest "$REPO:latest")" ]
-          docker buildx imagetools inspect "$REPO:ubuntu20"
+          run-id: ${{ needs.previo.outputs.run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Tags base, latest (= base) y ml, amd64 + arm64
         run: |
@@ -336,7 +390,7 @@ jobs:
             echo
             echo "| Tag | Digest | Arquitecturas |"
             echo "|---|---|---|"
-            for t in base latest ml ubuntu20; do
+            for t in base latest ml; do
               plataformas=$(docker buildx imagetools inspect "$REPO:$t" --format '{{json .Manifest}}' \
                 | jq -r '[.manifests[].platform | select(.os != "unknown") | .os + "/" + .architecture] | join(", ")')
               echo "| $t | $(digest "$REPO:$t") | $plataformas |"

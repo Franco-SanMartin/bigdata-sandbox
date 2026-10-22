@@ -1,0 +1,55 @@
+# Documentacion: en cada cambio de README, guias o la pagina de docs/.
+#   revisar     links relativos (README, guias y docs/index.html) y que cada
+#               bloque de comandos de las guias diga como se prueba. Rapido.
+#   tutoriales  corre los comandos de las guias, en orden, contra la imagen
+#               base YA PUBLICADA (escenario 'tutoriales' de
+#               pruebas/escenarios.sh). Asi un cambio solo de documentacion
+#               no rearma la imagen (el workflow "Imagen" lo ignora) y aun
+#               asi se prueba. Cuando cambia la imagen, "Imagen" corre el
+#               mismo escenario antes de publicar.
+name: Documentacion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - 'guias/**'
+      - 'docs/**'
+      - 'pruebas/tutoriales.py'
+      - 'pruebas/enlaces.py'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Links
+        run: python3 -I pruebas/enlaces.py README.md datos/README.md guias/*.md docs/index.html
+      - name: Marcas de prueba de las guias
+        run: python3 -I pruebas/tutoriales.py --revisar guias/[0-9]*.md
+
+  tutoriales:
+    needs: revisar
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      IMAGEN: franki678/bigdata-sandbox:base
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bajar la imagen publicada
+        run: |
+          docker pull -q "$IMAGEN"
+          docker image inspect -f '{{.Architecture}} {{.Id}}' "$IMAGEN"
+      - name: Comandos de las guias
+        run: bash pruebas/escenarios.sh tutoriales

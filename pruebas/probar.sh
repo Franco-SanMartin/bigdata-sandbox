@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de punta a punta: hace el paso a paso de TUTORIAL.md adentro del
+# Prueba de punta a punta: hace el recorrido de las guias 3 a 8 adentro del
 # contenedor y verifica que MapReduce, Pig, Hive y Spark den el mismo
 # resultado que un calculo directo en Python, y que Sqoop traiga y devuelva
 # bien los datos de MySQL. GitHub Actions la corre antes de
@@ -9,7 +9,7 @@
 #   docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
 #   docker exec bigdata bash /tmp/probar.sh
 # Necesita SERVICIOS=todo, DATANODES y REPLICATION de 2 o mas y un BLOCK_SIZE
-# chico (1m), como el arranque del TUTORIAL. Pisa los resultados de los
+# chico (1m), como el cluster de la guia 2. Pisa los resultados de los
 # ejemplos en HDFS (/user/root/resultados, wc-out, tienda) y la tabla
 # resumen_categoria de MySQL.
 set -euo pipefail

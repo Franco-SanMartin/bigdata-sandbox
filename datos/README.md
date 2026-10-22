@@ -3,14 +3,20 @@
 Carpeta compartida con el contenedor (adentro es `/datos`).
 Poné acá tus CSV y scripts; lo que dejes acá NO se sube a git.
 
-`ejemplos/` trae los datasets y scripts del [tutorial](../TUTORIAL.md): ventas
-por producto en MapReduce (`mapper.py` + `reducer.py`), Pig (`ventas.pig`),
-Hive (`ventas.hql`) y Spark (`ventas.py`), Sqoop (`sqoop.sh`, que trae la
-base MySQL `tienda.sql` a HDFS y la cruza en Hive con `tienda.hql`), más un
-generador de datos (`generar_ventas.py`) y el wordcount. Para MongoDB
-(versiones `base` y `ml` de la imagen): la base `tienda_mongo.js` y
-`consultas_mongo.js`. En `ejemplos/ml/` (versión `ml`): ETL de datos sucios
-con pandas y con Spark, y modelos de scikit-learn y Spark MLlib sobre datos
-generados con reglas conocidas (ver el [README](../README.md), sección 10).
-Si los editás, se guardan tus cambios; para recuperar uno original, borralo
-y reiniciá el contenedor.
+`ejemplos/` trae los datasets y scripts que usan las [guías](../guias/README.md):
+
+| Archivo | Guía |
+|---|---|
+| `ventas.csv`, `generar_ventas.py` | [3. HDFS](../guias/03-hdfs.md) |
+| `texto.txt`, `mapper.py`, `reducer.py` | [4. YARN y MapReduce](../guias/04-yarn-mapreduce.md) |
+| `wordcount.pig`, `ventas.pig` | [5. Pig](../guias/05-pig.md) |
+| `ventas.hql` | [6. Hive](../guias/06-hive.md) |
+| `tienda.sql`, `tienda.hql`, `sqoop.sh` | [7. MySQL y Sqoop](../guias/07-mysql-sqoop.md) |
+| `ventas.py` | [8. Spark](../guias/08-spark.md) |
+| `tienda_mongo.js`, `consultas_mongo.js` | [10. MongoDB](../guias/10-mongodb.md) |
+
+`ejemplos/ml/` es de la versión `ml` de la imagen: ETL de datos sucios con
+pandas y con Spark, y modelos de scikit-learn y Spark MLlib.
+
+Si editás un ejemplo, se guardan tus cambios; para recuperar el original,
+borralo y reiniciá el contenedor (`docker restart bigdata`).

@@ -1,0 +1,70 @@
+# Borra UN tag de franki678/bigdata-sandbox en Docker Hub (a mano: pestaña
+# Actions > "Borrar tag" > "Run workflow"). Solo el tag: las imagenes que
+# apuntaba se siguen pudiendo bajar por digest (franki678/bigdata-sandbox@sha256:...).
+# No borra los tags que se publican (latest, base, ml, full).
+#
+# Usa el secreto DOCKERHUB_TOKEN; para borrar, el token tiene que tener
+# permiso "Read, Write, Delete". Si no lo tiene (401/403), se borra a mano en
+# hub.docker.com > franki678/bigdata-sandbox > Tags > (el tag) > Delete.
+name: Borrar tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag a borrar de Docker Hub
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  borrar:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TAG: ${{ inputs.tag }}
+      REPO: franki678/bigdata-sandbox
+      USUARIO: ${{ vars.DOCKERHUB_USERNAME }}
+      CLAVE: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - name: Borrar ${{ inputs.tag }}
+        run: |
+          case "$TAG" in
+            ''|latest|base|ml|full) echo "El tag '$TAG' no se borra desde aca" >&2; exit 1 ;;
+          esac
+          [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "Tag invalido: $TAG" >&2; exit 1; }
+          api=https://hub.docker.com/v2
+          antes=$(curl -s -o /dev/null -w '%{http_code}' "$api/repositories/$REPO/tags/$TAG/")
+          echo "El tag hoy en Docker Hub: HTTP $antes"
+          [ "$antes" = 200 ] || { echo "No existe el tag $TAG: no hay nada que borrar"; exit 0; }
+
+          # Sesion en la API de Docker Hub (el token nunca se muestra)
+          jwt=$(jq -n --arg u "$USUARIO" --arg p "$CLAVE" '{username: $u, password: $p}' \
+                | curl -s -H 'Content-Type: application/json' -d @- "$api/users/login" | jq -r '.token // empty')
+          [ -n "$jwt" ] || { echo "No se pudo iniciar sesion en la API de Docker Hub" >&2; exit 1; }
+          echo "::add-mask::$jwt"
+
+          codigo=$(curl -s -o respuesta.json -w '%{http_code}' -X DELETE \
+                   -H "Authorization: Bearer $jwt" "$api/repositories/$REPO/tags/$TAG/")
+          echo "DELETE $REPO:$TAG -> HTTP $codigo"
+          case "$codigo" in
+            2??) ;;
+            401|403)
+              echo "Docker Hub no dejo borrar (el token no tiene permiso Delete)." >&2
+              echo "A mano: hub.docker.com > $REPO > Tags > $TAG > Delete" >&2
+              exit 1 ;;
+            *) jq -r '.message // .detail // empty' respuesta.json 2> /dev/null || true; exit 1 ;;
+          esac
+          despues=$(curl -s -o /dev/null -w '%{http_code}' "$api/repositories/$REPO/tags/$TAG/")
+          echo "Ahora: HTTP $despues"
+          [ "$despues" = 404 ]
+          {
+            echo "## Tags de $REPO"
+            echo
+            echo "| Tag | Digest |"
+            echo "|---|---|"
+            curl -s "$api/repositories/$REPO/tags/?page_size=100" | jq -r '.results[] | "| \(.name) | \(.digest) |"'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

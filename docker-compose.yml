@@ -1,5 +1,5 @@
-# BigData Sandbox con Docker Compose: el mismo cluster que el "docker run" del
-# README, pero con todos los parametros en este archivo. Para cambiar algo, se
+# BigData Sandbox con Docker Compose: el mismo cluster que el "docker run" de
+# la guia 2 (guias/02-arrancar-y-apagar.md), pero con todos los parametros en este archivo. Para cambiar algo, se
 # edita aca y se vuelve a correr "docker compose up -d".
 #
 # Las lineas que empiezan con # estan apagadas. Para prender una, se le saca el
@@ -19,7 +19,7 @@
 #   docker compose down -v             borrar contenedor Y volumen: se pierde todo
 #                                      HDFS, las tablas de Hive y las bases MySQL y MongoDB
 #
-# No mezclar con el "docker run" del README: los dos crean un contenedor
+# No mezclar con el "docker run" de la guia 2: los dos crean un contenedor
 # llamado "bigdata". Si ya existe uno, antes: docker rm -f bigdata
 # (los datos no se pierden: los dos usan el mismo volumen, bigdata_hadoop).
 
@@ -32,10 +32,9 @@ services:
     # La publicada en Docker Hub (o la cargada con "docker load"). Sin tag es
     # "latest", la de la clase (= ":base", con MongoDB). Las otras versiones
     # (README, "Versiones de la imagen"): ":ml" (+ Python para datos y
-    # JupyterLab) y ":ubuntu20" (la de antes, sin MongoDB).
+    # JupyterLab).
     image: franki678/bigdata-sandbox
     # image: franki678/bigdata-sandbox:ml
-    # image: franki678/bigdata-sandbox:ubuntu20
 
     # En lugar de usar la publicada, armarla desde el Dockerfile de esta
     # carpeta (5-10 min la primera vez). Se usa con: docker compose up -d --build
@@ -67,7 +66,7 @@ services:
 
       # Tamano de bloque: numero + m o g ("1m", "32m", "128m", "1g"). Minimo 1m.
       # Por defecto: "128m", el de un cluster real. Chico se ven muchos bloques
-      # con archivos chicos: con 1m, el dataset del tutorial queda en 6 bloques.
+      # con archivos chicos: con 1m, el dataset de la guia 3 queda en 6 bloques.
       BLOCK_SIZE: "1m"
 
       # Cantidad de NameNodes, de 1 a 3. Por defecto: "1" (+ Secondary NameNode).
@@ -84,11 +83,9 @@ services:
       #   todo       lo anterior + Hive + Spark (6 GB)
       # SERVICIOS: "todo"
 
-      # MongoDB con la base de ejemplo "tienda" (no en :ubuntu20).
-      # Anda con cualquier SERVICIOS; con todo prendido, darle 7 GB a Docker.
-      # Por defecto: "no". Para verlo desde la compu (MongoDB Compass),
-      # prender su puerto abajo.
-      # MONGODB: "si"
+      # MongoDB con la base de ejemplo "tienda" (guia 10). Anda con cualquier
+      # SERVICIOS; con todo prendido, darle 7 GB a Docker. Por defecto: "no".
+      MONGODB: "si"
 
       # JupyterLab en http://localhost:8888 (solo imagen :ml). Por defecto:
       # "si". Para verlo, prender su puerto abajo.
@@ -132,10 +129,10 @@ services:
 
       # MySQL (la base "tienda" de Sqoop), para entrar desde DBeaver o
       # Workbench: localhost:3306, usuario alumno, clave alumno
-      # - "127.0.0.1:3306:3306"
+      - "127.0.0.1:3306:3306"
 
       # MongoDB (con MONGODB: "si"), para MongoDB Compass: mongodb://localhost:27017
-      # - "127.0.0.1:27017:27017"
+      - "127.0.0.1:27017:27017"
 
       # JupyterLab (imagen :ml): http://localhost:8888. Sin contrasena: dejar
       # el 127.0.0.1, que lo deja ver solo desde esta compu
@@ -173,6 +170,6 @@ services:
 volumes:
   bigdata_hadoop:
     # Sin esta linea, compose lo llamaria "bigdata_bigdata_hadoop". Con ella es
-    # el mismo volumen que usa el "docker run" del README: se puede pasar de
+    # el mismo volumen que usa el "docker run" de la guia 2: se puede pasar de
     # uno a otro sin perder datos.
     name: bigdata_hadoop
