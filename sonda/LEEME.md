@@ -10,7 +10,7 @@ cluster del aula (la versión `empresa`):
 - **Simulado.** Si no anda ni lo uno ni lo otro: cada PC corre su cluster simulado sola, como hoy.
 
 No instala nada en Windows ni pide permisos de administrador. Lo único que queda en las PCs es la imagen
-de la sonda (unos 10 MB) y una carpeta con los resultados.
+de la sonda (unos 18 MB; el `.tar.gz` pesa unos 8 MB) y una carpeta con los resultados.
 
 ## Qué hay en el release `sonda-v1`
 

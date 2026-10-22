@@ -89,6 +89,9 @@ END {
         m = split(g("tcp_companeros", r), tc, " ")
         for (i = 1; i <= m; i++) { tct++; if (tc[i] ~ /:si$/) tcs++ }
     }
+    # contadores en 0 (y no vacios) si nadie sumo
+    dno += 0; udp += 0; ins += 0; wk += 0; wgo += 0; tun += 0; tk += 0; tg += 0; tcp += 0
+    yacargada += 0; tct += 0; tcs += 0
     med_ip = mediana(ip_a, ip_n); med_pp = mediana(pp_a, pp_n); med_pg = mediana(pg_a, pg_n)
 
     # --- dia 2 ---
@@ -98,6 +101,7 @@ END {
         if (g("dia2_imagen_cargada_antes", r) == "si") d2i++; else d2no = d2no " " nom[r]
         if (g("dia2_carpeta_resultados", r) == "si") d2c++
     }
+    d2i += 0; d2c += 0
     # --- veredicto ---
     if (N == 0 && d2) {
         ver = "SIN DATOS DE RED (hoy solo se registro el dia siguiente)"
