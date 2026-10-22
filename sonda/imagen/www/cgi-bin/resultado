@@ -2,7 +2,7 @@
 # POST con el archivo de resultados de un alumno (lineas clave=valor)
 # shellcheck source=../../cgi.sh
 . /sonda/cgi.sh
-c=$(cuerpo)
+c=$(cuerpo 65536)
 nombre=$(limpiar "$(echo "$c" | valor nombre)")
 [ -n "$nombre" ] || { echo "error=falta el nombre"; exit 0; }
 printf '%s\n' "$c" > "$DATOS/resultados/$nombre.txt"

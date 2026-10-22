@@ -173,7 +173,7 @@ companeros=
 if [ -n "$mi_ip" ]; then
     otros=$(http /cgi-bin/lista | awk -v yo="$NOMBRE" 'NF >= 4 && $1 != yo { print $1, $3, $4 }' | head -n 2)
     while read -r nom ip puerto; do
-        [ -n "$nom" ] && [ "$ip" != - ] || continue
+        if [ -z "$nom" ] || [ "$ip" = - ]; then continue; fi
         if socat -t3 -T3 - "TCP:$ip:$puerto,connect-timeout=3" < /dev/null 2>/dev/null | grep -q sonda-ok; then
             companeros="$companeros $nom:si"
         else
