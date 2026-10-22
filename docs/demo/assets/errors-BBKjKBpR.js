@@ -1,0 +1,1 @@
+const n={cluster_stopped:409,service_down:503,not_found:404,invalid:400,busy:409,unsupported:501,failed:500};class e extends Error{constructor(t,o,r=o?n[o]:500){super(t),this.code=o,this.status=r}code;status}function i(s,t){throw new e(t,s)}const a=s=>s instanceof e?s.code:void 0;export{e as A,a as e,i as f};

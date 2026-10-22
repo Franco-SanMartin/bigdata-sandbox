@@ -1,0 +1,1 @@
+const t={lineal:{},tonto:{strategy:"most_frequent"},arbol:{max_depth:3},logistica:{C:1},mlp:{hidden_layer_sizes:"16,8",max_iter:500},kmeans:{n_clusters:3,n_init:10}},e=["visitas_mes","ticket_promedio"];export{e as C,t as D};

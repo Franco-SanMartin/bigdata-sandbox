@@ -1,6 +1,9 @@
 # Documentacion: en cada cambio de README, guias o la pagina de docs/.
 #   revisar     links relativos (README, guias y docs/index.html) y que cada
 #               bloque de comandos de las guias diga como se prueba. Rapido.
+#   demo        que docs/demo/ (la demo de la interfaz en GitHub Pages, bajo
+#               /demo/) sea la compilacion de ui/ de este commit: la arma con
+#               npm run build:demo y no tiene que cambiar nada.
 #   tutoriales  corre los comandos de las guias, en orden, contra la imagen
 #               base YA PUBLICADA (escenario 'tutoriales' de
 #               pruebas/escenarios.sh). Asi un cambio solo de documentacion
@@ -11,11 +14,12 @@ name: Documentacion
 
 on:
   push:
-    branches: [main]
+    branches: [main, vitrina]
     paths:
       - '**.md'
       - 'guias/**'
       - 'docs/**'
+      - 'ui/**'
       - 'pruebas/tutoriales.py'
       - 'pruebas/enlaces.py'
       - '.github/workflows/docs.yml'
@@ -35,9 +39,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Links
-        run: python3 -I pruebas/enlaces.py README.md datos/README.md guias/*.md docs/index.html
+        run: python3 -I pruebas/enlaces.py README.md README.en.md CHANGELOG.md datos/README.md guias/*.md docs/index.html
       - name: Marcas de prueba de las guias
         run: python3 -I pruebas/tutoriales.py --revisar guias/[0-9]*.md
+
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npm run build:demo
+      - name: docs/demo al dia con ui/
+        run: |
+          git status --porcelain -- ../docs/demo
+          test -z "$(git status --porcelain -- ../docs/demo)" || {
+            echo "::error::docs/demo no es la compilacion de ui/: corre npm run build:demo en ui/ y commitea docs/demo"; exit 1; }
 
   tutoriales:
     needs: revisar

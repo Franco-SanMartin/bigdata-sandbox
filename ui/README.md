@@ -14,6 +14,7 @@ cd ui
 npm install
 npm run dev        # http://localhost:5173 (las llamadas a /api van a localhost:8080)
 npm run build      # genera dist/: archivos estáticos para servir desde el backend o GitHub Pages
+npm run build:demo # la demo de GitHub Pages en ../docs/demo/ (siempre en modo demo, sin probar /api)
 ```
 
 ## Modo demo y backend real
@@ -24,7 +25,8 @@ la app prueba `GET ./api/status`:
 - si contesta JSON, usa `src/api/http.ts` y habla con el backend del contenedor;
 - si no, usa `src/api/demo/`: un cluster simulado en el navegador (tiempos ×5).
 
-`?demo` en la URL fuerza el modo demo. Las rutas HTTP que tiene que implementar el
+`?demo` en la URL fuerza el modo demo, y la compilación de `npm run build:demo` (la de
+https://franki-678.github.io/bigdata-sandbox/demo/) va directo al demo, sin probar `/api`. Las rutas HTTP que tiene que implementar el
 backend están documentadas al lado de cada método en `src/api/types.ts` y, con payloads,
 errores, eventos y el comando real detrás de cada una, en [`API.md`](API.md). Los eventos en
 vivo llegan por Server-Sent Events en `GET /api/events`.

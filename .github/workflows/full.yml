@@ -20,7 +20,7 @@ name: Full
 
 on:
   push:
-    branches: [full, main]
+    branches: [full, main, vitrina]
     paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**']
   workflow_dispatch:
 
