@@ -1,33 +1,35 @@
 /* Cluster simulado del modo demo. Imita lo que el backend real lee del NameNode (JMX),
    del ResourceManager (REST) y de los logs, con los tiempos acelerados. */
 import type {
-  Activity, AppType, ApiEvent, BootProgress, CatalogEntry, DataSource, ModelRun, QueryResult, StepRequest, StepRun, TrainRequest, BootStep, ClusterConfig, ClusterPhase, ClusterStatus,
+  Activity, AppType, ApiEvent, BlockTransfer, BootProgress, BootStep, ClusterConfig, ClusterPhase, ClusterStatus,
   DataNode, ExampleJob, HdfsFile, LogLine, Process, ProcState, YarnApp, YarnStage, YarnTask,
 } from '../types';
 import { DEFAULT_CONFIG, DOCKER_LIMIT_MB, blockSizeMb, configSummary, estimateRam, processSpecs, type ProcSpec } from '../../lib/cluster';
-import { ETL_RESUMEN, LIMPIAS_POR_MES, LIMPIAS_POR_PAGO, LIMPIAS_POR_PRODUCTO, LIMPIAS_POR_SUCURSAL, MLLIB, MONGO_COLLECTIONS, MYSQL_TABLES, SKLEARN, answer } from './datasets';
 
 export const SPEED = 5;           // 1 s real = 5 s del cluster
-const TS = '1792041277726';       // marca de tiempo del ResourceManager en los ids de YARN
-const DEAD_AFTER = 40;            // s sin latidos hasta que el NameNode da por muerto a un DataNode
-const YARN_MB = 4096;
+export const TS = '1792041277726';       // marca de tiempo del ResourceManager en los ids de YARN
+export const DEAD_AFTER = 40;            // s sin latidos hasta que el NameNode da por muerto a un DataNode
+export const YARN_MB = 4096;
 
 let seed = 2026;
 const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
 interface DnRec { id: number; s: 'up' | 'stopping' | 'dead' | 'starting' | 'off'; since: number; ghosts: number[]; tok: object }
-interface BlockRec { id: number; gs: number; n: number; mb: number; reps: number[]; want: number[] }
-interface FileRec { path: string; sizeMb: number; rep: number; bsMb: number; blocks: BlockRec[]; writing: boolean; by: string; at: number }
+export interface BlockRec { id: number; gs: number; n: number; mb: number; reps: number[]; want: number[] }
+export interface FileRec { path: string; sizeMb: number; rep: number; bsMb: number; blocks: BlockRec[]; writing: boolean; by: string; at: number }
 interface ProcRec { spec: ProcSpec; state: ProcState; upSince?: number; pid?: number; role?: 'active' | 'standby' }
 interface StepRec extends BootStep { lines: { at: number; level: LogLine['level']; text: string }[] }
-interface TaskRec extends YarnTask { dur: number; blockId?: number; slot?: number }
-interface StageRec extends Omit<YarnStage, 'tasks'> { tasks: TaskRec[]; durSec: number; blocks?: number[] }
-interface StageDef { id: string; name: string; description: string; dependsOn: string[]; edge?: string; durSec: number; n: number; blocks?: number[] }
-interface AppDef { type: AppType; name: string; am: number; amStart: number; taskMb: number; executors: number; stages: StageDef[] }
-interface PipeRec extends StepRun { kind: 'yarn' | 'local' | 'put'; total?: number; msgs?: [string, number][]; file?: FileRec }
-interface TrainRec extends ModelRun { total?: number }
-interface AppRec { id: string; num: string; name: string; type: AppType; state: YarnApp['state']; sub: number; start?: number; end?: number; am: number; amStart: number; taskMb: number; executors: number; slots: { busy: TaskRec | null; cont: string }[]; conts: { id: string; memoryMb: number; kind: 'am' | 'task' | 'executor'; label: string }[]; cseq: number; stages: StageRec[]; log: LogLine[]; onDone?: () => void; amReadyAt?: number }
+export interface TaskRec extends YarnTask { dur: number; blockId?: number; slot?: number }
+export interface StageRec extends Omit<YarnStage, 'tasks'> { tasks: TaskRec[]; durSec: number; blocks?: number[]; ops?: string[] }
+export interface StageDef { id: string; name: string; description: string; dependsOn: string[]; edge?: string; durSec: number; n: number; blocks?: number[]; ops?: string[] }
+/** rowsIn/rowsOut/out: filas que lee y escribe y dónde deja el resultado (para el detalle del trabajo) */
+export interface AppDef { type: AppType; name: string; am: number; amStart: number; taskMb: number; executors: number; stages: StageDef[]; rowsIn?: number; rowsOut?: number; out?: string }
+export interface AppRec { cmd?: string; input?: string; def?: AppDef; id: string; num: string; name: string; type: AppType; state: YarnApp['state']; sub: number; start?: number; end?: number; am: number; amStart: number; taskMb: number; executors: number; slots: { busy: TaskRec | null; cont: string }[]; conts: { id: string; memoryMb: number; kind: 'am' | 'task' | 'executor'; label: string }[]; cseq: number; stages: StageRec[]; log: LogLine[]; onDone?: () => void; amReadyAt?: number }
 
+/** Un archivo para subir a HDFS: de dónde sale y cuánto pesa */
+export interface PutSpec { path: string; mb: number; local: string; rows: string; rep?: number; bsMb?: number }
+
+/* Lo que no es privado lo usan los módulos del demo (hdfs.ts, yarn.ts, pipeline.ts, datos.ts, ml.ts) */
 export class DemoEngine {
   private t0 = performance.now();
   private epoch = Date.now();
@@ -39,14 +41,14 @@ export class DemoEngine {
   phase: ClusterPhase = 'stopped';
   volumeNN: number | null = null;
   startedAt: number | null = null;
-  private procs = new Map<string, ProcRec>();
-  private dns: DnRec[] = [];
-  private files: FileRec[] = [];
-  private jobs: AppRec[] = [];
+  procs = new Map<string, ProcRec>();
+  dns: DnRec[] = [];
+  files: FileRec[] = [];
+  jobs: AppRec[] = [];
   private acts: Activity[] = [];
   private mem: { t: number; usedMb: number }[] = [];
   private boot: (Omit<BootProgress, 'steps'> & { steps: StepRec[] }) | null = null;
-  private hdfsDown = false;
+  hdfsDown = false;
   private libs = false;
   private blk = 1073741825;
   private gs = 1001;
@@ -54,6 +56,12 @@ export class DemoEngine {
   private actSeq = 0;
   private replBusy = false;
   private bootCount = 0;
+  /** Carpetas creadas a mano (hdfs dfs -mkdir) */
+  dirs = new Set<string>();
+  /** Ya se cargaron las carpetas del arranque en dirs */
+  dirsReady = false;
+  /** Últimas copias de bloques, para la vista de re-replicación */
+  transfers: (BlockTransfer & { at: number })[] = [];
 
   constructor() {
     setInterval(() => this.tick(), 100);
@@ -62,9 +70,12 @@ export class DemoEngine {
 
   /* ---------- Reloj y eventos ---------- */
   now(): number { return this.epoch + (performance.now() - this.t0) * SPEED; }
-  private at(sec: number, fn: () => void) { this.queue.push({ t: this.now() + sec * 1000, fn }); }
+  at(sec: number, fn: () => void) { this.queue.push({ t: this.now() + sec * 1000, fn }); }
   subscribe(fn: (e: ApiEvent) => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
-  private emit(e: ApiEvent = { type: 'status' }) { this.listeners.forEach(l => l(e)); }
+  emit(e: ApiEvent = { type: 'status' }) {
+    if (e.type === 'transfer') { this.transfers.unshift({ ...e.transfer, at: this.now() }); if (this.transfers.length > 50) this.transfers.pop(); }
+    this.listeners.forEach(l => l(e));
+  }
   private tick() {
     const n = this.now();
     this.queue.sort((a, b) => a.t - b.t);
@@ -77,7 +88,7 @@ export class DemoEngine {
     }
     if (changed) this.emit();
   }
-  private act(source: string, level: Activity['level'], title: string, o: Partial<Activity> = {}) {
+  act(source: string, level: Activity['level'], title: string, o: Partial<Activity> = {}) {
     const entry: Activity = { id: 'a' + ++this.actSeq, at: this.now(), source, level, title, ...o };
     this.acts.unshift(entry); if (this.acts.length > 400) this.acts.pop();
     this.emit({ type: 'activity', entry });
@@ -186,7 +197,7 @@ export class DemoEngine {
   saveConfig(cfg: ClusterConfig) { this.config = { ...cfg }; this.emit(); }
   resetVolume() {
     if (this.phase !== 'stopped') return;
-    this.files = []; this.libs = false; this.volumeNN = null; this.applied = null; this.dns = []; this.jobs = [];
+    this.files = []; this.dirs.clear(); this.dirsReady = false; this.transfers = []; this.libs = false; this.volumeNN = null; this.applied = null; this.dns = []; this.jobs = [];
     this.act('Vos', 'warn', 'Volumen borrado', { command: 'docker compose down -v', input: 'volumen bigdata_hadoop', action: 'Borra HDFS, el metastore de Hive, MySQL y MongoDB', output: 'El próximo arranque formatea todo de cero. Ya podés cambiar la cantidad de NameNodes.' });
     this.emit();
   }
@@ -212,33 +223,41 @@ export class DemoEngine {
   }
 
   /* ---------- HDFS ---------- */
-  private count(dn: number) { let n = 0; this.files.forEach(f => f.blocks.forEach(b => { if (b.reps.includes(dn)) n++; })); return n; }
-  private pick(n: number, excl: number[] = []) {
+  count(dn: number) { let n = 0; this.files.forEach(f => f.blocks.forEach(b => { if (b.reps.includes(dn)) n++; })); return n; }
+  pick(n: number, excl: number[] = []) {
     const c = this.dns.filter(d => d.s === 'up' && !excl.includes(d.id)).map(d => ({ id: d.id, k: this.count(d.id) + rnd() * .9 }));
     c.sort((a, b) => a.k - b.k);
     return c.slice(0, n).map(d => d.id);
   }
-  private makeFile(path: string, sizeMb: number, bsMb: number, by: string, rep = this.applied?.replication ?? 1): FileRec {
+  makeFile(path: string, sizeMb: number, bsMb: number, by: string, rep = this.applied?.replication ?? 1): FileRec {
     const nb = Math.max(1, Math.ceil(sizeMb / bsMb));
     const f: FileRec = { path, sizeMb, rep, bsMb, blocks: [], writing: false, by, at: this.now() };
     for (let i = 0; i < nb; i++) f.blocks.push({ id: this.blk++, gs: this.gs++, n: i + 1, mb: Math.min(bsMb, sizeMb - i * bsMb), reps: [], want: [] });
     return f;
   }
-  private putNow(path: string, sizeMb: number, bsMb: number, by: string) {
-    const f = this.makeFile(path, sizeMb, bsMb, by);
+  putNow(path: string, sizeMb: number, bsMb: number, by: string, rep?: number) {
+    this.files = this.files.filter(x => x.path !== path);
+    const f = this.makeFile(path, sizeMb, bsMb, by, rep);
     const live = this.dns.filter(d => d.s === 'up').length;
     f.blocks.forEach(b => { b.reps = this.pick(Math.min(f.rep, live)); });
     this.files.push(f);
+    return f;
   }
   putExample(ex: 'ventas' | 'numeros' | 'sucias', onDone?: () => void): FileRec | undefined {
-    if (this.phase !== 'running' || this.hdfsDown) return;
     const spec = ex === 'ventas' ? { path: '/user/root/ventas/ventas_grandes.csv', mb: 5.93, local: 'ventas_grandes.csv', rows: '200.000 filas' } : ex === 'sucias' ? { path: '/user/root/ml/ventas_sucias.csv', mb: 4.45, local: 'ventas_sucias.csv', rows: '103.000 filas' } : { path: '/user/root/numeros.txt', mb: 6.57, local: 'numeros.txt', rows: '1.000.000 líneas' };
+    return this.putFile(spec, onDone);
+  }
+  /** hdfs dfs -put: corta en bloques y los manda por la tubería de DataNodes, con los tiempos del demo */
+  putFile(spec: PutSpec, onDone?: (f: FileRec) => void, by = 'Vos'): FileRec | undefined {
+    if (this.phase !== 'running' || this.hdfsDown) return;
     this.files = this.files.filter(f => f.path !== spec.path);
-    const bs = blockSizeMb(this.applied!.blockSize) || 128;
-    const f = this.makeFile(spec.path, spec.mb, bs, 'cliente HDFS'); f.writing = true;
+    const bs = spec.bsMb || blockSizeMb(this.applied!.blockSize) || 128;
+    const f = this.makeFile(spec.path, spec.mb, bs, 'cliente HDFS', spec.rep); f.writing = true;
     this.files.push(f);
     const r = Math.min(f.rep, this.dns.filter(d => d.s === 'up').length);
-    this.act('Vos', 'info', `Subiendo ${spec.local} a HDFS`, { command: `hdfs dfs -put -f ${spec.local} ${spec.path.slice(0, spec.path.lastIndexOf('/') + 1)}`, input: `/datos/${spec.local} · ${spec.rows} · ${spec.mb.toLocaleString('es-AR')} MB`, action: `Lo corta en ${f.blocks.length} bloques de ${bs} MB; el NameNode elige los DataNodes y cada bloque viaja al primero, que lo pasa al siguiente`, output: `${f.blocks.length} bloques × ${r} copias = ${f.blocks.length * r} copias` });
+    const dir = spec.path.slice(0, spec.path.lastIndexOf('/') + 1);
+    const flags = (spec.rep ? ` -D dfs.replication=${spec.rep}` : '') + (spec.bsMb ? ` -D dfs.blocksize=${spec.bsMb}m` : '');
+    this.act(by, 'info', `Subiendo ${spec.local} a HDFS`, { command: `hdfs dfs${flags} -put -f ${spec.local} ${dir}`, input: `/datos/${spec.local} · ${spec.rows} · ${spec.mb.toLocaleString('es-AR')} MB`, action: `Lo corta en ${f.blocks.length} bloque${f.blocks.length > 1 ? 's' : ''} de ${bs} MB; el NameNode elige los DataNodes y cada bloque viaja al primero, que lo pasa al siguiente`, output: `${f.blocks.length} bloques × ${r} copias = ${f.blocks.length * r} copias` });
     f.blocks.forEach((b, i) => {
       b.want = this.pick(r);
       b.want.forEach((dn, k) => this.at(.9 + i * 1.6 + k * .9, () => {
@@ -248,7 +267,14 @@ export class DemoEngine {
         this.emit();
       }));
     });
-    this.at(1 + f.blocks.length * 1.6 + r * .9, () => { f.writing = false; this.act('NameNode', 'ok', `${spec.local} cerrado`, { output: `${f.blocks.length} bloques, ${f.blocks.length * r} copias`, tech: `DIR* completeFile: ${spec.path} is closed by DFSClient` }); onDone?.(); this.emit(); });
+    this.at(1 + f.blocks.length * 1.6 + r * .9, () => {
+      if (!this.files.includes(f)) return;
+      f.writing = false;
+      this.act('NameNode', 'ok', `${spec.local} cerrado`, { output: `${f.blocks.length} bloques, ${f.blocks.length * r} copias`, tech: `DIR* completeFile: ${spec.path} is closed by DFSClient` });
+      this.emit({ type: 'hdfs', path: spec.path });
+      onDone?.(f); this.emit();
+    });
+    this.emit({ type: 'hdfs', path: spec.path });
     this.emit();
     return f;
   }
@@ -259,7 +285,7 @@ export class DemoEngine {
     this.at(1, () => { if (n > prev) this.replicate(); else this.checkOver(); });
     this.emit();
   }
-  private replicate() {
+  replicate() {
     if (this.replBusy || this.hdfsDown || this.phase !== 'running') return;
     const jobs: { f: FileRec; b: BlockRec }[] = [];
     const upCount = this.dns.filter(d => d.s === 'up').length;
@@ -365,8 +391,22 @@ export class DemoEngine {
     this.emit();
   }
 
+  /** Sigue un trabajo de YARN: tick cada segundo del cluster mientras corre, y al final done o fail */
+  watch(appId: string, h: { tick?: (progress: number) => void; done: () => void; fail: (why: string) => void }) {
+    const loop = () => {
+      const a = this.jobs.find(x => x.id === appId);
+      if (!a || a.state === 'KILLED' || a.state === 'FAILED') return h.fail(!a ? 'El trabajo desapareció' : a.state === 'KILLED' ? 'Trabajo cancelado' : 'El trabajo falló');
+      if (a.state === 'FINISHED') return h.done();
+      h.tick?.(this.apps().find(x => x.id === appId)?.progress ?? 0);
+      this.at(1, loop);
+    };
+    this.at(1, loop);
+  }
+  dnsUp() { return this.dns.filter(d => d.s === 'up').length; }
+  replicating() { return this.replBusy; }
+
   /* ---------- YARN ---------- */
-  private usedYarn() { return this.jobs.reduce((a, p) => a + p.conts.reduce((x, c) => x + c.memoryMb, 0), 0); }
+  usedYarn() { return this.jobs.reduce((a, p) => a + p.conts.reduce((x, c) => x + c.memoryMb, 0), 0); }
   private inputBlocks(prefix: string) { return this.files.filter(f => f.path.startsWith(prefix)).flatMap(f => f.blocks.map(b => b.id)); }
   submitExample(job: ExampleJob): string {
     if (this.phase !== 'running' || this.applied!.services === 'hdfs') return '';
@@ -374,26 +414,26 @@ export class DemoEngine {
     const bl = this.inputBlocks('/user/root/ventas'); const n = Math.max(1, bl.length || 6);
     const def: AppDef & { cmd: string } = ({
       'mr-ventas': { type: 'MAPREDUCE' as AppType, name: 'ventas por producto (mapper.py + reducer.py)', am: 512, amStart: 6, taskMb: 512, executors: 0, cmd: 'hadoop jar hadoop-streaming-3.3.6.jar -mapper mapper.py -reducer reducer.py -input /user/root/ventas -output /user/root/resultados/mr_por_producto', stages: [
-        { id: 'map', name: 'Map', description: 'Cada mapper lee un bloque y emite producto, cantidad, importe', dependsOn: [], durSec: 9, n, blocks: bl },
-        { id: 'reduce', name: 'Reduce', description: 'Recibe los pares ordenados por producto y suma', dependsOn: ['map'], edge: 'shuffle + sort', durSec: 7, n: 1 }] },
+        { id: 'map', name: 'Map', description: 'Cada mapper lee un bloque y emite producto, cantidad, importe', dependsOn: [], durSec: 9, n, blocks: bl, ops: ['TextInputFormat', 'mapper.py', 'sort + spill'] },
+        { id: 'reduce', name: 'Reduce', description: 'Recibe los pares ordenados por producto y suma', dependsOn: ['map'], edge: 'shuffle + sort', durSec: 7, n: 1, ops: ['merge', 'reducer.py', 'TextOutputFormat'] }], rowsIn: 200000, rowsOut: 8, out: '/user/root/resultados/mr_por_producto' },
       'hive-ventas': { type: 'TEZ' as AppType, name: 'HIVE: SELECT producto, SUM(cantidad)… GROUP BY producto', am: 1024, amStart: 8, taskMb: 1024, executors: 0, cmd: 'beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql', stages: [
-        { id: 'm1', name: 'Map 1', description: 'Lee la tabla ventas, un bloque por tarea, y suma parcial por producto', dependsOn: [], durSec: 4, n, blocks: bl },
-        { id: 'r2', name: 'Reducer 2', description: 'GROUP BY producto: junta las sumas parciales', dependsOn: ['m1'], edge: 'SCATTER_GATHER', durSec: 3, n: 2 },
-        { id: 'r3', name: 'Reducer 3', description: 'ORDER BY facturado DESC: una tarea ordena las 8 filas', dependsOn: ['r2'], edge: 'SCATTER_GATHER', durSec: 2, n: 1 }] },
+        { id: 'm1', name: 'Map 1', description: 'Lee la tabla ventas, un bloque por tarea, y suma parcial por producto', dependsOn: [], durSec: 4, n, blocks: bl, ops: ['TableScan', 'Select Operator', 'Group By Operator (parcial)', 'Reduce Output Operator'] },
+        { id: 'r2', name: 'Reducer 2', description: 'GROUP BY producto: junta las sumas parciales', dependsOn: ['m1'], edge: 'SCATTER_GATHER', durSec: 3, n: 2, ops: ['Group By Operator (final)', 'Reduce Output Operator'] },
+        { id: 'r3', name: 'Reducer 3', description: 'ORDER BY facturado DESC: una tarea ordena las 8 filas', dependsOn: ['r2'], edge: 'SCATTER_GATHER', durSec: 2, n: 1, ops: ['Select Operator', 'File Output Operator'] }], rowsIn: 200000, rowsOut: 8 },
       'spark-ventas': { type: 'SPARK' as AppType, name: 'ventas por producto (ventas.py)', am: 1024, amStart: 14, taskMb: 0, executors: 2, cmd: 'spark-submit ejemplos/ventas.py', stages: [
-        { id: 's0', name: 'Stage 0', description: 'csv(): lee la primera línea para los nombres de columna', dependsOn: [], durSec: 1.5, n: 1, blocks: bl.slice(0, 1) },
-        { id: 's1', name: 'Stage 1', description: 'inferSchema: recorre todo el archivo para adivinar los tipos', dependsOn: ['s0'], durSec: 2.2, n, blocks: bl },
-        { id: 's2', name: 'Stage 2', description: 'withColumn + suma parcial por producto en cada partición', dependsOn: ['s1'], durSec: 2.5, n, blocks: bl },
-        { id: 's3', name: 'Stage 3', description: 'Shuffle: suma final por producto (4 particiones)', dependsOn: ['s2'], edge: 'shuffle', durSec: 1.2, n: 4 },
-        { id: 's4', name: 'Stage 4', description: 'orderBy + write: ordena y guarda en HDFS', dependsOn: ['s3'], edge: 'shuffle', durSec: 1.5, n: 1 }] },
+        { id: 's0', name: 'Stage 0', description: 'csv(): lee la primera línea para los nombres de columna', dependsOn: [], durSec: 1.5, n: 1, blocks: bl.slice(0, 1), ops: ['FileScan csv', 'CollectLimit 1'] },
+        { id: 's1', name: 'Stage 1', description: 'inferSchema: recorre todo el archivo para adivinar los tipos', dependsOn: ['s0'], durSec: 2.2, n, blocks: bl, ops: ['FileScan csv', 'inferSchema'] },
+        { id: 's2', name: 'Stage 2', description: 'withColumn + suma parcial por producto en cada partición', dependsOn: ['s1'], durSec: 2.5, n, blocks: bl, ops: ['FileScan csv', 'Project (importe)', 'HashAggregate (parcial)', 'Exchange hashpartitioning'] },
+        { id: 's3', name: 'Stage 3', description: 'Shuffle: suma final por producto (4 particiones)', dependsOn: ['s2'], edge: 'shuffle', durSec: 1.2, n: 4, ops: ['HashAggregate (final)', 'Exchange rangepartitioning'] },
+        { id: 's4', name: 'Stage 4', description: 'orderBy + write: ordena y guarda en HDFS', dependsOn: ['s3'], edge: 'shuffle', durSec: 1.5, n: 1, ops: ['Sort', 'WriteFiles csv'] }], rowsIn: 200000, rowsOut: 8, out: '/user/root/resultados/spark_por_producto' },
     } as Record<ExampleJob, AppDef & { cmd: string }>)[job];
     return this.submitApp(def, { command: def.cmd, input: `/user/root/ventas · ${n} bloques` });
   }
   /** Manda un trabajo a la cola de YARN. onDone corre cuando termina bien */
-  private submitApp(def: AppDef, o: { command?: string; input?: string; quiet?: boolean; onDone?: () => void } = {}): string {
+  submitApp(def: AppDef, o: { command?: string; input?: string; quiet?: boolean; onDone?: () => void } = {}): string {
     const num = String(++this.appSeq).padStart(4, '0');
-    const app: AppRec = { id: `application_${TS}_${num}`, num, name: def.name, type: def.type, state: 'ACCEPTED', sub: this.now(), am: def.am, amStart: def.amStart, taskMb: def.taskMb, executors: def.executors, slots: [], conts: [], cseq: 1, log: [], onDone: o.onDone,
-      stages: def.stages.map(st => ({ id: st.id, name: st.name, description: st.description, dependsOn: st.dependsOn, edge: st.edge, state: 'pending' as const, durSec: st.durSec, blocks: st.blocks,
+    const app: AppRec = { cmd: o.command, input: o.input, def, id: `application_${TS}_${num}`, num, name: def.name, type: def.type, state: 'ACCEPTED', sub: this.now(), am: def.am, amStart: def.amStart, taskMb: def.taskMb, executors: def.executors, slots: [], conts: [], cseq: 1, log: [], onDone: o.onDone,
+      stages: def.stages.map(st => ({ id: st.id, name: st.name, description: st.description, dependsOn: st.dependsOn, edge: st.edge, state: 'pending' as const, durSec: st.durSec, blocks: st.blocks, ops: st.ops,
         tasks: Array.from({ length: st.n }, (_, i) => ({ id: `${st.id}_${String(i).padStart(6, '0')}`, index: i, state: 'pending' as const, dur: st.durSec * (.82 + rnd() * .36), blockId: st.blocks?.[i] })) })) };
     this.jobs.unshift(app);
     this.alog(app, 'Aplicación enviada a la cola default');
@@ -407,7 +447,7 @@ export class DemoEngine {
     this.act('Vos', 'warn', `Trabajo cancelado: ${a.name}`, { command: `yarn application -kill ${id}`, output: 'YARN liberó su memoria', appId: id });
     this.emit();
   }
-  private alog(a: AppRec, text: string, level: LogLine['level'] = 'INFO') { a.log.push({ t: this.now(), level, text }); }
+  alog(a: AppRec, text: string, level: LogLine['level'] = 'INFO') { a.log.push({ t: this.now(), level, text }); }
   private yarnSchedule(): boolean {
     let changed = false; let free = YARN_MB - this.usedYarn(); const n = this.now();
     for (const a of this.jobs.slice().reverse()) {
@@ -446,6 +486,7 @@ export class DemoEngine {
       a.state = 'FINISHED'; a.end = this.now(); a.conts = []; a.slots = [];
       this.alog(a, `Terminó bien en ${((a.end - a.sub) / 1000).toFixed(1)} s`);
       this.act('YARN', 'ok', `Terminó «${a.name}»`, { output: `${Math.round((a.end - a.sub) / 1000)} s · memoria liberada`, tech: `${a.id} State change from RUNNING to FINISHED`, appId: a.id });
+      if (a.def?.out) { this.putNow(`${a.def.out}/part-00000`, 0.001, 128, a.type); this.emit({ type: 'hdfs', path: a.def.out }); }
       a.onDone?.();
     }
     this.emit({ type: 'yarn', appId: a.id }); this.emit();

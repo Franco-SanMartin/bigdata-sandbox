@@ -1,6 +1,6 @@
 /* Acciones sobre el cluster: piden confirmación cuando corresponde y avisan el resultado. */
 import { api } from '../api';
-import type { ClusterConfig, ExampleJob, Process } from '../api/types';
+import type { ClusterConfig, ExampleJob, Process, StepRequest, TrainRequest, UploadRequest } from '../api/types';
 import { getSnapshot } from './store';
 import { confirm, navigate, toast } from './ui';
 import { configSummary } from '../lib/cluster';
@@ -89,6 +89,22 @@ export async function processAction(p: Process, action: 'start' | 'stop') {
   await run(api().processAction(p.id, action), action === 'stop' ? { title: `${p.name} apagado`, description: 'Seguí lo que pasa en la consola.' } : { title: `Arrancando ${p.name}` });
 }
 
-export const putExample = (x: 'ventas' | 'numeros') => run(api().putExample(x), { title: `Subiendo ${x === 'ventas' ? 'ventas_grandes.csv' : 'numeros.txt'} a HDFS` });
+const EXAMPLE_FILE = { ventas: 'ventas_grandes.csv', numeros: 'numeros.txt', sucias: 'ventas_sucias.csv' };
+export const putExample = (x: 'ventas' | 'numeros' | 'sucias') => run(api().putExample(x), { title: `Subiendo ${EXAMPLE_FILE[x]} a HDFS` });
 export const addDataNode = () => run(api().addDataNode(), { title: 'Sumando un DataNode en caliente' });
 export const submitExample = (j: ExampleJob) => run(api().submitExample(j), { title: 'Trabajo enviado a YARN' });
+
+/* Acciones de los módulos nuevos. Devuelven el resultado (o undefined si falló: el error ya salió como aviso) */
+async function attempt<T>(p: Promise<T>, ok?: { title: string; description?: string; kind?: 'ok' | 'run' }): Promise<T | undefined> {
+  try { const v = await p; if (ok) toast({ kind: 'run', ...ok }); return v; }
+  catch (e) { toast({ kind: 'bad', title: 'No se pudo', description: e instanceof Error ? e.message : String(e) }); return undefined; }
+}
+export const hdfsUpload = (r: UploadRequest) => attempt(api().hdfsUpload(r), { title: 'Subiendo a HDFS', description: r.dest });
+export const hdfsMkdir = (path: string) => attempt(api().hdfsMkdir(path), { title: 'Carpeta creada', description: path, kind: 'ok' });
+export async function hdfsDelete(path: string, recursive: boolean) {
+  const ok = await confirm({ title: `Borrar ${path}`, danger: true, confirmLabel: 'Borrar', description: 'Se borra sin pasar por la papelera (hdfs dfs -rm -skipTrash). Los DataNodes liberan sus bloques.', facts: [['Ruta', path], ['Con lo de adentro', recursive ? 'sí' : 'no']] });
+  return ok ? attempt(api().hdfsDelete(path, recursive), { title: 'Borrado', description: path, kind: 'ok' }) : undefined;
+}
+export const runStep = (r: StepRequest) => attempt(api().runStep(r), { title: 'Paso del pipeline en marcha' });
+export const pipelineReset = () => attempt(api().pipelineReset(), { title: 'Pipeline reiniciado', kind: 'ok' });
+export const trainModel = (r: TrainRequest) => attempt(api().train(r), { title: 'Entrenando', description: `${r.model} con ${r.engine === 'sklearn' ? 'scikit-learn' : 'Spark MLlib'}` });

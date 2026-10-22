@@ -25,7 +25,8 @@ la app prueba `GET ./api/status`:
 - si no, usa `src/api/demo/`: un cluster simulado en el navegador (tiempos ×5).
 
 `?demo` en la URL fuerza el modo demo. Las rutas HTTP que tiene que implementar el
-backend están documentadas al lado de cada método en `src/api/types.ts`; los eventos en
+backend están documentadas al lado de cada método en `src/api/types.ts` y, con payloads,
+errores, eventos y el comando real detrás de cada una, en [`API.md`](API.md). Los eventos en
 vivo llegan por Server-Sent Events en `GET /api/events`.
 
 ## Estructura
@@ -35,10 +36,12 @@ src/api/        contrato (types.ts), cliente HTTP y modo demo
 src/state/      foto del cluster, estado de la interfaz y acciones con confirmación
 src/shell/      barra lateral, barra superior, Ctrl+K, consola, ayuda, avisos
 src/widgets/    arquitectura viva y arranque paso a paso
-src/pages/      Cluster, Configuración, Consola
+src/pages/      Cluster, Configuración, Consola y una carpeta por módulo (hdfs, yarn, pipeline, datos, ml)
+src/components/ tabla, controles y el trace (comando → entra → hace → sale)
 src/lib/        reglas de configuración, RAM, docker-compose.yml, formatos
 src/styles/     tokens (escala neutra), componentes y widgets
 ```
 
 Atajos: `Ctrl+K` buscar o ejecutar, `Ctrl+J` consola, `?` ayuda, `G` y una letra para ir
-a cada pantalla (`G C` Cluster, `G S` Configuración…).
+a cada pantalla (`G C` Cluster, `G H` HDFS, `G Y` YARN, `G P` Pipeline, `G D` Datos,
+`G M` Machine Learning, `G O` Consola, `G S` Configuración).

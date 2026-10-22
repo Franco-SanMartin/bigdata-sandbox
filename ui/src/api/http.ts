@@ -1,22 +1,28 @@
 /* Cliente del backend real del contenedor (puerto 8080). Rutas documentadas en types.ts. */
-import type { ApiEvent, ClusterConfig, SandboxApi } from './types';
-
-class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
+import type { ApiErrorCode, ApiEvent, ClusterConfig, DataSource, SandboxApi } from './types';
+import { ApiFailure } from './errors';
 
 async function req<T>(method: string, path: string, body?: unknown, as: 'json' | 'text' = 'json'): Promise<T> {
-  const r = await fetch(`./api${path}`, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+  const form = body instanceof FormData;
+  const r = await fetch(`./api${path}`, {
+    method,
+    headers: body && !form ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? (form ? body : JSON.stringify(body)) : undefined,
+  });
   if (!r.ok) {
-    let msg = `${r.status} ${r.statusText}`;
-    try { const j = await r.json(); if (j?.error) msg = j.error; } catch { /* sin cuerpo */ }
-    throw new HttpError(r.status, msg);
+    let msg = `${r.status} ${r.statusText}`; let code: ApiErrorCode | undefined;
+    try { const j = await r.json(); if (j?.error) msg = j.error; code = j?.code; } catch { /* sin cuerpo */ }
+    throw new ApiFailure(msg, code, r.status);
   }
-  if (r.status === 202 || r.status === 204) return undefined as T;
+  if (r.status === 204 || (r.status === 202 && !(r.headers.get('content-type') || '').includes('json'))) return undefined as T;
   return (as === 'text' ? r.text() : r.json()) as Promise<T>;
 }
 
 export function createHttpApi(): SandboxApi {
   let offset = 0; // diferencia entre el reloj del cluster y el del navegador
   const cfg = (config: ClusterConfig) => ({ config });
+  const q = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => e[1] !== undefined)).toString();
+  const src = (source: DataSource, text: string) => ({ source, text });
   return {
     mode: 'live',
     now: () => Date.now() + offset,
@@ -24,7 +30,7 @@ export function createHttpApi(): SandboxApi {
     activity: () => req('GET', '/activity?limit=200'),
     subscribe(fn: (e: ApiEvent) => void) {
       const es = new EventSource('./api/events');
-      ['status', 'activity', 'transfer', 'yarn'].forEach(t => es.addEventListener(t, ev => fn({ type: t, ...JSON.parse((ev as MessageEvent).data || '{}') } as ApiEvent)));
+      ['status', 'activity', 'transfer', 'yarn', 'hdfs', 'step', 'model'].forEach(t => es.addEventListener(t, ev => fn({ type: t, ...JSON.parse((ev as MessageEvent).data || '{}') } as ApiEvent)));
       return () => es.close();
     },
     validate: c => req('POST', '/config/validate', cfg(c)),
@@ -41,9 +47,39 @@ export function createHttpApi(): SandboxApi {
     putExample: example => req('POST', '/hdfs/put', { example }),
     setReplication: (path, replication) => req('PATCH', '/hdfs/files', { path, replication }),
     addDataNode: () => req('POST', '/hdfs/datanodes'),
+    hdfsList: path => req('GET', `/hdfs/ls?${q({ path })}`),
+    hdfsFile: path => req('GET', `/hdfs/file?${q({ path })}`),
+    hdfsUpload: ({ file, ...rest }) => {
+      if (!file) return req('POST', '/hdfs/upload', rest);
+      const f = new FormData();
+      Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) f.append(k, String(v)); });
+      f.append('file', file);
+      return req('POST', '/hdfs/upload', f);
+    },
+    hdfsMkdir: path => req('POST', '/hdfs/mkdir', { path }),
+    hdfsDelete: (path, recursive) => req('DELETE', `/hdfs/files?${q({ path, recursive: recursive ? '1' : '0' })}`),
+    fsck: path => req('GET', `/hdfs/fsck?${q({ path })}`),
+    replication: () => req('GET', '/hdfs/replication'),
     apps: () => req('GET', '/yarn/apps'),
     submitExample: async example => (await req<{ id: string }>('POST', '/yarn/apps', { example })).id,
     killApp: id => req('POST', `/yarn/apps/${encodeURIComponent(id)}/kill`),
+    yarnCluster: () => req('GET', '/yarn/cluster'),
+    app: id => req('GET', `/yarn/apps/${encodeURIComponent(id)}`),
+    appLogs: (id, container) => req('GET', `/yarn/apps/${encodeURIComponent(id)}/logs?${q({ container })}`),
+    pipelineCatalog: () => req('GET', '/pipeline/catalog'),
+    pipelineState: () => req('GET', '/pipeline'),
+    runStep: async r => (await req<{ id: string }>('POST', '/pipeline/steps', r)).id,
+    steps: () => req('GET', '/pipeline/steps'),
+    pipelineReset: () => req('POST', '/pipeline/reset'),
+    catalog: () => req('GET', '/data/catalog'),
+    schema: (source, name) => req('GET', `/data/schema?${q({ source, name })}`),
+    query: (source, text) => req('POST', '/data/query', src(source, text)),
+    explain: (source, text) => req('POST', '/data/explain', src(source, text)),
+    queryExamples: () => req('GET', '/data/examples'),
+    mlDatasets: () => req('GET', '/ml/datasets'),
+    recommend: (dataset, task) => req('POST', '/ml/recommend', { dataset, task }),
+    train: async r => (await req<{ id: string }>('POST', '/ml/train', r)).id,
+    models: () => req('GET', '/ml/models'),
   };
 }
 

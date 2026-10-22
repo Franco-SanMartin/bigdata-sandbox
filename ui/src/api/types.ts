@@ -271,15 +271,293 @@ export interface Activity {
   appId?: string;
 }
 
-/* ---------- Pipeline ---------- */
+/* ---------- Patrón de toda acción: comando → qué entra → qué hace → cómo quedan los datos ---------- */
+
+export type Cell = string | number | boolean | null;
+
+/** Una muestra de datos: las primeras filas de un archivo, una tabla o un resultado */
+export interface DataSample {
+  columns: string[];
+  rows: Cell[][];
+  /** Filas (o documentos, o líneas) que hay en total, no solo las de la muestra */
+  total?: number;
+  /** Formato: csv, parquet, texto, tabla de Hive, documentos de MongoDB… */
+  format?: string;
+  note?: string;
+}
+
+/**
+ * Lo que devuelve toda acción nueva del contrato (y lo que se ve en la consola).
+ * Es el mismo patrón que Activity, más la muestra de los datos antes y después.
+ */
+export interface ActionTrace {
+  /** El comando exacto que corre el backend (o el equivalente en la terminal) */
+  command: string;
+  /** Qué entra: archivo, tabla o parámetros */
+  input: string;
+  /** Qué hace, en una línea */
+  action: string;
+  /** Cómo quedan los datos */
+  output: string;
+  /** Quién hace el trabajo */
+  engine?: Engine;
+  before?: DataSample;
+  after?: DataSample;
+  /** Trabajos de YARN que lanzó */
+  appIds?: string[];
+}
+
+/**
+ * Respuesta de las acciones. Si la acción sigue en segundo plano (subir un archivo grande,
+ * un paso del pipeline, un entrenamiento), `id` sirve para seguirla y el progreso llega por SSE.
+ */
+export interface ActionResult {
+  id: string;
+  /** done: terminó en el momento · running: sigue en segundo plano */
+  state: 'done' | 'running';
+  trace: ActionTrace;
+}
+
+/** Cuerpo de los errores HTTP: { error, code } con status 4xx/5xx */
+export type ApiErrorCode =
+  /** 409: el cluster no está en marcha */
+  | 'cluster_stopped'
+  /** 503: el servicio que hace falta está apagado (HiveServer2, MySQL, MongoDB, YARN…) */
+  | 'service_down'
+  /** 404 */
+  | 'not_found'
+  /** 400: parámetros inválidos (ruta fuera de HDFS, SQL vacío, porcentaje fuera de rango…) */
+  | 'invalid'
+  /** 409: ya hay algo corriendo que lo impide (otro paso del pipeline, el mismo archivo escribiéndose) */
+  | 'busy'
+  /** 501: no disponible en esta versión de la imagen (por ejemplo, ML en base) */
+  | 'unsupported'
+  /** 500: el comando falló; el mensaje trae la última línea de su salida */
+  | 'failed';
+
+export interface ApiError { error: string; code: ApiErrorCode }
+
+/* ---------- HDFS: árbol, archivos, fsck y re-replicación ---------- */
+
+export interface HdfsEntry {
+  path: string;
+  name: string;
+  type: 'dir' | 'file';
+  /** Solo archivos */
+  sizeMb?: number;
+  replication?: number;
+  blockSizeMb?: number;
+  blocks?: number;
+  /** Solo carpetas: cuántas cosas tiene adentro */
+  children?: number;
+  owner: string;
+  group: string;
+  /** rwxr-xr-x */
+  permission: string;
+  modifiedAt: number;
+  /** Solo archivos: mismo significado que HdfsFile.state */
+  state?: HdfsFile['state'];
+}
+
+export interface HdfsListing {
+  path: string;
+  /** Carpeta de arriba; null en "/" */
+  parent: string | null;
+  entries: HdfsEntry[];
+}
+
+/** Un archivo con sus bloques, cada bloque con sus réplicas por DataNode, y las primeras líneas */
+export interface HdfsFileDetail extends HdfsFile {
+  owner: string;
+  permission: string;
+  preview: DataSample;
+  /** Salida de hdfs fsck <ruta> -files -blocks -locations, tal cual */
+  fsck: string[];
+}
+
+export type HdfsExample = 'ventas' | 'numeros' | 'sucias' | 'senal' | 'texto';
+
+export interface UploadRequest {
+  /** Carpeta de destino en HDFS */
+  dest: string;
+  /** Un archivo de ejemplo de la imagen (/datos/ejemplos) … */
+  example?: HdfsExample;
+  /** … o uno de tu compu (multipart/form-data) */
+  file?: File;
+  /** -D dfs.replication=N (si no, la de la configuración) */
+  replication?: number;
+  /** -D dfs.blocksize=128m (si no, la de la configuración) */
+  blockSize?: string;
+}
+
+export interface FsckReport {
+  path: string;
+  healthy: boolean;
+  totalSizeMb: number;
+  dirs: number;
+  files: number;
+  blocks: number;
+  minimallyReplicated: number;
+  underReplicated: number;
+  overReplicated: number;
+  missing: number;
+  corrupt: number;
+  defaultReplication: number;
+  avgReplication: number;
+  liveDataNodes: number;
+  /** Bloques con problemas, uno por línea, como los marca fsck */
+  problems: { file: string; block: string; issue: 'under' | 'missing' | 'corrupt' | 'over'; replicas: number; expected: number }[];
+  /** Salida completa del comando */
+  raw: string[];
+  trace: ActionTrace;
+}
+
+/** Lo que el NameNode está re-replicando (o borrando de más) ahora */
+export interface ReplicationTask {
+  block: string;
+  file: string;
+  kind: 'copy' | 'delete';
+  from?: number;
+  to?: number;
+  state: 'pending' | 'running' | 'done';
+}
+
+export interface ReplicationState {
+  underReplicated: number;
+  pending: number;
+  missing: number;
+  overReplicated: number;
+  /** DataNodes sin latidos y segundos que faltan para darlos por muertos */
+  stale: { dataNode: number; deadInSec: number }[];
+  tasks: ReplicationTask[];
+  /** Últimas copias hechas, más nuevas primero */
+  recent: (BlockTransfer & { at: number })[];
+}
+
+/* ---------- YARN: NodeManagers, colas, detalle de trabajos y logs ---------- */
+
+export interface NodeManager {
+  /** bigdata:45454 */
+  id: string;
+  state: 'RUNNING' | 'UNHEALTHY' | 'LOST' | 'DECOMMISSIONED';
+  memTotalMb: number;
+  memUsedMb: number;
+  vcoresTotal: number;
+  vcoresUsed: number;
+  containers: (YarnContainer & { appId: string; vcores: number })[];
+  lastHealthUpdate: number;
+}
+
+export interface YarnQueue {
+  name: string;
+  /** Porcentaje de la memoria del cluster que le toca */
+  capacity: number;
+  usedMb: number;
+  running: number;
+  pending: number;
+}
+
+export interface YarnCluster {
+  totalMb: number;
+  usedMb: number;
+  totalVcores: number;
+  usedVcores: number;
+  /** Mínimo que da YARN por contenedor (yarn.scheduler.minimum-allocation-mb) */
+  minAllocationMb: number;
+  maxAllocationMb: number;
+  nodes: NodeManager[];
+  queues: YarnQueue[];
+}
+
+/** Un nodo del DAG (vértice de Tez, etapa de Spark, fase de MapReduce) con sus contadores */
+export interface DagVertex {
+  id: string;
+  name: string;
+  state: YarnStage['state'];
+  tasks: number;
+  tasksDone: number;
+  /** Lo que hace, en el idioma del motor: "TableScan → Group By", "csv → withColumn → groupBy" */
+  operators: string[];
+  recordsIn?: number;
+  recordsOut?: number;
+  bytesReadMb?: number;
+  bytesWrittenMb?: number;
+  startedAt?: number;
+  finishedAt?: number;
+}
+
+export interface DagEdge { from: string; to: string; kind: string }
+
+export interface YarnAppDetail extends YarnApp {
+  engine: Engine;
+  /** Lo que se mandó a correr */
+  command: string;
+  trackingUrl?: string;
+  diagnostics?: string;
+  dag: { vertices: DagVertex[]; edges: DagEdge[] };
+  /** Contadores de Hadoop (MAP_INPUT_RECORDS, HDFS_BYTES_READ…) o métricas de Spark */
+  counters: { group: string; name: string; value: number }[];
+  /** Dónde dejó el resultado */
+  outputPath?: string;
+  trace: ActionTrace;
+}
+
+export interface AppLogs {
+  appId: string;
+  containers: { id: string; kind: YarnContainer['kind']; label: string }[];
+  /** Contenedor mostrado (el del ApplicationMaster si no se pide otro) */
+  container: string;
+  files: { name: 'stdout' | 'stderr' | 'syslog'; lines: string[] }[];
+}
+
+/* ---------- Pipeline: Ingesta → ETL → Almacenamiento → Análisis → ML → Resultados ---------- */
 
 export type PipelineStage = 'ingesta' | 'etl' | 'almacen' | 'analisis' | 'ml' | 'resultados';
 /** Quién hace el trabajo: el cliente de HDFS, MapReduce (y Pig, Sqoop), Tez (Hive), Spark o una sola máquina (pandas, scikit-learn) */
 export type Engine = 'hdfs' | 'mr' | 'tez' | 'spark' | 'uno';
 
+export interface ToolOption {
+  id: string;
+  label: string;
+  kind: 'select' | 'number' | 'boolean' | 'text';
+  default: string | number | boolean;
+  choices?: { value: string; label: string }[];
+  help?: string;
+}
+
+/** Una herramienta que se puede elegir en una etapa, con cuándo conviene */
+export interface PipelineTool {
+  /** put, sqoop, pandas, pyspark, hivetab, parquet, mysql, hive, sparksql, sklearn, mllib, getmerge, informe */
+  id: string;
+  label: string;
+  engine: Engine;
+  whenToUse: string;
+  whenNot: string;
+  /** El comando que corre, con las opciones por defecto */
+  command: string;
+  /** Script de ejemplo de la imagen que usa (ejemplos/ml/etl_pandas.py…) */
+  script?: string;
+  options: ToolOption[];
+  /** Se puede usar con la versión y los servicios que están corriendo */
+  available: boolean;
+  unavailableReason?: string;
+  /** La que se sugiere en esta etapa */
+  recommended?: boolean;
+}
+
+export interface PipelineStageInfo {
+  stage: PipelineStage;
+  label: string;
+  /** Qué se hace en esta etapa, en una línea */
+  description: string;
+  /** Qué tiene que existir antes (lo deja la etapa anterior) */
+  needs: string;
+  tools: PipelineTool[];
+}
+
 export interface StepRequest {
   stage: PipelineStage;
-  /** put, sqoop, pandas, pyspark, pig, hive, hivetab, mysql, mongo, sparksql */
+  /** put, sqoop, pandas, pyspark, hivetab, parquet, mysql, hive, sparksql, sklearn, mllib, getmerge, informe */
   tool: string;
   options: Record<string, string | boolean | number>;
 }
@@ -300,6 +578,24 @@ export interface StepRun {
   appIds: string[];
   /** Lo que dejó: ruta, filas, tamaño y un resumen (por ejemplo, lo que arregló el ETL) */
   output?: { path: string; rows?: number; sizeMb?: number; summary?: [string, string][] };
+  /** Comando → qué entra → qué hace → cómo quedan (con antes y después) */
+  trace?: ActionTrace;
+  /** Si es de ML, el entrenamiento que lanzó */
+  modelId?: string;
+  error?: string;
+}
+
+/** Lo que muestra el riel fijo de la derecha */
+export interface PipelineState {
+  stages: { stage: PipelineStage; label: string; state: 'pending' | 'running' | 'done' | 'failed'; stepId?: string; tool?: string; engine?: Engine }[];
+  /** La etapa en la que estás (la que corre, o la primera sin hacer) */
+  current: PipelineStage;
+  /** La que sigue y qué hace falta para hacerla */
+  next: { stage: PipelineStage; hint: string } | null;
+  /** Motor trabajando ahora (null si no corre nada) */
+  working: { engine: Engine; stepId: string; message: string } | null;
+  /** El dato que viaja por el pipeline, como quedó en la última etapa */
+  dataset: { path: string; rows?: number; sizeMb?: number; format: string } | null;
 }
 
 /* ---------- Datos: Hive, MySQL y MongoDB ---------- */
@@ -316,6 +612,20 @@ export interface CatalogEntry {
   columns: { name: string; type: string }[];
 }
 
+export interface TableSchema extends CatalogEntry {
+  columns: { name: string; type: string; nullable?: boolean; key?: 'PK' | 'índice'; comment?: string;
+    /** Solo MongoDB: en qué porcentaje de los documentos aparece el campo */
+    presence?: number }[];
+  /** textfile, parquet, InnoDB, WiredTiger */
+  format?: string;
+  sizeMb?: number;
+  partitions?: string[];
+  indexes?: { name: string; columns: string[]; unique: boolean }[];
+  /** SHOW CREATE TABLE (o el validador/índices de la colección) */
+  ddl?: string;
+  sample: DataSample;
+}
+
 export interface QueryResult {
   columns: string[];
   rows: (string | number | null)[][];
@@ -324,11 +634,66 @@ export interface QueryResult {
   /** Si la consulta lanzó un trabajo en YARN (Hive → Tez) */
   appId?: string;
   note?: string;
+  /** Quién la resolvió: tez para Hive con trabajo, uno para MySQL/MongoDB o Hive sin trabajo (fetch task) */
+  engine?: Engine;
+  /** Filas que leyó el motor (no las que devolvió) */
+  scanned?: number;
+  trace?: ActionTrace;
 }
+
+export interface QueryPlan {
+  source: DataSource;
+  engine: Engine;
+  /** Árbol del plan: cada nodo con sus hijos por índice */
+  nodes: { id: number; label: string; detail?: string; children: number[]; rows?: number }[];
+  /** Salida de EXPLAIN / explain("executionStats") tal cual */
+  raw: string[];
+  /** Si va a lanzar un trabajo en YARN y con cuántas etapas */
+  yarnStages?: number;
+}
+
+export interface QueryExample { source: DataSource; label: string; text: string; script?: string }
 
 /* ---------- Machine Learning ---------- */
 
 export type MlTask = 'regresion' | 'clasificacion' | 'clustering';
+
+export interface MlDataset {
+  /** senal */
+  id: string;
+  label: string;
+  path: string;
+  rows: number;
+  /** Cómo se generó (ejemplos/ml/generar_senal.py) */
+  script?: string;
+  columns: { name: string; type: string; role: 'entrada' | 'objetivo' | 'respuesta' | 'ignorar'; note?: string }[];
+  /** Qué se puede predecir y qué tipo de problema es */
+  targets: { column: string | null; task: MlTask; label: string }[];
+  sample: DataSample;
+  /** Está en HDFS (MLlib lo necesita ahí; scikit-learn lo lee de /datos) */
+  inHdfs: boolean;
+}
+
+export interface ModelChoice {
+  /** lineal, arbol, logistica, mlp, kmeans, tonto */
+  model: string;
+  label: string;
+  engine: 'sklearn' | 'mllib';
+  fit: 'recomendado' | 'sirve' | 'línea base' | 'no conviene';
+  why: string;
+  /** Costo esperado, medido en el sandbox */
+  expected?: { seconds: number; memoryMb: number; metric: string; value: number };
+}
+
+export interface MlRecommendation {
+  dataset: string;
+  task: MlTask;
+  /** Por qué es este tipo de problema */
+  why: string;
+  /** Qué motor conviene con este tamaño de datos */
+  engineAdvice: string;
+  choices: ModelChoice[];
+}
 
 export interface TrainRequest {
   task: MlTask;
@@ -337,6 +702,10 @@ export interface TrainRequest {
   engine: 'sklearn' | 'mllib';
   /** Porcentaje para entrenar (el resto, para probar) */
   trainPct: number;
+  /** senal si no se dice otro */
+  dataset?: string;
+  /** Hiperparámetros (profundidad del árbol, k de KMeans, capas de la red…) */
+  params?: Record<string, number | string>;
 }
 
 export interface ModelRun {
@@ -361,6 +730,13 @@ export interface ModelRun {
   appId?: string;
   /** Valores de referencia y no medidos en este momento (modo demo con Spark MLlib) */
   reference?: boolean;
+  dataset?: string;
+  /** Matriz de confusión (clasificación): filas = real, columnas = predicho */
+  confusion?: { labels: string[]; matrix: number[][] };
+  /** Algunas filas de prueba con lo real y lo predicho */
+  predictions?: DataSample;
+  trace?: ActionTrace;
+  error?: string;
 }
 
 /* ---------- Eventos en vivo (SSE en GET /api/events) ---------- */
@@ -369,7 +745,13 @@ export type ApiEvent =
   | { type: 'status' }
   | { type: 'activity'; entry: Activity }
   | { type: 'transfer'; transfer: BlockTransfer }
-  | { type: 'yarn'; appId: string };
+  | { type: 'yarn'; appId: string }
+  /** Cambió algo en HDFS (se subió, borró o terminó de escribir un archivo) */
+  | { type: 'hdfs'; path: string }
+  /** Avance de un paso del pipeline */
+  | { type: 'step'; step: StepRun }
+  /** Avance de un entrenamiento */
+  | { type: 'model'; run: ModelRun };
 
 /* ---------- La interfaz ---------- */
 
@@ -417,6 +799,21 @@ export interface SandboxApi {
   /** POST /api/hdfs/datanodes { id } → 202 (datanode start N en caliente) */
   addDataNode(): Promise<void>;
 
+  /** GET /api/hdfs/ls?path=/user/root → una carpeta, para armar el árbol de a un nivel */
+  hdfsList(path: string): Promise<HdfsListing>;
+  /** GET /api/hdfs/file?path=… → bloques, réplicas por DataNode, primeras líneas y fsck del archivo */
+  hdfsFile(path: string): Promise<HdfsFileDetail>;
+  /** POST /api/hdfs/upload (JSON { dest, example, replication, blockSize } o multipart con file) → 202 ActionResult; avanza por SSE transfer/hdfs */
+  hdfsUpload(req: UploadRequest): Promise<ActionResult>;
+  /** POST /api/hdfs/mkdir { path } → ActionResult */
+  hdfsMkdir(path: string): Promise<ActionResult>;
+  /** DELETE /api/hdfs/files?path=…&recursive=1 → ActionResult (hdfs dfs -rm -r -skipTrash) */
+  hdfsDelete(path: string, recursive: boolean): Promise<ActionResult>;
+  /** GET /api/hdfs/fsck?path=/ → informe de hdfs fsck */
+  fsck(path: string): Promise<FsckReport>;
+  /** GET /api/hdfs/replication → lo que el NameNode está re-replicando ahora */
+  replication(): Promise<ReplicationState>;
+
   /** GET /api/yarn/apps */
   apps(): Promise<YarnApp[]>;
   /** POST /api/yarn/apps { example } → { id } */
@@ -424,17 +821,40 @@ export interface SandboxApi {
   /** POST /api/yarn/apps/:id/kill */
   killApp(id: string): Promise<void>;
 
-  /** POST /api/pipeline/steps { stage, tool, options } → { id } */
+  /** GET /api/yarn/cluster → memoria y vcores por NodeManager, contenedores y colas */
+  yarnCluster(): Promise<YarnCluster>;
+  /** GET /api/yarn/apps/:id → detalle con el DAG (Tez, Spark o MapReduce), contadores y comando */
+  app(id: string): Promise<YarnAppDetail>;
+  /** GET /api/yarn/apps/:id/logs?container=… → stdout, stderr y syslog de un contenedor */
+  appLogs(id: string, container?: string): Promise<AppLogs>;
+
+  /** GET /api/pipeline/catalog → etapas y herramientas, con cuándo conviene cada una */
+  pipelineCatalog(): Promise<PipelineStageInfo[]>;
+  /** GET /api/pipeline → el riel: etapa actual, qué sigue, motor trabajando, dato que viaja */
+  pipelineState(): Promise<PipelineState>;
+  /** POST /api/pipeline/steps { stage, tool, options } → { id }; avanza por SSE step */
   runStep(req: StepRequest): Promise<string>;
   /** GET /api/pipeline/steps */
   steps(): Promise<StepRun[]>;
+  /** POST /api/pipeline/reset → vuelve a la primera etapa (no borra lo que hay en HDFS) */
+  pipelineReset(): Promise<void>;
 
   /** GET /api/data/catalog: tablas de Hive y MySQL y colecciones de MongoDB */
   catalog(): Promise<CatalogEntry[]>;
+  /** GET /api/data/schema?source=hive&name=default.ventas → columnas, formato, índices, DDL y muestra */
+  schema(source: DataSource, name: string): Promise<TableSchema>;
   /** POST /api/data/query { source, text } (SQL para Hive y MySQL, mongosh para MongoDB) */
   query(source: DataSource, text: string): Promise<QueryResult>;
+  /** POST /api/data/explain { source, text } → plan (EXPLAIN de Hive y MySQL, explain() de MongoDB) */
+  explain(source: DataSource, text: string): Promise<QueryPlan>;
+  /** GET /api/data/examples → consultas de ejemplo de la imagen (ventas.hql, tienda.hql, consultas_mongo.js) */
+  queryExamples(): Promise<QueryExample[]>;
 
-  /** POST /api/ml/train { task, model, engine, trainPct } → { id } */
+  /** GET /api/ml/datasets → datos para entrenar, con columnas y qué se puede predecir */
+  mlDatasets(): Promise<MlDataset[]>;
+  /** POST /api/ml/recommend { dataset, task } → tipo de problema y modelos recomendados, con su costo */
+  recommend(dataset: string, task: MlTask): Promise<MlRecommendation>;
+  /** POST /api/ml/train { task, model, engine, trainPct, dataset, params } → { id }; avanza por SSE model */
   train(req: TrainRequest): Promise<string>;
   /** GET /api/ml/models */
   models(): Promise<ModelRun[]>;
