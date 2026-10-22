@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
-import { navigate, type PageId } from '../state/ui';
 import { ActivityList, useFilteredActivity } from '../shell/ConsoleDrawer';
-import { navById } from '../shell/nav';
-import { HELP } from '../help/content';
-import { Empty, Seg } from '../components/ui';
+import { Seg } from '../components/ui';
 
 export function ConsolePage() {
   const [q, setQ] = useState('');
@@ -20,21 +17,6 @@ export function ConsolePage() {
           <span className="muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{items.length} eventos</span>
         </div>
         <div className="panel-b flush">{items.length ? <ActivityList items={items} /> : <div className="tbl-empty">Nada para mostrar con este filtro.</div>}</div>
-      </section>
-    </div>
-  );
-}
-
-/** Módulos que llegan en la próxima entrega */
-export function PendingPage({ id }: { id: PageId }) {
-  const n = navById(id);
-  return (
-    <div className="page-in">
-      <div className="page-head"><div><h1>{n.title}</h1><p>{HELP[id].intro}</p></div></div>
-      <section className="panel">
-        <Empty icon={<n.icon size={20} />} title="Este módulo llega en la próxima entrega" action={<button className="btn" type="button" onClick={() => navigate('cluster')}>Volver a Cluster</button>}>
-          Primero se aprueba el armazón de la app y la pantalla de Cluster; después se suman HDFS, YARN, el pipeline, los datos y ML con el mismo sistema.
-        </Empty>
       </section>
     </div>
   );
