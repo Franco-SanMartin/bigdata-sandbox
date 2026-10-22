@@ -29,11 +29,17 @@ function layers(vs: DagVertex[], es: DagEdge[]): DagVertex[][] {
 }
 
 function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
-  const cols = layers(app.dag.vertices, app.dag.edges);
   const stage = (id: string): YarnStage | undefined => app.stages.find(s => s.id === id);
   if (!app.dag.vertices.length) return <p className="muted">Todavía no hay etapas: el trabajo espera su ApplicationMaster.</p>;
+  // Spark History da las etapas sin decir de cuál depende cada una: van en fila, en el orden en que arrancaron, sin flechas
+  const flat = !app.dag.edges.length && app.dag.vertices.length > 1;
+  const cols = flat
+    ? [[...app.dag.vertices].sort((a, b) => (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity))]
+    : layers(app.dag.vertices, app.dag.edges);
   return (
-    <div className="dag" role="list" aria-label="DAG">
+    <>
+    {flat && <p className="muted dag-note">Etapas en el orden en que arrancaron: {app.type === 'SPARK' ? 'Spark History' : 'el motor'} no informa de qué etapa depende cada una.</p>}
+    <div className={flat ? 'dag dag-flat' : 'dag'} role="list" aria-label="DAG">
       {cols.map((col, i) => {
         const into = i ? app.dag.edges.find(e => col.some(v => v.id === e.to)) : undefined;
         return (
@@ -70,6 +76,7 @@ function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
         );
       })}
     </div>
+    </>
   );
 }
 

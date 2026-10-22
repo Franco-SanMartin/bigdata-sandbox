@@ -31,6 +31,8 @@ export function createHttpApi(): SandboxApi {
     subscribe(fn: (e: ApiEvent) => void) {
       const es = new EventSource('./api/events');
       ['status', 'activity', 'transfer', 'yarn', 'hdfs', 'step', 'model'].forEach(t => es.addEventListener(t, ev => fn({ type: t, ...JSON.parse((ev as MessageEvent).data || '{}') } as ApiEvent)));
+      // De action solo interesa cuándo empieza y termina, no cada línea de salida
+      es.addEventListener('action', ev => { const d = JSON.parse((ev as MessageEvent).data || '{}'); if (d.state) fn({ type: 'action', id: d.id, state: d.state, exitCode: d.exitCode }); });
       return () => es.close();
     },
     validate: c => req('POST', '/config/validate', cfg(c)),
@@ -42,6 +44,7 @@ export function createHttpApi(): SandboxApi {
     apply: c => req('POST', '/cluster/apply', cfg(c)),
     resetVolume: () => req('POST', '/cluster/reset'),
     processAction: (id, a) => req('POST', `/processes/${encodeURIComponent(id)}/${a}`),
+    action: id => req('GET', `/actions/${encodeURIComponent(id)}`),
     dataNodes: () => req('GET', '/hdfs/datanodes'),
     files: () => req('GET', '/hdfs/files?recursive=1'),
     putExample: example => req('POST', '/hdfs/put', { example }),

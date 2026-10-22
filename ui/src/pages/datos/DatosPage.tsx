@@ -123,7 +123,7 @@ function Catalog({ entries, error, sel, onPick }: { entries: CatalogEntry[] | un
                     <button type="button" className="cat-item" aria-current={sel?.source === s && sel.name === c.name} onClick={() => onPick(c)}>
                       <span className="nm">{c.name}</span>
                       <span className="k">{c.kind}</span>
-                      <span className="r">{nf(c.rows)}</span>
+                      <span className="r" title={c.rows == null ? 'Sin estadísticas (ANALYZE TABLE … COMPUTE STATISTICS)' : undefined}>{c.rows == null ? '—' : nf(c.rows)}</span>
                     </button>
                   </li>
                 ))}
@@ -160,7 +160,7 @@ function SchemaPanel({ sel, data, loading, error }: { sel: { source: DataSource;
         <div className="sch-meta">
           <span>{data.kind}</span>
           {data.format && <span>formato<b>{data.format}</b></span>}
-          <span>{mongo ? 'documentos' : 'filas'}<b>{nf(data.rows)}</b></span>
+          <span>{mongo ? 'documentos' : 'filas'}<b>{data.rows == null ? 'sin estadísticas' : nf(data.rows)}</b></span>
           {data.sizeMb != null && <span>tamaño<b>{sizeLabel(data.sizeMb)}</b></span>}
           {data.location && <span className="mono">hdfs<b>{data.location}</b></span>}
         </div>
@@ -298,7 +298,8 @@ function QueryPanel({ source, setSource, text, setText, examples, available }: {
             {res?.note && !running && !err && tab === 'res' && <span className="end muted">{res.note}</span>}
           </div>
           {running && (tab === 'res' || tab === 'plan') ? (
-            <div className="res-run"><Dot s="running" />{running.what === 'plan' ? 'Pidiendo el plan' : 'Corriendo'} en {SOURCE[source]}<span className="mono muted">{nf((now - running.t0) / 1000, 1)} s</span></div>
+            <div className="res-run"><Dot s="running" />{running.what === 'plan' ? 'Pidiendo el plan' : 'Corriendo'} en {SOURCE[source]}<span className="mono muted">{nf((now - running.t0) / 1000, 1)} s</span>
+              {source === 'hive' && running.what === 'consulta' && now - running.t0 > 3000 && <span className="muted">· si lanza un trabajo de Tez, abrir la sesión en YARN lleva 10–20 s</span>}</div>
           ) : err && (tab === 'res' || (tab === 'plan' && err.what === 'plan')) ? (
             <div className="callout res-err" data-k="bad" role="alert">
               <span className="head"><span className="badge" data-k="bad">{err.code}</span><b>{err.what === 'plan' ? 'El plan' : 'La consulta'} falló en {SOURCE[err.source]}</b></span>

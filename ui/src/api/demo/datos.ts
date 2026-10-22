@@ -57,7 +57,7 @@ export class DemoData {
     needProc(this.e, ...PROC[source]);
     const entry = this.catalog().find(c => c.source === source && c.name === name);
     if (!entry) fail('not_found', `No existe ${name} en ${PROC[source][1]}`);
-    const s = (columns: string[], rows: (string | number | null)[][], total: number, note?: string): DataSample => ({ columns, rows, total, note });
+    const s = (columns: string[], rows: (string | number | null)[][], total: number | undefined, note?: string): DataSample => ({ columns, rows, total, note });
     if (source === 'hive') {
       const ddl = HIVE_DDL[name];
       const sample = name === 'default.ventas' ? s(VENTAS_COLS, VENTAS_HEAD, 200000) : name === 'default.tienda_ventas' ? s(['id', ...VENTAS_COLS], VENTAS_HEAD.map((r, i) => [i + 1, ...r]), 200000)

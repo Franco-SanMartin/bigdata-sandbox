@@ -1,5 +1,6 @@
 /* Modo demo: la misma interfaz que el backend real, respondida por el cluster simulado. */
 import type { SandboxApi } from '../types';
+import { ApiFailure } from '../errors';
 import { composeYaml, estimateRam, validate } from '../../lib/cluster';
 import { DemoEngine, SPEED } from './engine';
 import { DemoHdfs } from './hdfs';
@@ -36,6 +37,7 @@ export function createDemoApi(): SandboxApi {
     apply: c => ok(e.apply(c)),
     resetVolume: () => ok(e.resetVolume()),
     processAction: (id, a) => ok(e.processAction(id, a)),
+    action: id => call(() => { throw new ApiFailure(`El modo demo no guarda la salida de las acciones (${id}): mirá la consola`, 'not_found', 404); }),
     dataNodes: () => ok(e.dataNodes()),
     files: () => ok(e.filesView()),
     putExample: x => { e.putExample(x); return ok(undefined); },

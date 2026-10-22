@@ -4,6 +4,7 @@ import type { MlDataset, MlRecommendation, MlTask, ModelChoice, ModelRun, TrainR
 import { fail } from '../errors';
 import type { DemoEngine, StageDef } from './engine';
 import { CLIENTES_COLS, CLIENTES_HEAD, MLLIB, SKLEARN } from './datasets';
+import { CLUSTER_FEATURES, DEFAULT_PARAMS } from '../../lib/ml';
 import { n, needHdfs, needProc, trace } from './common';
 
 const SENAL_PATH = '/user/root/ml/clientes_senal.csv';
@@ -17,11 +18,6 @@ const TASK_LABEL: Record<MlTask, string> = { regresion: 'regresión', clasificac
 const METRIC: Record<MlTask, string> = { regresion: 'r2', clasificacion: 'aciertos', clustering: 'rand_ajustado' };
 const TARGET: Record<MlTask, string | null> = { regresion: 'gasto_mes_siguiente', clasificacion: 'vuelve', clustering: null };
 const FEATURES = ['antiguedad_meses', 'visitas_mes', 'ticket_promedio', 'reclamos', 'edad'];
-/** Hiperparámetros de modelos_sklearn.py */
-export const DEFAULT_PARAMS: Record<string, Record<string, number | string>> = {
-  lineal: {}, tonto: { strategy: 'most_frequent' }, arbol: { max_depth: 3 }, logistica: { C: 1 },
-  mlp: { hidden_layer_sizes: '16,8', max_iter: 500 }, kmeans: { n_clusters: 3, n_init: 10 },
-};
 
 /* Matriz de confusión con 4.000 filas de prueba (1.708 no vuelven, 2.292 vuelven), coherente con los aciertos medidos */
 const CONFUSION: Record<string, number[][]> = {
@@ -122,22 +118,23 @@ export class DemoMl {
     if (this.runs.some(r => r.state === 'running')) fail('busy', 'Ya hay un entrenamiento corriendo');
     const target = req.target === undefined ? TARGET[req.task] : req.target;
     if (target !== TARGET[req.task]) fail('invalid', req.task === 'clustering' ? 'Clustering no usa columna objetivo' : `Para ${TASK_LABEL[req.task]} el objetivo es ${TARGET[req.task]}`);
-    const features = req.features ?? FEATURES;
+    const features = req.features ?? (req.task === 'clustering' ? CLUSTER_FEATURES : FEATURES);
     if (!features.length) fail('invalid', 'Elegí al menos una columna de entrada');
     const bad = features.find(f => !FEATURES.includes(f));
     if (bad) fail('invalid', `${bad} no se puede usar como entrada`);
     const params = { ...DEFAULT_PARAMS[req.model], ...req.params };
-    const sameAsMeasured = req.trainPct === 80 && features.length === FEATURES.length && Object.entries(params).every(([k, v]) => String(DEFAULT_PARAMS[req.model][k]) === String(v));
+    const sameAsMeasured = (req.task === 'clustering' || req.trainPct === 80) && features.length === (req.task === 'clustering' ? CLUSTER_FEATURES : FEATURES).length && Object.entries(params).every(([k, v]) => String(DEFAULT_PARAMS[req.model][k]) === String(v));
 
     const res = table[key];
-    const trainRows = Math.round(ROWS * req.trainPct / 100);
+    // Clustering no separa filas de prueba: entrena con todas y se mide contra segmento_real (como el backend)
+    const trainRows = req.task === 'clustering' ? ROWS : Math.round(ROWS * req.trainPct / 100);
     const id = `m${++this.seq}`;
     const sk = req.engine === 'sklearn';
     const command = sk ? `python3 ejemplos/ml/modelos_sklearn.py   # ${MODEL_LABEL[req.model]}` : `spark-submit ejemplos/ml/modelos_spark.py   # ${MODEL_LABEL[req.model]}`;
     const r: ModelRun = {
       id, task: req.task, model: req.model, engine: req.engine, dataset: 'senal', state: 'running', startedAt: this.e.now(), progress: 0,
       message: sk ? 'Leyendo clientes_senal.csv' : 'Pidiendo contenedores a YARN', trainRows, testRows: ROWS - trainRows, metrics: {}, reference: !sk || !sameAsMeasured, target, features, params,
-      trace: trace(command, `clientes_senal.csv · ${n(ROWS)} filas · ${n(trainRows)} para entrenar y ${n(ROWS - trainRows)} para probar`,
+      trace: trace(command, `clientes_senal.csv · ${n(ROWS)} filas · ${req.task === 'clustering' ? 'todas para entrenar (se mide contra segmento_real)' : `${n(trainRows)} para entrenar y ${n(ROWS - trainRows)} para probar`}`,
         `${MODEL_LABEL[req.model]} (${TASK_LABEL[req.task]}) con ${sk ? 'scikit-learn, en una sola máquina' : 'Spark MLlib, repartido en executors de YARN'}`,
         'Todavía entrenando', { engine: sk ? 'uno' : 'spark', before: { columns: CLIENTES_COLS, rows: CLIENTES_HEAD, total: ROWS, format: 'csv' } }),
     };
@@ -162,7 +159,7 @@ export class DemoMl {
     if (sk) {
       // Arrancar Python e importar pandas y scikit-learn lleva un par de segundos; el entrenamiento, lo medido
       const fit = Math.max(.5, res.seconds!);
-      const steps: [number, string, number][] = [[1.5, 'Separando columnas de entrada y objetivo', .25], [2.2, `train_test_split: ${n(trainRows)} / ${n(ROWS - trainRows)}`, .35], [2.4, `Entrenando (${MODEL_LABEL[req.model]})`, .5], [2.4 + fit, `Probando con ${n(ROWS - trainRows)} filas que no vio`, .9]];
+      const steps: [number, string, number][] = [[1.5, 'Separando columnas de entrada y objetivo', .25], [2.2, req.task === 'clustering' ? 'Escalando las columnas (StandardScaler)' : `train_test_split: ${n(trainRows)} / ${n(ROWS - trainRows)}`, .35], [2.4, `Entrenando (${MODEL_LABEL[req.model]})`, .5], [2.4 + fit, req.task === 'clustering' ? 'Comparando los grupos con segmento_real' : `Probando con ${n(ROWS - trainRows)} filas que no vio`, .9]];
       steps.forEach(([t, msg, p]) => this.e.at(t, () => { if (r.state !== 'running') return; r.message = msg; r.progress = p; this.emit(r); }));
       this.e.at(3 + fit, () => { if (r.state !== 'running') return; if (this.e.phase !== 'running') failRun('Se apagó el cluster'); else finish(); });
     } else {

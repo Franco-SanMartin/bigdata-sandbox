@@ -12,21 +12,23 @@ import { useStatus } from '../../state/store';
 import { useApi } from '../../state/useApi';
 import { mbLabel, nf } from '../../lib/format';
 import { EngineChip, MAIN, ModelDetail, RefTag, TASK, metricLabel, metricValue, runTime } from './ModelDetail';
+import { CLUSTER_FEATURES, DEFAULT_PARAMS } from '../../lib/ml';
 import './ml.css';
 
 const TASKS: MlTask[] = ['regresion', 'clasificacion', 'clustering'];
 const MODEL: Record<string, string> = { lineal: 'Regresión lineal', tonto: 'Clasificador tonto', arbol: 'Árbol de decisión', logistica: 'Regresión logística', mlp: 'Red neuronal (MLP)', kmeans: 'KMeans' };
 const FIT: Record<ModelChoice['fit'], 'ok' | 'bad' | undefined> = { recomendado: 'ok', sirve: undefined, 'línea base': undefined, 'no conviene': 'bad' };
 
-/** Hiperparámetros que se pueden tocar, con los valores por defecto de modelos_sklearn.py */
-type Param = { key: string; label: string; def: number | string } & ({ kind: 'int'; min: number; max: number } | { kind: 'num' } | { kind: 'text'; hint: string });
+/** Hiperparámetros que se pueden tocar; los valores por defecto (modelos_sklearn.py) están en lib/ml.ts */
+type Param = { key: string; label: string } & ({ kind: 'int'; min: number; max: number } | { kind: 'num' } | { kind: 'text'; hint: string });
 const PARAMS: Record<string, Param[]> = {
-  arbol: [{ key: 'max_depth', label: 'profundidad máxima', kind: 'int', min: 1, max: 20, def: 3 }],
-  logistica: [{ key: 'C', label: 'C (regularización)', kind: 'num', def: 1 }],
-  mlp: [{ key: 'hidden_layer_sizes', label: 'capas ocultas', kind: 'text', hint: 'neuronas por capa, separadas por coma', def: '16,8' }, { key: 'max_iter', label: 'iteraciones máximas', kind: 'int', min: 50, max: 5000, def: 500 }],
-  kmeans: [{ key: 'n_clusters', label: 'grupos (k)', kind: 'int', min: 2, max: 10, def: 3 }, { key: 'n_init', label: 'arranques', kind: 'int', min: 1, max: 50, def: 10 }],
+  arbol: [{ key: 'max_depth', label: 'profundidad máxima', kind: 'int', min: 1, max: 20 }],
+  logistica: [{ key: 'C', label: 'C (regularización)', kind: 'num' }],
+  mlp: [{ key: 'hidden_layer_sizes', label: 'capas ocultas', kind: 'text', hint: 'neuronas por capa, separadas por coma' }, { key: 'max_iter', label: 'iteraciones máximas', kind: 'int', min: 50, max: 5000 }],
+  kmeans: [{ key: 'n_clusters', label: 'grupos (k)', kind: 'int', min: 2, max: 10 }, { key: 'n_init', label: 'arranques', kind: 'int', min: 1, max: 50 }],
 };
-const defaults = (model: string) => Object.fromEntries((PARAMS[model] ?? []).map(p => [p.key, p.def]));
+const defaults = (model: string) => ({ ...DEFAULT_PARAMS[model] });
+const def = (model: string, key: string) => DEFAULT_PARAMS[model]?.[key] ?? '';
 
 type Role = 'objetivo' | 'entrada' | 'ignorar';
 
@@ -57,6 +59,12 @@ export function MlPage() {
   const choices = rec.data?.task === task ? rec.data.choices : [];
   const models4task = [...new Set(choices.map(c => c.model))];
   const choice = choices.find(c => c.model === model && c.engine === engine);
+
+  // En clustering arrancan marcadas solo las dos columnas que separan los segmentos; en los otros, todas
+  const inputsKey = inputs.join(',');
+  useEffect(() => {
+    setIgnored(new Set(task === 'clustering' ? inputs.filter(c => !CLUSTER_FEATURES.includes(c)) : []));
+  }, [task, inputsKey]);
 
   // Al cambiar de problema, el formulario arranca con el modelo recomendado
   useEffect(() => {
@@ -187,12 +195,14 @@ export function MlPage() {
               ]} />
             </div>
             <div className="ml-f"><span className="ml-fl">para entrenar</span>
-              <span className="ml-pct"><Stepper value={trainPct} onChange={setTrainPct} min={50} max={95} label="Porcentaje para entrenar" id="ml-pct" /><span className="muted">% · {nf(trainRows)} / {nf((ds?.rows ?? 0) - trainRows)} filas</span></span>
+              {task === 'clustering'
+                ? <span className="ml-pct"><span className="muted">todas las filas ({nf(ds?.rows ?? 0)}): clustering no separa prueba, se mide contra segmento_real</span></span>
+                : <span className="ml-pct"><Stepper value={trainPct} onChange={setTrainPct} min={50} max={95} label="Porcentaje para entrenar" id="ml-pct" /><span className="muted">% · {nf(trainRows)} / {nf((ds?.rows ?? 0) - trainRows)} filas</span></span>}
             </div>
             {(PARAMS[model] ?? []).map(p => (
               <label key={p.key} className="ml-f"><span className="ml-fl">{p.label} <span className="mono muted">{p.key}</span></span>
-                {p.kind === 'int' ? <Stepper value={Number(params[p.key] ?? p.def)} onChange={v => setParams(x => ({ ...x, [p.key]: v }))} min={p.min} max={p.max} label={p.label} />
-                  : <input className="input mono" value={String(params[p.key] ?? p.def)} inputMode={p.kind === 'num' ? 'decimal' : undefined} placeholder={p.kind === 'text' ? p.hint : undefined}
+                {p.kind === 'int' ? <Stepper value={Number(params[p.key] ?? def(model, p.key))} onChange={v => setParams(x => ({ ...x, [p.key]: v }))} min={p.min} max={p.max} label={p.label} />
+                  : <input className="input mono" value={String(params[p.key] ?? def(model, p.key))} inputMode={p.kind === 'num' ? 'decimal' : undefined} placeholder={p.kind === 'text' ? p.hint : undefined}
                       onChange={e => setParams(x => ({ ...x, [p.key]: p.kind === 'num' && e.target.value.trim() !== '' && !isNaN(Number(e.target.value)) ? Number(e.target.value) : e.target.value }))} />}
               </label>
             ))}

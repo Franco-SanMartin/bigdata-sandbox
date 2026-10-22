@@ -318,6 +318,25 @@ export interface ActionResult {
   trace: ActionTrace;
 }
 
+/** GET /api/actions/:id: un comando que corrió el backend, con su salida y la foto de antes y después */
+export interface ActionRun {
+  id: string;
+  title: string;
+  command: string;
+  input?: string;
+  action?: string;
+  source?: string;
+  state: 'running' | 'done' | 'failed';
+  startedAt: number;
+  finishedAt?: number;
+  exitCode?: number;
+  before?: unknown;
+  after?: unknown;
+  /** Últimas líneas de salida (stdout y stderr) */
+  lines: { t: number; stream: 'stdout' | 'stderr' | string; text: string }[];
+  error?: string;
+}
+
 /** Cuerpo de los errores HTTP: { error, code } con status 4xx/5xx */
 export type ApiErrorCode =
   /** 409: el cluster no está en marcha */
@@ -437,7 +456,7 @@ export interface ReplicationState {
 /* ---------- YARN: NodeManagers, colas, detalle de trabajos y logs ---------- */
 
 export interface NodeManager {
-  /** bigdata:45454 */
+  /** host:puerto con que se registró el NodeManager (en la imagen, localhost:45454) */
   id: string;
   state: 'RUNNING' | 'UNHEALTHY' | 'LOST' | 'DECOMMISSIONED';
   memTotalMb: number;
@@ -614,7 +633,8 @@ export interface CatalogEntry {
   /** base.tabla o base.colección */
   name: string;
   kind: 'tabla' | 'externa' | 'colección';
-  rows: number;
+  /** Filas según las estadísticas del motor. Sin estadísticas (tabla externa recién creada en Hive, sin ANALYZE TABLE) no viene */
+  rows?: number;
   location?: string;
   columns: { name: string; type: string }[];
 }
@@ -730,6 +750,7 @@ export interface ModelRun {
   progress: number;
   message: string;
   trainRows: number;
+  /** Filas de prueba. En clustering es 0: se entrena con todo y se mide contra segmento_real */
   testRows: number;
   /** r2, error_medio, aciertos, validacion_cruzada, rand_ajustado… */
   metrics: Record<string, number>;
@@ -739,7 +760,7 @@ export interface ModelRun {
   /** Lo aprendido: coeficientes, importancias, reglas del árbol, grupos */
   learned?: { title: string; rows: [string, string, string?][] }[];
   appId?: string;
-  /** Valores de referencia y no medidos en este momento (modo demo con Spark MLlib) */
+  /** Valores de referencia y no medidos en este momento (modo demo con Spark MLlib; el backend real siempre mide: false) */
   reference?: boolean;
   dataset?: string;
   /** Matriz de confusión (clasificación): filas = real, columnas = predicho */
@@ -763,10 +784,13 @@ export type ApiEvent =
   | { type: 'yarn'; appId: string }
   /** Cambió algo en HDFS (se subió, borró o terminó de escribir un archivo) */
   | { type: 'hdfs'; path: string }
-  /** Avance de un paso del pipeline */
-  | { type: 'step'; step: StepRun }
+  /** Avance de un paso del pipeline. Sin step: se reinició el pipeline (POST /api/pipeline/reset) */
+  | { type: 'step'; step?: StepRun }
   /** Avance de un entrenamiento */
-  | { type: 'model'; run: ModelRun };
+  | { type: 'model'; run: ModelRun }
+  /** Empezó o terminó una acción del backend (GET /api/actions/:id). El backend también manda una por
+      cada línea de salida ({ id, t, stream, text }), pero el cliente solo reenvía las que traen state */
+  | { type: 'action'; id: string; state: ActionRun['state']; exitCode?: number };
 
 /* ---------- La interfaz ---------- */
 
@@ -800,8 +824,10 @@ export interface SandboxApi {
   /** POST /api/cluster/reset → 202: borra el volumen (docker compose down -v) */
   resetVolume(): Promise<void>;
 
-  /** POST /api/processes/:id/start | /stop → 202 */
-  processAction(id: string, action: 'start' | 'stop'): Promise<void>;
+  /** POST /api/processes/:id/start | /stop → 202 { id } (el id de la acción, para action(id)) */
+  processAction(id: string, action: 'start' | 'stop'): Promise<{ id: string } | void>;
+  /** GET /api/actions/:id → la acción con su salida (sirve para ver qué pasó con un comando) */
+  action(id: string): Promise<ActionRun>;
 
   /** GET /api/hdfs/datanodes */
   dataNodes(): Promise<DataNode[]>;
@@ -809,7 +835,7 @@ export interface SandboxApi {
   files(): Promise<HdfsFile[]>;
   /** POST /api/hdfs/put { example: 'ventas' | 'numeros' | 'sucias' } → 202 */
   putExample(example: 'ventas' | 'numeros' | 'sucias'): Promise<void>;
-  /** PATCH /api/hdfs/files { path, replication } (hdfs dfs -setrep) */
+  /** PATCH /api/hdfs/files { path, replication } (hdfs dfs -setrep; con -w solo si hay DataNodes vivos para esa replicación) */
   setReplication(path: string, replication: number): Promise<void>;
   /** POST /api/hdfs/datanodes { id } → 202 (datanode start N en caliente) */
   addDataNode(): Promise<void>;
@@ -851,7 +877,7 @@ export interface SandboxApi {
   runStep(req: StepRequest): Promise<string>;
   /** GET /api/pipeline/steps */
   steps(): Promise<StepRun[]>;
-  /** POST /api/pipeline/reset → vuelve a la primera etapa (no borra lo que hay en HDFS) */
+  /** POST /api/pipeline/reset → vuelve a la primera etapa y vacía el historial (no borra lo que hay en HDFS); manda un evento step sin step */
   pipelineReset(): Promise<void>;
 
   /** GET /api/data/catalog: tablas de Hive y MySQL y colecciones de MongoDB */
@@ -869,7 +895,7 @@ export interface SandboxApi {
   mlDatasets(): Promise<MlDataset[]>;
   /** POST /api/ml/recommend { dataset, task } → tipo de problema y modelos recomendados, con su costo */
   recommend(dataset: string, task: MlTask): Promise<MlRecommendation>;
-  /** POST /api/ml/train { task, model, engine, trainPct, dataset, params } → { id }; avanza por SSE model */
+  /** POST /api/ml/train { task, model, engine, trainPct, dataset, params, target, features } → 202 { id }; avanza por SSE model */
   train(req: TrainRequest): Promise<string>;
   /** GET /api/ml/models */
   models(): Promise<ModelRun[]>;

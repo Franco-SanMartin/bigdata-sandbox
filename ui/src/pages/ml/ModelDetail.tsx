@@ -57,7 +57,9 @@ export function ModelDetail({ run, label }: { run: ModelRun; label: string }) {
           {others.map(([k, v]) => <div key={k} className="stat"><span className="stat-l">{metricLabel(k)}</span><span className="stat-v">{metricValue(k, v)}</span><span className="stat-s">{METRIC[k]?.tip}</span></div>)}
           <div className="stat"><span className="stat-l">tiempo</span><span className="stat-v">{runTime(run.seconds)}</span><span className="stat-s">solo el fit()</span></div>
           <div className="stat"><span className="stat-l">memoria</span><span className="stat-v">{run.memoryMb != null ? mbLabel(run.memoryMb) : '—'}</span><span className="stat-s">{run.engine === 'mllib' ? 'driver + executors' : 'pico del proceso'}</span></div>
-          <div className="stat"><span className="stat-l">entrena / prueba</span><span className="stat-v">{nf(run.trainRows)}<small>/ {nf(run.testRows)}</small></span><span className="stat-s">filas</span></div>
+          {run.task === 'clustering'
+            ? <div className="stat"><span className="stat-l">entrena</span><span className="stat-v">{nf(run.trainRows)}</span><span className="stat-s">filas, todas: se mide contra segmento_real</span></div>
+            : <div className="stat"><span className="stat-l">entrena / prueba</span><span className="stat-v">{nf(run.trainRows)}<small>/ {nf(run.testRows)}</small></span><span className="stat-s">filas</span></div>}
         </div>
       )}
 
