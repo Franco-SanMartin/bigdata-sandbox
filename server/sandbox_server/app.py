@@ -16,7 +16,10 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from . import config as cfg
+from . import datos as datos_mod
 from . import hdfs as hdfs_mod
+from . import ml as ml_mod
+from . import pipeline as pipeline_mod
 from . import yarn as yarn_mod
 from .actions import ActionRunner
 from .cluster import Cluster, Conflict, Invalid, Settings
@@ -138,6 +141,9 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
 
     hdfs = hdfs_mod.Hdfs(cluster, runner, bus)
     yarn = yarn_mod.Yarn(cluster, runner, bus)
+    datos = datos_mod.Datos(cluster, runner, bus, hdfs)
+    ml = ml_mod.Ml(cluster, runner, bus, hdfs)
+    pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)
 
     api = [
         Route("/api/status", status),
@@ -155,6 +161,9 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         Route("/api/actions/{id}", action_get),
         *hdfs.routes(),
         *yarn.routes(),
+        *pipeline.routes(),
+        *datos.routes(),
+        *ml.routes(),
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     if ui.is_dir():
@@ -188,6 +197,8 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         bus.close()
         await cluster.shutdown()
         await runner.wait_all()
+        await ml.wait_all()
+        await pipeline.wait_all()
 
     app = Starlette(routes=api, lifespan=lifespan,
                     exception_handlers={ApiError: on_api_error, HTTPException: on_http})
@@ -196,5 +207,8 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     app.state.runner = runner
     app.state.hdfs = hdfs
     app.state.yarn = yarn
+    app.state.datos = datos
+    app.state.ml = ml
+    app.state.pipeline = pipeline
     return app
 
