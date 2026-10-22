@@ -1,22 +1,28 @@
 # Arma las versiones de la imagen (cada una es un --target del Dockerfile),
-# las PRUEBA de punta a punta y, solo desde main y si todo da bien, las
+# las PRUEBA en todos los escenarios y, solo desde main y si TODO dio bien, las
 # publica en Docker Hub:
 #
-#   franki678/bigdata-sandbox:base    Hadoop + Pig + Hive + Spark + Sqoop/MySQL + MongoDB
-#   franki678/bigdata-sandbox:ml      base + pandas, scikit-learn, Spark MLlib y JupyterLab
-#   franki678/bigdata-sandbox:latest  LA DE LA CLASE: este workflow NO la cambia
-#                                     solo. Hoy es la imagen de antes de las
-#                                     versiones (Ubuntu 20.04, sin MongoDB).
+#   franki678/bigdata-sandbox:base      Hadoop + Pig + Hive + Spark + Sqoop/MySQL + MongoDB (Ubuntu 24.04)
+#   franki678/bigdata-sandbox:latest    = base (la misma imagen, mismo digest)
+#   franki678/bigdata-sandbox:ml        base + pandas, scikit-learn, Spark MLlib y JupyterLab
+#   franki678/bigdata-sandbox:ubuntu20  la latest de antes (Ubuntu 20.04, sin MongoDB). Se copio
+#                                       una sola vez, antes de que latest pasara a ser base; este
+#                                       workflow no la vuelve a tocar.
 #
-# Pasar latest (y el archivo del aula de Releases) a la version base es una
-# decision aparte: se corre a mano desde main (pestaña Actions > "Imagen" >
-# "Run workflow") tildando "latest = base".
+# Como sigue:
+#   1. armar      una maquina por procesador (Intel/AMD y ARM64, las dos
+#                 nativas, sin emular): arma base y ml, mide su tamaño y las
+#                 deja como artifact del run. En main, ademas, las sube a
+#                 Docker Hub SIN tag (solo por digest: nadie las baja asi).
+#   2. escenarios cada escenario de pruebas/escenarios.sh en una maquina
+#                 aparte, en las dos arquitecturas, con la imagen del paso 1
+#                 (la de este commit, no la publicada).
+#   3. resumen    tamaños y RAM medidos, en el resumen del run.
+#   4. publicar   solo en main y solo si pasaron TODOS los escenarios: pone
+#                 los tags base, latest y ml a lo que subio el paso 1.
 #
-# Las pruebas: pruebas/probar.sh (el paso a paso de TUTORIAL.md con MapReduce,
-# Pig, Hive, Spark y Sqoop) en las dos, mas pruebas/probar_mongodb.sh en la
-# base y pruebas/probar_ml.sh en la ml.
-# Corre sola cuando cambia el codigo en main o en la rama versiones (en
-# versiones solo arma y prueba), o a mano desde la pestaña Actions.
+# El archivo del aula (Releases, README seccion 5B) NO se arma aca: es el
+# workflow "Aula", a mano, despues de que este publico.
 # Para publicar necesita en el repo (Settings > Secrets and variables >
 # Actions) la variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token
 # de Docker Hub con permiso Read & Write; cuando vence, hay que generar otro).
@@ -27,179 +33,315 @@ on:
     branches: [main, versiones]
     paths-ignore: ['**.md']
   workflow_dispatch:
-    inputs:
-      latest_es_base:
-        description: "latest = base: pasar la imagen de la clase (latest) y el archivo del aula a la version base"
-        type: boolean
-        default: false
 
 permissions:
-  contents: write   # para subir el archivo del aula a Releases
+  contents: read
+
+# Un solo run por rama; en las demas ramas, uno nuevo cancela el anterior
+concurrency:
+  group: imagen-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   REPO: docker.io/franki678/bigdata-sandbox
+  LOCAL: franki678/bigdata-sandbox
+  PUBLICA: ${{ github.ref == 'refs/heads/main' && 'si' || 'no' }}
 
 jobs:
   # -------------------------------------------------------------------------
-  # 1. Armar y probar cada version, en paralelo (amd64)
+  # 1. Armar base y ml, una maquina por arquitectura
   # -------------------------------------------------------------------------
-  probar:
-    runs-on: ubuntu-latest
+  armar:
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        version: [base, ml]
+        arq: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
 
-      - name: Armar ${{ matrix.version }} (amd64)
+      - name: Lugar en disco (la imagen descomprimida ocupa varios GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          command -v zstd > /dev/null && command -v pigz > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zstd pigz; }
+          df -h / "$RUNNER_TEMP"
+
+      # Fecha fija (la del commit) en la imagen: si se vuelve a armar con todo
+      # del cache sale identica, con el mismo digest. Asi lo que se sube es
+      # exactamente lo que se probo (se verifica abajo).
+      - name: Fecha del commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUBLICA == 'si'
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Armar base (${{ matrix.arq }})
+        id: base
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: ${{ matrix.version }}
-          platforms: linux/amd64
+          target: base
+          platforms: linux/${{ matrix.arq }}
           load: true
-          tags: franki678/bigdata-sandbox:${{ matrix.version }}
-          # Cache de capas en GitHub (una por version): si solo cambian
-          # scripts o ejemplos, no vuelve a bajar todo de Apache
+          provenance: false
+          tags: ${{ env.LOCAL }}:base
+          # Cache de capas en GitHub (una por version y arquitectura): si solo
+          # cambian scripts o ejemplos, no vuelve a bajar todo de Apache
+          cache-from: type=gha,scope=base-${{ matrix.arq }}
+          cache-to: type=gha,mode=max,scope=base-${{ matrix.arq }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
+
+      - name: Armar ml (${{ matrix.arq }})
+        id: ml
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ml
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.LOCAL }}:ml
           cache-from: |
-            type=gha,scope=base
-            type=gha,scope=${{ matrix.version }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.version }}
+            type=gha,scope=base-${{ matrix.arq }}
+            type=gha,scope=ml-${{ matrix.arq }}
+          cache-to: type=gha,mode=max,scope=ml-${{ matrix.arq }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
 
-      # Prenderla como lo haria un alumno (con MongoDB) y esperar el cartel LISTO
-      - name: Prender el cluster
+      # Solo main: subir por digest, sin tag. Sale todo del cache del paso de
+      # arriba (no se vuelve a armar nada). Los tags se ponen recien en
+      # "publicar", si pasaron todos los escenarios. En las otras ramas corre
+      # igual pero sin subir, para que la verificacion de abajo se pruebe antes
+      # de llegar a main.
+      - name: Subir base por digest (sin tag)
+        id: base_push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: base
+          platforms: linux/${{ matrix.arq }}
+          provenance: false
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ env.PUBLICA == 'si' }}
+          cache-from: type=gha,scope=base-${{ matrix.arq }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
+
+      - name: Subir ml por digest (sin tag)
+        id: ml_push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ml
+          platforms: linux/${{ matrix.arq }}
+          provenance: false
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ env.PUBLICA == 'si' }}
+          cache-from: |
+            type=gha,scope=base-${{ matrix.arq }}
+            type=gha,scope=ml-${{ matrix.arq }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
+
+      - name: Lo subido es lo mismo que se va a probar
+        env:
+          BASE_PROBADA: ${{ fromJSON(steps.base.outputs.metadata)['containerimage.config.digest'] }}
+          BASE_SUBIDA: ${{ fromJSON(steps.base_push.outputs.metadata)['containerimage.config.digest'] }}
+          ML_PROBADA: ${{ fromJSON(steps.ml.outputs.metadata)['containerimage.config.digest'] }}
+          ML_SUBIDA: ${{ fromJSON(steps.ml_push.outputs.metadata)['containerimage.config.digest'] }}
         run: |
-          docker run -d --name bigdata \
-            -e DATANODES=2 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si \
-            -v "$PWD/datos-prueba:/datos" franki678/bigdata-sandbox:${{ matrix.version }}
-          for i in $(seq 1 60); do
-            if docker logs bigdata 2>&1 | grep -q 'Cluster LISTO'; then exit 0; fi
-            if [ "$(docker inspect -f '{{.State.Running}}' bigdata)" != true ]; then break; fi
-            sleep 5
+          echo "base: armada $BASE_PROBADA / subida $BASE_SUBIDA"
+          echo "ml:   armada $ML_PROBADA / subida $ML_SUBIDA"
+          [ -n "$BASE_PROBADA" ] && [ "$BASE_PROBADA" = "$BASE_SUBIDA" ]
+          [ -n "$ML_PROBADA" ] && [ "$ML_PROBADA" = "$ML_SUBIDA" ]
+          [ "$PUBLICA" = si ] || exit 0
+          mkdir -p digests
+          echo "${{ steps.base_push.outputs.digest }}" > digests/base-${{ matrix.arq }}
+          echo "${{ steps.ml_push.outputs.digest }}" > digests/ml-${{ matrix.arq }}
+          cat digests/*
+
+      - uses: actions/upload-artifact@v4
+        if: env.PUBLICA == 'si'
+        with:
+          name: digests-${{ matrix.arq }}
+          path: digests/
+          retention-days: 7
+
+      # Descarga: lo que baja 'docker pull' (comprimido; aproximado con gzip
+      # de 'docker save', que es tambien el archivo del aula). Descomprimida:
+      # lo que ocupa el sistema de archivos de la imagen.
+      - name: Tamaños
+        run: |
+          mkdir -p medidas
+          for v in base ml; do
+            descarga=$(docker save "$LOCAL:$v" | pigz -c | wc -c)
+            disco=$(docker run --rm --entrypoint /usr/bin/du "$LOCAL:$v" -sxb / | cut -f1)
+            printf '| %s | %s | %s | %s |\n' "$v" "${{ matrix.arq }}" \
+              "$(numfmt --to=si --suffix=B --format=%.2f "$descarga")" \
+              "$(numfmt --to=si --suffix=B --format=%.2f "$disco")" | tee -a medidas/tamanos.md
           done
-          docker logs bigdata
-          exit 1
+          docker image ls "$LOCAL"
 
-      - name: Probar MapReduce, Pig, Hive, Spark y Sqoop
-        run: |
-          docker cp pruebas/probar.sh bigdata:/tmp/probar.sh
-          docker exec bigdata bash /tmp/probar.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medidas-tamanos-${{ matrix.arq }}
+          path: medidas/tamanos.md
+          retention-days: 7
 
-      - name: Probar MongoDB
-        if: matrix.version == 'base'
+      # base y ml en un solo archivo (comparten casi todas las capas)
+      - name: Guardar las imagenes para los escenarios
         run: |
-          docker cp pruebas/probar_mongodb.sh bigdata:/tmp/probar_mongodb.sh
-          docker exec bigdata bash /tmp/probar_mongodb.sh
+          docker save "$LOCAL:base" "$LOCAL:ml" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
+          ls -lh "$RUNNER_TEMP/imagenes.tar.zst"
 
-      - name: Probar Python para datos (librerias, JupyterLab, ETL y modelos)
-        if: matrix.version == 'ml'
-        run: |
-          docker cp pruebas/probar_ml.sh bigdata:/tmp/probar_ml.sh
-          docker exec bigdata bash /tmp/probar_ml.sh
-
-      - name: Tamaño y memoria
-        if: always()
-        run: |
-          docker image ls franki678/bigdata-sandbox
-          docker stats --no-stream bigdata || true
-
-      - name: Logs si algo fallo
-        if: failure()
-        run: |
-          docker logs bigdata || true
-          docker exec bigdata bash -c 'tail -n 80 /opt/hadoop/logs/*.log /opt/hive/*.log /var/log/mysql/error.log /var/log/mongodb/mongod.log /var/log/jupyter.log' || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagenes-${{ matrix.arq }}
+          path: ${{ runner.temp }}/imagenes.tar.zst
+          compression-level: 0
+          retention-days: 3
 
   # -------------------------------------------------------------------------
-  # 2. Publicar amd64 + arm64, SOLO desde main y con las dos versiones probadas
+  # 2. Escenarios, cada uno en una maquina aparte, en las dos arquitecturas
   # -------------------------------------------------------------------------
-  publicar:
-    needs: probar
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
+  escenarios:
+    needs: armar
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        arq: [amd64, arm64]
+        escenario: [reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, desde-latest, volumen-cortado, ml]
     steps:
       - uses: actions/checkout@v4
-      # QEMU: para armar tambien la version ARM64 (Mac M1-M4)
-      - uses: docker/setup-qemu-action@v3
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagenes-${{ matrix.arq }}
+          path: ${{ runner.temp }}
+      - name: Cargar la imagen armada
+        run: |
+          command -v zstd > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zstd; }
+          zstd -dc "$RUNNER_TEMP/imagenes.tar.zst" | docker load
+          rm "$RUNNER_TEMP/imagenes.tar.zst"
+          docker image ls "$LOCAL"
+      - name: Escenario ${{ matrix.escenario }} (${{ matrix.arq }})
+        env:
+          IMAGEN: ${{ env.LOCAL }}:${{ matrix.escenario == 'ml' && 'ml' || 'base' }}
+          MEDIDAS: medidas.md
+        run: |
+          docker image inspect -f '{{.Architecture}}' "$IMAGEN"
+          bash pruebas/escenarios.sh ${{ matrix.escenario }}
+      - name: Medidas de RAM
+        if: always()
+        run: |
+          mkdir -p medidas
+          [ -f medidas.md ] && sed 's/^| /| ${{ matrix.arq }} | /' medidas.md > medidas/ram.md || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medidas-ram-${{ matrix.arq }}-${{ matrix.escenario }}
+          path: medidas/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # 3. Tamaños y RAM medidos, en el resumen del run
+  # -------------------------------------------------------------------------
+  resumen:
+    needs: [armar, escenarios]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: medidas-*
+          path: medidas
+      - name: Resumen
+        run: |
+          {
+            echo "## Tamaños"
+            echo
+            echo "| Versión | Arquitectura | Descarga (comprimida) | Descomprimida |"
+            echo "|---|---|--:|--:|"
+            cat medidas/medidas-tamanos-*/tamanos.md 2> /dev/null | sort || true
+            echo
+            echo "## RAM (docker stats, 2 DataNodes; reposo = 30 s después de LISTO; pico = mientras corren las pruebas)"
+            echo
+            echo "| Arquitectura | Versión y servicios | En reposo | Pico con trabajos |"
+            echo "|---|---|--:|--:|"
+            cat medidas/medidas-ram-*/ram.md 2> /dev/null | sort || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------
+  # 4. Publicar: SOLO desde main y con TODOS los escenarios en verde
+  # -------------------------------------------------------------------------
+  publicar:
+    needs: [armar, escenarios]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Publicar base (amd64 + arm64)${{ inputs.latest_es_base && ' y latest' || '' }}
-        uses: docker/build-push-action@v6
+      - uses: actions/download-artifact@v4
         with:
-          context: .
-          target: base
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          cache-from: type=gha,scope=base
-          # latest solo con "latest = base" tildado a mano (ver arriba)
-          tags: |
-            ${{ env.REPO }}:base
-            ${{ inputs.latest_es_base && format('{0}:latest', env.REPO) || '' }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=Hadoop + Pig + Hive + Spark + Sqoop + MongoDB en un solo contenedor
+          pattern: digests-*
+          path: digests
+          merge-multiple: true
 
-      - name: Publicar ml (amd64 + arm64)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: ml
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          cache-from: |
-            type=gha,scope=base
-            type=gha,scope=ml
-          tags: ${{ env.REPO }}:ml
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=BigData sandbox + pandas, scikit-learn, Spark MLlib y JupyterLab
-
-      # 3. Solo con "latest = base": la misma imagen (amd64) en un solo archivo,
-      #    para bajarla una vez y repartirla en el aula (README seccion 5B).
-      #    Queda en el release 'imagen' y reemplaza al anterior.
-      - name: Armar la del aula (amd64)
-        if: inputs.latest_es_base
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: base
-          platforms: linux/amd64
-          load: true
-          cache-from: type=gha,scope=base
-          tags: franki678/bigdata-sandbox:latest
-
-      - name: Archivo para el aula
-        if: inputs.latest_es_base
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Antes de que latest pase a ser base: la latest de antes (Ubuntu 20.04)
+      # queda como :ubuntu20, con sus dos arquitecturas. Una sola vez: si
+      # :ubuntu20 ya existe, no se toca.
+      - name: Guardar la latest de antes como ubuntu20
         run: |
-          docker save franki678/bigdata-sandbox:latest | gzip > bigdata-sandbox.tar.gz
-          ls -lh bigdata-sandbox.tar.gz
-          # Releases acepta hasta 2 GiB por archivo
-          [ "$(stat -c %s bigdata-sandbox.tar.gz)" -lt 2147483648 ]
-          # Probar lo que hace el aula: compartirlo como la PC del profesor,
-          # bajarlo como un alumno y cargarlo
-          docker run -d --rm --name compartir -p 8000:8000 -v "$PWD:/srv:ro" -w /srv \
-            --entrypoint python3 franki678/bigdata-sandbox:latest -m http.server 8000
-          sleep 3
-          curl -sf -o /tmp/bajado.tar.gz http://localhost:8000/bigdata-sandbox.tar.gz
-          docker stop compartir
-          cmp bigdata-sandbox.tar.gz /tmp/bajado.tar.gz
-          docker image rm franki678/bigdata-sandbox:latest
-          docker load -i /tmp/bajado.tar.gz
-          docker image inspect -f '{{.Architecture}}' franki678/bigdata-sandbox:latest
-          # Subirlo
-          if ! gh release view imagen > /dev/null 2>&1; then
-            gh release create imagen --title "Imagen para el aula" \
-              --notes "La imagen en un solo archivo, para bajarla una vez y repartirla (README, seccion 5B). Se actualiza cuando cambia latest."
+          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r .digest; }
+          if docker buildx imagetools inspect "$REPO:ubuntu20" > /dev/null 2>&1; then
+            echo ":ubuntu20 ya existe ($(digest "$REPO:ubuntu20")): no se toca"
+            exit 0
           fi
-          gh release upload imagen bigdata-sandbox.tar.gz --clobber
+          # latest tiene que ser todavia la de antes de las versiones (sin SANDBOX_VERSION)
+          if docker buildx imagetools inspect "$REPO:latest" --format '{{json .Image}}' | grep -q SANDBOX_VERSION; then
+            echo "latest ya no es la de Ubuntu 20.04 y no existe :ubuntu20: no hay que copiar nada" >&2
+            exit 1
+          fi
+          docker buildx imagetools create -t "$REPO:ubuntu20" "$REPO:latest"
+          [ "$(digest "$REPO:ubuntu20")" = "$(digest "$REPO:latest")" ]
+          docker buildx imagetools inspect "$REPO:ubuntu20"
+
+      - name: Tags base, latest (= base) y ml, amd64 + arm64
+        run: |
+          ls digests
+          docker buildx imagetools create -t "$REPO:base" -t "$REPO:latest" \
+            "$REPO@$(cat digests/base-amd64)" "$REPO@$(cat digests/base-arm64)"
+          docker buildx imagetools create -t "$REPO:ml" \
+            "$REPO@$(cat digests/ml-amd64)" "$REPO@$(cat digests/ml-arm64)"
+
+      - name: Verificar lo publicado
+        run: |
+          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r .digest; }
+          {
+            echo "## Publicado"
+            echo
+            echo "| Tag | Digest | Arquitecturas |"
+            echo "|---|---|---|"
+            for t in base latest ml ubuntu20; do
+              plataformas=$(docker buildx imagetools inspect "$REPO:$t" --format '{{json .Manifest}}' \
+                | jq -r '[.manifests[].platform | select(.os != "unknown") | .os + "/" + .architecture] | join(", ")')
+              echo "| $t | $(digest "$REPO:$t") | $plataformas |"
+              grep -q linux/amd64 <<< "$plataformas"
+              grep -q linux/arm64 <<< "$plataformas"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$(digest "$REPO:latest")" = "$(digest "$REPO:base")" ]

@@ -1,0 +1,92 @@
+# Archivo para el aula: la imagen latest (amd64) en un solo archivo, para
+# bajarla una vez y repartirla en las PCs del aula (README seccion 5B). Queda
+# en el release 'imagen' como bigdata-sandbox.tar.gz y reemplaza al anterior.
+#
+# Se corre a mano desde main (pestaña Actions > "Aula" > "Run workflow"),
+# despues de que "Imagen" publico una latest nueva. Arma el archivo con la
+# latest PUBLICADA (no vuelve a armar ni a probar nada).
+#
+# La primera vez que latest paso a ser base, el archivo de antes (Ubuntu
+# 20.04) quedo en el mismo release como bigdata-sandbox-ubuntu20.tar.gz, para
+# volver atras. Ese no se vuelve a tocar.
+name: Aula
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aula:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # para subir el archivo a Releases
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      IMAGEN: franki678/bigdata-sandbox:latest
+    steps:
+      - name: Guardar el archivo de antes (Ubuntu 20.04), una sola vez
+        run: |
+          version() { docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" | sed -n 's/^SANDBOX_VERSION=//p'; }
+          if gh release view imagen --json assets --jq '.assets[].name' | grep -qx bigdata-sandbox-ubuntu20.tar.gz; then
+            echo "bigdata-sandbox-ubuntu20.tar.gz ya esta en el release: no se toca"
+            exit 0
+          fi
+          gh release download imagen -p bigdata-sandbox.tar.gz -O bigdata-sandbox-ubuntu20.tar.gz
+          ls -l bigdata-sandbox-ubuntu20.tar.gz
+          # Tiene que ser la de antes de las versiones (sin SANDBOX_VERSION)
+          docker load -i bigdata-sandbox-ubuntu20.tar.gz
+          [ -z "$(version "$IMAGEN")" ] || { echo "el archivo del release ya no es la de Ubuntu 20.04" >&2; exit 1; }
+          docker image rm "$IMAGEN"
+          gh release upload imagen bigdata-sandbox-ubuntu20.tar.gz
+          # Que haya quedado entero antes de reemplazar el otro
+          subido=$(gh release view imagen --json assets --jq '.assets[] | select(.name == "bigdata-sandbox-ubuntu20.tar.gz") | .size')
+          [ "$subido" = "$(stat -c %s bigdata-sandbox-ubuntu20.tar.gz)" ]
+          rm bigdata-sandbox-ubuntu20.tar.gz
+
+      - name: Armar el archivo con la latest publicada (amd64)
+        run: |
+          docker pull --platform linux/amd64 "$IMAGEN"
+          docker image inspect -f '{{.Architecture}} {{.Id}}' "$IMAGEN"
+          # Solo esa arquitectura (con el almacen de imagenes de containerd,
+          # docker save guardaria todas)
+          plataforma=
+          docker save --help | grep -q -- --platform && plataforma="--platform linux/amd64"
+          docker save $plataforma "$IMAGEN" | gzip > bigdata-sandbox.tar.gz
+          ls -lh bigdata-sandbox.tar.gz
+          # Releases acepta hasta 2 GiB por archivo
+          [ "$(stat -c %s bigdata-sandbox.tar.gz)" -lt 2147483648 ]
+
+      - name: Probar lo que hace el aula
+        run: |
+          # Compartirlo como la PC del profesor, bajarlo como un alumno y cargarlo
+          docker run -d --rm --name compartir -p 8000:8000 -v "$PWD:/srv:ro" -w /srv \
+            --entrypoint python3 "$IMAGEN" -m http.server 8000
+          sleep 3
+          curl -sf -o /tmp/bajado.tar.gz http://localhost:8000/bigdata-sandbox.tar.gz
+          docker stop compartir
+          cmp bigdata-sandbox.tar.gz /tmp/bajado.tar.gz
+          docker image rm "$IMAGEN"
+          docker load -i /tmp/bajado.tar.gz
+          docker image inspect -f '{{.Architecture}}' "$IMAGEN" | grep -qx amd64
+          docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGEN" | grep -x 'SANDBOX_VERSION=.*'
+
+      - name: Subirlo
+        run: |
+          gh release upload imagen bigdata-sandbox.tar.gz --clobber
+          gh release edit imagen --notes "La imagen latest (Intel/AMD) en un solo archivo, para bajarla una vez y repartirla en el aula (README, sección 5B): \`docker load -i bigdata-sandbox.tar.gz\`. Se actualiza cuando cambia latest.
+
+          bigdata-sandbox-ubuntu20.tar.gz es la de antes (Ubuntu 20.04, sin MongoDB), por si hace falta volver atrás: con \`docker load\` queda como franki678/bigdata-sandbox:latest."
+          {
+            echo "## Release imagen"
+            echo
+            echo "| Archivo | Tamaño | Actualizado |"
+            echo "|---|--:|---|"
+            gh release view imagen --json assets --jq '.assets[] | "| \(.name) | \(.size) | \(.updatedAt) |"'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          subido=$(gh release view imagen --json assets --jq '.assets[] | select(.name == "bigdata-sandbox.tar.gz") | .size')
+          [ "$subido" = "$(stat -c %s bigdata-sandbox.tar.gz)" ]
