@@ -127,7 +127,8 @@ cat "$base/datos/planilla.csv"
     echo '</details>'
 } >> "$resumen_ci"
 
-# 6. Verificar
+# 6. Verificar (los archivos los escribio root desde los contenedores)
+sudo -n chmod -R a+rX "$base" 2> /dev/null || true
 val() { sed -n "s/^$1=//p" "$2" | tail -n 1; }
 grep -q "^VEREDICTO: $esperado" "$base/datos/resumen.txt" || fallar "se esperaba VEREDICTO: $esperado"
 grep -q "^VEREDICTO: $esperado" "$base/resumen-http.txt" || fallar "el resumen por HTTP no coincide"

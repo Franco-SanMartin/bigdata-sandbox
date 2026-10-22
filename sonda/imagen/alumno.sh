@@ -68,8 +68,7 @@ anotar wg_go "$wggo"
 decir "WireGuard: kernel $kernel, wireguard-go $wggo"
 
 # 4. Inscripcion (reintenta un minuto por si el profe todavia no arranco)
-umask 077
-wg genkey > /tmp/clave
+(umask 077; wg genkey > /tmp/clave)
 pub=$(wg pubkey < /tmp/clave)
 resp=
 hasta=$(( $(segundos) + ${ESPERA_PROFE:-60} ))
@@ -129,7 +128,7 @@ fi
 anotar tunel "$tunel"
 anotar tunel_modo "$modo"
 [ -n "$motivo" ] && anotar tunel_motivo "$motivo"
-decir "tunel: $tunel ${motivo:+($motivo)}"
+if [ "$tunel" = si ]; then decir "tunel: si ($modo)"; else decir "tunel: no ($motivo)"; fi
 
 # 6. Ancho de banda por el tunel: alumno -> profe y alumno -> companero (pasa por el hub)
 if [ "$tunel" = si ]; then
@@ -207,7 +206,7 @@ decir "copia local: sonda-resultados\\sonda-$NOMBRE.txt; enviado al profe: $envi
 
 echo
 echo "================ RESULTADO DE ESTA PC ================"
-grep -E '^(udp_profe|inscripcion|wg_kernel|wg_go|tunel|tunel_motivo|ping_profe_ms|iperf_profe_mbps|iperf_par|iperf_par_mbps|tcp_companeros|enviado_al_profe)=' "$archivo"
+grep -E '^(udp_profe|inscripcion|wg_kernel|wg_go|tunel|tunel_modo|tunel_motivo|ping_profe_ms|iperf_profe_mbps|iperf_par|iperf_par_mbps|tcp_companeros|enviado_al_profe)=' "$archivo"
 echo "======================================================"
 
 # 9. Quedarse un rato atendiendo a los companeros (iperf y TCP) y despues irse

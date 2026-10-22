@@ -34,8 +34,7 @@ if wg_kernel_anda; then modo=kernel
 elif wg_go_anda; then modo=go
 fi
 if [ "$modo" != no ] && crear_wg wg0 "$modo"; then
-    umask 077
-    wg genkey > /tmp/clave
+    (umask 077; wg genkey > /tmp/clave)
     wg pubkey < /tmp/clave > /tmp/hub_pub
     wg set wg0 private-key /tmp/clave listen-port "$P_WG"
     ip addr add "$HUB_IP/24" dev wg0
