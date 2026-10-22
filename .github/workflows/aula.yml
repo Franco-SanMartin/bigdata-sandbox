@@ -1,7 +1,8 @@
 # Archivo para el aula: la imagen latest (= base, Intel/AMD) en un solo
 # archivo, para bajarla una vez y repartirla en las PCs del aula
-# (guias/01-instalacion.md). Queda en el release 'imagen' como
-# bigdata-sandbox.tar.gz y reemplaza al anterior.
+# (guias/01-instalacion.md). Lleva los dos tags, :base y :latest. Queda en el
+# release 'imagen' como bigdata-sandbox.tar.gz y reemplaza al anterior; el
+# texto del release sale de .github/release-imagen.md.
 #
 # Se corre a mano desde main (pestaña Actions > "Aula" > "Run workflow"),
 # despues de que "Imagen" publico una latest nueva. Arma el archivo con la
@@ -25,16 +26,23 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       IMAGEN: franki678/bigdata-sandbox:latest
+      BASE: franki678/bigdata-sandbox:base
     steps:
+      - uses: actions/checkout@v4
+
       - name: Armar el archivo con la latest publicada (amd64)
         run: |
           docker pull --platform linux/amd64 "$IMAGEN"
-          docker image inspect -f '{{.Architecture}} {{.Id}}' "$IMAGEN"
+          docker pull --platform linux/amd64 "$BASE"
+          docker image inspect -f '{{.Architecture}} {{.Id}}' "$IMAGEN" "$BASE"
+          # latest es base: tienen que ser la misma imagen
+          [ "$(docker image inspect -f '{{.Id}}' "$IMAGEN")" = "$(docker image inspect -f '{{.Id}}' "$BASE")" ]
           # Solo esa arquitectura (con el almacen de imagenes de containerd,
-          # docker save guardaria todas)
+          # docker save guardaria todas). Con los dos tags: la imagen va una
+          # sola vez y docker load deja cargados :base y :latest.
           plataforma=
           docker save --help | grep -q -- --platform && plataforma="--platform linux/amd64"
-          docker save $plataforma "$IMAGEN" | gzip > bigdata-sandbox.tar.gz
+          docker save $plataforma "$IMAGEN" "$BASE" | gzip > bigdata-sandbox.tar.gz
           ls -lh bigdata-sandbox.tar.gz
           # Releases acepta hasta 2 GiB por archivo
           [ "$(stat -c %s bigdata-sandbox.tar.gz)" -lt 2147483648 ]
@@ -48,15 +56,16 @@ jobs:
           curl -sf -o /tmp/bajado.tar.gz http://localhost:8000/bigdata-sandbox.tar.gz
           docker stop compartir
           cmp bigdata-sandbox.tar.gz /tmp/bajado.tar.gz
-          docker image rm "$IMAGEN"
+          docker image rm "$IMAGEN" "$BASE"
           docker load -i /tmp/bajado.tar.gz
           docker image inspect -f '{{.Architecture}}' "$IMAGEN" | grep -qx amd64
+          docker image inspect -f '{{.Architecture}}' "$BASE" | grep -qx amd64
           docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGEN" | grep -x 'SANDBOX_VERSION=base'
 
       - name: Subirlo
         run: |
           gh release upload imagen bigdata-sandbox.tar.gz --clobber
-          gh release edit imagen --notes "La imagen latest (= base: Ubuntu 24.04, Hadoop, Pig, Hive, Spark, Sqoop/MySQL y MongoDB) para Intel/AMD en un solo archivo, para bajarla una vez y repartirla en el aula sin internet: \`docker load -i bigdata-sandbox.tar.gz\` (queda como franki678/bigdata-sandbox:latest). Paso a paso en guias/01-instalacion.md. Se actualiza cuando cambia latest."
+          gh release edit imagen --notes-file .github/release-imagen.md
           {
             echo "## Release imagen"
             echo
