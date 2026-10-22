@@ -271,6 +271,98 @@ export interface Activity {
   appId?: string;
 }
 
+/* ---------- Pipeline ---------- */
+
+export type PipelineStage = 'ingesta' | 'etl' | 'almacen' | 'analisis' | 'ml' | 'resultados';
+/** Quién hace el trabajo: el cliente de HDFS, MapReduce (y Pig, Sqoop), Tez (Hive), Spark o una sola máquina (pandas, scikit-learn) */
+export type Engine = 'hdfs' | 'mr' | 'tez' | 'spark' | 'uno';
+
+export interface StepRequest {
+  stage: PipelineStage;
+  /** put, sqoop, pandas, pyspark, pig, hive, hivetab, mysql, mongo, sparksql */
+  tool: string;
+  options: Record<string, string | boolean | number>;
+}
+
+export interface StepRun {
+  id: string;
+  stage: PipelineStage;
+  tool: string;
+  engine: Engine;
+  state: 'running' | 'done' | 'failed';
+  startedAt: number;
+  finishedAt?: number;
+  /** 0 a 1 */
+  progress: number;
+  /** Qué está haciendo ahora, en una línea */
+  message: string;
+  /** Trabajos de YARN que lanzó (para ver su detalle) */
+  appIds: string[];
+  /** Lo que dejó: ruta, filas, tamaño y un resumen (por ejemplo, lo que arregló el ETL) */
+  output?: { path: string; rows?: number; sizeMb?: number; summary?: [string, string][] };
+}
+
+/* ---------- Datos: Hive, MySQL y MongoDB ---------- */
+
+export type DataSource = 'hive' | 'mysql' | 'mongodb';
+
+export interface CatalogEntry {
+  source: DataSource;
+  /** base.tabla o base.colección */
+  name: string;
+  kind: 'tabla' | 'externa' | 'colección';
+  rows: number;
+  location?: string;
+  columns: { name: string; type: string }[];
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: (string | number | null)[][];
+  /** Tiempo que tardó */
+  ms: number;
+  /** Si la consulta lanzó un trabajo en YARN (Hive → Tez) */
+  appId?: string;
+  note?: string;
+}
+
+/* ---------- Machine Learning ---------- */
+
+export type MlTask = 'regresion' | 'clasificacion' | 'clustering';
+
+export interface TrainRequest {
+  task: MlTask;
+  /** lineal, arbol, logistica, mlp, kmeans, tonto */
+  model: string;
+  engine: 'sklearn' | 'mllib';
+  /** Porcentaje para entrenar (el resto, para probar) */
+  trainPct: number;
+}
+
+export interface ModelRun {
+  id: string;
+  task: MlTask;
+  model: string;
+  engine: 'sklearn' | 'mllib';
+  state: 'running' | 'done' | 'failed';
+  startedAt: number;
+  finishedAt?: number;
+  progress: number;
+  message: string;
+  trainRows: number;
+  testRows: number;
+  /** r2, error_medio, aciertos, validacion_cruzada, rand_ajustado… */
+  metrics: Record<string, number>;
+  /** Tiempo de entrenamiento medido y memoria que usó */
+  seconds?: number;
+  memoryMb?: number;
+  /** Lo aprendido: coeficientes, importancias, reglas del árbol, grupos */
+  learned?: { title: string; rows: [string, string, string?][] }[];
+  appId?: string;
+  /** Valores de referencia y no medidos en este momento (modo demo con Spark MLlib) */
+  reference?: boolean;
+}
+
 /* ---------- Eventos en vivo (SSE en GET /api/events) ---------- */
 
 export type ApiEvent =
@@ -318,8 +410,8 @@ export interface SandboxApi {
   dataNodes(): Promise<DataNode[]>;
   /** GET /api/hdfs/files?recursive=1 (con bloques y ubicaciones, como hdfs fsck -files -blocks -locations) */
   files(): Promise<HdfsFile[]>;
-  /** POST /api/hdfs/put { example: 'ventas' | 'numeros' } → 202 */
-  putExample(example: 'ventas' | 'numeros'): Promise<void>;
+  /** POST /api/hdfs/put { example: 'ventas' | 'numeros' | 'sucias' } → 202 */
+  putExample(example: 'ventas' | 'numeros' | 'sucias'): Promise<void>;
   /** PATCH /api/hdfs/files { path, replication } (hdfs dfs -setrep) */
   setReplication(path: string, replication: number): Promise<void>;
   /** POST /api/hdfs/datanodes { id } → 202 (datanode start N en caliente) */
@@ -331,4 +423,19 @@ export interface SandboxApi {
   submitExample(job: ExampleJob): Promise<string>;
   /** POST /api/yarn/apps/:id/kill */
   killApp(id: string): Promise<void>;
+
+  /** POST /api/pipeline/steps { stage, tool, options } → { id } */
+  runStep(req: StepRequest): Promise<string>;
+  /** GET /api/pipeline/steps */
+  steps(): Promise<StepRun[]>;
+
+  /** GET /api/data/catalog: tablas de Hive y MySQL y colecciones de MongoDB */
+  catalog(): Promise<CatalogEntry[]>;
+  /** POST /api/data/query { source, text } (SQL para Hive y MySQL, mongosh para MongoDB) */
+  query(source: DataSource, text: string): Promise<QueryResult>;
+
+  /** POST /api/ml/train { task, model, engine, trainPct } → { id } */
+  train(req: TrainRequest): Promise<string>;
+  /** GET /api/ml/models */
+  models(): Promise<ModelRun[]>;
 }
