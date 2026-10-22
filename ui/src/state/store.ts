@@ -28,8 +28,13 @@ function schedule() {
     queued = false;
     try {
       const a = api();
-      const [status, dataNodes, files, apps] = await Promise.all([a.status(), a.dataNodes(), a.files(), a.apps()]);
-      snap = { ...snap, status, dataNodes, files, apps, error: null };
+      // Primero el estado. /yarn/apps contesta 409 con el cluster apagado y 503 sin el
+      // ResourceManager: en esos casos ni se pide (si no, la consola se llena de errores cada 2 s)
+      const status = await a.status();
+      snap = { ...snap, status };
+      const yarn = status.phase === 'running' && status.processes.some(p => p.id === 'rm' && p.state === 'up');
+      const [dataNodes, files, apps] = await Promise.all([a.dataNodes(), a.files(), yarn ? a.apps() : []]);
+      snap = { ...snap, dataNodes, files, apps, error: null };
     } catch (e) {
       snap = { ...snap, error: e instanceof Error ? e.message : String(e) };
     }

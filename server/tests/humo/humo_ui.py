@@ -10,7 +10,10 @@ Recorre cada pantalla en un Chromium y anota los errores de la consola del
 navegador (tienen que ser cero), corre desde la interfaz un paso del pipeline,
 una consulta de Hive que va por Tez y un entrenamiento, y abre el DAG de Tez y el
 de Spark. Después reinicia el cluster con solo HDFS y vuelve a pasar por las
-pantallas: YARN, Datos y ML tienen que avisar que su servicio no está.
+pantallas: YARN, Datos y ML tienen que avisar que su servicio no está. Al final
+apaga el cluster y recorre todo una vez más con la página abierta: apagado, la
+interfaz no pide lo que contesta 409 (cluster_stopped), así que la consola queda
+sin errores y la red sin ningún 409.
 
 Deja las capturas en HUMO_SALIDAS/capturas/*.png y el resultado en
 HUMO_SALIDAS/resumen-ui.md. Termina con código 1 si falló algún chequeo.
@@ -38,6 +41,7 @@ SOLO_HDFS = hf.SOLO_HDFS
 
 RESULTADOS: list[dict] = []
 CONSOLA: list[dict] = []
+RESPUESTAS_409: list[dict] = []   # cada 409 de la API que ve el navegador, con su etapa
 ESPERADOS: list[dict] = []   # 503 de la API con solo HDFS: el servicio está apagado a propósito
 ETAPA = {"nombre": "todo"}
 
@@ -214,10 +218,31 @@ def solo_hdfs(page: Page) -> None:
         assert codigo == 503 and r["code"] == "service_down", (codigo, r)
 
 
+def apagado(page: Page) -> None:
+    # Esta vez la página queda abierta (en Cluster, desde donde se apaga) mientras se
+    # apaga: lo que pida de fondo con el cluster apagado tiene que contestar 200
+    ir(page, "cluster")
+    hf.apagar("solo HDFS, con la interfaz abierta")
+    RESULTADOS.extend(hf.RESULTADOS)
+    hf.RESULTADOS.clear()
+    ETAPA["nombre"] = "apagado"
+    n409 = len(RESPUESTAS_409)
+    recorrer(page, "apagado")
+    with Chequeo("apagado: en YARN, 10 s sin ningún 409 en la red ni en la consola") as c:
+        n = len(CONSOLA)
+        ir(page, "yarn")
+        page.wait_for_timeout(10_000)   # el sondeo de fondo va cada 2 s
+        nuevos = RESPUESTAS_409[n409:]
+        c.detalle = f"{len(nuevos)} respuestas 409, {len(errores_desde(n))} errores de consola" + (
+            f": {sorted({r['url'] for r in nuevos})}" if nuevos else "")
+        assert not nuevos and not errores_desde(n), (nuevos[:5], errores_desde(n)[:3])
+
+
 def resumen() -> int:
     SALIDAS.mkdir(parents=True, exist_ok=True)
     (SALIDAS / "resumen-ui.json").write_text(json.dumps({"chequeos": RESULTADOS, "consola": CONSOLA,
-                                                        "esperados": ESPERADOS}, indent=2,
+                                                        "esperados": ESPERADOS,
+                                                        "respuestas409": RESPUESTAS_409}, indent=2,
                                                         ensure_ascii=False) + "\n")
     malos = [r for r in RESULTADOS if not r["ok"]]
     L = [f"## Humo de la interfaz: {len(RESULTADOS) - len(malos)} de {len(RESULTADOS)} bien", "",
@@ -246,14 +271,22 @@ def main() -> int:
             page.on("console", lambda m: m.type == "error" and anotar(
                 "console", m.text, page.url, (m.location or {}).get("url", "")))
             page.on("pageerror", lambda e: anotar("pageerror", str(e), page.url))
+            page.on("response", lambda r: r.status == 409 and RESPUESTAS_409.append(
+                {"etapa": ETAPA["nombre"], "url": r.url}))
             todo(page)
             solo_hdfs(page)
+            apagado(page)
             nav.close()
     except Exception:
         traceback.print_exc()
         RESULTADOS.append({"nombre": "el humo de la interfaz se cortó", "ok": False, "segundos": 0, "detalle": "",
                            "error": traceback.format_exc()[-1500:]})
-    hf.apagar("solo HDFS, al final de la interfaz")
+    try:
+        prendido = hf.estado()["phase"] != "stopped"
+    except Exception:
+        prendido = True
+    if prendido:   # se cortó antes de apagar: que no queden procesos colgados
+        hf.apagar("al final de la interfaz")
     RESULTADOS.extend(hf.RESULTADOS)
     return resumen()
 
