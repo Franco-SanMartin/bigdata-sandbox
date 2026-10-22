@@ -6,7 +6,8 @@
 .yr-name { display: block; max-width: 380px; }
 .yr-prog { display: inline-grid; grid-template-columns: 90px auto; align-items: center; gap: 8px; font-size: var(--fs-xs); }
 .yr-prog .meter { height: 4px; }
-.yr-apps .ops-del { opacity: .6; }
+.yr-kill { color: var(--text-3); }
+.yr-kill:hover { color: var(--bad-text); }
 
 /* Mapa de contenedores */
 .cm { display: flex; flex-direction: column; gap: 14px; }
@@ -32,7 +33,7 @@
 .cm-c:hover { filter: brightness(1.12); }
 .cm-free { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-width: 0; font-size: var(--fs-xs); color: var(--text-4); overflow: hidden; white-space: nowrap; }
 .cm-foot { font-size: var(--fs-xs); margin: 0; }
-.cm-q { display: inline-grid; grid-template-columns: 60px auto; align-items: center; gap: 8px; font-size: var(--fs-xs); }
+.cm-q { display: inline-grid; grid-template-columns: 50px auto; align-items: center; gap: 8px; font-size: var(--fs-xs); }
 .cm-q .meter { height: 4px; }
 
 /* Detalle */
@@ -42,11 +43,11 @@
 
 /* DAG: columnas por profundidad; con un solo vértice queda una sola tarjeta */
 .dag { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 4px; }
-.dag-step { display: flex; align-items: center; min-width: 0; }
-.dag-step:only-child, .dag-step:only-child .dag-col { flex: 1; }
-.dag-edge { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 8px; color: var(--text-4); font-size: 10px; white-space: nowrap; }
-.dag-col { display: flex; flex-direction: column; gap: 8px; }
-.dag-v { width: 210px; max-width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--n-1); font-size: var(--fs-sm); }
+.dag-step { display: flex; align-items: center; flex: none; }
+.dag-step:only-child, .dag-step:only-child .dag-col { flex: 1; max-width: 520px; }
+.dag-edge { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 56px; flex: none; padding: 0 4px; color: var(--text-4); font-size: 9.5px; text-align: center; line-height: 1.25; overflow-wrap: anywhere; }
+.dag-col { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.dag-v { width: 180px; max-width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--n-1); font-size: var(--fs-sm); }
 .dag-step:only-child .dag-v { width: auto; }
 .dag-v[data-s="running"] { border-color: var(--run); }
 .dag-v[data-s="pending"] { opacity: .6; }

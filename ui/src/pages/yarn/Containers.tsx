@@ -52,15 +52,14 @@ export function Queues({ c }: { c: YarnCluster }) {
   return (
     <div className="tbl-wrap">
       <table className="tbl" aria-label="Colas">
-        <thead><tr><th>Cola</th><th className="r">Capacidad</th><th>Usado</th><th className="r">Corren</th><th className="r">Esperan</th></tr></thead>
+        <thead><tr><th>Cola</th><th>Usado</th><th className="r">Corren</th><th className="r">Esperan</th></tr></thead>
         <tbody>
           {c.queues.map(q => {
             const cap = c.totalMb * q.capacity / 100;
             return (
               <tr key={q.name}>
-                <td className="mono">{q.name}</td>
-                <td className="r">{nf(q.capacity)} %</td>
-                <td><span className="cm-q"><span className="meter" role="meter" aria-label={`Memoria de la cola ${q.name}`} aria-valuenow={q.usedMb} aria-valuemin={0} aria-valuemax={cap}><i style={{ width: `${Math.min(100, q.usedMb / Math.max(1, cap) * 100)}%` }} /></span><span className="muted">{mbLabel(q.usedMb)}</span></span></td>
+                <td><span className="mono">{q.name}</span> <span className="muted">{nf(q.capacity)} %</span></td>
+                <td><span className="cm-q"><span className="meter" data-k={q.usedMb >= cap ? 'run' : undefined} role="meter" aria-label={`Memoria de la cola ${q.name}`} aria-valuenow={q.usedMb} aria-valuemin={0} aria-valuemax={cap}><i style={{ width: `${Math.min(100, q.usedMb / Math.max(1, cap) * 100)}%` }} /></span><span className="muted">{mbLabel(q.usedMb)}</span></span></td>
                 <td className="r">{q.running}</td>
                 <td className="r">{q.pending ? <span className="ops-warn">{q.pending}</span> : 0}</td>
               </tr>

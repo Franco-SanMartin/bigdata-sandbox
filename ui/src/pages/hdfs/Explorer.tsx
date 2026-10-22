@@ -24,12 +24,14 @@ const EXAMPLES: { value: HdfsExample; label: string }[] = [
 const join = (dir: string, name: string) => (name.startsWith('/') ? name : (dir === '/' ? '' : dir) + '/' + name);
 
 /** El último comando que corrió desde el explorador, con su traza desplegable */
-export function LastAction({ r, onClose }: { r: ActionResult; onClose: () => void }) {
+export function LastAction({ r, onClose, writing }: { r: ActionResult; onClose: () => void; writing?: boolean }) {
   const [open, setOpen] = useState(false);
+  // Un put arranca "running": termina cuando en la carpeta ya no queda nada escribiéndose
+  const done = r.state === 'done' || (r.state === 'running' && writing === false);
   return (
     <div className="ops-last">
       <div className="ops-last-h">
-        <span className="badge" data-k={r.state === 'done' ? 'ok' : 'run'}>{r.state === 'done' ? 'hecho' : 'en curso'}</span>
+        <span className="badge" data-k={done ? 'ok' : 'run'}>{done ? 'hecho' : 'en curso'}</span>
         <code className="mono">$ {r.trace.command}</code>
         <span className="muted ops-ell">→ {r.trace.output}</span>
         <button className="btn btn-sm btn-ghost" type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}>{open ? 'menos' : 'traza'}</button>
@@ -128,7 +130,7 @@ export function Explorer({ path, setPath, ls, sel, setSel, defRep, defBlock }: {
           <button className="btn btn-sm btn-primary" type="submit" disabled={busy}><Upload size={13} />Subir</button>
         </form>
       )}
-      {last && <LastAction r={last} onClose={() => setLast(null)} />}
+      {last && <LastAction r={last} onClose={() => setLast(null)} writing={ls.data ? ls.data.entries.some(e => e.state === 'writing') : undefined} />}
       {ls.err && <div className="panel-b"><ErrorLine err={ls.err} onRetry={ls.err.code === 'not_found' ? () => setPath('/') : ls.reload} /></div>}
       <div className="panel-b flush">
         {!ls.data && !ls.err ? <div className="panel-b"><Loading /></div> : ls.data && (

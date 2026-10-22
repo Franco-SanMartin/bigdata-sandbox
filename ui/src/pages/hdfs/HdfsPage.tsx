@@ -21,7 +21,7 @@ export function HdfsPage() {
   const [sel, setSel] = useState<string | null>(null);
   // Cuando un DataNode cambia de estado cambian las ubicaciones, sin evento hdfs: se vuelve a pedir
   const dnKey = dataNodes.map(d => d.id + d.state).join(',');
-  const ls = useRes(a => (up ? a.hdfsList(path) : null), [path, up], isHdfs);
+  const ls = useRes(a => (up ? a.hdfsList(path) : null), [path, up, dnKey], isHdfs);
   const file = useRes(a => (up && sel ? a.hdfsFile(sel) : null), [sel, up, dnKey], isHdfs);
   const repl = useRes(a => (up ? a.replication() : null), [up, dnKey], isHdfs, 1500);
   const h = status?.hdfs;

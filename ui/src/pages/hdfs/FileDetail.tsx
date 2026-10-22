@@ -69,7 +69,7 @@ export function BlockMap({ file, dataNodes }: { file: HdfsFileDetail; dataNodes:
 
 function Preview({ file }: { file: HdfsFileDetail }) {
   const p = file.preview;
-  if (!p.rows.length && p.note) return <div className="callout"><span><b>{p.format ?? 'Sin vista previa'}.</b> {p.note}</span></div>;
+  if (!p.rows.length && p.note) return <div className="callout"><span>{p.format && <b>{p.format}. </b>}{p.note}</span></div>;
   return <SampleTable sample={p} label="Primeras líneas" />;
 }
 
