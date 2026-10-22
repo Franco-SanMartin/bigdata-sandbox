@@ -69,3 +69,13 @@ def test_store_guarda_y_lee(tmp_path):
     store.save({**cfg.IMAGE_DEFAULTS, "datanodes": 7})
     assert store.load()["datanodes"] == 7
     assert not (tmp_path / "x" / "interfaz.tmp").exists()
+
+
+def test_puertos_como_lib_sh():
+    """Los mismos puertos que sandbox/lib.sh y que cluster.ts de la interfaz."""
+    from conftest import BASE
+    from sandbox_server.specs import process_specs
+    uno = {s.id: s.ports for s in process_specs(BASE)}
+    assert uno["nn1"] == [9870, 9000]
+    ha = {s.id: s.ports for s in process_specs({**BASE, "namenodes": 3})}
+    assert ha["nn2"] == [9871, 9001, 8020] and ha["jn3"] == [8487, 8482] and "snn" not in ha

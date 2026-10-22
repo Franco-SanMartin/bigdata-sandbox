@@ -1,0 +1,46 @@
+{
+ "nodes": {
+  "node": [
+   {
+    "rack": "/default-rack",
+    "state": "RUNNING",
+    "id": "localhost:45454",
+    "nodeHostName": "localhost",
+    "nodeHTTPAddress": "localhost:8042",
+    "lastHealthUpdate": 1792041605000,
+    "version": "3.3.6",
+    "healthReport": "",
+    "numContainers": 3,
+    "usedMemoryMB": 3072,
+    "availMemoryMB": 1024,
+    "usedVirtualCores": 3,
+    "availableVirtualCores": 1,
+    "memUtilization": 0,
+    "cpuUtilization": 0.0,
+    "numRunningOpportContainers": 0,
+    "usedMemoryOpportGB": 0,
+    "usedVirtualCoresOpport": 0,
+    "numQueuedContainers": 0,
+    "resourceUtilization": {
+     "nodePhysicalMemoryMB": 5120,
+     "nodeVirtualMemoryMB": 5120,
+     "nodeCPUUsage": 0.3,
+     "aggregatedContainersPhysicalMemoryMB": 1800,
+     "aggregatedContainersVirtualMemoryMB": 4100,
+     "containersCPUUsage": 0.2
+    },
+    "usedResource": {
+     "memory": 3072,
+     "vCores": 3,
+     "resourceInformations": {}
+    },
+    "availableResource": {
+     "memory": 1024,
+     "vCores": 1,
+     "resourceInformations": {}
+    },
+    "nodeAttributesInfo": {}
+   }
+  ]
+ }
+}

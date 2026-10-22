@@ -16,15 +16,16 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from . import config as cfg
-from . import probes
+from . import hdfs as hdfs_mod
+from . import yarn as yarn_mod
 from .actions import ActionRunner
-from .boot import now_ms
 from .cluster import Cluster, Conflict, Invalid, Settings
+from .errors import ApiError, code_for_status
 from .events import EventBus, sse_stream
 
 
-def _error(status: int, message: str, **extra: object) -> JSONResponse:
-    return JSONResponse({"error": message, **extra}, status_code=status)
+def _error(status: int, message: str, code: str, **extra: object) -> JSONResponse:
+    return JSONResponse({"error": message, "code": code, **extra}, status_code=status)
 
 
 async def _config_from(request: Request) -> object:
@@ -119,44 +120,24 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     async def action_get(request: Request) -> JSONResponse:
         run = runner.get(request.path_params["id"])
         if run is None:
-            return _error(404, "no existe esa acción")
+            raise ApiError("No existe esa acción", "not_found")
         return JSONResponse(run.to_json())
 
-    async def datanodes(_: Request) -> JSONResponse:
-        running = {int(p["id"][2:]) for p in cluster.processes
-                   if p["kind"] == "datanode" and p["state"] in ("up", "starting")}
-        expected = max([cluster.config["datanodes"], *running])
-        return JSONResponse(probes.datanodes_from_jmx(cluster.nn_jmx, now_ms(), expected, running))
-
-    async def files(_: Request) -> JSONResponse:
-        if cluster.phase != "running" or not cluster.hdfs["available"]:
-            return JSONResponse([])
-        proc = await asyncio.create_subprocess_exec(
-            "hdfs", "fsck", "/", "-files", "-blocks", "-locations",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, stdin=asyncio.subprocess.DEVNULL)
-        try:
-            out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-        except asyncio.TimeoutError:
-            proc.kill()
-            return _error(504, "hdfs fsck tardó demasiado")
-        return JSONResponse(probes.parse_fsck(out.decode("utf-8", "replace"),
-                                              cfg.block_size_mb(cluster.config["blockSize"])))
-
     async def api_not_found(request: Request) -> JSONResponse:
-        return _error(404, f"todavía no hay {request.method} /api/{request.path_params['rest']}")
+        raise ApiError(f"No hay {request.method} /api/{request.path_params['rest']}", "not_found")
 
-    async def on_invalid(_: Request, e: Exception) -> JSONResponse:
-        assert isinstance(e, Invalid)
-        return _error(400, str(e), issues=e.issues) if e.issues else _error(400, str(e))
-
-    async def on_conflict(_: Request, e: Exception) -> JSONResponse:
-        return _error(409, str(e))
+    async def on_api_error(_: Request, e: Exception) -> JSONResponse:
+        assert isinstance(e, ApiError)
+        return JSONResponse(e.body(), status_code=e.status)
 
     async def on_http(request: Request, e: Exception) -> Response:
         assert isinstance(e, HTTPException)
         if request.url.path.startswith("/api/"):
-            return _error(e.status_code, e.detail)
+            return _error(e.status_code, e.detail, code_for_status(e.status_code))
         return PlainTextResponse(e.detail, status_code=e.status_code)
+
+    hdfs = hdfs_mod.Hdfs(cluster, runner, bus)
+    yarn = yarn_mod.Yarn(cluster, runner, bus)
 
     api = [
         Route("/api/status", status),
@@ -172,8 +153,8 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         Route("/api/cluster/reset", reset, methods=["POST"]),
         Route("/api/processes/{id}/{action:str}", process_action, methods=["POST"]),
         Route("/api/actions/{id}", action_get),
-        Route("/api/hdfs/datanodes", datanodes),
-        Route("/api/hdfs/files", files),
+        *hdfs.routes(),
+        *yarn.routes(),
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     if ui.is_dir():
@@ -184,18 +165,36 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
                                 f"<code>{ui}</code>. La API está en <code>/api/status</code>.</p>")
         api.append(Route("/", no_ui))
 
+    async def autostart() -> None:
+        """AUTOSTART=1: arranca solo con la configuración de las variables de
+        entorno (la misma que leen :base y :ml), como si apretaran «Iniciar»."""
+        c, issues = cluster.check(cfg.from_env())
+        if cfg.has_errors(issues):
+            bus.log("Cluster", "error", "AUTOSTART: las variables tienen errores, no arranca solo",
+                    tech="; ".join(i["message"] for i in issues if i.get("level") == "error"))
+            return
+        bus.log("Cluster", "info", "AUTOSTART=1: arranca solo con las variables del contenedor")
+        try:
+            await cluster.start(c)
+        except ApiError as e:
+            bus.log("Cluster", "error", "AUTOSTART: no se pudo arrancar", tech=str(e))
+
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette):
         cluster.start_polling()
+        if cluster.s.autostart:
+            await autostart()
         yield
         bus.close()
         await cluster.shutdown()
         await runner.wait_all()
 
     app = Starlette(routes=api, lifespan=lifespan,
-                    exception_handlers={Invalid: on_invalid, Conflict: on_conflict, HTTPException: on_http})
+                    exception_handlers={ApiError: on_api_error, HTTPException: on_http})
     app.state.cluster = cluster
     app.state.bus = bus
     app.state.runner = runner
+    app.state.hdfs = hdfs
+    app.state.yarn = yarn
     return app
 

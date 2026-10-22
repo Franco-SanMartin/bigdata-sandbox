@@ -1,0 +1,17 @@
+{
+ "FileStatus": {
+  "accessTime": 0,
+  "blockSize": 0,
+  "childrenNum": 4,
+  "fileId": 16391,
+  "group": "supergroup",
+  "length": 0,
+  "modificationTime": 1792041340000,
+  "owner": "root",
+  "pathSuffix": "",
+  "permission": "755",
+  "replication": 0,
+  "storagePolicy": 0,
+  "type": "DIRECTORY"
+ }
+}

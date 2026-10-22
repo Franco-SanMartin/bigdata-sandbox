@@ -6,3 +6,5 @@ h11==0.16.0
 click==8.5.0
 idna==3.20
 typing_extensions==4.16.0
+# Subidas desde la compu (multipart/form-data): Starlette lo usa para request.form()
+python-multipart==0.0.32

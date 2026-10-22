@@ -54,15 +54,20 @@ def test_config(client):
 
 def test_errores_en_json(client):
     r = client.post("/api/config/validate", content=b"no es json")
-    assert r.status_code == 400 and r.json() == {"error": "el cuerpo tiene que ser JSON"}
-    assert client.post("/api/config/validate", json={}).json() == {"error": "falta { config }"}
+    assert r.status_code == 400 and r.json() == {"error": "el cuerpo tiene que ser JSON", "code": "invalid"}
+    assert client.post("/api/config/validate", json={}).json() == {"error": "falta { config }", "code": "invalid"}
     r = client.post("/api/cluster/start", json={"config": {**BASE, "blockSize": "x"}})
     assert r.status_code == 400 and r.json()["issues"][0]["field"] == "blockSize"
+    # Con el cluster apagado, los códigos de ui/src/api/errors.ts
     r = client.get("/api/yarn/apps")
-    assert r.status_code == 404 and "error" in r.json()
+    assert r.status_code == 409 and r.json()["code"] == "cluster_stopped"
+    r = client.get("/api/hdfs/ls?path=/")
+    assert r.status_code == 409 and r.json()["code"] == "cluster_stopped"
+    r = client.get("/api/no-existe")
+    assert r.status_code == 404 and r.json()["code"] == "not_found"
     assert client.get("/api/status", headers={}).status_code == 200
     r = client.delete("/api/status")
-    assert r.status_code in (404, 405) and "error" in r.json()
+    assert r.status_code in (404, 405) and r.json()["code"] in ("not_found", "invalid")
 
 
 def test_ciclo_completo(client):

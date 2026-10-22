@@ -1,0 +1,53 @@
+{
+ "app": {
+  "id": "application_1792041277726_0003",
+  "user": "root",
+  "name": "ventas.py",
+  "queue": "default",
+  "state": "RUNNING",
+  "finalStatus": "UNDEFINED",
+  "progress": 10.0,
+  "trackingUI": "ApplicationMaster",
+  "trackingUrl": "http://localhost:8088/proxy/application_1792041277726_0003/",
+  "diagnostics": "",
+  "clusterId": 1792041277726,
+  "applicationType": "SPARK",
+  "applicationTags": "",
+  "priority": 0,
+  "startedTime": 1792041600000,
+  "launchTime": 1792041601000,
+  "finishedTime": 0,
+  "elapsedTime": 30000,
+  "amContainerLogs": "http://localhost:8042/node/containerlogs/container_1792041277726_0003_01_000001/root",
+  "amHostHttpAddress": "localhost:8042",
+  "amRPCAddress": "localhost:40201",
+  "masterNodeId": "localhost:45454",
+  "allocatedMB": 3072,
+  "allocatedVCores": 3,
+  "reservedMB": 0,
+  "reservedVCores": 0,
+  "runningContainers": 3,
+  "memorySeconds": 123456,
+  "vcoreSeconds": 120,
+  "queueUsagePercentage": 75.0,
+  "clusterUsagePercentage": 75.0,
+  "preemptedResourceMB": 0,
+  "preemptedResourceVCores": 0,
+  "numNonAMContainerPreempted": 0,
+  "numAMContainerPreempted": 0,
+  "preemptedMemorySeconds": 0,
+  "preemptedVcoreSeconds": 0,
+  "logAggregationStatus": "NOT_START",
+  "unmanagedApplication": false,
+  "amNodeLabelExpression": "",
+  "timeouts": {
+   "timeout": [
+    {
+     "type": "LIFETIME",
+     "expiryTime": "UNLIMITED",
+     "remainingTimeInSeconds": -1
+    }
+   ]
+  }
+ }
+}

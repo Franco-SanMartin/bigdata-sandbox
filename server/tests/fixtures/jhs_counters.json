@@ -1,0 +1,88 @@
+{
+ "jobCounters": {
+  "id": "job_1792041277726_0001",
+  "counterGroup": [
+   {
+    "counterGroupName": "org.apache.hadoop.mapreduce.FileSystemCounter",
+    "counter": [
+     {
+      "name": "FILE_BYTES_READ",
+      "totalCounterValue": 4521,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 4521
+     },
+     {
+      "name": "FILE_BYTES_WRITTEN",
+      "totalCounterValue": 1708123,
+      "mapCounterValue": 1430000,
+      "reduceCounterValue": 278123
+     },
+     {
+      "name": "HDFS_BYTES_READ",
+      "totalCounterValue": 6220014,
+      "mapCounterValue": 6220014,
+      "reduceCounterValue": 0
+     },
+     {
+      "name": "HDFS_BYTES_WRITTEN",
+      "totalCounterValue": 212,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 212
+     }
+    ]
+   },
+   {
+    "counterGroupName": "org.apache.hadoop.mapreduce.JobCounter",
+    "counter": [
+     {
+      "name": "TOTAL_LAUNCHED_MAPS",
+      "totalCounterValue": 6,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 0
+     },
+     {
+      "name": "TOTAL_LAUNCHED_REDUCES",
+      "totalCounterValue": 1,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 0
+     },
+     {
+      "name": "DATA_LOCAL_MAPS",
+      "totalCounterValue": 6,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 0
+     }
+    ]
+   },
+   {
+    "counterGroupName": "org.apache.hadoop.mapreduce.TaskCounter",
+    "counter": [
+     {
+      "name": "MAP_INPUT_RECORDS",
+      "totalCounterValue": 200001,
+      "mapCounterValue": 200001,
+      "reduceCounterValue": 0
+     },
+     {
+      "name": "MAP_OUTPUT_RECORDS",
+      "totalCounterValue": 200000,
+      "mapCounterValue": 200000,
+      "reduceCounterValue": 0
+     },
+     {
+      "name": "REDUCE_INPUT_RECORDS",
+      "totalCounterValue": 200000,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 200000
+     },
+     {
+      "name": "REDUCE_OUTPUT_RECORDS",
+      "totalCounterValue": 8,
+      "mapCounterValue": 0,
+      "reduceCounterValue": 8
+     }
+    ]
+   }
+  ]
+ }
+}

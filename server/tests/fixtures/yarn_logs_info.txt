@@ -1,0 +1,4 @@
+Application State: Completed.
+Container: container_1792041277726_0001_01_000001 on localhost_45454
+Container: container_1792041277726_0001_01_000002 on localhost_45454
+Container: container_1792041277726_0001_01_000008 on localhost_45454

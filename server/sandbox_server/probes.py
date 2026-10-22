@@ -329,11 +329,19 @@ def parse_dfsadmin_report(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 _FSCK_FILE = re.compile(
-    r"^(?P<path>/\S*) (?P<size>\d+) bytes, replicated: replication=(?P<rep>\d+), (?P<nb>\d+) block\(s\):\s*(?P<rest>.*)$")
+    r"^(?P<path>/\S*) (?P<size>\d+) bytes, replicated: replication=(?P<rep>\d+), (?P<nb>\d+) block\(s\)"
+    r"(?P<open>, OPENFORWRITE)?:\s*(?P<rest>.*)$")
 _FSCK_BLOCK = re.compile(
     r"^(?P<i>\d+)\. (?P<pool>BP-[^:]+):blk_(?P<id>\d+)_(?P<gs>\d+) len=(?P<len>\d+)"
     r"(?: Live_repl=(?P<live>\d+))?\s*(?P<rest>.*)$")
 _LOC = re.compile(r"DatanodeInfoWithStorage\[([^,\]]+)")
+
+
+def _fsck_block(b: re.Match) -> dict:
+    locs = [x for x in (_xfer_to_dn(a) for a in _LOC.findall(b.group("rest"))) if x is not None]
+    bid, gs = int(b.group("id")), int(b.group("gs"))
+    return {"id": bid, "genStamp": gs, "name": f"blk_{bid}_{gs}", "index": int(b.group("i")) + 1,
+            "sizeMb": round(int(b.group("len")) / MB, 3), "locations": locs, "stale": []}
 
 
 def parse_fsck(text: str, block_size_mb: float | None = None) -> list[dict]:
@@ -347,13 +355,21 @@ def parse_fsck(text: str, block_size_mb: float | None = None) -> list[dict]:
             cur = {"path": m.group("path"), "sizeMb": round(int(m.group("size")) / MB, 3),
                    "replication": int(m.group("rep")), "blockSizeMb": block_size_mb, "blocks": [],
                    "state": "ok", "_nb": int(m.group("nb"))}
-            if "MISSING" in rest or "CORRUPT" in rest:
+            # -openforwrite: el archivo se está escribiendo (el -put lo escribe como <nombre>._COPYING_)
+            if m.group("open") or m.group("path").endswith("._COPYING_"):
+                cur["state"] = "writing"
+            elif "MISSING" in rest or "CORRUPT" in rest:
                 cur["state"] = "missing"
             elif "Under replicated" in rest:
                 cur["state"] = "under"
             files.append(cur)
             continue
         if cur is None:
+            continue
+        if cur["state"] == "writing":
+            b = _FSCK_BLOCK.match(line)
+            if b:
+                cur["blocks"].append(_fsck_block(b))
             continue
         if line.startswith(cur["path"] + ":") and ("MISSING" in line or "CORRUPT" in line):
             cur["state"] = "missing"
@@ -363,13 +379,11 @@ def parse_fsck(text: str, block_size_mb: float | None = None) -> list[dict]:
             continue
         b = _FSCK_BLOCK.match(line)
         if b:
-            locs = [x for x in (_xfer_to_dn(a) for a in _LOC.findall(b.group("rest"))) if x is not None]
             if "MISSING" in b.group("rest"):
                 cur["state"] = "missing"
-            bid, gs = int(b.group("id")), int(b.group("gs"))
-            cur["blocks"].append({"id": bid, "genStamp": gs, "name": f"blk_{bid}_{gs}", "index": int(b.group("i")) + 1,
-                                  "sizeMb": round(int(b.group("len")) / MB, 3), "locations": locs, "stale": []})
-            if cur["state"] == "ok" and len(locs) < cur["replication"]:
+            blk = _fsck_block(b)
+            cur["blocks"].append(blk)
+            if cur["state"] == "ok" and len(blk["locations"]) < cur["replication"]:
                 cur["state"] = "under"
     for f in files:
         f.pop("_nb", None)

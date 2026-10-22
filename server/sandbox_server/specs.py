@@ -13,6 +13,7 @@ def dn_http(n: int) -> int: return 9900 + n   # 9901 ... 9909
 def dn_data(n: int) -> int: return 9910 + n   # transferencia de bloques
 def jn_rpc(n: int) -> int: return 8484 + n    # 8485, 8486, 8487
 def jn_http(n: int) -> int: return 8479 + n   # 8480, 8481, 8482
+def zkfc_rpc(n: int) -> int: return 8018 + n  # 8019, 8020, 8021 (solo en HA)
 
 
 @dataclass
@@ -39,7 +40,8 @@ def process_specs(c: dict, ui_port: int = 8080) -> list[ProcSpec]:
                               [jn_rpc(k), jn_http(k)], jn_http(k), web=jn_http(k)))
     for j in range(1, c["namenodes"] + 1):
         s.append(ProcSpec(f"nn{j}", "namenode", f"NameNode {j}" if ha else "NameNode", "hdfs",
-                          [nn_http(j), nn_rpc(j)], nn_http(j), web=nn_http(j), controllable=True))
+                          [nn_http(j), nn_rpc(j)] + ([zkfc_rpc(j)] if ha else []), nn_http(j), web=nn_http(j),
+                          controllable=True))
     if not ha:
         s.append(ProcSpec("snn", "secondarynamenode", "Secondary NameNode", "hdfs", [9868], 9868, web=9868))
     for i in range(1, c["datanodes"] + 1):

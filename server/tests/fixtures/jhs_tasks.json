@@ -1,0 +1,76 @@
+{
+ "tasks": {
+  "task": [
+   {
+    "startTime": 1792041405000,
+    "finishTime": 1792041415000,
+    "elapsedTime": 10000,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000000",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000000_0"
+   },
+   {
+    "startTime": 1792041405100,
+    "finishTime": 1792041415300,
+    "elapsedTime": 10200,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000001",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000001_0"
+   },
+   {
+    "startTime": 1792041405200,
+    "finishTime": 1792041415600,
+    "elapsedTime": 10400,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000002",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000002_0"
+   },
+   {
+    "startTime": 1792041405300,
+    "finishTime": 1792041415900,
+    "elapsedTime": 10600,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000003",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000003_0"
+   },
+   {
+    "startTime": 1792041405400,
+    "finishTime": 1792041416200,
+    "elapsedTime": 10800,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000004",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000004_0"
+   },
+   {
+    "startTime": 1792041405500,
+    "finishTime": 1792041416500,
+    "elapsedTime": 11000,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_m_000005",
+    "state": "SUCCEEDED",
+    "type": "MAP",
+    "successfulAttempt": "attempt_1792041277726_0001_m_000005_0"
+   },
+   {
+    "startTime": 1792041405000,
+    "finishTime": 1792041428000,
+    "elapsedTime": 23000,
+    "progress": 100.0,
+    "id": "task_1792041277726_0001_r_000000",
+    "state": "SUCCEEDED",
+    "type": "REDUCE",
+    "successfulAttempt": "attempt_1792041277726_0001_r_000000_0"
+   }
+  ]
+ }
+}

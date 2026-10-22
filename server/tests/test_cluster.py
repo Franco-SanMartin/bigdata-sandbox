@@ -9,6 +9,7 @@ from conftest import BASE, fixture_json
 from sandbox_server.actions import ActionRunner
 from sandbox_server.cluster import Cluster, Conflict, Invalid
 from sandbox_server.events import EventBus
+from sandbox_server.errors import ApiError
 
 
 def nuevo(settings):
@@ -212,8 +213,9 @@ def test_acciones_sobre_procesos(settings):
         assert cl.process_action_for("mysql", "stop").display == "mysqladmin shutdown"
         with pytest.raises(Invalid):
             cl.process_action_for("rm", "stop")          # no se controla suelto
-        with pytest.raises(Invalid):
+        with pytest.raises(ApiError) as e:
             cl.process_action_for("nada", "stop")
+        assert e.value.code == "not_found" and e.value.status == 404
         with pytest.raises(Invalid):
             cl.process_action_for("dn1", "reiniciar")
     asyncio.run(main())

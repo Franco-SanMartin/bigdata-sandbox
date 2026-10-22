@@ -1,0 +1,66 @@
+{
+ "FileStatuses": {
+  "FileStatus": [
+   {
+    "accessTime": 1792041285000,
+    "blockSize": 1048576,
+    "childrenNum": 0,
+    "fileId": 16401,
+    "group": "supergroup",
+    "length": 6888896,
+    "modificationTime": 1792041290000,
+    "owner": "root",
+    "pathSuffix": "numeros.txt",
+    "permission": "644",
+    "replication": 2,
+    "storagePolicy": 0,
+    "type": "FILE"
+   },
+   {
+    "accessTime": 0,
+    "blockSize": 0,
+    "childrenNum": 1,
+    "fileId": 16410,
+    "group": "supergroup",
+    "length": 0,
+    "modificationTime": 1792041330000,
+    "owner": "root",
+    "pathSuffix": "resultados",
+    "permission": "755",
+    "replication": 0,
+    "storagePolicy": 0,
+    "type": "DIRECTORY"
+   },
+   {
+    "accessTime": 1792041335000,
+    "blockSize": 1048576,
+    "childrenNum": 0,
+    "fileId": 16420,
+    "group": "supergroup",
+    "length": 1048576,
+    "modificationTime": 1792041340000,
+    "owner": "root",
+    "pathSuffix": "subida.csv._COPYING_",
+    "permission": "644",
+    "replication": 2,
+    "storagePolicy": 0,
+    "type": "FILE"
+   },
+   {
+    "accessTime": 0,
+    "blockSize": 0,
+    "childrenNum": 1,
+    "fileId": 16395,
+    "group": "supergroup",
+    "length": 0,
+    "modificationTime": 1792041280000,
+    "owner": "root",
+    "pathSuffix": "ventas",
+    "permission": "755",
+    "replication": 0,
+    "storagePolicy": 0,
+    "type": "DIRECTORY"
+   }
+  ]
+ }
+}

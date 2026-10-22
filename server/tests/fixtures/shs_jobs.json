@@ -1,0 +1,19 @@
+[
+ {
+  "jobId": 1,
+  "name": "csv at NativeMethodAccessorImpl.java:0",
+  "stageIds": [
+   2,
+   3
+  ],
+  "status": "RUNNING"
+ },
+ {
+  "jobId": 0,
+  "name": "load at NativeMethodAccessorImpl.java:0",
+  "stageIds": [
+   1
+  ],
+  "status": "SUCCEEDED"
+ }
+]

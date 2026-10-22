@@ -1,0 +1,24 @@
+Container: container_1792041277726_0001_01_000001 on localhost_45454
+LogAggregationType: AGGREGATED
+====================================================================
+LogType:stdout
+LogLastModifiedTime:Thu Oct 22 14:03:51 +0000 2026
+LogLength:0
+LogContents:
+
+End of LogType:stdout
+*****************************************************************************
+
+Container: container_1792041277726_0001_01_000001 on localhost_45454
+LogAggregationType: AGGREGATED
+====================================================================
+LogType:syslog
+LogLastModifiedTime:Thu Oct 22 14:03:51 +0000 2026
+LogLength:412
+LogContents:
+2026-10-22 14:03:21,612 INFO [main] org.apache.hadoop.mapreduce.v2.app.MRAppMaster: Created MRAppMaster for application appattempt_1792041277726_0001_000001
+2026-10-22 14:03:24,118 INFO [main] org.apache.hadoop.mapreduce.v2.app.job.impl.JobImpl: Input size for job job_1792041277726_0001 = 6219354. Number of splits = 6
+2026-10-22 14:03:50,907 INFO [Thread-80] org.apache.hadoop.mapreduce.v2.app.MRAppMaster: Job finished cleanly, recording last MRAppMaster retry
+End of LogType:syslog
+*****************************************************************************
+

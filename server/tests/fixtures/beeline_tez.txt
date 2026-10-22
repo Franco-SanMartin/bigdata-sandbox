@@ -1,0 +1,17 @@
+Connecting to jdbc:hive2://localhost:10000
+Connected to: Apache Hive (version 3.1.3)
+INFO  : Compiling command(queryId=root_20261022140500_1a2b): SELECT producto, SUM(cantidad) AS unidades FROM ventas GROUP BY producto ORDER BY unidades DESC
+INFO  : Executing command(queryId=root_20261022140500_1a2b): SELECT producto, SUM(cantidad) AS unidades FROM ventas GROUP BY producto ORDER BY unidades DESC
+INFO  : Query ID = root_20261022140500_1a2b
+INFO  : Total jobs = 1
+INFO  : Launching Job 1 out of 1
+INFO  : Starting task [Stage-1:MAPRED] in serial mode
+INFO  : Subscribed to counters: [] for queryId: root_20261022140500_1a2b
+INFO  : Tez session hasn't been created yet. Opening session
+INFO  : Dag name: SELECT producto, SUM(cantidad...DESC (Stage-1)
+INFO  : Status: Running (Executing on YARN cluster with App id application_1792041277726_0002)
+
+INFO  : Map 1: -/-	Reducer 2: 0/2	Reducer 3: 0/1	
+INFO  : Map 1: 0/6	Reducer 2: 0/2	Reducer 3: 0/1	
+INFO  : Map 1: 0(+3)/6	Reducer 2: 0/2	Reducer 3: 0/1	
+INFO  : Map 1: 6/6	Reducer 2: 1(+1)/2	Reducer 3: 0/1	

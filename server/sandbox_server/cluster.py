@@ -22,20 +22,24 @@ from . import config as cfg
 from . import probes
 from .actions import Action, ActionRunner
 from .boot import BootTracker, Volume, now_ms, plan
+from .errors import ApiError
 from .events import EventBus
 from .proc import exited
 from .specs import ProcSpec, dn_data, dn_http, nn_http, process_specs
 
 
-class Conflict(Exception):
-    """La acción no se puede hacer en el estado actual (HTTP 409)."""
+class Conflict(ApiError):
+    """La acción no se puede hacer en el estado actual (HTTP 409, 'busy' salvo
+    que se diga otro código)."""
+    code = "busy"
 
 
-class Invalid(Exception):
-    """Pedido inválido (HTTP 400)."""
+class Invalid(ApiError):
+    """Pedido inválido (HTTP 400). Con 'issues' si vienen de validar la configuración."""
+    code = "invalid"
 
     def __init__(self, message: str, issues: list[dict] | None = None):
-        super().__init__(message)
+        super().__init__(message, issues=issues or None)
         self.issues = issues or []
 
 
@@ -58,6 +62,10 @@ class Settings:
     poll_starting: float = 1.0
     # Si es False no se sondea nada real (tests)
     probe: bool = True
+    # AUTOSTART=1: arranca solo al prender el servidor, con la config de las variables
+    autostart: bool = field(default_factory=lambda: os.environ.get("AUTOSTART", "0").strip() in ("1", "si", "true"))
+    # Carpeta de trabajo de los ejemplos (/datos, con ejemplos/ adentro)
+    datos_dir: Path = field(default_factory=lambda: _env_path("SANDBOX_DATOS", "/datos"))
 
     def __post_init__(self) -> None:
         if self.state_file is None:
@@ -119,6 +127,10 @@ class Cluster:
         self.hdfs = probes.empty_hdfs()
         self.yarn = probes.yarn_summary(None)
         self.nn_jmx: dict | None = None
+        # Puerto web del NameNode activo (WebHDFS y JMX); None si no hay
+        self.nn_active_port: int | None = None
+        # Lo que corre después de cada sondeo (HDFS y YARN miran ahí qué cambió)
+        self.watchers: list = []
         self.mem_limit, self.mem_used = 0, 0
         self.mem_history: deque[dict] = deque(maxlen=MEM_HISTORY)
         self._last_mem = 0
@@ -396,11 +408,11 @@ class Cluster:
         spec = next((p for p in self.specs() if p.id == pid), None)
         m = re.fullmatch(r"dn([1-9])", pid)
         if spec is None and not m:
-            raise Invalid(f"no hay un proceso {pid}")
+            raise ApiError(f"No hay un proceso {pid}", "not_found")
         if spec is not None and not spec.controllable:
             raise Invalid(f"{spec.name} no se prende ni se apaga suelto")
         if self.phase != "running":
-            raise Conflict("el cluster no está en marcha")
+            raise Conflict("El cluster está apagado: arrancalo desde Cluster", "cluster_stopped")
         b = str(self.s.bin_dir)
         verbo = "Prender" if action == "start" else "Apagar"
         if m:
@@ -468,6 +480,11 @@ class Cluster:
                 await self.refresh()
             except Exception as e:  # noqa: BLE001 (el sondeo nunca tiene que morir)
                 self.logs.append(f"[interfaz] error leyendo el estado: {e}")
+            for watch in list(self.watchers):
+                try:
+                    await watch()
+                except Exception as e:  # noqa: BLE001
+                    self.logs.append(f"[interfaz] error mirando cambios: {e}")
             await asyncio.sleep(self.s.poll_starting if self.phase == "starting" else self.s.poll_running)
 
     async def refresh(self) -> None:
@@ -498,6 +515,7 @@ class Cluster:
         if 8088 in ports:
             yarn = await asyncio.to_thread(probes.get_json, "http://localhost:8088/ws/v1/cluster/metrics")
         limit, used = await asyncio.to_thread(probes.memory_from)
+        self.nn_active_port = active_port
         self.update(running, ports, roles, jmx, yarn, limit, used)
 
     def update(self, running: dict[str, dict], ports: set[int], roles: dict[str, str], jmx: dict | None,
@@ -573,6 +591,27 @@ class Cluster:
         if sig != self._last_sig or t - self._last_pub >= 10_000:
             self._last_sig, self._last_pub = sig, t
             self.bus.publish("status", {})
+
+    # ------------------------------------------------- lo que piden las rutas
+
+    def need_running(self) -> None:
+        if self.phase != "running":
+            raise ApiError("El cluster está apagado: arrancalo desde Cluster", "cluster_stopped")
+
+    def need_hdfs(self) -> None:
+        """HDFS tiene que estar respondiendo (cluster en marcha y un NameNode activo)."""
+        self.need_running()
+        if not self.hdfs.get("available") or (self.s.probe and not self.nn_active_port):
+            raise ApiError("HDFS no responde: no hay ningún NameNode activo", "service_down")
+
+    def need_proc(self, pid: str, name: str) -> None:
+        """Un proceso tiene que estar arriba (rm, hiveserver2, sparkhistory...)."""
+        self.need_running()
+        p = next((x for x in self.processes if x["id"] == pid), None)
+        if p is None and not any(sp.id == pid for sp in self.specs()):
+            raise ApiError(f"{name} no está en esta configuración", "unsupported")
+        if p is None or p["state"] != "up":
+            raise ApiError(f"{name} está apagado", "service_down")
 
     # ------------------------------------------------------------- estado
 

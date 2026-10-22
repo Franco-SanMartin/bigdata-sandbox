@@ -43,6 +43,24 @@ def pedir(metodo, ruta, cuerpo=None, timeout=10):
         return e.code, e.read().decode()
 
 
+def subir(destino, nombre, contenido: bytes, **campos):
+    """POST multipart/form-data como el de la interfaz (sin bibliotecas de afuera)."""
+    borde = "humo" + str(time.time_ns())
+    partes = []
+    for k, v in {"dest": destino, **campos}.items():
+        partes.append(f'--{borde}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+    partes.append(f'--{borde}\r\nContent-Disposition: form-data; name="file"; filename="{nombre}"\r\n'
+                  f"Content-Type: application/octet-stream\r\n\r\n".encode() + contenido + b"\r\n")
+    partes.append(f"--{borde}--\r\n".encode())
+    req = urllib.request.Request(URL + "/api/hdfs/upload", data=b"".join(partes), method="POST",
+                                 headers={"content-type": f"multipart/form-data; boundary={borde}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+
+
 def estado():
     return pedir("GET", "/api/status")[1]
 
@@ -87,12 +105,49 @@ def test_arranca_hdfs_y_apaga():
     _, dns = pedir("GET", "/api/hdfs/datanodes")
     assert any(d["id"] == 1 and d["state"] == "live" for d in dns), dns
 
+    probar_hdfs()
+
     codigo, _ = pedir("POST", "/api/cluster/stop")
     assert codigo == 202
     s = esperar(lambda s: s["phase"] == "stopped", 60, "stopped")
     assert not [p["id"] for p in s["processes"] if p["id"] != "ui" and p["state"] == "up"]
     _, acts = pedir("GET", "/api/activity?limit=5")
     assert acts[-1]["title"] == "Cluster apagado"
+
+
+def probar_hdfs():
+    """Carpeta, subida desde la compu, listado, detalle, fsck y borrado contra HDFS de verdad."""
+    carpeta = "/user/root/humo"
+    codigo, r = pedir("POST", "/api/hdfs/mkdir", {"path": carpeta})
+    assert codigo == 200 and r["state"] == "done", r
+
+    filas = "".join(f"{i},producto{i % 7},{i % 5}\n" for i in range(60000)).encode()  # ~1,1 MB: 2 bloques de 1 MB
+    codigo, r = subir(carpeta, "humo.csv", b"id,producto,cantidad\n" + filas, blockSize="1m")
+    assert codigo == 202 and r["state"] == "running", r
+    archivo = carpeta + "/humo.csv"
+
+    fin = time.time() + 120
+    while time.time() < fin:
+        codigo, ls = pedir("GET", "/api/hdfs/ls?path=" + carpeta)
+        entrada = next((e for e in ls["entries"] if e["name"] == "humo.csv"), None) if codigo == 200 else None
+        if entrada and entrada["state"] != "writing":
+            break
+        time.sleep(1)
+    else:
+        raise AssertionError(f"la subida no terminó: {ls}")
+    assert entrada["type"] == "file" and entrada["blocks"] == 2 and entrada["replication"] == 1, entrada
+
+    codigo, d = pedir("GET", "/api/hdfs/file?path=" + archivo)
+    assert codigo == 200 and d["preview"]["columns"] == ["id", "producto", "cantidad"], d
+    assert len(d["blocks"]) == 2 and all(b["locations"] == [1] for b in d["blocks"]), d["blocks"]
+
+    codigo, f = pedir("GET", "/api/hdfs/fsck?path=" + carpeta, timeout=60)
+    assert codigo == 200 and f["healthy"] and f["files"] == 1 and f["blocks"] == 2, f
+
+    codigo, r = pedir("DELETE", f"/api/hdfs/files?path={carpeta}&recursive=1")
+    assert codigo == 200 and r["state"] == "done", r
+    codigo, r = pedir("GET", "/api/hdfs/ls?path=" + carpeta)
+    assert codigo == 404 and json.loads(r)["code"] == "not_found", r
 
 
 if __name__ == "__main__":

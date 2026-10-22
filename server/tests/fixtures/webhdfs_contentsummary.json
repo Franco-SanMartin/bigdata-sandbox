@@ -1,0 +1,16 @@
+{
+ "ContentSummary": {
+  "directoryCount": 1,
+  "ecPolicy": "Replicated",
+  "fileCount": 1,
+  "length": 6219354,
+  "quota": -1,
+  "snapshotDirectoryCount": 0,
+  "snapshotFileCount": 0,
+  "snapshotLength": 0,
+  "snapshotSpaceConsumed": 0,
+  "spaceConsumed": 12438708,
+  "spaceQuota": -1,
+  "typeQuota": {}
+ }
+}

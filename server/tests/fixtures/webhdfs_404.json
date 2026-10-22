@@ -1,0 +1,7 @@
+{
+ "RemoteException": {
+  "exception": "FileNotFoundException",
+  "javaClassName": "java.io.FileNotFoundException",
+  "message": "File does not exist: /user/root/nada"
+ }
+}
