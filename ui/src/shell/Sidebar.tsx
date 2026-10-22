@@ -1,7 +1,7 @@
 import { route, navigate } from '../state/ui';
 import { useSnapshot } from '../state/store';
 import { api } from '../api';
-import { DEMO_SPEED } from '../api/demo';
+import { SPEED as DEMO_SPEED } from '../api/demo/speed';
 import { NAV } from './nav';
 import { Dot, Tip } from '../components/ui';
 

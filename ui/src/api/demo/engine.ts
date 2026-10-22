@@ -6,7 +6,8 @@ import type {
 } from '../types';
 import { DEFAULT_CONFIG, DOCKER_LIMIT_MB, blockSizeMb, configSummary, estimateRam, processSpecs, type ProcSpec } from '../../lib/cluster';
 
-export const SPEED = 5;           // 1 s real = 5 s del cluster
+import { SPEED } from './speed';
+export { SPEED };
 export const TS = '1792041277726';       // marca de tiempo del ResourceManager en los ids de YARN
 export const DEAD_AFTER = 40;            // s sin latidos hasta que el NameNode da por muerto a un DataNode
 export const YARN_MB = 4096;
