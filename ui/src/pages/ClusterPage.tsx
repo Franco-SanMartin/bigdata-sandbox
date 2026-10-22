@@ -6,6 +6,7 @@ import { useSnapshot } from '../state/store';
 import { composeOpen, consoleFilter, consoleOpen, navigate } from '../state/ui';
 import { applyConfig, processAction, startCluster, stopCluster } from '../state/actions';
 import { ArchitectureMap } from '../widgets/ArchitectureMap';
+import { ArchitecturePreview } from '../widgets/ArchitecturePreview';
 import { BootView } from '../widgets/BootView';
 import { ActivityList } from '../shell/ConsoleDrawer';
 import { DataTable, type Column } from '../components/DataTable';
@@ -62,7 +63,7 @@ function Stopped({ s }: { s: ClusterStatus }) {
     <div className="grid cols-12">
       <section className="panel span-7" aria-labelledby="h-arch">
         <div className="panel-h"><h2 id="h-arch">Arquitectura</h2><span className="sub">lo que va a levantar esta configuración</span></div>
-        <div className="panel-b"><ArchitectureMap processes={s.processes} /></div>
+        <div className="panel-b"><ArchitecturePreview config={s.config} /></div>
       </section>
       <div className="span-5" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="panel" aria-labelledby="h-cfg">
