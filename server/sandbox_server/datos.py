@@ -164,12 +164,17 @@ def hive_format(info: dict[str, str]) -> str:
     return "textfile"
 
 
-def hive_rows(params: dict[str, str]) -> int:
+def hive_rows(params: dict[str, str]) -> int | None:
+    """Filas según las estadísticas del Metastore. None si no hay: una tabla
+    externa recién creada no tiene numRows (o tiene 0 sin COLUMN_STATS_ACCURATE)
+    hasta que alguien corra ANALYZE TABLE … COMPUTE STATISTICS."""
     try:
-        v = int(params.get("numRows", "0"))
+        v = int(params.get("numRows", ""))
     except ValueError:
-        return 0
-    return max(v, 0)
+        return None
+    if v < 0 or (v == 0 and "BASIC_STATS" not in params.get("COLUMN_STATS_ACCURATE", "")):
+        return None
+    return v
 
 
 _VERTEX = re.compile(r"^\s*((?:Map|Reducer|Union) \d+)\s*(?:<-.*)?$")
@@ -642,7 +647,10 @@ class Datos:
         info = d["info"]
         e = {"source": "hive", "name": name,
              "kind": "externa" if "EXTERNAL" in info.get("Table Type", "") else "tabla",
-             "rows": hive_rows(d["params"]), "columns": [{"name": c["name"], "type": c["type"]} for c in d["columns"]]}
+             "columns": [{"name": c["name"], "type": c["type"]} for c in d["columns"]]}
+        rows = hive_rows(d["params"])
+        if rows is not None:
+            e["rows"] = rows
         if info.get("Location"):
             e["location"] = location_path(info["Location"])
         return e
@@ -778,7 +786,7 @@ class Datos:
         e["partitions"] = d["partitions"]
         e["ddl"] = "\n".join(ddl_lines).strip() or None
         e["sample"] = {"columns": cols or [c["name"] for c in d["columns"]], "rows": rows,
-                       **({"total": e["rows"]} if e["rows"] else {}), "format": e["format"]}
+                       **({"total": e["rows"]} if e.get("rows") else {}), "format": e["format"]}
         size = d["params"].get("totalSize")
         if size and size.isdigit() and int(size) > 0:
             e["sizeMb"] = round(int(size) / hdfs_mod.MB, 6)

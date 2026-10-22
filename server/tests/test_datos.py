@@ -166,3 +166,11 @@ def test_el_pipeline_invalida_el_catalogo(mundo):
         mundo.datos.invalidate("hive")
         assert any(x["name"] == "default.ventas_limpias" for x in await mundo.datos.catalog())
     asyncio.run(main())
+
+
+def test_hive_rows_sin_estadisticas():
+    assert D.hive_rows({}) is None
+    assert D.hive_rows({"numRows": "0"}) is None
+    assert D.hive_rows({"numRows": "-1"}) is None
+    assert D.hive_rows({"numRows": "0", "COLUMN_STATS_ACCURATE": '{"BASIC_STATS":"true"}'}) == 0
+    assert D.hive_rows({"numRows": "1200"}) == 1200
