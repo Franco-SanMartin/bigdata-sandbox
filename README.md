@@ -53,17 +53,32 @@ La versión se elige con el *tag*, lo que va después de los dos puntos:
 |---|---|---|
 | `latest` = `base` | **Publicada. La de la materia** | Ubuntu 24.04 + Hadoop, Hive, Spark, Pig, Sqoop, MySQL, ZooKeeper y MongoDB. Es la de las guías |
 | `ml` | Publicada | `base` + Python para datos (pandas, numpy, scikit-learn, matplotlib, pymongo) y JupyterLab, para ETL y machine learning |
-| `full` | En preparación, no publicada | `ml` + una interfaz web para manejar y mirar el cluster desde el navegador |
+| `full` | Publicada | `ml` + una interfaz web en el puerto 8080 para prender, configurar y mirar el cluster desde el navegador ([abajo](#la-versión-full)) |
 | `empresa` | En desarrollo | Un cluster repartido entre varias compus por red, con seguridad, ingesta en tiempo real y métricas |
 
-- Las guías y el mapa son de `base`. Con `ml` valen igual (es `base` con
-  agregados); `full` y `empresa` van a tener su propia documentación cuando se
-  publiquen.
-- Las dos publicadas sirven para Intel/AMD (amd64) y ARM (Mac M1–M4): Docker
-  baja sola la que corresponde.
+- Las guías y el mapa son de `base`. Con `ml` y `full` valen igual (son `base`
+  con agregados); `empresa` va a tener su propia documentación cuando se
+  publique.
+- Las publicadas sirven para Intel/AMD (amd64) y ARM (Mac M1–M4): Docker baja
+  sola la que corresponde.
 - Hasta octubre de 2026, `latest` era una imagen anterior sobre Ubuntu 20.04,
   sin MongoDB. Si la tenés, ver
   [Venís de la imagen anterior](guias/11-problemas.md#venís-de-la-imagen-anterior).
+
+### La versión `full`
+
+```bash
+docker run -d --name bigdata-full --stop-timeout 20 \
+  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop \
+  franki678/bigdata-sandbox:full
+```
+
+Abrís http://localhost:8080. El contenedor arranca solo la interfaz: el
+cluster se elige y se prende desde ahí (*Iniciar*). Con `-e AUTOSTART=1`
+arranca solo, con las variables de siempre (`DATANODES`, `REPLICATION`,
+`SERVICIOS`...). Para entrar a las páginas web de cada servicio, agregá sus
+puertos como en el [arranque rápido](#arranque-rápido). Detalle del servidor y
+su API en [server/README.md](server/README.md).
 
 ### Qué hay en `base`
 
