@@ -750,7 +750,8 @@ def main() -> int:
             _, acts = pedir("GET", "/api/activity?limit=500")
             guardar("activity", acts)
             c.detalle = f"{len(acts)} entradas"
-        apagar("todo")
+        if os.environ.get("HUMO_DEJAR_PRENDIDO") != "1":    # humo_ui.py sigue con el cluster prendido
+            apagar("todo")
     except Exception:
         traceback.print_exc()
         RESULTADOS.append({"nombre": "el humo se cortó", "ok": False, "segundos": 0, "detalle": "",
