@@ -186,9 +186,11 @@ export class DemoHdfs {
     files.forEach(f => f.blocks.forEach(b => {
       const k = b.locations.length;
       if (!k) { missing++; return; }
-      if (k < f.replication) { under++; for (let i = k; i < Math.min(f.replication, live); i++) tasks.push({ block: b.name, file: f.path, kind: 'copy', from: b.locations[0], state: this.e.replicating() ? 'running' : 'pending' }); }
+      if (k < f.replication) { under++; for (let i = k; i < Math.min(f.replication, live); i++) tasks.push({ block: b.name, file: f.path, kind: 'copy', from: b.locations[0], state: 'pending' }); }
       if (k > f.replication) { over++; tasks.push({ block: b.name, file: f.path, kind: 'delete', from: b.locations[b.locations.length - 1], state: 'pending' }); }
     }));
+    // El NameNode copia de a pocos bloques por latido: el primero va copiando, el resto espera en la cola
+    if (this.e.replicating()) tasks.filter(t => t.kind === 'copy').slice(0, 2).forEach(t => { t.state = 'running'; });
     const now = this.e.now();
     return {
       underReplicated: under, missing, overReplicated: over, pending: tasks.length,
