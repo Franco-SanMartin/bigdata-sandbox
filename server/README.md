@@ -157,6 +157,79 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `POST /api/yarn/apps/{id}/kill` | → 204 | `yarn application -kill <id>` |
 | `GET /api/yarn/apps/{id}/logs?container=` | `AppLogs` | Corriendo: NM `:8042/ws/v1/node/containerlogs`. Terminado: `yarn logs -applicationId … -containerId … -size -65536` (los agregados) |
 
+### Pipeline
+
+Seis etapas (ingesta, ETL, almacén, análisis, ML y resultados). Cada paso es
+una acción del `ActionRunner`, y corre uno por vez.
+
+| Método y ruta | Qué hace | Respuesta |
+|---|---|---|
+| `GET /api/pipeline/catalog` | Las etapas con sus herramientas: `input`/`output`, opciones con `min`/`max`, `available` y `unavailableReason` | 200 `PipelineStageInfo[]` |
+| `GET /api/pipeline` | El último paso de cada etapa | 200 `PipelineState` |
+| `POST /api/pipeline/steps` | `{stage, tool, options}` → corre el paso (también `POST /api/pipeline/step`) | 202 `{id}` |
+| `GET /api/pipeline/steps` | El historial, el más nuevo primero | 200 `PipelineStep[]` |
+| `POST /api/pipeline/reset` | Vacía el historial (no borra nada de HDFS) | 204 |
+
+Errores del paso: `invalid` (falta la etapa anterior u opción fuera de rango),
+`cluster_stopped`, `busy` (ya corre otro paso), `unsupported` (la herramienta
+no está en esta configuración o en la imagen) y `failed` (en el paso, con la
+última línea del motor).
+
+Qué corre cada herramienta:
+
+| Etapa | Herramienta | Comando |
+|---|---|---|
+| ingesta | `put` | `hdfs dfs -put -f /datos/ventas_sucias.csv /user/root/ml/` |
+| ingesta | `sqoop` | `sqoop import … --table ventas -m N --target-dir /user/root/tienda/ventas` |
+| ETL | `pandas` | `python3 ejemplos/ml/etl_pandas.py` + `hdfs dfs -put` del Parquet |
+| ETL | `pyspark` | `spark-submit --master yarn ejemplos/ml/etl_spark.py` |
+| ETL | `pig`, `hive` | no disponibles: la imagen no trae un script de ETL para `ventas_sucias` |
+| almacén | `hivetab` | `beeline -e "CREATE EXTERNAL TABLE … STORED AS PARQUET LOCATION …"` |
+| almacén | `parquet` | `hdfs dfs -ls /user/root/ml/ventas_limpias` |
+| análisis | `hive` / `sparksql` / `pandas` | `INSERT OVERWRITE DIRECTORY /user/root/resultados/por_<campo> … GROUP BY <campo>` con beeline, `spark-sql` o `jobs/resumen_pandas.py` |
+| ML | `sklearn` / `mllib` | lo mismo que `POST /api/ml/train` con el modelo del pipeline; el paso deja `modelId` |
+| resultados | `getmerge` | `hdfs dfs -getmerge /user/root/resultados/por_<campo> por_<campo>.csv` |
+| resultados | `mysql` | `sqoop export … --table resumen_<campo> --export-dir … -m 1` (crea la tabla antes con `mysql`) |
+
+Sqoop recibe el usuario y la clave por variables de entorno de la acción
+(`SQOOP_USER`, `SQOOP_PASS`): el comando que se ve en la consola no trae la
+clave.
+
+### Datos
+
+| Método y ruta | Qué hace | De dónde sale |
+|---|---|---|
+| `GET /api/data/catalog` | `DataTable[]` de Hive, MySQL y MongoDB (las fuentes apagadas no aparecen). Se cachea 20 s y el pipeline lo invalida | `beeline` (`SHOW DATABASES`/`TABLES`, `DESCRIBE FORMATTED`), `mysql` (`information_schema`) y `mongosh` (muestra de documentos) |
+| `GET /api/data/schema?source=&name=` | `TableSchema`: columnas, DDL, índices, formato, tamaño y una muestra | Lo mismo, más `SHOW CREATE TABLE`, `SHOW INDEX` y el tamaño (`totalSize` de Hive o WebHDFS `GETCONTENTSUMMARY`) |
+| `POST /api/data/query` | `{source, text}` → `QueryResult` (hasta 1000 filas). En Hive, si lanzó un trabajo Tez, trae `appId` | `beeline --outputformat=tsv2`, `mysql --batch`, `mongosh --quiet --eval` |
+| `POST /api/data/explain` | `{source, text}` → `QueryPlan` con nodos y `raw` | `EXPLAIN` en Hive y en MySQL, `.explain("executionStats")` en MongoDB |
+| `GET /api/data/examples` | Consultas de ejemplo de cada fuente | `ejemplos/` de la imagen |
+
+Una consulta que falla da `failed` con la última línea de error del motor
+(`FAILED: SemanticException …`, `ERROR 1146 …`, `SyntaxError: …`). En MongoDB,
+una colección que no existe devuelve cero documentos, como el shell.
+
+### Machine Learning
+
+| Método y ruta | Qué hace | Respuesta |
+|---|---|---|
+| `GET /api/ml/datasets` | `clientes_senal.csv` con filas, columnas, muestra y objetivos | 200 `MlDataset[]` |
+| `POST /api/ml/recommend` | `{dataset, task}` → modelos y motores recomendados, con lo esperado | 200 `MlRecommendation` |
+| `POST /api/ml/train` | `{dataset, task, model, engine, trainPct, target?, features?, params?}` → entrena | 202 `{id}` |
+| `GET /api/ml/models` | Los modelos entrenados, el más nuevo primero | 200 `MlRun[]` |
+
+`train` corre un job de `sandbox_server/jobs/`: `python3 entrenar_sklearn.py
+clientes_senal.csv …` (scikit-learn) o `spark-submit --master yarn
+entrenar_spark.py hdfs:///user/root/ml/clientes_senal.csv …` (MLlib, que sube el
+CSV a HDFS si no está). Si el CSV no existe, lo genera con
+`ejemplos/ml/generar_senal.py`. El job imprime su avance (`== mensaje|0.4`) y
+al final una línea `@@resultado@@ {json}` con métricas, matriz de confusión y
+predicciones. Los modelos son medidos (`reference: false`).
+
+Valida `target` (el del problema; clustering no lleva), `features` (columnas
+de entrada, sin el objetivo ni `segmento_real`) y `params` según el modelo, y
+devuelve todo con los valores por defecto aplicados.
+
 ### Eventos SSE
 
 | Evento | Cuándo |
@@ -167,6 +240,8 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `hdfs` | `{path}`: se subió, borró o terminó de escribir algo en esa carpeta |
 | `yarn` | `{appId}`: una aplicación cambió de estado, de avance o de contenedores |
 | `action` | Línea de salida (`{id, t, stream, text}`) o cambio de estado (`{id, state, ...}`) de una acción |
+| `step` | `{step}`: un paso del pipeline arrancó, avanzó o terminó |
+| `model` | `{run}`: un entrenamiento arrancó, avanzó (`progress`, `message`, `appId`) o terminó |
 
 ### Errores
 
@@ -236,6 +311,7 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 | `SANDBOX_DATOS` | `/datos` | Donde están los ejemplos (`ejemplos/`, `ventas_grandes.csv`...) |
 | `SANDBOX_UPLOADS` | `$TMPDIR/sandbox-subidas` | Carpeta temporal de las subidas desde la compu |
 | `SANDBOX_MAX_UPLOAD_MB` | `2048` | Tamaño máximo de una subida |
+| `SANDBOX_SQOOP_USER` / `SANDBOX_SQOOP_PASS` | los de `ejemplos/sqoop.sh` | Usuario y clave de MySQL para `sqoop import`/`export`. Le llegan a sqoop por variables de entorno, no en el comando que se muestra |
 
 Si el contenedor se apaga con `docker stop`, conviene darle 20 s
 (`stop_grace_period: 20s` en el compose, `docker stop -t 20`). Al salir, el
@@ -262,6 +338,14 @@ en el `PATH` que anotan lo que les piden, y WebHDFS/YARN por un `http` que
 contesta con las fixtures. El CI (`.github/workflows/server.yml`) corre lo mismo
 con Python 3.12 en cada push a `full` o `main` que toque `server/`.
 
+Pipeline, Datos y ML usan `tests/falsos.py`: `hdfs dfs`, `beeline`, `mysql`,
+`mongosh`, `sqoop`, `spark-submit` y `spark-sql` falsos que guardan su estado
+en una carpeta (HDFS, tablas de Hive y de MySQL, colecciones de MongoDB). Con
+eso el pipeline completo corre de punta a punta. Los errores tienen el formato
+de cada motor, y con `FALSO_FALLA=<comando>` ese comando falla. Los jobs
+reales de entrenamiento se prueban con scikit-learn de verdad solo si está
+instalado (`test_job_real_confusion_y_predicciones`; en el CI se saltea).
+
 `tests/fixtures/ui_cluster.json` tiene casos calculados con el `cluster.ts` de
 la interfaz. Así la validación, la estimación de memoria y el compose del
 servidor dan lo mismo que el modo demo.
@@ -284,6 +368,29 @@ docker run -d --name humo -p 8080:8080 franki678/bigdata-sandbox:full
 SANDBOX_HUMO=1 python3 server/tests/humo/test_humo.py
 ```
 
+Lo que el humo todavía no cubre y tiene que cubrir para Pipeline, Datos y ML,
+con todos los servicios prendidos (el perfil de `:ml` más MySQL, MongoDB y
+HiveServer2):
+
+- **Pipeline completo:** `put` → `pyspark` → `hivetab` → `hive` (por
+  producto) → `sklearn` (clasificación) → `mysql` (sqoop export), esperando
+  cada paso por el evento `step` hasta `done`. Al final:
+  `/user/root/resultados/por_producto` en HDFS, `tienda.resumen_producto` con
+  filas en MySQL y el `modelId` en `GET /api/ml/models`.
+- **Las variantes:** `sqoop` import (que la clave llegue por
+  `SANDBOX_SQOOP_USER`/`SANDBOX_SQOOP_PASS`), `pandas` en ETL y análisis,
+  `sparksql`, `getmerge` y `mllib`.
+- **Datos:** el catálogo trae `default.ventas_limpias`, `tienda.ventas` y una
+  colección de MongoDB. Además, `schema` de cada una, una consulta con
+  `GROUP BY` en Hive que traiga `appId` (Tez), un `explain` de cada fuente y una
+  consulta con error de cada motor, para confirmar que la última línea que se
+  toma es la buena: los formatos de error de los falsos se copiaron a mano.
+- **ML:** `train` de cada motor con `target`, `features` y `params`, y comparar
+  la matriz de confusión con la de `ejemplos/ml/modelos_sklearn.py`. Con MLlib,
+  que el `appId` del evento `model` sea el de YARN.
+- **Tiempos:** cuánto tarda cada paso de verdad. Los falsos no dicen nada de
+  eso, y de ahí salen los tiempos máximos de cada acción.
+
 ## Qué falta
 
 - **Imagen.** Falta un target `full` en el `Dockerfile`, sobre `ml`:
@@ -293,7 +400,7 @@ SANDBOX_HUMO=1 python3 server/tests/humo/test_humo.py
   - `stop_grace_period: 20s` en el compose.
 - **Apagado.** Mover la función `apagar` del entrypoint a `sandbox/lib.sh`, así
   el servidor la llama en vez de repetir el orden.
-- **Endpoints que faltan:** Pipeline, catálogo de datos, consultas y ML, todos
-  sobre `ActionRunner`.
 - **Prueba de humo en el CI** contra la imagen `full` recién construida
-  (incluye los casos de HDFS).
+  (incluye los casos de HDFS y los de Pipeline, Datos y ML de arriba).
+- **Pig y Hive en el ETL:** quedan como no disponibles hasta que la imagen
+  traiga un `etl.pig` y un `etl.hql` para `ventas_sucias.csv`.
