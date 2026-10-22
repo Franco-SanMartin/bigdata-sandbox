@@ -22,6 +22,7 @@ import sys
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -37,6 +38,7 @@ SOLO_HDFS = hf.SOLO_HDFS
 
 RESULTADOS: list[dict] = []
 CONSOLA: list[dict] = []
+ESPERADOS: list[dict] = []   # 503 de la API con solo HDFS: el servicio está apagado a propósito
 ETAPA = {"nombre": "todo"}
 
 
@@ -92,6 +94,15 @@ def captura(page: Page, nombre: str) -> None:
     CAPTURAS.mkdir(parents=True, exist_ok=True)
     page.wait_for_timeout(600)          # que terminen las transiciones
     page.screenshot(path=str(CAPTURAS / f"{nombre}.png"), full_page=True)
+
+
+def es_esperado(e: dict) -> bool:
+    """Con solo HDFS, el navegador anota como error cada 503 de la API (YARN, Hive,
+    Spark... apagados). Es la respuesta esperada (service_down): no cuenta, pero
+    solo ese caso; un 503 de HDFS o de /api/status sí es un error."""
+    ruta = urllib.parse.urlparse(e["recurso"]).path
+    return (e["etapa"] == "solo-hdfs" and e["tipo"] == "console" and "status of 503" in e["texto"]
+            and ruta.startswith("/api/") and not ruta.startswith(("/api/hdfs", "/api/status", "/api/cluster")))
 
 
 def ir(page: Page, pantalla: str) -> None:
@@ -184,9 +195,14 @@ def todo(page: Page) -> None:
 
 
 def solo_hdfs(page: Page) -> None:
+    # La página se va a about:blank mientras se apaga y se arranca: si no, sus pedidos de
+    # fondo dan 409/503 y Playwright los entrega recién en la primera pantalla siguiente.
+    page.goto("about:blank")
     # Los mismos chequeos de apagado y arranque que humo_full.py (sin procesos colgados)
     hf.apagar("todo, después de la interfaz")
     hf.arrancar(SOLO_HDFS, "solo HDFS para la interfaz")
+    page.wait_for_timeout(500)
+    ETAPA["nombre"] = "solo-hdfs"
     RESULTADOS.extend(hf.RESULTADOS)
     hf.RESULTADOS.clear()
     recorrer(page, "solo-hdfs")
@@ -200,7 +216,8 @@ def solo_hdfs(page: Page) -> None:
 
 def resumen() -> int:
     SALIDAS.mkdir(parents=True, exist_ok=True)
-    (SALIDAS / "resumen-ui.json").write_text(json.dumps({"chequeos": RESULTADOS, "consola": CONSOLA}, indent=2,
+    (SALIDAS / "resumen-ui.json").write_text(json.dumps({"chequeos": RESULTADOS, "consola": CONSOLA,
+                                                        "esperados": ESPERADOS}, indent=2,
                                                         ensure_ascii=False) + "\n")
     malos = [r for r in RESULTADOS if not r["ok"]]
     L = [f"## Humo de la interfaz: {len(RESULTADOS) - len(malos)} de {len(RESULTADOS)} bien", "",
@@ -208,7 +225,9 @@ def resumen() -> int:
     for r in RESULTADOS:
         det = (r["detalle"] + (" — " + r["error"] if r["error"] else "")).replace("|", "/").replace("\n", " ")
         L.append(f"| {'✅' if r['ok'] else '❌'} | {r['nombre']} | {r['segundos']} | {det[:700]} |")
-    L += ["", f"Errores de consola en total: {len(CONSOLA)}", ""]
+    L += ["", f"Errores de consola en total: {len(CONSOLA)}",
+          f"503 esperados con solo HDFS (no cuentan): {len(ESPERADOS)} en "
+          f"{sorted({e['recurso'] for e in ESPERADOS})}", ""]
     (SALIDAS / "resumen-ui.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
     return 1 if malos else 0
@@ -221,12 +240,13 @@ def main() -> int:
             nav = pw.chromium.launch()
             page = nav.new_page(viewport={"width": 1440, "height": 900}, locale="es-AR")
 
-            def anotar(tipo, texto, donde=""):
-                CONSOLA.append({"etapa": ETAPA["nombre"], "tipo": tipo, "texto": texto[:500], "donde": donde})
-            page.on("console", lambda m: m.type == "error" and anotar("console", m.text, page.url))
+            def anotar(tipo, texto, donde="", recurso=""):
+                e = {"etapa": ETAPA["nombre"], "tipo": tipo, "texto": texto[:500], "donde": donde, "recurso": recurso}
+                (ESPERADOS if es_esperado(e) else CONSOLA).append(e)
+            page.on("console", lambda m: m.type == "error" and anotar(
+                "console", m.text, page.url, (m.location or {}).get("url", "")))
             page.on("pageerror", lambda e: anotar("pageerror", str(e), page.url))
             todo(page)
-            ETAPA["nombre"] = "solo-hdfs"
             solo_hdfs(page)
             nav.close()
     except Exception:
