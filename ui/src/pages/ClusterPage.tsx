@@ -5,8 +5,7 @@ import type { ClusterStatus, DataNode, Process } from '../api/types';
 import { useSnapshot } from '../state/store';
 import { composeOpen, consoleFilter, consoleOpen, navigate } from '../state/ui';
 import { applyConfig, processAction, startCluster, stopCluster } from '../state/actions';
-import { ArchitectureMap } from '../widgets/ArchitectureMap';
-import { ArchitecturePreview } from '../widgets/ArchitecturePreview';
+import { Mimic, MimicLegend } from '../widgets/Mimic';
 import { BootView } from '../widgets/BootView';
 import { ActivityList } from '../shell/ConsoleDrawer';
 import { DataTable, type Column } from '../components/DataTable';
@@ -63,7 +62,7 @@ function Stopped({ s }: { s: ClusterStatus }) {
     <div className="grid cols-12">
       <section className="panel span-7" aria-labelledby="h-arch">
         <div className="panel-h"><h2 id="h-arch">Arquitectura</h2><span className="sub">lo que va a levantar esta configuración</span></div>
-        <div className="panel-b"><ArchitecturePreview config={s.config} /></div>
+        <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><MimicLegend /><Mimic config={s.config} /></div>
       </section>
       <div className="span-5" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <section className="panel" aria-labelledby="h-cfg">
@@ -86,6 +85,7 @@ function Stopped({ s }: { s: ClusterStatus }) {
 
 /* ---------- Arrancando ---------- */
 function Starting({ s }: { s: ClusterStatus }) {
+  const snap = useSnapshot();
   return (
     <div className="grid cols-12">
       <section className="panel span-7" aria-labelledby="h-boot">
@@ -94,7 +94,7 @@ function Starting({ s }: { s: ClusterStatus }) {
       </section>
       <section className="panel span-5" aria-labelledby="h-arch2">
         <div className="panel-h"><h2 id="h-arch2">Arquitectura</h2><span className="sub">se prende cada proceso cuando responde</span></div>
-        <div className="panel-b"><ArchitectureMap processes={s.processes} /></div>
+        <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><MimicLegend /><Mimic config={s.config} processes={s.processes} dataNodes={snap.dataNodes} files={snap.files} now={s.now} /></div>
       </section>
     </div>
   );
@@ -138,7 +138,7 @@ function Running({ s, dataNodes }: { s: ClusterStatus; dataNodes: DataNode[] }) 
       <div className="grid cols-12">
         <section className="panel span-8" aria-labelledby="h-arch3">
           <div className="panel-h"><h2 id="h-arch3">Arquitectura</h2><span className="sub">elegí un proceso para ver su detalle</span></div>
-          <div className="panel-b"><ArchitectureMap processes={procs} dataNodes={dataNodes} selected={selected?.id} onSelect={setSel} now={s.now} /></div>
+          <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><MimicLegend /><Mimic config={s.config} processes={procs} dataNodes={dataNodes} files={snap.files} selected={selected?.id} onSelect={setSel} now={s.now} /></div>
         </section>
         <section className="panel span-4" aria-labelledby="h-det">
           <div className="panel-h"><h2 id="h-det">Detalle</h2></div>
