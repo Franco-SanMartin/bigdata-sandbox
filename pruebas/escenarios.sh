@@ -7,7 +7,10 @@
 #   bash pruebas/escenarios.sh <escenario>      (sin argumento: los lista)
 #   IMAGEN=franki678/bigdata-sandbox:ml bash pruebas/escenarios.sh ml
 # En Windows, desde Git Bash: MSYS_NO_PATHCONV=1 bash pruebas/escenarios.sh ...
-# GitHub Actions la corre con la imagen publicada (workflow "Escenarios").
+# GitHub Actions la corre con la imagen recien armada, antes de publicarla
+# (workflow "Imagen"), y a mano con una ya publicada (workflow "Escenarios").
+# Con MEDIDAS=<archivo>, anota ahi la RAM en reposo y en el pico de los
+# trabajos (una fila de tabla por medicion).
 set -eu   # sin pipefail: 'docker logs | grep -q' cortaria el pipe y daria error
 cd "$(dirname "$0")/.."
 
@@ -25,6 +28,7 @@ VERSION=$(docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$
 
 paso()  { echo; echo "=== $* ==="; }
 falla() { echo "FALLA: $*" >&2; docker logs --tail 80 "$C" 2>&1 || true; exit 1; }
+[ -n "${MEDIDAS:-}" ] && MEDIDAS=$(realpath "$MEDIDAS")   # el script cambia de carpeta
 en()    { docker exec "$C" bash -c "$1"; }
 
 limpiar() { docker rm -f "$C" > /dev/null 2>&1 || true; docker volume rm -f "$V" > /dev/null 2>&1 || true; }
@@ -91,6 +95,48 @@ apagar_bien() { # docker stop: tiene que apagar todo en orden antes de que Docke
     tail -1 "$T"/mongod.log
     tail -5 "$T"/mongod.log | grep -q '"Shutting down","attr":{"exitCode":0}' || falla "MongoDB no se apago en orden"
   fi
+  if archivo_de /var/log/jupyter.log > "$T"/jupyter.log 2> /dev/null; then
+    grep -q 'received signal 15, stopping' "$T"/jupyter.log || { tail -5 "$T"/jupyter.log; falla "JupyterLab no se apago en orden"; }
+  fi
+}
+
+# RAM que usa el contenedor (lo mismo que muestra docker stats), en MiB
+ram() {
+  docker stats --no-stream --format '{{.MemUsage}}' "$C" | awk '{
+    v = $1; u = v; sub(/^[0-9.]+/, "", u); sub(/[A-Za-z]+$/, "", v)
+    f = (u == "GiB") ? 1024 : (u == "MiB") ? 1 : (u == "KiB") ? 1 / 1024 : 1 / 1048576
+    printf "%d\n", v * f }'
+}
+gb() { awk -v m="$1" 'BEGIN { s = sprintf("%.1f GB", m / 1024); sub(/\./, ",", s); print s }'; }
+
+medir_desde() { # $1=que se mide. Reposo: 30 s despues de LISTO; despues anota la RAM cada pocos segundos hasta medir_hasta
+  MIDE=$1
+  sleep 30
+  REPOSO=$(ram)
+  : > "$T/ram"
+  ( while [ -f "$T/ram" ]; do ram >> "$T/ram" 2> /dev/null || true; sleep 1; done ) &
+  MUESTREO=$!
+}
+medir_hasta() {
+  local pico
+  pico=$(sort -n "$T/ram" | tail -1); rm -f "$T/ram"; wait "$MUESTREO" 2> /dev/null || true
+  echo "RAM ($MIDE): en reposo $(gb "$REPOSO"), pico con trabajos $(gb "$pico")"
+  if [ -n "${MEDIDAS:-}" ]; then
+    echo "| $MIDE | $(gb "$REPOSO") | $(gb "$pico") |" >> "$MEDIDAS"
+  fi
+}
+
+# La imagen de antes de las versiones (Ubuntu 20.04, MariaDB 10.3): desde que
+# latest es la base, quedo como :ubuntu20. Si todavia no existe, latest.
+imagen_anterior() {
+  local i
+  for i in ${IMAGEN_ANTERIOR:-franki678/bigdata-sandbox:ubuntu20 franki678/bigdata-sandbox:latest}; do
+    docker image inspect "$i" > /dev/null 2>&1 || docker pull -q "$i" > /dev/null 2>&1 || continue
+    if ! docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$i" | grep -q '^SANDBOX_VERSION='; then
+      echo "$i"; return 0
+    fi
+  done
+  falla "no encontre la imagen anterior (Ubuntu 20.04) ni como :ubuntu20 ni como :latest"
 }
 
 hive_sql() { en "beeline -u jdbc:hive2://localhost:10000 --silent=true --outputformat=csv2 -e \"$1\" 2>/dev/null"; }
@@ -99,7 +145,9 @@ hive_sql() { en "beeline -u jdbc:hive2://localhost:10000 --silent=true --outputf
 reinicio() {
   paso "Arranque + prueba completa"
   prender "${CHICO[@]}"; listo 1
+  medir_desde "${VERSION:-ubuntu20}, todo"
   probar
+  medir_hasta
   en "ls /datos" | grep -q derby.log && falla "quedo un derby.log en /datos"
 
   paso "docker stop / docker start"
@@ -169,6 +217,12 @@ servicios() {
     *) docker logs "$C" 2>&1 | grep -q 'no trae JupyterLab' || falla "no aviso que esta version no trae JupyterLab" ;;
   esac
   subir_ventas; leer_ok
+  # BLOCK_SIZE=1m es para HDFS: ls y df tienen que seguir mostrando como siempre
+  if [ -n "$VERSION" ]; then
+    [ "$(en 'ls -l /opt/sandbox/lib.sh' | awk '{print $5}')" = "$(en 'stat -c %s /opt/sandbox/lib.sh')" ] \
+      || falla "ls -l no muestra el tamano en bytes con BLOCK_SIZE=1m"
+    en "df /" | head -1 | grep -q '1K-blocks' || falla "df no muestra bloques de 1K con BLOCK_SIZE=1m"
+  fi
   en "pig -x local -param entrada=/datos/ejemplos/texto.txt /datos/ejemplos/wordcount.pig 2>/dev/null" \
     | grep -q '^(datos,3)$' || falla "pig -x local con SERVICIOS=hdfs"
 
@@ -287,8 +341,10 @@ mongodb() {
   [ -n "$VERSION" ] || falla "IMAGEN=$IMAGEN es de antes de las versiones: no trae MongoDB"
   paso "MONGODB=si con todo prendido: prueba completa y prueba de MongoDB"
   prender "${CHICO[@]}" -e MONGODB=si; listo 1
+  medir_desde "$VERSION, todo + MongoDB"
   probar
   probar probar_mongodb.sh
+  medir_hasta
   mongo 'db.propia.insertOne({hola: "mundo"})' > /dev/null
 
   paso "docker stop / docker start: MongoDB se apaga en orden y no se vuelve a cargar"
@@ -323,8 +379,10 @@ ml() { # IMAGEN tiene que ser la version ml
   paso "Version ml con MongoDB: prueba completa y prueba de ml"
   [ "$VERSION" = ml ] || falla "IMAGEN=$IMAGEN no es la version ml"
   prender "${CHICO[@]}" -e MONGODB=si; listo 1
+  medir_desde "ml, todo + MongoDB + JupyterLab"
   probar
   probar probar_ml.sh
+  medir_hasta
 
   paso "docker stop / docker start: JupyterLab vuelve a prender"
   apagar_bien
@@ -340,10 +398,13 @@ ml() { # IMAGEN tiene que ser la version ml
 # ---------------------------------------------------------------------------
 desde_latest() { # el volumen de un alumno que usaba la imagen de antes de las versiones
   [ -n "$VERSION" ] || falla "IMAGEN=$IMAGEN es la de antes de las versiones: no hay a que pasar"
-  local anterior=${IMAGEN_ANTERIOR:-franki678/bigdata-sandbox:latest}
-  paso "Volumen creado con $anterior (Ubuntu 20.04, MariaDB 10.3)"
-  docker image inspect "$anterior" > /dev/null 2>&1 || docker pull -q "$anterior"
+  local anterior
+  anterior=$(imagen_anterior)
+  paso "Volumen creado con $anterior (Ubuntu 20.04, MariaDB 10.3) + prueba completa"
   docker run -d --name "$C" -v "$V:/hadoop" "${CHICO[@]}" "$anterior" > /dev/null; listo 1
+  medir_desde "ubuntu20 (la anterior), todo"
+  probar
+  medir_hasta
   subir_ventas
   hive_sql "CREATE TABLE previa (x INT)" > /dev/null
   apagar_bien
@@ -366,10 +427,41 @@ desde_latest() { # el volumen de un alumno que usaba la imagen de antes de las v
 }
 
 # ---------------------------------------------------------------------------
+volumen_cortado() { # un volumen de la imagen anterior que se apago de golpe (sin docker stop)
+  [ -n "$VERSION" ] || falla "IMAGEN=$IMAGEN es la de antes de las versiones"
+  local anterior
+  anterior=$(imagen_anterior)
+  paso "Volumen creado con $anterior, cortado con docker kill mientras escribe en MySQL"
+  docker run -d --name "$C" -v "$V:/hadoop" -e SERVICIOS=mapreduce "$anterior" > /dev/null; listo 1
+  en "mysql tienda -e 'CREATE TABLE propia (x INT); INSERT INTO propia VALUES (1)'"
+  # Escrituras en curso al momento del corte: el registro de MySQL queda a medias
+  docker exec -d "$C" bash -c 'while true; do mysql tienda -e "INSERT INTO propia VALUES (2)"; done'
+  sleep 3; docker kill "$C" > /dev/null
+
+  paso "Con $IMAGEN: avisa con los pasos y el resto del cluster arranca igual"
+  prender -e SERVICIOS=mapreduce; listo 1
+  docker logs "$C" 2>&1 | grep -q 'MySQL NO ARRANCO' || falla "no aviso por que no arranca MySQL"
+  docker logs "$C" 2>&1 | sed -n '/MySQL NO ARRANCO/,/Sqoop no/p'
+  subir_ventas; leer_ok
+
+  paso "Los pasos del aviso: la anterior lo cierra bien y esta lo pone al dia"
+  docker rm -f "$C" > /dev/null
+  docker run -d --name "$C" -v "$V:/hadoop" -e SERVICIOS=mapreduce "$anterior" > /dev/null; listo 1
+  apagar_bien
+  prender -e SERVICIOS=mapreduce; listo 1
+  docker logs "$C" 2>&1 | grep -q 'MySQL NO ARRANCO' && falla "siguio sin arrancar MySQL"
+  en "mysql -N -B -e 'SELECT COUNT(*) FROM tienda.propia WHERE x = 1'" | grep -qx 1 \
+    || falla "se perdio lo que se escribio en MySQL antes del corte"
+  en "cat /hadoop/mysql/mysql_upgrade_info" | grep -q '^10\.11' || falla "no se pusieron al dia las tablas de MySQL"
+  leer_ok
+}
+
+# ---------------------------------------------------------------------------
 case "${1:-}" in
   reinicio|ha|servicios|parametros|corte|mongodb|ml) limpiar; "$1" ;;
   volumen-viejo) limpiar; volumen_viejo ;;
   desde-latest) limpiar; desde_latest ;;
-  *) echo "Uso: $0 reinicio|ha|servicios|parametros|volumen-viejo|corte|mongodb|ml|desde-latest"; exit 1 ;;
+  volumen-cortado) limpiar; volumen_cortado ;;
+  *) echo "Uso: $0 reinicio|ha|servicios|parametros|volumen-viejo|corte|mongodb|ml|desde-latest|volumen-cortado"; exit 1 ;;
 esac
 echo; echo "ESCENARIO $1: OK"

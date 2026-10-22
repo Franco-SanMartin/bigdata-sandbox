@@ -225,10 +225,16 @@ COPY entrypoint.sh             /opt/entrypoint.sh
 # quien baja la imagen ya armada y no tiene el repo. Los de ejemplos/ml
 # necesitan las librerias de la version ml: van recien ahi.
 COPY datos/ejemplos/           /opt/sandbox/ejemplos/
-# sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan
+# sed: si el repo se clono en Windows con saltos CRLF, los scripts no arrancan.
+# ls, df y du: BLOCK_SIZE (-e BLOCK_SIZE=1m) es el tamano de bloque de HDFS,
+# pero ls, df y du de Linux leen una variable con el mismo nombre y mostrarian
+# todo en MB. Estos tres (primeros en el PATH) la ignoran y llaman al original.
 RUN rm -rf /opt/sandbox/ejemplos/ml \
  && find /opt/entrypoint.sh /opt/sandbox/lib.sh /opt/sandbox/bin /opt/sandbox/ejemplos -type f \
       -exec sed -i 's/\r$//' {} + \
+ && for c in ls df du; do \
+      printf '#!/bin/sh\nunset BLOCK_SIZE\nexec /usr/bin/%s "$@"\n' "$c" > /opt/sandbox/bin/$c; \
+    done \
  && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* && mkdir -p /datos
 
 # HDFS: NameNodes 9870-9872, Secondary 9868, DataNodes 9901-9909, RPC 9000

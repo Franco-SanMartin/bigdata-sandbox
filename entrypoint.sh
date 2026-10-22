@@ -147,6 +147,21 @@ fi
 # 3b) MySQL con la base de ejemplo "tienda", para Sqoop (SERVICIOS=mapreduce o
 #     todo: Sqoop copia con trabajos MapReduce). Vive en el volumen.
 # ---------------------------------------------------------------------------
+mysql_cortado() {
+  log "MySQL NO ARRANCO: este volumen es de la imagen anterior (Ubuntu 20.04," \
+      "MariaDB 10.3) y la ultima vez se apago de golpe (sin 'docker stop')." \
+      "\n  El MariaDB de esta imagen (10.11) no puede abrir una base que quedo asi;" \
+      "primero la tiene que cerrar bien la imagen que la creo. No se pierde nada:" \
+      "\n    1. docker rm -f <contenedor>          (el volumen queda)" \
+      "\n    2. el mismo docker run de siempre (mismo -v ...:/hadoop), pero con la" \
+      "\n       imagen franki678/bigdata-sandbox:ubuntu20" \
+      "\n    3. cuando diga 'Cluster LISTO': docker stop -t 20 <contenedor>" \
+      "\n    4. docker rm <contenedor> y volver a crearlo con esta imagen: MySQL se" \
+      "\n       pone al dia solo." \
+      "\n  Si lo que habia en MySQL no importa: docker exec <contenedor> rm -rf /hadoop/mysql" \
+      "\n  y docker restart <contenedor>: se crea de cero con la base de ejemplo 'tienda'." \
+      "\n  Mientras tanto, todo lo demas (HDFS, YARN, Hive, Spark) anda; Sqoop no."
+}
 mysql_start() {
   # mysqld corre como el usuario 'mysql' (no como root): sus carpetas son de el
   mkdir -p /run/mysqld /var/log/mysql /hadoop/mysql
@@ -160,9 +175,22 @@ mysql_start() {
   fi
   log "Arrancando MySQL (base de ejemplo para Sqoop)..."
   mysqld > /dev/null 2>&1 &
-  local _
-  for _ in $(seq 1 60); do mysqladmin --silent ping > /dev/null 2>&1 && break; sleep 1; done
-  mysqladmin --silent ping > /dev/null 2>&1 || return 1
+  local pid=$! _
+  for _ in $(seq 1 60); do
+    mysqladmin --silent ping > /dev/null 2>&1 && break
+    kill -0 "$pid" 2> /dev/null || break   # mysqld ya se cerro: no esperar de mas
+    sleep 1
+  done
+  if ! mysqladmin --silent ping > /dev/null 2>&1; then
+    # Volumen de la imagen anterior (MariaDB 10.3) que se apago de golpe: el
+    # MariaDB de esta imagen no sabe terminar lo que quedo a medias en ese
+    # formato viejo. No hay arreglo automatico seguro: lo tiene que cerrar
+    # bien el MariaDB que lo creo (la imagen :ubuntu20).
+    if grep -q 'Upgrade after a crash is not supported' /var/log/mysql/error.log 2> /dev/null; then
+      mysql_cortado
+    fi
+    return 1
+  fi
   # Pone al dia las tablas internas de MySQL si la base la creo un MariaDB mas
   # viejo (el volumen de la imagen anterior, con Ubuntu 20.04, trae la 10.3).
   # Tarda ~10 s una sola vez; despues ve que ya esta al dia y no hace nada.
@@ -306,11 +334,13 @@ apagar() {
   #    arriba: con HDFS ya apagado, HiveServer2 se queda reintentando
   #    conectarse a los NameNodes y no termina. A la vez, las bases de datos,
   #    que no dependen de nada (mysqld: en MariaDB 10.5 o mas nuevo se llama
-  #    mariadbd).
+  #    mariadbd), y JupyterLab (que cierra sus notebooks abiertos).
   local usan_hdfs='org.apache.hive.service.server.HiveServer2|hive.metastore.HiveMetaStore|spark.deploy.history.HistoryServer'
+  local jupyter='/jupyter-lab|jupyter lab'
   local _
   pkill -TERM -f "$usan_hdfs" || true
   pkill -TERM -x 'mysqld|mariadbd|mongod' || true
+  pkill -TERM -f "$jupyter" || true
   for _ in $(seq 1 10); do
     pgrep -f "$usan_hdfs" > /dev/null || break
     sleep 0.25
@@ -318,7 +348,7 @@ apagar() {
   # 2. El resto: YARN, HDFS y ZooKeeper
   pkill -TERM -x java || true
   for _ in $(seq 1 32); do
-    pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || break
+    pgrep -x 'java|mysqld|mariadbd|mongod' > /dev/null || pgrep -f "$jupyter" > /dev/null || break
     sleep 0.25
   done
   exit 0
