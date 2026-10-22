@@ -1,10 +1,10 @@
 /* Paleta de comandos (Ctrl+K): ir a cualquier pantalla o ejecutar una acción. */
 import { Command } from 'cmdk';
 import { Dialog } from 'radix-ui';
-import { ExternalLink, FileCode2, Play, Plus, Power, RotateCcw, Rows3, SquareTerminal, Upload, CircleHelp, Zap } from 'lucide-react';
+import { Brain, ExternalLink, FileCode2, Play, Plus, Power, RotateCcw, Rows3, SquareTerminal, Upload, CircleHelp, Zap } from 'lucide-react';
 import { composeOpen, consoleOpen, helpOpen, navigate, paletteOpen } from '../state/ui';
 import { useStatus } from '../state/store';
-import { addDataNode, applyConfig, processAction, putExample, startCluster, stopCluster, submitExample } from '../state/actions';
+import { addDataNode, applyConfig, pipelineReset, processAction, putExample, startCluster, stopCluster, submitExample, trainModel } from '../state/actions';
 import { NAV } from './nav';
 
 export function CommandPalette() {
@@ -43,9 +43,15 @@ export function CommandPalette() {
               {running && <Command.Group heading="Datos y trabajos">
                 <Command.Item value="subir ventas_grandes.csv hdfs put" onSelect={run(() => putExample('ventas'))}><Upload size={15} />Subir ventas_grandes.csv a HDFS</Command.Item>
                 <Command.Item value="subir numeros.txt hdfs put" onSelect={run(() => putExample('numeros'))}><Upload size={15} />Subir numeros.txt a HDFS</Command.Item>
+                <Command.Item value="subir ventas_sucias.csv hdfs put pipeline" onSelect={run(() => putExample('sucias'))}><Upload size={15} />Subir ventas_sucias.csv a HDFS</Command.Item>
                 {yarn && <Command.Item value="lanzar mapreduce ventas" onSelect={run(() => submitExample('mr-ventas'))}><Rows3 size={15} />Lanzar MapReduce: ventas por producto</Command.Item>}
                 {todo && <Command.Item value="lanzar hive tez consulta" onSelect={run(() => submitExample('hive-ventas'))}><Rows3 size={15} />Lanzar consulta de Hive (Tez)</Command.Item>}
                 {todo && <Command.Item value="lanzar spark ventas.py" onSelect={run(() => submitExample('spark-ventas'))}><Rows3 size={15} />Lanzar ventas.py en Spark</Command.Item>}
+                <Command.Item value="revisar hdfs fsck bloques" onSelect={run(() => navigate('hdfs'))}><Rows3 size={15} />Revisar HDFS con fsck</Command.Item>
+                <Command.Item value="pipeline reiniciar volver a la primera etapa" onSelect={run(pipelineReset)}><RotateCcw size={15} />Reiniciar el pipeline</Command.Item>
+                {todo && <Command.Item value="entrenar regresion lineal scikit-learn ml" onSelect={run(() => trainModel({ task: 'regresion', model: 'lineal', engine: 'sklearn', trainPct: 80 }))}><Brain size={15} />Entrenar regresión lineal (scikit-learn)</Command.Item>}
+                {todo && <Command.Item value="entrenar arbol de decision clasificacion scikit-learn ml" onSelect={run(() => trainModel({ task: 'clasificacion', model: 'arbol', engine: 'sklearn', trainPct: 80 }))}><Brain size={15} />Entrenar árbol de decisión (scikit-learn)</Command.Item>}
+                {todo && <Command.Item value="entrenar kmeans clustering grupos scikit-learn ml" onSelect={run(() => trainModel({ task: 'clustering', model: 'kmeans', engine: 'sklearn', trainPct: 80 }))}><Brain size={15} />Agrupar clientes con KMeans (scikit-learn)</Command.Item>}
               </Command.Group>}
               {webs.length > 0 && <Command.Group heading="Páginas del cluster">
                 {webs.map(p => <Command.Item key={p.id} value={`abrir pagina ${p.name} ${p.webUrl}`} onSelect={run(() => window.open(p.webUrl, '_blank', 'noopener'))}><ExternalLink size={15} />{p.name}<span className="end">{p.webUrl!.replace('http://', '')}</span></Command.Item>)}

@@ -14,11 +14,52 @@ export const HELP: Record<PageId, Help> = {
       ['Arranque', 'La primera vez formatea HDFS y carga las bases de ejemplo (unos 2 minutos). Después solo levanta los procesos.'],
     ],
   },
-  hdfs: { intro: 'El sistema de archivos distribuido: archivos, bloques, réplicas y DataNodes. Llega en la próxima entrega.', terms: [['Bloque', 'HDFS corta cada archivo en bloques del tamaño de BLOCK_SIZE.'], ['Réplica', 'Cada bloque se guarda en tantos DataNodes como diga REPLICATION.']] },
-  yarn: { intro: 'La cola de YARN, la memoria por contenedor y el detalle de cada trabajo (DAG de Tez o de Spark). Llega en la próxima entrega.', terms: [['ApplicationMaster', 'El primer contenedor de cada trabajo: pide memoria y reparte las tareas.'], ['Contenedor', 'Un pedazo de memoria (múltiplo de 512 MB) donde corre una tarea.']] },
-  pipeline: { intro: 'De un CSV a un modelo: ingesta, ETL, almacenamiento, análisis, ML y resultados, eligiendo la herramienta en cada etapa. Llega en la próxima entrega.', terms: [['Motor', 'Pig corre sobre MapReduce, Hive sobre Tez, PySpark sobre Spark y pandas en una sola máquina.']] },
-  datos: { intro: 'Las tablas de Hive, la base tienda de MySQL y las colecciones de MongoDB, con consultas. Llega en la próxima entrega.', terms: [] },
-  ml: { intro: 'Entrenamiento y comparación de modelos con scikit-learn y Spark MLlib. Llega en la próxima entrega.', terms: [] },
+  hdfs: {
+    intro: 'El sistema de archivos distribuido. Navegá las carpetas, abrí un archivo para ver en qué bloques se cortó y en qué DataNodes está cada copia, subí o borrá archivos, corré fsck y mirá cómo el NameNode re-replica cuando apagás un DataNode.',
+    terms: [
+      ['Bloque', 'HDFS corta cada archivo en pedazos del tamaño de BLOCK_SIZE. El último puede ser más chico.'],
+      ['Réplica', 'Cada bloque se guarda en tantos DataNodes como diga REPLICATION, nunca dos copias en el mismo nodo.'],
+      ['Sub-replicado', 'Un bloque con menos copias de las pedidas: pasa cuando se cae un DataNode o hay menos nodos que REPLICATION.'],
+      ['fsck', 'hdfs fsck revisa todos los bloques y dice si falta alguno, si hay copias de menos o de más.'],
+      ['Re-replicación', 'Cuando el NameNode da por muerto a un DataNode (40 s sin latidos), copia sus bloques a otros nodos desde las copias que quedan.'],
+    ],
+  },
+  yarn: {
+    intro: 'Cómo YARN reparte los 4 GB y los 4 vcores del NodeManager entre los trabajos. Abrí un trabajo para ver su DAG (MapReduce, Tez o Spark), qué tarea leyó qué bloque, sus contadores y los logs de cada contenedor.',
+    terms: [
+      ['ApplicationMaster', 'El primer contenedor de cada trabajo: pide memoria y reparte las tareas.'],
+      ['Contenedor', 'Un pedazo de memoria (múltiplo de 512 MB) y un vcore, donde corre una tarea o un executor.'],
+      ['DAG', 'El grafo de etapas del trabajo. Una flecha es un shuffle: los datos se reparten por clave entre las tareas de la etapa siguiente.'],
+      ['Executor', 'En Spark, un contenedor que queda vivo todo el trabajo y corre muchas tareas.'],
+    ],
+  },
+  pipeline: {
+    intro: 'De ventas_sucias.csv a un resumen y un modelo: ingesta, ETL, almacenamiento, análisis, ML y resultados. En cada etapa elegís la herramienta y ves cuándo conviene; el riel de la derecha muestra en qué etapa estás, qué sigue y qué motor está trabajando.',
+    terms: [
+      ['Motor', 'Sqoop corre sobre MapReduce, Hive sobre Tez, PySpark sobre Spark y pandas o scikit-learn en una sola máquina.'],
+      ['ETL', 'Extraer, transformar y cargar: acá, pasar de 103.000 filas sucias a 97.200 limpias.'],
+      ['Parquet', 'Formato por columnas y comprimido: se lee solo lo que se usa.'],
+      ['Tabla externa', 'Hive anota dónde están los archivos y qué columnas tienen, sin moverlos. Borrar la tabla no borra los datos.'],
+    ],
+  },
+  datos: {
+    intro: 'Las tablas de Hive, la base tienda de MySQL y las colecciones de MongoDB: catálogo, esquema, consultas con resultado en tabla y el plan de cada consulta, con el motor que la resuelve.',
+    terms: [
+      ['Hive', 'SQL sobre archivos de HDFS. Si hay que agrupar o unir, lanza un trabajo Tez en YARN; un SELECT con LIMIT lo lee directo.'],
+      ['MySQL', 'Base relacional de una sola máquina: rápida para consultas chicas y con índices.'],
+      ['MongoDB', 'Base de documentos: cada pedido trae sus ítems adentro. Sin índice, recorre toda la colección (COLLSCAN).'],
+      ['Plan', 'Lo que el motor va a hacer para resolver la consulta: EXPLAIN en Hive y MySQL, explain() en MongoDB.'],
+    ],
+  },
+  ml: {
+    intro: 'Elegís qué querés predecir y te dice qué tipo de problema es y qué modelo conviene. Entrená con scikit-learn o Spark MLlib, separando datos para entrenar y para probar, y compará métricas, tiempo y memoria.',
+    terms: [
+      ['Regresión', 'Predecir un número (cuánto va a gastar). Se mide con R²: 1 es perfecto.'],
+      ['Clasificación', 'Predecir una categoría (si vuelve o no). Se mide con el porcentaje de aciertos.'],
+      ['Agrupamiento', 'Encontrar grupos sin decirle la respuesta (KMeans). Se compara con los grupos reales con el índice de Rand ajustado.'],
+      ['Entrenar y probar', 'El modelo aprende con una parte de las filas y se mide con las que no vio.'],
+    ],
+  },
   consola: { intro: 'Todo lo que pasó en el cluster, con el comando exacto, lo que entró, lo que hizo y lo que salió. También está abajo en cualquier pantalla con Ctrl+J.', terms: [['Mis acciones', 'Lo que hiciste vos desde la interfaz.'], ['Problemas', 'Avisos y errores: nodos caídos, bloques perdidos, procesos que no responden.']] },
   config: {
     intro: 'Los parámetros del contenedor (las variables de entorno del docker-compose.yml). Se guardan y se aplican reiniciando el cluster; los datos quedan en el volumen.',
@@ -34,5 +75,6 @@ export const HELP: Record<PageId, Help> = {
 
 export const SHORTCUTS: [string, string][] = [
   ['Buscar o ejecutar', 'Ctrl+K'], ['Consola', 'Ctrl+J'], ['Ayuda', '?'],
-  ['Ir a Cluster', 'G C'], ['Ir a HDFS', 'G H'], ['Ir a YARN', 'G Y'], ['Ir a Configuración', 'G S'], ['Ir a la Consola', 'G O'],
+  ['Ir a Cluster', 'G C'], ['Ir a HDFS', 'G H'], ['Ir a YARN', 'G Y'], ['Ir al Pipeline', 'G P'], ['Ir a Datos', 'G D'], ['Ir a Machine Learning', 'G M'],
+  ['Ir a la Consola', 'G O'], ['Ir a Configuración', 'G S'],
 ];

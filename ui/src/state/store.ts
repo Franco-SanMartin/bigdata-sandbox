@@ -1,7 +1,7 @@
 /* Estado del cluster en el navegador: una foto que se refresca con cada evento de la API. */
 import { useSyncExternalStore } from 'react';
 import { api } from '../api';
-import type { Activity, BlockTransfer, ClusterStatus, DataNode, HdfsFile, YarnApp } from '../api/types';
+import type { Activity, ApiEvent, BlockTransfer, ClusterStatus, DataNode, HdfsFile, YarnApp } from '../api/types';
 
 export interface Snapshot {
   status: ClusterStatus | null;
@@ -17,6 +17,7 @@ const subs = new Set<() => void>();
 const notify = () => subs.forEach(f => f());
 const transferSubs = new Set<(t: BlockTransfer) => void>();
 const activitySubs = new Set<(a: Activity) => void>();
+const eventSubs = new Set<(e: ApiEvent) => void>();
 
 let queued = false;
 function schedule() {
@@ -42,6 +43,7 @@ export async function startStore() {
   a.subscribe(ev => {
     if (ev.type === 'activity') { snap = { ...snap, activity: [ev.entry, ...snap.activity].slice(0, 400) }; activitySubs.forEach(f => f(ev.entry)); }
     if (ev.type === 'transfer') transferSubs.forEach(f => f(ev.transfer));
+    eventSubs.forEach(f => f(ev));
     schedule();
   });
   // Relojes, barras de progreso y, en vivo, por si se pierde un evento
@@ -55,3 +57,5 @@ export function useStatus(): ClusterStatus | null { return useSyncExternalStore(
 export const getSnapshot = () => snap;
 export function onTransfer(f: (t: BlockTransfer) => void) { transferSubs.add(f); return () => { transferSubs.delete(f); }; }
 export function onActivity(f: (a: Activity) => void) { activitySubs.add(f); return () => { activitySubs.delete(f); }; }
+/** Cualquier evento de la API (hdfs, yarn, step, model…), para las pantallas que piden sus propios datos */
+export function onEvent(f: (e: ApiEvent) => void) { eventSubs.add(f); return () => { eventSubs.delete(f); }; }

@@ -25,3 +25,6 @@ export function ago(now: number, t: number): string {
 }
 
 export const plural = (n: number, one: string, many = one + 's') => `${nf(n)} ${n === 1 ? one : many}`;
+
+/** Como mbLabel, pero los archivos chiquitos van en bytes (texto.txt pesa 138 bytes, no "0 MB") */
+export const sizeLabel = (mb: number) => (mb < 0.01 ? `${nf(Math.round(mb * 1048576))} bytes` : mbLabel(mb));
