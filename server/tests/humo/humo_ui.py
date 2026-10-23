@@ -13,7 +13,8 @@ de Spark. Después reinicia el cluster con solo HDFS y vuelve a pasar por las
 pantallas: YARN, Datos y ML tienen que avisar que su servicio no está. Al final
 apaga el cluster y recorre todo una vez más con la página abierta: apagado, la
 interfaz no pide lo que contesta 409 (cluster_stopped), así que la consola queda
-sin errores y la red sin ningún 409.
+sin errores y la red sin ningún 409. Por último lo vuelve a iniciar con el botón
+«Iniciar cluster» de la pantalla Cluster y lo apaga.
 
 Deja las capturas en HUMO_SALIDAS/capturas/*.png y el resultado en
 HUMO_SALIDAS/resumen-ui.md. Termina con código 1 si falló algún chequeo.
@@ -289,6 +290,35 @@ def apagado(page: Page) -> None:
         inicio_dice(page, c, "apagado")
         expect(page.locator(".hero").get_by_role("button", name="Iniciar cluster")).to_be_visible()
     extender("apagado", page)
+
+    with Chequeo("apagado: Iniciar desde la interfaz, en Cluster") as c:
+        n = len(CONSOLA)
+        ir(page, "cluster")
+        # La barra de arriba tiene los mismos botones: los de la cabecera de Cluster
+        cabecera = page.locator(".page-head")
+        boton = cabecera.get_by_role("button", name="Iniciar cluster", exact=True)
+        expect(boton).to_be_enabled(timeout=10_000)
+        boton.click()
+        t0 = time.time()
+
+        def listo():
+            s = hf.estado()
+            if s["phase"] == "stopped" and s.get("boot") and any(p["state"] == "failed" for p in s["boot"]["steps"]):
+                raise SystemExit(f"el arranque falló: {[p['name'] for p in s['boot']['steps'] if p['state'] == 'failed']}")
+            return s if s["phase"] == "running" else None
+        try:   # SystemExit: hf.esperar no lo toma como "todavía no"
+            s = hf.esperar(listo, hf.ARRANQUE, "running", 3)
+        except SystemExit as e:
+            raise AssertionError(str(e)) from None
+        expect(cabecera.get_by_role("button", name="Detener", exact=True)).to_be_visible(timeout=20_000)
+        captura(page, "apagado-iniciado-desde-la-interfaz")
+        c.detalle = f"{round(time.time() - t0, 1)} s; servicios: {s['config']['services']}"
+        assert all(p["state"] in ("done", "skipped") for p in s["boot"]["steps"])
+        assert not errores_desde(n), errores_desde(n)
+    page.goto("about:blank")
+    hf.apagar("después de iniciar desde la interfaz")
+    RESULTADOS.extend(hf.RESULTADOS)
+    hf.RESULTADOS.clear()
 
 
 def resumen() -> int:

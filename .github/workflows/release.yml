@@ -1,0 +1,60 @@
+# Release de una versión (vX.Y.Z) en GitHub, con el texto de su sección del
+# CHANGELOG.md (desde "## [X.Y.Z]" hasta el próximo "## [" o los links del
+# final). Lo firma el bot de Actions.
+#
+# Corre solo cuando pusheás un tag v*, o a mano desde main (pestaña Actions >
+# "Release" > "Run workflow") pasándole un tag que ya exista. Si el release
+# ya existe, le actualiza el texto. No mueve el tag ni toca los releases
+# 'imagen' y 'sonda-v1' (no son tags v*).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag ya existente (por ejemplo v1.0.0)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # para crear o editar el release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Sacar las notas del CHANGELOG
+        run: |
+          # Solo tags de versión: así nunca pisa 'imagen' ni 'sonda-v1'
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG no es un tag vX.Y.Z"; exit 1; }
+          version="${TAG#v}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { dentro = 1; next }
+            dentro && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            dentro { print }
+          ' CHANGELOG.md > notas.md
+          # Sin sección en el CHANGELOG no hay release
+          grep -q '[^[:space:]]' notas.md || { echo "::error::No hay sección [$version] en CHANGELOG.md"; exit 1; }
+          cat notas.md
+
+      - name: Crear o actualizar el release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file notas.md --latest
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notas.md --latest
+          fi
+          gh release view "$TAG" --json tagName,name,author,url
