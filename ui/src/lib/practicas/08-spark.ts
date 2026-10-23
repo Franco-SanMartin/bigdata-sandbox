@@ -2,6 +2,7 @@
 import { appCheck, appResult, submitTemplate, waitApp } from './comun';
 import { notThere } from './motor';
 import type { Practice } from './tipos';
+import { plural } from '../format';
 
 export const spark: Practice = {
   id: 'spark', guide: '08', guideFile: '08-spark.md',
@@ -45,12 +46,12 @@ export const spark: Practice = {
         const a = await c.api.app(c.vars.ventas);
         const v = a.dag.vertices;
         return {
-          summary: `${v.length} etapa(s), ${a.dag.edges.length} shuffle(s)`,
+          summary: `${plural(v.length, 'etapa')}, ${plural(a.dag.edges.length, 'shuffle')}`,
           out: { kind: 'table', columns: ['etapa', 'qué hace', 'tareas', 'entran', 'salen'], rows: v.map(x => [x.name, x.operators.join(' → '), `${x.tasksDone}/${x.tasks}`, x.recordsIn ?? '', x.recordsOut ?? '']) },
           vars: { dag: String(v.length) }, link: { label: 'Ver el DAG', page: 'yarn', arg: a.id },
         };
       },
-      verify: async c => (Number(c.vars.dag ?? 0) > 0 ? { ok: true, detail: `${c.vars.dag} etapa(s)` } : { ok: false, detail: 'Todavía no se miró el DAG' }),
+      verify: async c => (Number(c.vars.dag ?? 0) > 0 ? { ok: true, detail: plural(Number(c.vars.dag), 'etapa') } : { ok: false, detail: 'Todavía no se miró el DAG' }),
     },
   ],
 };

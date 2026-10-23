@@ -2,6 +2,7 @@
 import { appCheck, appResult, ensureExample, entry, fileCheck, lsOut, submitTemplate, waitApp } from './comun';
 import { notThere } from './motor';
 import type { Practice } from './tipos';
+import { plural } from '../format';
 
 const IN = '/user/root/texto.txt';
 const OUT = '/user/root/wc-out';
@@ -67,7 +68,7 @@ export const mapreduce: Practice = {
         } catch (e) {
           if (!notThere(e)) throw e;
         }
-        return { summary: `${l.entries.length} archivo(s) en ${OUT}`, out: text ? { kind: 'text', text: text.split('\n').slice(0, 20).join('\n') } : lsOut(l), link: { label: 'Ver en HDFS', page: 'hdfs', arg: OUT } };
+        return { summary: `${plural(l.entries.length, 'archivo')} en ${OUT}`, out: text ? { kind: 'text', text: text.split('\n').slice(0, 20).join('\n') } : lsOut(l), link: { label: 'Ver en HDFS', page: 'hdfs', arg: OUT } };
       },
       verify: async c => {
         const part = await entry(c, OUT, 'part-r-00000');

@@ -2,6 +2,7 @@
 import type { ClusterStatus } from '../../api/types';
 import { waitFor } from './motor';
 import type { Practice, StepCtx } from './tipos';
+import { plural } from '../format';
 
 const nns = (s: ClusterStatus) => s.processes.filter(p => p.kind === 'namenode');
 const active = (s: ClusterStatus) => nns(s).find(p => p.state === 'up' && p.role === 'active');
@@ -67,7 +68,7 @@ export const ha: Practice = {
       does: 'El cliente prueba los NameNodes de la lista hasta dar con el activo.', expect: 'Lista la carpeta como siempre',
       run: async c => {
         const l = await c.api.hdfsList('/user/root');
-        return { summary: `${l.entries.length} cosa(s) en /user/root: el cliente encontró al nuevo activo`, vars: { lsOk: '1' } };
+        return { summary: `${plural(l.entries.length, 'entrada')} en /user/root: el cliente encontró al nuevo activo`, vars: { lsOk: '1' } };
       },
       verify: async c => {
         await c.api.hdfsList('/user/root');

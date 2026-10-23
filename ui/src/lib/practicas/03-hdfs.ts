@@ -2,6 +2,7 @@
 import { notThere, waitFor } from './motor';
 import { VENTAS_DIR, VENTAS_FILE, dnUp, mbLabel, ensureExample, entry, fileCheck, lsOut, needDataNodes } from './comun';
 import type { Practice, StepCtx } from './tipos';
+import { plural } from '../format';
 
 const NAME = 'ventas_grandes.csv';
 
@@ -52,7 +53,7 @@ export const hdfsBasico: Practice = {
       does: 'Le pregunta al NameNode qué hay: nombre, tamaño y réplica de cada archivo.', expect: `Aparece ${NAME} con su réplica`,
       run: async c => {
         const l = await c.api.hdfsList(VENTAS_DIR);
-        return { summary: `${l.entries.length} cosa(s) en ${VENTAS_DIR}`, out: lsOut(l), link: { label: 'Ver en HDFS', page: 'hdfs', arg: VENTAS_DIR } };
+        return { summary: `${plural(l.entries.length, 'entrada')} en ${VENTAS_DIR}`, out: lsOut(l), link: { label: 'Ver en HDFS', page: 'hdfs', arg: VENTAS_DIR } };
       },
       verify: c => fileCheck(c, VENTAS_DIR, NAME),
     },
@@ -81,14 +82,14 @@ export const hdfsBasico: Practice = {
         await waitFor(c, () => entry(c, VENTAS_DIR, NAME), e => e?.replication === 3, { seconds: 30, every: 1500, what: 'Esperando a que el NameNode anote la réplica 3…' });
         const s = await c.status();
         const live = dnUp(s);
-        return { summary: live >= 3 ? 'Réplica 3: el NameNode copia lo que falta' : `Réplica 3 con ${live} DataNode(s) vivo(s): cada bloque queda con ${live} copia(s), sub-replicado`, link: { label: 'Ver los bloques', page: 'hdfs', arg: VENTAS_FILE } };
+        return { summary: live >= 3 ? 'Réplica 3: el NameNode copia lo que falta' : `Réplica 3 con ${plural(live, 'DataNode vivo', 'DataNodes vivos')}: cada bloque queda con ${plural(live, 'copia')}, sub-replicado`, link: { label: 'Ver los bloques', page: 'hdfs', arg: VENTAS_FILE } };
       },
       verify: async c => {
         const e = await entry(c, VENTAS_DIR, NAME);
         if (e?.replication !== 3) return { ok: false, detail: `La réplica es ${e?.replication ?? '?'}` };
         if (e.state !== 'under') return { ok: true, detail: 'Réplica 3' };
         const live = dnUp(await c.status());
-        return { ok: true, detail: live >= 3 ? 'Réplica 3 (el NameNode todavía está copiando lo que falta)' : `Réplica 3 (sub-replicado: hay ${live} DataNode(s) vivo(s))` };
+        return { ok: true, detail: live >= 3 ? 'Réplica 3 (el NameNode todavía está copiando lo que falta)' : `Réplica 3 (sub-replicado: hay ${plural(live, 'DataNode vivo', 'DataNodes vivos')})` };
       },
       tip: 'Con menos DataNodes que la réplica, fsck lo marca Under replicated: no es un error, es que no hay dónde.',
     },
@@ -99,7 +100,7 @@ export const hdfsBasico: Practice = {
       run: async c => {
         const f = await c.api.fsck(VENTAS_DIR);
         return {
-          summary: f.healthy ? 'HEALTHY: ningún bloque perdido' : `${f.underReplicated} sub-replicado(s), ${f.missing} perdido(s)`,
+          summary: f.healthy ? 'HEALTHY: ningún bloque perdido' : `${plural(f.underReplicated, 'sub-replicado')}, ${plural(f.missing, 'perdido')}`,
           out: { kind: 'kv', items: [['Archivos', String(f.files)], ['Bloques', String(f.blocks)], ['Sub-replicados', String(f.underReplicated)], ['Perdidos', String(f.missing)], ['Réplica promedio', f.avgReplication.toLocaleString('es-AR')], ['DataNodes vivos', String(f.liveDataNodes)]] },
         };
       },

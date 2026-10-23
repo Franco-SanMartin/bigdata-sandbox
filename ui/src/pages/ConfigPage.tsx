@@ -8,7 +8,7 @@ import { applyConfig, resetVolume, startCluster } from '../state/actions';
 import { Meter, Seg, Stepper, Switch } from '../components/ui';
 import { GatedButton, HelpTip } from '../components/base';
 import { BLOCK_PRESETS, blockSizeLabel, configDiff, configSummary, processSpecs } from '../lib/cluster';
-import { nf } from '../lib/format';
+import { nf, plural } from '../lib/format';
 import { Mimic, MimicLegend, type Highlight } from '../widgets/Mimic';
 
 const NAMENODES: { n: number; title: string; text: string }[] = [
@@ -69,7 +69,7 @@ export function ConfigPage() {
               <Field hlProps={hlp('replication')} id="f-rep" label="Réplicas por bloque" env="REPLICATION" hint="Copias de cada bloque, cada una en un DataNode distinto. Con 2 o más, si se cae un nodo no se pierde nada." help="No puede ser mayor que la cantidad de DataNodes: dos copias del mismo bloque nunca van al mismo nodo. En producción se usa 3." issue={issue('replication')} note={draft.replication > 1 && draft.replication <= draft.datanodes ? `Aguanta ${draft.replication - 1} DataNode${draft.replication > 2 ? 's' : ''} caído${draft.replication > 2 ? 's' : ''}` : undefined}>
                 <Stepper id="f-rep" value={draft.replication} min={1} max={9} onChange={v => set('replication', v)} label="réplicas" />
               </Field>
-              <Field wide hlProps={hlp('blockSize')} id="f-bs" label="Tamaño de bloque" env="BLOCK_SIZE" hint="HDFS corta cada archivo en bloques de este tamaño. 1 MB para ver muchos bloques con archivos chicos; 128 MB es el de un cluster real." help="Se aplica a los archivos que subas desde ahora; los que ya están conservan su tamaño de bloque. Acepta valores como 8m, 64m o 256m." issue={issue('blockSize')} note={`ventas_grandes.csv (5,9 MB) → ${Math.ceil(5.93 / (parseInt(draft.blockSize, 10) * (/g$/i.test(draft.blockSize) ? 1024 : 1) || 128))} bloque(s)`}>
+              <Field wide hlProps={hlp('blockSize')} id="f-bs" label="Tamaño de bloque" env="BLOCK_SIZE" hint="HDFS corta cada archivo en bloques de este tamaño. 1 MB para ver muchos bloques con archivos chicos; 128 MB es el de un cluster real." help="Se aplica a los archivos que subas desde ahora; los que ya están conservan su tamaño de bloque. Acepta valores como 8m, 64m o 256m." issue={issue('blockSize')} note={`ventas_grandes.csv (5,9 MB) → ${plural(Math.ceil(5.93 / (parseInt(draft.blockSize, 10) * (/g$/i.test(draft.blockSize) ? 1024 : 1) || 128)), 'bloque')}`}>
                 <Seg value={BLOCK_PRESETS.includes(draft.blockSize) && ['1m', '16m', '128m', '1g'].includes(draft.blockSize) ? draft.blockSize : 'otro'} onChange={v => { if (v !== 'otro') { set('blockSize', v); setCustomBs(''); } }} label="Tamaño de bloque"
                   options={[{ value: '1m', label: '1 MB' }, { value: '16m', label: '16 MB' }, { value: '128m', label: '128 MB' }, { value: '1g', label: '1 GB' }, { value: 'otro', label: 'otro' }]} />
                 <span className="inline-input"><input className="input" aria-label="Otro tamaño de bloque" placeholder="ej. 8m" value={customBs || (['1m', '16m', '128m', '1g'].includes(draft.blockSize) ? '' : draft.blockSize)} aria-invalid={issue('blockSize')?.level === 'error'}
