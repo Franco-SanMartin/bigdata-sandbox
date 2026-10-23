@@ -102,6 +102,38 @@ guías 03 a 10 paso a paso, chequeadas contra el cluster.
 | ![Pipeline: la ingesta hecha y la etapa de ETL con sus herramientas](docs/capturas/pipeline.png) | ![Machine Learning: un árbol de decisión entrenado con scikit-learn y su detalle](docs/capturas/ml.png) |
 | **Pipeline**: de un CSV sucio a un resumen y un modelo, eligiendo la herramienta de cada etapa | **Machine Learning**: el mismo modelo con scikit-learn o con Spark MLlib, comparados |
 
+#### Por dentro de cada modelo
+
+Abajo del detalle de un modelo entrenado está **por dentro**: el modelo dibujado
+en 3D con lo que de verdad aprendió (los pesos, los cortes, los centros) y la
+cuenta de una fila hecha delante tuyo. Elegís una fila de prueba o movés las entradas con
+deslizadores; arriba, reproducir, pausa, paso a paso y velocidad; la cámara se
+gira con el mouse y, al pasar por encima, cada neurona dice su activación y
+cada conexión su peso y cuánto aporta.
+
+- **Red neuronal** (las dos, scikit-learn y MLlib): las capas son planos y las
+  conexiones, más gruesas cuanto más pesan (petróleo si suman, tinta si
+  restan). El dato entra, los pulsos avanzan capa por capa, se encienden las
+  neuronas que se activan y a la derecha salen las probabilidades. En «cómo
+  aprendió» la red se reacomoda época por época, con la curva de pérdida al lado.
+- **Árbol**: la fila baja por el camino, pregunta por pregunta, hasta su hoja.
+- **KMeans**: los puntos en 3D (con PCA si hay más de 3 columnas) y los centros
+  moviéndose iteración por iteración hasta quedarse quietos.
+- **Regresión lineal y logística**: la superficie que aprendió sobre dos
+  columnas, con cada punto y su residuo.
+
+La cuenta del navegador da exactamente lo que predijo el servidor (el humo lo
+compara fila por fila, con tolerancia 1e-6). Con «reducir movimiento» del
+sistema se avanza paso a paso; sin WebGL, dice por qué y la cuenta queda igual
+al costado, en texto.
+
+| | |
+|---|---|
+| ![Por dentro de una red neuronal: las capas, las conexiones según su peso y la salida con sus probabilidades](docs/capturas/ml-red.gif) | ![Por dentro de un árbol: la fila baja por el camino hasta la hoja](docs/capturas/ml-arbol.gif) |
+| **Red neuronal**: la pasada de una fila, capa por capa | **Árbol**: el camino de la fila hasta la hoja |
+| ![KMeans: los centros moviéndose iteración por iteración](docs/capturas/ml-kmeans.gif) | ![La red época por época, con la curva de pérdida](docs/capturas/ml-entrenamiento.png) |
+| **KMeans**: cómo se acomodan los centros | **Cómo aprendió**: los pesos de cada época y la curva de pérdida |
+
 Las capturas son de la [demo](https://franki-678.github.io/bigdata-sandbox/demo/);
 el humo del CI (`server/tests/humo/humo_ui.py`) saca las mismas pantallas contra
 la imagen de verdad.

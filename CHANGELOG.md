@@ -18,6 +18,22 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **Por dentro de cada modelo** en la pantalla de Machine Learning: el modelo
+  entrenado dibujado en 3D con lo que de verdad aprendió, y la cuenta de una
+  fila hecha delante tuyo, con reproducir, pausa, paso a paso, velocidad y
+  cámara que se gira. La red neuronal (scikit-learn y MLlib) muestra capas,
+  conexiones según su peso, el dato pasando capa por capa, las neuronas que se
+  activan y las probabilidades de salida, y época por época con la curva de
+  pérdida; el árbol, el camino de la fila hasta la hoja; KMeans, los puntos en
+  3D y los centros moviéndose por iteración; la regresión lineal y la
+  logística, su superficie con los residuos. Sin WebGL dice por qué y deja la
+  cuenta en texto; con «reducir movimiento», paso a paso.
+- `GET /api/ml/models/{id}/viz`: lo de adentro de cada modelo (pesos, nodos,
+  centros, coeficientes) y una muestra con lo que predijo, para los últimos 30.
+- La red neuronal también se ofrece con Spark MLlib en la recomendación.
+- El humo rehace la cuenta de cada modelo con lo que devuelve `/viz` y la
+  compara con lo que predijo el servidor (1e-6), y en la interfaz revisa que
+  el dibujo 3D se vea y que la cuenta del navegador dé lo mismo.
 - El humo de `full` entrena desde la API todos los modelos de ML en los dos
   motores (regresión, árbol, logística, red, tonto y KMeans) y revisa que la
   métrica quede en un rango razonable y que la regresión aprenda la regla real.

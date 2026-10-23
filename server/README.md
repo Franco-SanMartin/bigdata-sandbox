@@ -218,6 +218,7 @@ una colección que no existe devuelve cero documentos, como el shell.
 | `POST /api/ml/recommend` | `{dataset, task}` → modelos y motores recomendados, con lo esperado | 200 `MlRecommendation` |
 | `POST /api/ml/train` | `{dataset, task, model, engine, trainPct, target?, features?, params?}` → entrena | 202 `{id}` |
 | `GET /api/ml/models` | Los modelos entrenados, el más nuevo primero | 200 `MlRun[]` |
+| `GET /api/ml/models/{id}/viz` | Lo de adentro del modelo para dibujarlo: pesos, nodos, centros o coeficientes, y una muestra con lo que predijo | 200 `Viz` (404 si no hay) |
 
 `train` corre un job de `sandbox_server/jobs/`: `python3 entrenar_sklearn.py
 clientes_senal.csv …` (scikit-learn) o `spark-submit --master yarn
@@ -226,6 +227,16 @@ CSV a HDFS si no está). Si el CSV no existe, lo genera con
 `ejemplos/ml/generar_senal.py`. El job imprime su avance (`== mensaje|0.4`) y
 al final una línea `@@resultado@@ {json}` con métricas, matriz de confusión y
 predicciones. Los modelos son medidos (`reference: false`).
+
+El job además escribe lo de adentro del modelo en un archivo aparte
+(`SANDBOX_VIZ`, con `jobs/viz.py`): pesos y sesgos de la red (y los de cada
+época en scikit-learn), los nodos del árbol, los centros de KMeans con el
+recorrido de Lloyd, coeficientes y escaladores, más una muestra de filas de
+prueba con lo que predijo el modelo. Va a un archivo y no a la salida porque
+puede pesar cientos de KB (tope 3 MB); el servidor guarda los de los últimos 30
+modelos y el run solo lleva `hasViz` (o `vizError` si no se pudo). Con eso la
+interfaz rehace la cuenta en el navegador y tiene que dar lo mismo que el
+servidor: el humo lo compara con tolerancia 1e-6.
 
 Valida `target` (el del problema; clustering no lleva), `features` (columnas
 de entrada, sin el objetivo ni `segmento_real`) y `params` según el modelo, y
