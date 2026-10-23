@@ -83,7 +83,7 @@ def todo(page, h) -> None:
         with page.expect_download(timeout=20_000) as bajada:
             page.locator(".qx-res .rt-bar").get_by_role("button", name="CSV").click()
         d = bajada.value
-        texto = open(d.path(), encoding="utf-8").read()
+        texto = open(d.path(), encoding="utf-8-sig").read()  # el CSV trae BOM para Excel
         c.detalle = f"{d.suggested_filename} · {len(texto)} bytes"
         assert d.suggested_filename.endswith(".csv"), d.suggested_filename
         assert texto.splitlines()[0] == "sucursal,tickets", texto[:200]
