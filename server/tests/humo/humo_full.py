@@ -26,6 +26,7 @@ Hace dos arranques:
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -332,7 +333,8 @@ def solo_hdfs() -> None:
         assert visto and fin
         assert bytes_hdfs == 300 * 1024 * 1024, "el ls dijo terminado pero grande.bin no tiene los 300 MB"
         assert abiertos.strip() == "0", "el ls dijo terminado pero el fsck lo tiene abierto"
-        assert "Exception" not in log and "put:" not in log, "el -put dejó errores"
+        errores = errores_put(log)
+        assert "put:" not in log and not errores, f"el -put dejó errores: {errores[:3]}"
 
     with Chequeo("replicación: setrep 1 y de vuelta a 2") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": archivo, "replication": 1}, timeout=120)
@@ -391,6 +393,23 @@ def solo_hdfs() -> None:
         assert codigo == 404 and r["code"] == "not_found", r
 
     apagar("solo-hdfs")
+
+
+def errores_put(log: str) -> list[str]:
+    """Las entradas del log del -put con una excepción, sin contar los reintentos de addBlock.
+
+    Con un archivo de muchos bloques el NameNode a veces contesta NotReplicatedYetException
+    porque el bloque anterior todavía no llegó a la réplica mínima; el cliente lo anota
+    (INFO con el stack y WARN «sleeping … retries left»), espera y reintenta solo. Si se le acaban los reintentos el -put falla con «put:»
+    y eso sí cuenta. Cada entrada es la línea con fecha más las del stack que le siguen."""
+    entradas: list[str] = []
+    for linea in log.splitlines():
+        if re.match(r"\d{4}-\d{2}-\d{2} ", linea) or not entradas:
+            entradas.append(linea)
+        else:
+            entradas[-1] += "\n" + linea
+    return [e.splitlines()[0] for e in entradas if "Exception" in e
+            and not ("NotReplicatedYetException" in e and " ERROR " not in e.splitlines()[0])]
 
 
 def put_terminado(carpeta: str):
@@ -590,25 +609,45 @@ def p2() -> None:
 
     salida = "/user/root/resultados/humo_wordcount"
     with Chequeo("Trabajos: wordcount con parámetros y sus logs") as c:
+        # Los chequeos de HDFS de antes mueven réplicas; si un DataNode todavía no volvió a
+        # reportar, el map puede leer un bloque sin ubicación (BlockMissingException)
+        esperar(lambda: sum(x["state"] == "live" for x in pedir("GET", "/api/hdfs/datanodes")[1]) >= 2,
+                180, "2 DataNodes live")
         t0 = time.time()
-        codigo, r = pedir("POST", "/api/yarn/apps", {"template": "mr-wordcount", "params": {"out": salida}},
-                          timeout=180)
-        assert codigo == 202, (codigo, r)
-        app = r["id"]
-        d = esperar_app(app)
+        intentos = []
+        for _ in range(2):
+            codigo, r = pedir("POST", "/api/yarn/apps", {"template": "mr-wordcount", "params": {"out": salida}},
+                              timeout=180)
+            assert codigo == 202, (codigo, r)
+            app = r["id"]
+            d = esperar_app(app)
+            intentos.append((app, d.get("state")))
+            # Un solo reintento y sólo por un bloque que no se pudo leer; cualquier otra falla cuenta
+            if d.get("state") == "FINISHED" or "BlockMissingException" not in str(d.get("diagnostics", "")):
+                break
         TIEMPOS["Trabajos wordcount"] = round(time.time() - t0, 1)
         guardar("p2_wordcount", d)
-        assert d["state"] == "FINISHED", d.get("state")
+        assert d["state"] == "FINISHED", (intentos, str(d.get("diagnostics", ""))[:300])
         assert d.get("outputPath") == salida, d.get("outputPath")
-        codigo, lg = pedir("GET", f"/api/yarn/apps/{app}/logs?container=cliente", timeout=120)
+        # El RM da el trabajo por terminado antes de que el cliente (hadoop jar) termine de
+        # escribir su log: los contadores son lo último que imprime
+        def logs_completos():
+            codigo, lg = pedir("GET", f"/api/yarn/apps/{app}/logs?container=cliente", timeout=120)
+            lineas = [l for f in lg.get("files", []) for l in f["lines"]] if codigo == 200 else []
+            return (codigo, lg, lineas) if any("Map input records" in l for l in lineas) else None
+        try:
+            codigo, lg, lineas = esperar(logs_completos, 60, "contadores en el log del cliente", 2)
+        except AssertionError:
+            codigo, lg = pedir("GET", f"/api/yarn/apps/{app}/logs?container=cliente", timeout=120)
+            lineas = [l for f in lg.get("files", []) for l in f["lines"]] if codigo == 200 else []
         guardar("p2_wordcount_logs", lg)
         assert codigo == 200 and lg["container"] == "cliente", (codigo, lg)
         assert lg["containers"][0]["id"] == "cliente", lg["containers"]
-        lineas = [l for f in lg["files"] for l in f["lines"]]
         assert any("Map input records" in l for l in lineas), lineas[-20:]
         _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(salida))
         assert any(e["name"].startswith("part-r-") for e in ls["entries"]), ls
-        c.detalle = f"{app} en {TIEMPOS['Trabajos wordcount']} s, {len(lineas)} líneas del cliente"
+        c.detalle = (f"{app} en {TIEMPOS['Trabajos wordcount']} s, {len(lineas)} líneas del cliente"
+                     + (f"; intentos: {intentos}" if len(intentos) > 1 else ""))
 
     for tpl, prm in (("mr-pi", {"maps": 2, "samples": 100}),
                      ("mr-grep", {"in": movido, "out": "/user/root/resultados/humo_grep", "regex": "Centro"})):
