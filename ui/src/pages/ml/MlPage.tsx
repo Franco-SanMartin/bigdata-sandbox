@@ -181,7 +181,7 @@ export function MlPage() {
               <ul className="ml-rec">
                 {choices.map(c => (
                   <li key={c.engine + c.model} aria-current={c.model === model && c.engine === engine}>
-                    <div className="hd">
+                    <div className="ml-hd">
                       <b>{c.label}</b><EngineChip engine={c.engine} />{c.fit !== 'sirve' && <span className="badge" data-k={FIT[c.fit]}>{c.fit}</span>}
                       <button className="btn btn-sm btn-ghost" type="button" onClick={() => applyChoice(c)}>usar</button>
                     </div>
@@ -228,7 +228,7 @@ export function MlPage() {
             </div>
             {live && (
               <div className="ml-live" aria-live="polite">
-                <div className="hd"><b>{MODEL[live.model] ?? live.model}</b><EngineChip engine={live.engine} /><span className="mono">{nf(live.progress * 100)} %</span></div>
+                <div className="ml-hd"><b>{MODEL[live.model] ?? live.model}</b><EngineChip engine={live.engine} /><span className="mono">{nf(live.progress * 100)} %</span></div>
                 <Meter value={live.progress * 100} max={100} kind="run" label="Avance del entrenamiento" />
                 <span className="muted">{live.message}{live.appId && <> · <span className="mono">{live.appId}</span></>}</span>
               </div>
