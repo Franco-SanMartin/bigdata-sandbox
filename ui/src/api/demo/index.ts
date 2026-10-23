@@ -30,7 +30,7 @@ export function createDemoApi(): SandboxApi {
     subscribe: fn => e.subscribe(fn),
     validate: c => ok(validate(c, e.volumeNN)),
     estimate: c => ok(estimateRam(c)),
-    compose: c => ok(composeYaml(c)),
+    compose: c => ok(composeYaml(c, e.status().image.tag)),
     saveConfig: c => ok(e.saveConfig(c)),
     start: c => ok(e.start(c)),
     stop: () => ok(e.stop()),
