@@ -36,7 +36,6 @@ span.ml-ck { cursor: default; }
 .ml-f { display: flex; flex-direction: column; gap: 6px; }
 .ml-fl { font-size: var(--fs-sm); color: var(--text-3); display: flex; gap: 8px; align-items: baseline; }
 .ml-fl .mono { font-size: var(--fs-xs); color: var(--text-4); }
-.ml-f select.input { appearance: auto; }
 .ml-pct { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); }
 .ml-go { display: flex; align-items: center; gap: 10px; padding-top: 4px; font-size: var(--fs-sm); }
 .ml-live { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface-2); font-size: var(--fs-sm); }
