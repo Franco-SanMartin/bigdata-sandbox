@@ -197,7 +197,7 @@ def validate_params(tpl: dict, params: object) -> dict:
             if not isinstance(raw, str):
                 raise ApiError(f"{label} tiene que ser texto", "invalid")
             if p.get("pattern") and not re.search(p["pattern"], raw):
-                raise ApiError(f"{label} solo admite {p['help']}", "invalid")
+                raise ApiError(f"{label} solo admite {p['help'][:1].lower() + p['help'][1:]}", "invalid")
             if raw.startswith("-") or any(c in raw for c in "\0\n\r"):
                 raise ApiError(f"{label} no puede empezar con - ni tener saltos de línea", "invalid")
             out[name] = raw

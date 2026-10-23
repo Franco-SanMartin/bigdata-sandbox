@@ -90,7 +90,7 @@ export function paramError(prm: JobParam, raw: JobValue | undefined): string | n
   const s = String(v);
   if (prm.type === 'hdfs-path') return !s.trim() ? `Falta ${prm.label.toLowerCase()}` : /[\0\n\r:]/.test(s.replace(/^hdfs:\/\/[^/]*/, '')) ? `${prm.label}: ruta de HDFS inválida` : null;
   // \w de Python también acepta letras con tilde y ñ
-  if (prm.pattern && !new RegExp(prm.pattern.replace(/\\w/g, '\\p{L}\\p{N}_'), 'u').test(s)) return `${prm.label} solo admite ${prm.help}`;
+  if (prm.pattern && !new RegExp(prm.pattern.replace(/\\w/g, '\\p{L}\\p{N}_'), 'u').test(s)) return `${prm.label} solo admite ${(prm.help ?? '').replace(/^\p{Lu}/u, c => c.toLowerCase())}`;
   if (s.startsWith('-') || /[\0\n\r]/.test(s)) return `${prm.label} no puede empezar con - ni tener saltos de línea`;
   return null;
 }

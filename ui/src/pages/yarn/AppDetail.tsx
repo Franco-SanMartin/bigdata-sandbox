@@ -1,14 +1,16 @@
-/* Detalle de un trabajo de YARN: DAG con sus tareas, contadores, resumen y logs por contenedor. */
-import { useMemo, useState } from 'react';
-import { ArrowRight, Search, Square, X } from 'lucide-react';
+/* Detalle de un trabajo: avance, DAG con sus tareas, contadores, resumen y logs en vivo por contenedor. */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowDownToLine, ArrowRight, FolderOpen, Pause, Play, Search } from 'lucide-react';
 import type { AppLogs, DagEdge, DagVertex, YarnAppDetail, YarnStage } from '../../api/types';
-import { EngineTag } from '../../components/Trace';
+import { KeyValue, Panel } from '../../components/base';
 import { CodeBlock, Dot, Seg, Tip } from '../../components/ui';
+import { navigate } from '../../state/ui';
 import { clock, duration, mbLabel, nf } from '../../lib/format';
 import { ErrorLine, Loading, type Res } from '../hdfs/common';
-import { shortId } from './Containers';
 
-export const APP_STATE: Record<YarnAppDetail['state'], string> = { ACCEPTED: 'run', RUNNING: 'run', FINISHED: 'ok', FAILED: 'bad', KILLED: 'bad' };
+export const APP_STATE: Record<YarnAppDetail['state'], 'ok' | 'run' | 'bad'> = { ACCEPTED: 'run', RUNNING: 'run', FINISHED: 'ok', FAILED: 'bad', KILLED: 'bad' };
+/** El estado de YARN dicho en castellano (el original queda en el tooltip) */
+export const STATE_ES: Record<YarnAppDetail['state'], string> = { ACCEPTED: 'en cola', RUNNING: 'corriendo', FINISHED: 'terminó', FAILED: 'falló', KILLED: 'cancelado' };
 const TASK_STATE = { pending: 'en cola', running: 'corriendo', done: 'terminada', failed: 'falló' } as const;
 
 /** Columnas del DAG por profundidad: un vértice va una columna después de todo lo que lo alimenta */
@@ -80,18 +82,40 @@ function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
   );
 }
 
-function Logs({ logs, onContainer }: { logs: Res<AppLogs>; onContainer: (id: string) => void }) {
-  const l = logs.data;
+/** Marca lo que coincide con la búsqueda */
+function hl(text: string, q: string) {
+  if (!q) return text;
+  const out: ReactNode[] = [];
+  const low = text.toLowerCase();
+  let i = 0, k = 0;
+  for (let j = low.indexOf(q); j >= 0; j = low.indexOf(q, i)) { out.push(text.slice(i, j), <mark key={k++}>{text.slice(j, j + q.length)}</mark>); i = j + q.length; }
+  out.push(text.slice(i));
+  return out;
+}
+
+function Logs({ logs, onContainer, live }: { logs: Res<AppLogs>; onContainer: (id: string) => void; live: boolean }) {
+  const [paused, setPaused] = useState(false);
+  const [follow, setFollow] = useState(true);
+  const frozen = useRef<AppLogs | undefined>(undefined);
+  if (!paused || !frozen.current) frozen.current = logs.data;
+  const l = paused ? frozen.current : logs.data;
   const [file, setFile] = useState<'stdout' | 'stderr' | 'syslog' | null>(null);
   const [q, setQ] = useState('');
   const [level, setLevel] = useState<'all' | 'warn' | 'error'>('all');
-  const cur = l ? (file && l.files.find(f => f.name === file)) || l.files.find(f => f.lines.length) || l.files[0] : undefined;
+  const view = useRef<HTMLPreElement>(null);
+  const cur = l ? (file && l.files.find(f => f.name === file)) || l.files.find(f => f.name === 'syslog' && f.lines.length) || l.files.find(f => f.lines.length) || l.files[0] : undefined;
+  const ql = q.trim().toLowerCase();
   const lines = useMemo(() => {
     if (!cur) return [];
-    const ql = q.trim().toLowerCase();
     return cur.lines.map((text, i) => ({ n: i + 1, text })).filter(x =>
       (level === 'all' || (level === 'warn' ? / (WARN|ERROR) /.test(x.text) : / ERROR /.test(x.text))) && (!ql || x.text.toLowerCase().includes(ql)));
-  }, [cur, q, level]);
+  }, [cur, ql, level]);
+  const fresh = paused && logs.data && cur ? (logs.data.files.find(f => f.name === cur.name)?.lines.length ?? 0) - cur.lines.length : 0;
+
+  // Siguiendo: cada línea nueva baja hasta el final, como un tail -f
+  useEffect(() => { const el = view.current; if (follow && !paused && el) el.scrollTop = el.scrollHeight; }, [lines.length, follow, paused, cur?.name]);
+  const onScroll = () => { const el = view.current; if (el && follow && el.scrollHeight - el.scrollTop - el.clientHeight > 40) setFollow(false); };
+
   return (
     <div className="lg">
       <div className="lg-side">
@@ -109,14 +133,26 @@ function Logs({ logs, onContainer }: { logs: Res<AppLogs>; onContainer: (id: str
         <div className="lg-bar">
           {l && <Seg value={cur?.name ?? 'syslog'} onChange={setFile} label="Archivo de log" options={l.files.map(f => ({ value: f.name, label: <>{f.name} <span className="muted">{f.lines.length}</span></> }))} />}
           <Seg value={level} onChange={setLevel} label="Nivel" options={[{ value: 'all', label: 'Todo' }, { value: 'warn', label: 'WARN+' }, { value: 'error', label: 'ERROR' }]} />
-          <label className="input-search"><Search size={13} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filtrar líneas…" aria-label="Filtrar el log" /></label>
-          <span className="muted lg-count">{cur ? `${lines.length} de ${cur.lines.length} líneas` : ''}</span>
+          <label className="input-search lg-q"><Search size={13} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar en el log…" aria-label="Buscar en el log" /></label>
+          <span className="lg-acts">
+            <Tip content={paused ? 'Volver a mostrar lo que va llegando' : 'Congelar el log para leerlo tranquilo'}>
+              <button type="button" className="btn btn-sm" aria-pressed={paused} onClick={() => setPaused(p => !p)} disabled={!live && !paused}>
+                {paused ? <><Play size={12} />Seguir{fresh > 0 && <span className="badge" data-k="run">+{fresh}</span>}</> : <><Pause size={12} />Pausar</>}
+              </button>
+            </Tip>
+            <Tip content="Bajar solo al final cuando llegan líneas nuevas">
+              <button type="button" className="btn btn-sm btn-ghost" aria-pressed={follow} onClick={() => { setFollow(f => !f); const el = view.current; if (el) el.scrollTop = el.scrollHeight; }}>
+                <ArrowDownToLine size={12} />{follow ? 'Al final' : 'Ir al final'}
+              </button>
+            </Tip>
+          </span>
+          <span className="muted lg-count">{cur ? (ql || level !== 'all' ? `${lines.length} de ${cur.lines.length} líneas` : `${cur.lines.length} líneas`) : ''}{live && !paused && <span className="lg-live"> · en vivo</span>}</span>
         </div>
-        {logs.err ? <ErrorLine err={logs.err} onRetry={logs.reload} /> : !l ? <Loading /> : (
-          <pre className="log lg-view" aria-label={`Log ${cur?.name ?? ''} de ${l.container}`}>
+        {logs.err && !l ? <ErrorLine err={logs.err} onRetry={logs.reload} /> : !l ? <Loading /> : (
+          <pre ref={view} onScroll={onScroll} className="log lg-view" aria-label={`Log ${cur?.name ?? ''} de ${l.container}`}>
             {lines.length ? lines.map(x => (
-              <div key={x.n} className={/ ERROR /.test(x.text) ? 'e' : / WARN /.test(x.text) ? 'w' : undefined}><span className="t lg-n">{x.n}</span>{x.text}</div>
-            )) : <span className="t">{cur?.lines.length ? 'Ninguna línea coincide con el filtro' : `${cur?.name ?? 'el log'} está vacío para este contenedor`}</span>}
+              <div key={x.n} className={/ ERROR /.test(x.text) ? 'e' : / WARN /.test(x.text) ? 'w' : undefined}><span className="t lg-n">{x.n}</span>{hl(x.text, ql)}</div>
+            )) : <span className="t">{cur?.lines.length ? 'Ninguna línea coincide con la búsqueda' : live ? `${cur?.name ?? 'el log'} todavía no tiene nada: el contenedor está arrancando` : `${cur?.name ?? 'el log'} está vacío para este contenedor`}</span>}
           </pre>
         )}
       </div>
@@ -124,62 +160,72 @@ function Logs({ logs, onContainer }: { logs: Res<AppLogs>; onContainer: (id: str
   );
 }
 
-export function AppDetail({ id, res, logs, onContainer, onKill, onClose, now }: {
-  id: string; res: Res<YarnAppDetail>; logs: Res<AppLogs>; onContainer: (c: string) => void; onKill: () => void; onClose: () => void; now: number;
-}) {
-  const a = res.data;
-  const live = a && (a.state === 'RUNNING' || a.state === 'ACCEPTED');
-  const secs = a?.startedAt ? ((a.finishedAt ?? now) - a.startedAt) / 1000 : null;
+/** Avance grande del trabajo con lo que está haciendo ahora */
+function Progress({ a, now }: { a: YarnAppDetail; now: number }) {
+  const k = APP_STATE[a.state];
+  const pct = a.progress * 100;
+  const secs = a.startedAt ? ((a.finishedAt ?? now) - a.startedAt) / 1000 : null;
+  const runV = a.dag.vertices.find(v => v.state === 'running');
+  const what = a.state === 'ACCEPTED' ? 'Esperando memoria para el ApplicationMaster'
+    : a.state === 'RUNNING' ? (runV ? `Corriendo ${runV.name}: ${runV.tasksDone} de ${runV.tasks} tareas` : 'Corriendo')
+    : a.state === 'FINISHED' ? `Terminó bien${secs != null ? ` en ${duration(secs)}` : ''}`
+    : a.state === 'KILLED' ? 'Lo cancelaron' : 'Falló: mirá el diagnóstico y el syslog del contenedor';
   return (
-    <section className="panel span-12" aria-label="Detalle del trabajo">
-      <div className="panel-h">
-        {a && <Dot s={a.state} label={a.state} />}
-        <h2>{a?.name ?? shortId(id)}</h2>
-        <span className="sub mono">{id}</span>
-        {a && <EngineTag engine={a.engine} />}
-        {a && <span className="badge" data-k={APP_STATE[a.state]}>{a.state} · {nf(a.progress * 100)} %</span>}
-        <span className="end">
-          {live && <button className="btn btn-sm btn-danger" type="button" onClick={onKill}><Square size={12} />Cancelar</button>}
-          <button className="btn btn-sm btn-ghost btn-icon" type="button" onClick={onClose} aria-label="Cerrar el detalle"><X size={13} /></button>
-        </span>
+    <div className="ad-prog" data-k={k}>
+      <div className="ad-prog-h">
+        <b className="num">{nf(pct)} %</b>
+        <span>{what}</span>
+        <span className="muted end">{secs != null ? duration(secs) : 'sin arrancar'} · {a.containers.length ? `${a.containers.length} contenedores vivos` : 'sin contenedores'}</span>
       </div>
-      <div className="panel-b">
-        {res.err ? <ErrorLine err={res.err} onRetry={res.reload} /> : !a ? <Loading /> : (
-          <div className="ad">
-            <div className="ops-col">
-              <div className="ops-sub-h"><h3>DAG</h3><span className="muted">{a.dag.vertices.length} {a.engine === 'tez' ? 'vértices' : a.engine === 'spark' ? 'etapas' : 'fases'}</span></div>
-              <Dag app={a} now={now} />
+      <span className="meter" data-k={k} role="meter" aria-label="Avance del trabajo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}><i style={{ width: `${pct}%` }} /></span>
+    </div>
+  );
+}
+
+export function AppDetail({ res, logs, onContainer, now }: { res: Res<YarnAppDetail>; logs: Res<AppLogs>; onContainer: (c: string) => void; now: number }) {
+  const a = res.data;
+  if (res.err && !a) return <section className="panel"><div className="panel-b"><ErrorLine err={res.err} onRetry={res.reload} /></div></section>;
+  if (!a) return <section className="panel"><div className="panel-b"><Loading label="Pidiendo el trabajo al ResourceManager" /></div></section>;
+  const live = a.state === 'RUNNING' || a.state === 'ACCEPTED';
+  const unit = a.engine === 'tez' ? 'vértices' : a.engine === 'spark' ? 'etapas' : 'fases';
+  return (
+    <div className="ad">
+      <Progress a={a} now={now} />
+      {a.diagnostics && <div className="callout" data-k={APP_STATE[a.state] === 'bad' ? 'bad' : 'run'}>{a.diagnostics}</div>}
+      <div className="ad-top">
+        <Panel title="DAG" sub={`${a.dag.vertices.length} ${unit}`}><Dag app={a} now={now} /></Panel>
+        <Panel title="Resumen" end={a.outputPath && a.state === 'FINISHED' ? (
+          <button type="button" className="btn btn-sm" onClick={() => navigate('hdfs', a.outputPath!.replace(/^\/+/, ''))}><FolderOpen size={13} />Ver resultado</button>
+        ) : undefined}>
+          <KeyValue items={[
+            ['Cola', <span className="mono">{a.queue} · {a.user}</span>],
+            ['Enviado', <>{clock(a.submittedAt)}{a.startedAt ? ` · arrancó ${clock(a.startedAt)}` : ' · esperando memoria'}</>],
+            ['Terminó', a.finishedAt ? clock(a.finishedAt) : <span className="muted">todavía no</span>],
+            ['Memoria', <>{a.containers.length ? `${a.containers.length} contenedores · ${mbLabel(a.containers.reduce((x, c) => x + c.memoryMb, 0))}` : 'ningún contenedor vivo'} · AM {mbLabel(a.amMemoryMb)}</>],
+            ...(a.outputPath ? [['Resultado', <span className="mono">{a.outputPath}</span>] as [string, ReactNode]] : []),
+            ['Entra', <span className="ad-ell">{a.trace.input}</span>],
+            ['Sale', <span className="ad-ell">{a.trace.output}</span>],
+            ...(a.trackingUrl ? [['Seguimiento', <a className="mono" href={a.trackingUrl} target="_blank" rel="noreferrer">{a.trackingUrl.replace(/^https?:\/\//, '')}</a>] as [string, ReactNode]] : []),
+          ]} />
+          <CodeBlock lines={a.command ? a.command.split('\n') : [`yarn application -status ${a.id}`]} label="Comando" />
+        </Panel>
+      </div>
+      <Panel title="Logs" sub={live ? 'se actualizan solos mientras corre' : 'de cada contenedor'} flush>
+        <Logs logs={logs} onContainer={onContainer} live={live} />
+      </Panel>
+      {a.counters.length > 0 && (
+        <details className="panel ad-cnt">
+          <summary className="panel-h"><h2>Contadores</h2><span className="sub">{a.counters.length} · lo que midió {a.engine === 'spark' ? 'Spark' : 'Hadoop'}</span></summary>
+          <div className="panel-b flush">
+            <div className="tbl-wrap">
+              <table className="tbl" aria-label="Contadores">
+                <thead><tr><th>Contador</th><th>Grupo</th><th className="r">Valor</th></tr></thead>
+                <tbody>{a.counters.map(x => <tr key={x.group + x.name}><td className="mono">{x.name}</td><td className="muted mono">{x.group}</td><td className="r">{nf(x.value)}</td></tr>)}</tbody>
+              </table>
             </div>
-            <div className="ad-top">
-              <div className="ops-col">
-                {a.counters.length > 0 && (
-                  <div className="tbl-wrap ad-counters">
-                    <table className="tbl" aria-label="Contadores">
-                      <thead><tr><th>Contador</th><th>Grupo</th><th className="r">Valor</th></tr></thead>
-                      <tbody>{a.counters.map(x => <tr key={x.group + x.name}><td className="mono">{x.name}</td><td className="muted mono">{x.group}</td><td className="r">{nf(x.value)}</td></tr>)}</tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              <div className="ops-col">
-                <dl className="kv ops-kv">
-                  <dt>Cola</dt><dd className="mono">{a.queue} · {a.user}</dd>
-                  <dt>Enviado</dt><dd>{clock(a.submittedAt)}{a.startedAt ? ` · arrancó ${clock(a.startedAt)}` : ' · esperando memoria'}</dd>
-                  <dt>Duración</dt><dd>{secs != null ? duration(secs) : '—'}{a.finishedAt ? ` · terminó ${clock(a.finishedAt)}` : ''}</dd>
-                  <dt>Contenedores</dt><dd>{a.containers.length ? `${a.containers.length} · ${mbLabel(a.containers.reduce((x, c) => x + c.memoryMb, 0))}` : 'ninguno vivo'} · AM {mbLabel(a.amMemoryMb)}</dd>
-                  {a.outputPath && <><dt>Resultado</dt><dd className="mono">{a.outputPath}</dd></>}
-                  {a.trackingUrl && <><dt>Seguimiento</dt><dd><a className="mono" href={a.trackingUrl} target="_blank" rel="noreferrer">{a.trackingUrl.replace(/^https?:\/\//, '')}</a></dd></>}
-                  {a.diagnostics && <><dt>Diagnóstico</dt><dd className="ops-bad">{a.diagnostics}</dd></>}
-                </dl>
-                <CodeBlock lines={a.command ? a.command.split('\n') : [`yarn application -status ${a.id}`]} label="Comando" />
-                <div className="ops-sub-h"><span className="muted">entra</span><span className="ops-ell">{a.trace.input}</span></div>
-                <div className="ops-sub-h"><span className="muted">sale</span><span className="ops-ell">{a.trace.output}</span></div>
-              </div>
-            </div>
-            <Logs logs={logs} onContainer={onContainer} />
           </div>
-        )}
-      </div>
-    </section>
+        </details>
+      )}
+    </div>
   );
 }
