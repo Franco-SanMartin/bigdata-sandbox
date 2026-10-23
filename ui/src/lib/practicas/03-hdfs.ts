@@ -113,6 +113,8 @@ export const hdfsBasico: Practice = {
       command: `hdfs dfs -get ${VENTAS_FILE} .`, input: 'El archivo en HDFS', cap: 'hdfs.read',
       does: 'Junta los bloques en orden y arma el archivo de nuevo, fuera de HDFS.', expect: 'Se baja ventas_grandes.csv',
       run: async c => {
+        // bajar y leer llegan juntos al servidor: si no lee, tampoco baja (y el paso va a la terminal)
+        await c.api.hdfsCat(VENTAS_FILE, 0, 1);
         const d = await c.api.hdfsDownload(VENTAS_FILE);
         if (typeof document !== 'undefined') {
           const a = document.createElement('a'); a.href = d.url; a.download = d.name; a.rel = 'noopener';

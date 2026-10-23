@@ -78,6 +78,12 @@ describe('prácticas en el demo', () => {
     for (const k of ['productos', 'join', 'sqoop', 'ls']) expect(m[k].ok, `mysql-sqoop/${k}: ${m[k].why}`).toBe(true);
   }, 60000);
 
+  it('pig: LOAD, FILTER y GROUP desde Consultas', async () => {
+    await boot(TODO);
+    const r = await play('pig');
+    for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
+  }, 60000);
+
   it('hdfs-falla: se cae un DataNode, quedan sub-replicados y vuelve sano', async () => {
     await boot(TODO);
     const r = await play('hdfs-falla');

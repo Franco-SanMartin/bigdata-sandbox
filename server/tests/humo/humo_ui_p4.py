@@ -3,7 +3,7 @@
 Lo carga humo_ui.py (no se corre solo). Cada función recibe la página de Playwright y el
 módulo humo_ui como `h`, con sus ayudas (Chequeo, ir, captura, esperar, pedir...).
 
-- todo: hdfs-basico, hive, mongodb y mapreduce se hacen desde la interfaz con el botón
+- todo: hdfs-basico, hive, mongodb, pig y mapreduce se hacen desde la interfaz con el botón
   Ejecutar de cada paso, contra el cluster de verdad, y quedan completas. Un paso que la
   interfaz todavía no sabe correr contesta "unsupported": se marca con "Lo hice en la
   terminal" y queda anotado en el detalle del chequeo (no es una falla).
@@ -13,10 +13,31 @@ módulo humo_ui como `h`, con sus ayudas (Chequeo, ir, captura, esperar, pedir..
   página no pide nada que conteste 409.
 """
 import re
+from urllib.parse import urlparse
 
 from playwright.sync_api import expect
 
 EJECUTAR = re.compile(r"^Ejecutar")
+
+
+# Rutas que usan las prácticas y que un servidor más viejo que la interfaz puede no tener
+RUTAS_NUEVAS = ("/api/hdfs/cat", "/api/hdfs/download", "/api/yarn/templates")
+
+
+def _faltan(h) -> set[str]:
+    """Las rutas de RUTAS_NUEVAS que este servidor no conoce (404 «No hay GET /api/…»)"""
+    if not hasattr(h, "_p4_faltan"):
+        h._p4_faltan = {r for r in RUTAS_NUEVAS
+                        if (lambda st, cuerpo: st == 404 and "No hay" in str(cuerpo))(*h.pedir("GET", r))}
+    return h._p4_faltan
+
+
+def _errores(h, n: int) -> list[dict]:
+    """Errores de consola desde n, sin los 404 de rutas que el servidor no tiene: ese paso
+    contesta "unsupported" y se hace en la terminal (queda anotado en el detalle)"""
+    faltan = _faltan(h)
+    return [e for e in h.errores_desde(n)
+            if not ("status of 404" in e["texto"] and urlparse(e.get("recurso", "")).path in faltan)]
 
 
 def _abrir(page, h, practica: str) -> None:
@@ -61,12 +82,13 @@ def _practica(page, h, c, practica: str, pasos: list[str], segundos: int = 900) 
             malos.append(f"{pid}: {k} {texto}")
     h.captura(page, f"p4-todo-{practica}")
     c.detalle = f"{len(pasos) - len(terminal)}/{len(pasos)} pasos desde la interfaz" + (
-        f" · en la terminal: {', '.join(terminal)}" if terminal else "")
+        f" · en la terminal: {', '.join(terminal)}" if terminal else "") + (
+        f" · el servidor no tiene {', '.join(sorted(_faltan(h)))}" if _faltan(h) else "")
     assert not malos, malos
     for pid in pasos:
         expect(page.locator(f"#paso-{pid}")).to_have_attribute("data-done", "true")
     expect(page.locator(".pr-finished")).to_be_visible()
-    assert not h.errores_desde(n), h.errores_desde(n)
+    assert not _errores(h, n), _errores(h, n)
 
 
 def todo(page, h) -> None:
@@ -79,6 +101,9 @@ def todo(page, h) -> None:
     with h.Chequeo("p4 todo: mongodb completa desde la interfaz") as c:
         _practica(page, h, c, "mongodb", ["findone", "find", "contar", "aggregate", "indice"], 300)
 
+    with h.Chequeo("p4 todo: pig completa desde la interfaz (LOAD, FILTER y GROUP)") as c:
+        _practica(page, h, c, "pig", ["datos", "load", "filter", "group"])
+
     with h.Chequeo("p4 todo: mapreduce (wordcount) desde la interfaz") as c:
         n = len(h.CONSOLA)
         _abrir(page, h, "mapreduce")
@@ -90,7 +115,7 @@ def todo(page, h) -> None:
             # seguir y logs no tienen id. Queda anotado y se revisa lo que sí se puede.
             c.detalle = "lanzar todavía no se corre desde la interfaz: seguir, logs y resultado quedan para la terminal"
             h.captura(page, "p4-todo-mapreduce")
-            assert not h.errores_desde(n), h.errores_desde(n)
+            assert not _errores(h, n), _errores(h, n)
         else:
             assert k == "ok", texto
             for pid in ["seguir", "logs", "resultado"]:
@@ -99,7 +124,7 @@ def todo(page, h) -> None:
             h.captura(page, "p4-todo-mapreduce")
             expect(page.locator(".pr-finished")).to_be_visible()
             c.detalle = "5/5 pasos desde la interfaz"
-            assert not h.errores_desde(n), h.errores_desde(n)
+            assert not _errores(h, n), _errores(h, n)
 
     with h.Chequeo("p4 todo: la lista cuenta las completas") as c:
         h.ir(page, "practicas")
@@ -147,5 +172,5 @@ def apagado(page, h) -> None:
         expect(li.get_by_role("button", name=EJECUTAR)).to_have_attribute("data-gated", "true")
         h.captura(page, "p4-apagado-detalle")
         c.detalle = page.locator(".pr-main .capnote").inner_text()[:140].replace("\n", " ")
-        assert not h.errores_desde(n), h.errores_desde(n)
+        assert not _errores(h, n), _errores(h, n)
         assert len(h.RESPUESTAS_409) == n409, h.RESPUESTAS_409[n409:]
