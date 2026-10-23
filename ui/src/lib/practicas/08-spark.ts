@@ -1,6 +1,6 @@
 /* Guía 08: Spark. SparkPi, las ventas con DataFrames y el DAG de etapas. */
-import { errorCode } from '../../api/errors';
-import { appCheck, appResult, waitApp } from './comun';
+import { appCheck, appResult, submitTemplate, waitApp } from './comun';
+import { notThere } from './motor';
 import type { Practice } from './tipos';
 
 export const spark: Practice = {
@@ -15,7 +15,7 @@ export const spark: Practice = {
       command: 'spark-submit --class org.apache.spark.examples.SparkPi $SPARK_HOME/examples/jars/spark-examples_*.jar 2',
       input: '2 particiones', does: 'Tira puntos al azar en cada partición y estima π con los que caen adentro del círculo.', expect: 'Termina FINISHED',
       run: async c => {
-        const id = await c.api.submitJob({ template: 'spark-pi', params: { partitions: 2 } });
+        const id = await submitTemplate(c, 'spark-pi', { partitions: 2 });
         return { ...appResult(await waitApp(c, id)), vars: { pi: id } };
       },
       verify: c => appCheck(c, 'pi'),
@@ -27,9 +27,9 @@ export const spark: Practice = {
       run: async c => {
         let id: string;
         try {
-          id = await c.api.submitJob({ template: 'spark-ventas', params: {} });
+          id = await submitTemplate(c, 'spark-ventas', {});
         } catch (e) {
-          if (errorCode(e) !== 'unsupported') throw e;
+          if (!notThere(e)) throw e;
           id = await c.api.submitExample('spark-ventas');
         }
         return { ...appResult(await waitApp(c, id)), vars: { ventas: id } };

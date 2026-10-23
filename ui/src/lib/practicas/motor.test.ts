@@ -3,7 +3,7 @@ import { ApiFailure } from '../../api/errors';
 import type { ClusterStatus, SandboxApi } from '../../api/types';
 import {
   STORAGE_KEY, currentStep, doneCount, executeStep, loadProgress, markDone, practiceState, resetPractice, saveProgress,
-  setVars, suggested, verifyStep, waitFor, type Storage,
+  notThere, setVars, suggested, verifyStep, waitFor, type Storage,
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
@@ -113,5 +113,14 @@ describe('catálogo', () => {
     const sug = suggested(PRACTICES, p, null, 3);
     expect(sug[0].id).toBe(b.id);
     expect(sug.map(x => x.id)).not.toContain(a.id);
+  });
+});
+
+describe('notThere', () => {
+  it('una ruta que el servidor no conoce cuenta como unsupported; un archivo que no está, no', () => {
+    expect(notThere(new ApiFailure('No hay GET /api/hdfs/cat', 'not_found'))).toBe(true);
+    expect(notThere(new ApiFailure('Pig no está', 'unsupported'))).toBe(true);
+    expect(notThere(new ApiFailure('No existe /user/root/x', 'not_found'))).toBe(false);
+    expect(notThere(new Error('No hay GET /api/hdfs/cat'))).toBe(false);
   });
 });

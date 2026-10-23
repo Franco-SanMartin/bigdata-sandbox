@@ -1,6 +1,5 @@
 /* Guía 03: HDFS. Lo básico (carpetas, put, ls, cat, réplica, fsck, get) y qué pasa cuando se cae un DataNode. */
-import { errorCode } from '../../api/errors';
-import { waitFor } from './motor';
+import { notThere, waitFor } from './motor';
 import { VENTAS_DIR, VENTAS_FILE, dnUp, mbLabel, ensureExample, entry, fileCheck, lsOut, needDataNodes } from './comun';
 import type { Practice, StepCtx } from './tipos';
 
@@ -12,7 +11,7 @@ async function head(c: StepCtx, path: string): Promise<{ text: string; command: 
     const r = await c.api.hdfsCat(path, 0, 4096);
     return { text: r.binary ? '(el archivo es binario: no se muestra como texto)' : r.text, command: r.command };
   } catch (e) {
-    if (errorCode(e) !== 'unsupported') throw e;
+    if (!notThere(e)) throw e;
     const d = await c.api.hdfsFile(path);
     return { text: [d.preview.columns.join(','), ...d.preview.rows.map(r => r.join(','))].join('\n'), command: `hdfs dfs -cat ${path} | head` };
   }
@@ -78,6 +77,8 @@ export const hdfsBasico: Practice = {
       expect: 'El archivo queda con réplica 3. Con menos de 3 DataNodes queda sub-replicado: no hay dónde poner la tercera copia',
       run: async c => {
         await c.api.setReplication(VENTAS_FILE, 3);
+        // el listado del NameNode tarda unos segundos en mostrar la réplica nueva
+        await waitFor(c, () => entry(c, VENTAS_DIR, NAME), e => e?.replication === 3, { seconds: 30, every: 1500, what: 'Esperando a que el NameNode anote la réplica 3…' });
         const s = await c.status();
         const live = dnUp(s);
         return { summary: live >= 3 ? 'Réplica 3: el NameNode copia lo que falta' : `Réplica 3 con ${live} DataNode(s) vivo(s): cada bloque queda con ${live} copia(s), sub-replicado`, link: { label: 'Ver los bloques', page: 'hdfs', arg: VENTAS_FILE } };

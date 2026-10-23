@@ -1,6 +1,6 @@
 /* Guía 04: YARN y MapReduce. El wordcount de siempre, de la entrada al part-r-00000. */
-import { errorCode } from '../../api/errors';
-import { appCheck, appResult, ensureExample, entry, fileCheck, lsOut, waitApp } from './comun';
+import { appCheck, appResult, ensureExample, entry, fileCheck, lsOut, submitTemplate, waitApp } from './comun';
+import { notThere } from './motor';
 import type { Practice } from './tipos';
 
 const IN = '/user/root/texto.txt';
@@ -28,7 +28,7 @@ export const mapreduce: Practice = {
       does: 'Le pide a YARN un contenedor para el ApplicationMaster, que después pide uno por cada map y reduce.',
       expect: 'Queda un trabajo application_… en la cola',
       run: async c => {
-        const id = await c.api.submitJob({ template: 'mr-wordcount', params: { in: IN, out: OUT, overwrite: true } });
+        const id = await submitTemplate(c, 'mr-wordcount', { in: IN, out: OUT, overwrite: true });
         return { summary: `Lanzado ${id}`, vars: { app: id }, link: { label: 'Ver el trabajo', page: 'yarn', arg: id } };
       },
       verify: async c => (c.vars.app ? { ok: true, detail: `Trabajo ${c.vars.app}` } : { ok: false, detail: 'Todavía no se lanzó' }),
@@ -65,7 +65,7 @@ export const mapreduce: Practice = {
         try {
           text = (await c.api.hdfsCat(PART, 0, 4096)).text;
         } catch (e) {
-          if (errorCode(e) !== 'unsupported') throw e;
+          if (!notThere(e)) throw e;
         }
         return { summary: `${l.entries.length} archivo(s) en ${OUT}`, out: text ? { kind: 'text', text: text.split('\n').slice(0, 20).join('\n') } : lsOut(l), link: { label: 'Ver en HDFS', page: 'hdfs', arg: OUT } };
       },

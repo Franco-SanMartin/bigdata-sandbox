@@ -1,9 +1,9 @@
 /* Piezas que repiten los catálogos: tablas de un ls, esperar un trabajo, armar la salida de una consulta. */
-import type { AppState, ClusterStatus, DataSource, HdfsEntry, HdfsListing, QueryResult, YarnAppDetail } from '../../api/types';
-import { errorCode } from '../../api/errors';
+import type { AppState, ClusterStatus, DataSource, HdfsEntry, HdfsListing, QueryResult, SubmitJobRequest, YarnAppDetail } from '../../api/types';
+import { errorCode, fail } from '../../api/errors';
 import { mbLabel as mbFmt } from '../format';
 import type { Capability } from '../capabilities';
-import { waitFor } from './motor';
+import { notThere, waitFor } from './motor';
 import type { Check, Requirement, StepCtx, StepOut, StepResult } from './tipos';
 
 /** Tamaño legible: los archivos chicos (texto.txt) en KB en vez de "0,0 MB" */
@@ -50,6 +50,19 @@ export async function fileCheck(c: StepCtx, dir: string, name: string): Promise<
   if (!e) return { ok: false, detail: `No está ${dir}/${name}` };
   if (e.state === 'writing') return { ok: false, detail: `${name} todavía se está escribiendo` };
   return { ok: true, detail: `${dir}/${name}: ${mbLabel(e.sizeMb ?? 0)}, réplica ${e.replication}` };
+}
+
+/** Lanza una plantilla de trabajo. Si el servidor no tiene plantillas (o no esa), contesta unsupported */
+export async function submitTemplate(c: StepCtx, template: string, params: SubmitJobRequest['params']): Promise<string> {
+  let ids: string[];
+  try {
+    ids = (await c.api.jobTemplates()).map(t => t.id);
+  } catch (e) {
+    if (notThere(e)) fail('unsupported', 'Lanzar trabajos todavía no está en este servidor');
+    throw e;
+  }
+  if (!ids.includes(template)) fail('unsupported', `${template}: este servidor no tiene esa plantilla`);
+  return c.api.submitJob({ template, params });
 }
 
 const ENDED: AppState[] = ['FINISHED', 'FAILED', 'KILLED'];

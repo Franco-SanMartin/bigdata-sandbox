@@ -125,10 +125,14 @@ export interface StepOutcome {
   unsupported?: boolean;
 }
 
+/** Lo que la API no tiene: unsupported, o una ruta que el servidor no conoce (la interfaz es más nueva que él) */
+export const notThere = (e: unknown): boolean =>
+  e instanceof ApiFailure && (e.code === 'unsupported' || (e.code === 'not_found' && /^No hay [A-Z]+ \/api\//.test(e.message)));
+
 /** Mensaje claro a partir de lo que tiró la API */
 export function explain(e: unknown): { error: string; unsupported: boolean } {
   if (e instanceof ApiFailure) {
-    if (e.code === 'unsupported')
+    if (notThere(e))
       return { unsupported: true, error: 'Este paso todavía no se puede correr desde la interfaz: hacelo con el comando en la terminal del contenedor y marcalo como hecho.' };
     return { unsupported: false, error: e.message };
   }

@@ -112,6 +112,8 @@ def todo(page, h) -> None:
 def solo_hdfs(page, h) -> None:
     with h.Chequeo("p4 solo HDFS: Hive y MongoDB dicen por qué no y ofrecen el arreglo") as c:
         n = len(h.CONSOLA)
+        # en la etapa todo Hive quedó completa, y una completa no se marca bloqueada: se empieza de nuevo
+        _abrir(page, h, "hive")
         h.ir(page, "practicas")
         h.captura(page, "p4-solo-hdfs-lista")
         hive = page.locator(".pr-card", has=page.get_by_role("button", name="Hive: SQL sobre HDFS"))
