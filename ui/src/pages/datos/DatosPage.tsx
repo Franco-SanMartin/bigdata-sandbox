@@ -16,13 +16,13 @@ import { ResultGrid } from './ResultGrid';
 import './datos.css';
 
 const SOURCES: DataSource[] = ['hive', 'mysql', 'mongodb'];
-const SOURCE: Record<DataSource, string> = { hive: 'Hive', mysql: 'MySQL', mongodb: 'MongoDB' };
+const SOURCE: Record<DataSource, string> = { hive: 'Hive', mysql: 'MySQL', mongodb: 'MongoDB', pig: 'Pig' };
 /** Proceso que atiende cada motor y su puerto */
-const PROC: Record<DataSource, { id: string; port: number }> = { hive: { id: 'hiveserver2', port: 10000 }, mysql: { id: 'mysql', port: 3306 }, mongodb: { id: 'mongodb', port: 27017 } };
+const PROC: Record<DataSource, { id: string; port: number }> = { hive: { id: 'hiveserver2', port: 10000 }, mysql: { id: 'mysql', port: 3306 }, mongodb: { id: 'mongodb', port: 27017 }, pig: { id: 'rm', port: 8088 } };
 /** Quién resuelve las consultas: Hive las pasa a Tez si hay que agrupar u ordenar; MySQL y MongoDB, en su propio proceso */
-const ENGINE: Record<DataSource, Engine> = { hive: 'tez', mysql: 'uno', mongodb: 'uno' };
-const CLIENT: Record<DataSource, string> = { hive: 'beeline -u jdbc:hive2://localhost:10000', mysql: 'mysql tienda', mongodb: 'mongosh tienda' };
-const PLACEHOLDER: Record<DataSource, string> = { hive: 'SELECT sucursal, SUM(cantidad) FROM ventas GROUP BY sucursal;', mysql: 'SELECT * FROM clientes LIMIT 10;', mongodb: 'db.pedidos.find({ cliente_id: 42 })' };
+const ENGINE: Record<DataSource, Engine> = { hive: 'tez', mysql: 'uno', mongodb: 'uno', pig: 'mr' };
+const CLIENT: Record<DataSource, string> = { hive: 'beeline -u jdbc:hive2://localhost:10000', mysql: 'mysql tienda', mongodb: 'mongosh tienda', pig: 'pig -x mapreduce' };
+const PLACEHOLDER: Record<DataSource, string> = { hive: 'SELECT sucursal, SUM(cantidad) FROM ventas GROUP BY sucursal;', mysql: 'SELECT * FROM clientes LIMIT 10;', mongodb: 'db.pedidos.find({ cliente_id: 42 })', pig: "v = LOAD '/user/root/ventas' USING PigStorage(',');\nDUMP v;" };
 
 const short = (name: string) => name.split('.').slice(1).join('.') || name;
 const starter = (s: DataSource, name: string) => (s === 'mongodb' ? `db.${short(name)}.find().limit(10)` : `SELECT * FROM ${short(name)} LIMIT 10;`);
@@ -36,7 +36,7 @@ export function DatosPage() {
   const up = phase === 'running';
   const [source, setSource] = useState<DataSource>('hive');
   const [sel, setSel] = useState<{ source: DataSource; name: string } | null>(null);
-  const [texts, setTexts] = useState<Record<DataSource, string>>({ hive: '', mysql: '', mongodb: '' });
+  const [texts, setTexts] = useState<Record<DataSource, string>>({ hive: '', mysql: '', mongodb: '', pig: '' });
   const text = texts[source];
   const setText = (v: string) => setTexts(t => ({ ...t, [source]: v }));
 

@@ -72,4 +72,41 @@
   --h-ctl-sm: 28px;
   --side-w: 232px;
   --top-h: 48px;
+
+  /* Espaciado: múltiplos de 4 */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* Roles tipográficos: tamaño / alto de línea / peso */
+  --t-display: 600 26px/1.15 var(--f-sans);
+  --t-title: 600 22px/1.2 var(--f-sans);
+  --t-section: 600 15px/1.3 var(--f-sans);
+  --t-body: 400 13px/1.5 var(--f-sans);
+  --t-label: 500 12px/1.3 var(--f-sans);
+  --t-caption: 400 11px/1.4 var(--f-sans);
+  --t-code: 400 12.5px/1.55 var(--f-mono);
+
+  /* Movimiento */
+  --dur-1: 90ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* Capas */
+  --z-sticky: 5;
+  --z-drawer: 30;
+  --z-overlay: 40;
+  --z-dialog: 41;
+  --z-tip: 60;
+  --z-toast: 70;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; }
 }

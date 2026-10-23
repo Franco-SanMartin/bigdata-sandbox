@@ -22,6 +22,8 @@ export function createDemoApi(): SandboxApi {
   /** Los módulos nuevos tiran ApiFailure al validar: así llega como promesa rechazada, igual que del backend */
   const call = <T>(fn: () => T | Promise<T>) => Promise.resolve().then(fn);
   const copy = <T>(v: T): T => structuredClone(v);
+  /** Lo que todavía no tiene versión demo: contesta como el backend sin la función */
+  const pending = (que: string): Promise<never> => call(() => { throw new ApiFailure(`${que}: todavía no está en esta versión de la interfaz`, 'unsupported', 501); });
   return {
     mode: 'demo',
     now: () => e.now(),
@@ -51,10 +53,15 @@ export function createDemoApi(): SandboxApi {
     hdfsDelete: (p, r) => call(() => hdfs.remove(p, r)),
     fsck: p => call(() => hdfs.fsck(p)),
     replication: () => call(() => hdfs.replication()),
+    hdfsCat: () => pending('Ver el contenido completo'),
+    hdfsDownload: () => pending('Bajar archivos'),
+    hdfsMove: () => pending('Mover archivos'),
 
     apps: () => ok(e.apps()),
     submitExample: j => ok(e.submitExample(j)),
     killApp: id => ok(e.killApp(id)),
+    jobTemplates: () => pending('Plantillas de trabajos'),
+    submitJob: () => pending('Plantillas de trabajos'),
     yarnCluster: () => call(() => yarn.cluster()),
     app: id => call(() => yarn.app(id)),
     appLogs: (id, c) => call(() => yarn.logs(id, c)),
@@ -66,9 +73,9 @@ export function createDemoApi(): SandboxApi {
     pipelineReset: () => call(() => pipe.reset()),
 
     catalog: () => call(() => data.catalog()),
-    schema: (s, n) => call(() => data.schema(s, n)),
-    query: (s, t) => call(() => data.query(s, t)),
-    explain: (s, t) => call(() => data.explain(s, t)),
+    schema: (s, n) => s === 'pig' ? pending('Pig') : call(() => data.schema(s, n)),
+    query: (s, t) => s === 'pig' ? pending('Pig') : call(() => data.query(s, t)),
+    explain: (s, t) => s === 'pig' ? pending('Pig') : call(() => data.explain(s, t)),
     queryExamples: () => call(() => data.examples()),
 
     mlDatasets: () => call(() => ml.datasets()),

@@ -14,7 +14,7 @@ name: Documentacion
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui2]
     paths:
       - '**.md'
       - 'guias/**'
@@ -57,6 +57,7 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build:demo
       - name: docs/demo al dia con ui/
         run: |

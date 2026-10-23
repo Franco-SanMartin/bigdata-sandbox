@@ -11,13 +11,20 @@ function store<T>(init: T) {
   };
 }
 
-/* ---------- Rutas (#cluster, #hdfs…) ---------- */
-export const PAGES = ['cluster', 'hdfs', 'yarn', 'pipeline', 'datos', 'ml', 'consola', 'config'] as const;
-export type PageId = typeof PAGES[number];
-const readHash = (): PageId => { const h = location.hash.slice(1) as PageId; return PAGES.includes(h) ? h : 'cluster'; };
-export const route = store<PageId>(readHash());
-addEventListener('hashchange', () => route.set(readHash()));
-export function navigate(p: PageId) { if (location.hash.slice(1) !== p) location.hash = p; route.set(p); }
+/* ---------- Rutas (#inicio, #hdfs/user/root…) ---------- */
+import { parseHash, type PageId } from '../lib/route';
+export { PAGES, parseHash, type PageId } from '../lib/route';
+/** #hdfs/user/root → ['hdfs', 'user/root']. Lo que no es una pantalla conocida va a Inicio */
+export const route = store<PageId>(parseHash(location.hash)[0]);
+/** Lo que sigue a la pantalla en la ruta (carpeta de HDFS, id de trabajo, práctica…) */
+export const routeArgStore = store<string>(parseHash(location.hash)[1]);
+export const useRouteArg = () => routeArgStore.use();
+addEventListener('hashchange', () => { const [p, a] = parseHash(location.hash); route.set(p); routeArgStore.set(a); });
+export function navigate(p: PageId, arg = '') {
+  const h = arg ? `${p}/${arg}` : p;
+  if (decodeURIComponent(location.hash.slice(1)) !== h) location.hash = h;
+  route.set(p); routeArgStore.set(arg);
+}
 
 /* ---------- Paneles ---------- */
 export const consoleOpen = store(false);
@@ -29,7 +36,11 @@ export const composeDraft = store<ClusterConfig | null>(null);
 export const consoleFilter = store<{ processId?: string; appId?: string } | null>(null);
 
 /* ---------- Avisos ---------- */
-export interface ToastMsg { id: number; title: string; description?: string; kind?: 'ok' | 'bad' | 'run' | 'info' }
+export interface ToastMsg {
+  id: number; title: string; description?: string; kind?: 'ok' | 'bad' | 'run' | 'info';
+  /** Un botón en el aviso: "Ver en consola", "Deshacer", "Abrir" */
+  action?: { label: string; run: () => void };
+}
 export const toasts = store<ToastMsg[]>([]);
 let tid = 0;
 export function toast(t: Omit<ToastMsg, 'id'>) { toasts.set(l => [...l.slice(-3), { ...t, id: ++tid }]); }
@@ -42,6 +53,8 @@ export interface ConfirmReq {
   facts?: [string, string][];
   confirmLabel: string;
   danger?: boolean;
+  /** Para lo que no se deshace: hay que escribir este texto para habilitar el botón */
+  typeToConfirm?: string;
   resolve: (ok: boolean) => void;
 }
 export const confirmReq = store<ConfirmReq | null>(null);

@@ -248,6 +248,36 @@ export interface YarnApp {
 
 export type ExampleJob = 'mr-ventas' | 'hive-ventas' | 'spark-ventas';
 
+/** Parámetro de una plantilla de trabajo. Los valores se validan en el backend: nunca llegan a una shell */
+export interface JobParam {
+  name: string;
+  label: string;
+  type: 'hdfs-path' | 'int' | 'text' | 'select' | 'bool';
+  default: string | number | boolean;
+  help?: string;
+  min?: number;
+  max?: number;
+  options?: { value: string; label: string }[];
+  /** Solo text: expresión regular que tiene que cumplir */
+  pattern?: string;
+  required?: boolean;
+}
+
+/** Un trabajo que se puede lanzar en YARN con parámetros (GET /api/yarn/templates) */
+export interface JobTemplate {
+  id: string;
+  label: string;
+  engine: 'mr' | 'tez' | 'spark';
+  description: string;
+  params: JobParam[];
+  /** El comando con {param} donde va cada valor, para mostrarlo armado */
+  command: string;
+  /** Lo que tiene que estar prendido: 'yarn', 'hiveserver2'… */
+  needs: string[];
+}
+
+export interface SubmitJobRequest { template: string; params: Record<string, string | number | boolean> }
+
 /* ---------- Actividad (lo que muestra la consola) ---------- */
 
 export interface Activity {
@@ -395,6 +425,23 @@ export interface HdfsFileDetail extends HdfsFile {
 }
 
 export type HdfsExample = 'ventas' | 'numeros' | 'sucias' | 'senal' | 'texto';
+
+/** Un tramo del contenido de un archivo (hdfs dfs -cat, leído por WebHDFS con offset y length) */
+export interface HdfsCat {
+  path: string;
+  offset: number;
+  /** Bytes leídos en este tramo */
+  length: number;
+  totalBytes: number;
+  /** Texto del tramo (UTF-8; si es binario viene vacío) */
+  text: string;
+  /** Quedó contenido después de este tramo */
+  truncated: boolean;
+  /** El tramo tiene bytes nulos: no se muestra como texto */
+  binary: boolean;
+  /** El comando equivalente, para la consola */
+  command: string;
+}
 
 export interface UploadRequest {
   /** Carpeta de destino en HDFS */
@@ -626,7 +673,8 @@ export interface PipelineState {
 
 /* ---------- Datos: Hive, MySQL y MongoDB ---------- */
 
-export type DataSource = 'hive' | 'mysql' | 'mongodb';
+/** pig: Pig Latin con pig -x mapreduce (llega con el paquete de Consultas) */
+export type DataSource = 'hive' | 'mysql' | 'mongodb' | 'pig';
 
 export interface CatalogEntry {
   source: DataSource;
@@ -854,6 +902,12 @@ export interface SandboxApi {
   fsck(path: string): Promise<FsckReport>;
   /** GET /api/hdfs/replication → lo que el NameNode está re-replicando ahora */
   replication(): Promise<ReplicationState>;
+  /** GET /api/hdfs/cat?path=…&offset=0&length=65536 (máx. 1 MiB por tramo) */
+  hdfsCat(path: string, offset?: number, length?: number): Promise<HdfsCat>;
+  /** GET /api/hdfs/download?path=… (attachment). Devuelve la URL para bajarlo y el nombre del archivo */
+  hdfsDownload(path: string): Promise<{ url: string; name: string }>;
+  /** POST /api/hdfs/move { from, to } → ActionResult (hdfs dfs -mv) */
+  hdfsMove(from: string, to: string): Promise<ActionResult>;
 
   /** GET /api/yarn/apps */
   apps(): Promise<YarnApp[]>;
@@ -861,6 +915,10 @@ export interface SandboxApi {
   submitExample(job: ExampleJob): Promise<string>;
   /** POST /api/yarn/apps/:id/kill */
   killApp(id: string): Promise<void>;
+  /** GET /api/yarn/templates → trabajos que se pueden lanzar con parámetros */
+  jobTemplates(): Promise<JobTemplate[]>;
+  /** POST /api/yarn/apps { template, params } → { id } */
+  submitJob(req: SubmitJobRequest): Promise<string>;
 
   /** GET /api/yarn/cluster → memoria y vcores por NodeManager, contenedores y colas */
   yarnCluster(): Promise<YarnCluster>;

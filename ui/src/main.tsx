@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/widgets.css';
+import './styles/base.css';
 import { loadFonts } from './lib/fonts';
 import { connect } from './api';
 import { startStore } from './state/store';

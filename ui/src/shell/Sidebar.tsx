@@ -2,7 +2,7 @@ import { route, navigate } from '../state/ui';
 import { useSnapshot } from '../state/store';
 import { api } from '../api';
 import { SPEED as DEMO_SPEED } from '../api/demo/speed';
-import { NAV } from './nav';
+import { NAV, NAV_GROUPS } from './nav';
 import { Dot, Tip } from '../components/ui';
 
 function Mark() {
@@ -27,13 +27,12 @@ export function Sidebar() {
     if (id === 'yarn' && st.yarn.running + st.yarn.pending) return <span className="badge-count" data-k="run">{st.yarn.running + st.yarn.pending}</span>;
     return null;
   };
-  const groups = ['Operación', 'Datos', 'Sistema'] as const;
   const demo = api().mode === 'demo';
   return (
     <aside className="side" aria-label="Navegación">
       <div className="side-brand"><Mark /><b>BigData Sandbox</b><span className="tag">full</span></div>
       <nav className="side-nav">
-        {groups.map(g => (
+        {NAV_GROUPS.map(g => (
           <div className="nav-group" key={g} role="group" aria-label={g}>
             <span className="nav-label">{g}</span>
             {NAV.filter(n => n.group === g).map(n => (

@@ -6,7 +6,7 @@ import type { DemoEngine, StageDef } from './engine';
 import { EXAMPLES, LIMPIAS_HEAD, MONGO_COLLECTIONS, MYSQL_TABLES, POR_CATEGORIA, VENTAS_HEAD, answer } from './datasets';
 import { LIMPIAS_COLS, POR, PRODUCTOS_ROWS, VENTAS_COLS, n, procUp, needProc, trace } from './common';
 
-const PROC: Record<DataSource, [string, string]> = { hive: ['hiveserver2', 'HiveServer2'], mysql: ['mysql', 'MySQL'], mongodb: ['mongodb', 'MongoDB'] };
+const PROC: Record<DataSource, [string, string]> = { hive: ['hiveserver2', 'HiveServer2'], mysql: ['mysql', 'MySQL'], mongodb: ['mongodb', 'MongoDB'], pig: ['rm', 'ResourceManager'] };
 
 /* DDL de ejemplos/ventas.hql y ejemplos/tienda.hql */
 const HIVE_DDL: Record<string, string> = {

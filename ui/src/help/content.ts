@@ -4,6 +4,14 @@ import type { PageId } from '../state/ui';
 export interface Help { intro: string; terms: [string, string][] }
 
 export const HELP: Record<PageId, Help> = {
+  inicio: {
+    intro: 'El estado del cluster en una línea y qué podés hacer ahora mismo. Cada tarjeta dice si está lista, por qué no y el botón que lo arregla.',
+    terms: [['Listo', 'Los procesos que hacen falta están arriba: se puede usar ya.'], ['Arrancando', 'Falta que termine de levantar algún proceso; se habilita solo.'], ['No disponible', 'Hace falta prender un servicio o cambiar la configuración. El botón de la tarjeta lo hace por vos.']],
+  },
+  practicas: {
+    intro: 'Recorridos paso a paso por lo que se ve en la materia: HDFS, MapReduce, Hive, Sqoop, Spark, alta disponibilidad. Cada paso se puede hacer desde la interfaz o copiando el comando.',
+    terms: [['Práctica', 'Una guía corta con un objetivo y pasos verificables.'], ['Progreso', 'Se guarda en este navegador.']],
+  },
   cluster: {
     intro: 'El estado de todos los procesos del contenedor. Cada NameNode, DataNode y servicio es un proceso aparte, con su puerto y su página web. Desde acá se arranca, se detiene y se prende o apaga cada uno.',
     terms: [
