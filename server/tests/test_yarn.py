@@ -618,6 +618,11 @@ def test_mandar_wordcount(settings, tmp_path, fake_hadoop):
         assert sub["template"] == "mr-wordcount" and sub["out"] == "/user/root/resultados/wordcount"
         assert sub["shown"].startswith("hadoop jar hadoop-mapreduce-examples-3.3.6.jar wordcount")
         assert any("Map input records" in l["text"] for l in sub["run"].lines)
+        # La salida del comando (con los contadores) se ve como un "contenedor" más de los logs
+        y.http.apps[app] = {"id": app, "state": "FINISHED", "finalStatus": "SUCCEEDED", "applicationType": "MAPREDUCE"}
+        r = await y.logs(app, "cliente")
+        assert r["container"] == "cliente" and r["containers"][0]["id"] == "cliente"
+        assert any("Map input records" in l for l in r["files"][0]["lines"])
     asyncio.run(main())
 
 
@@ -630,6 +635,19 @@ def test_mandar_grep_con_caracteres_raros(settings, tmp_path, fake_hadoop):
         # La regex llega como un solo argumento, tal cual
         assert hadoop_args(fake_hadoop)[-1].endswith(r"[grep] [/user/root/d] [/user/root/g] [[a-z] \w]")
         assert "hdfs dfs -mkdir -p /user/root" in fake_hadoop.read_text().splitlines()
+    asyncio.run(main())
+
+
+def test_salida_que_no_se_puede_borrar(settings, tmp_path, fake_hadoop):
+    async def main():
+        cl, y, bus = make(settings, tmp_path)
+        y.hdfs = FakeHdfs("/user/root/d")
+        for out in ("/user/root", "/user", "/", "/tmp", "/user/root/../..", "/user/root/d", "/user"):
+            with pytest.raises(ApiError) as e:
+                await y.submit_template("mr-wordcount", {"in": "/user/root/d/x.txt", "out": out})
+            assert e.value.code == "invalid", out
+        await y.runner.wait_all()
+        assert not fake_hadoop.exists() or "-rm" not in fake_hadoop.read_text()
     asyncio.run(main())
 
 

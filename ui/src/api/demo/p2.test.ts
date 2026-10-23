@@ -76,6 +76,11 @@ describe('plantillas de trabajos del demo', () => {
     expect(out.text).toContain('hadoop\t1\n');
     const logs = await api.appLogs(id);
     expect(logs.files.find(f => f.name === 'syslog')!.lines.join('\n')).toMatch(/Map input records=4/);
+    expect(logs.containers[0]).toMatchObject({ id: 'cliente', label: 'Salida del comando' });
+    const cli = await api.appLogs(id, 'cliente');
+    expect(cli.container).toBe('cliente');
+    expect(cli.files[0].lines[0]).toMatch(/^\$ hadoop jar .* wordcount /);
+    expect(cli.files[0].lines.join('\n')).toMatch(/Map input records=4/);
     const ls = await api.hdfsList('/user/root/resultados/wordcount');
     expect(ls.entries.map(e => e.name).sort()).toEqual(['_SUCCESS', 'part-r-00000']);
     expect((await api.app(id)).command).toBe('hadoop jar hadoop-mapreduce-examples-3.3.6.jar wordcount /user/root/texto.txt /user/root/resultados/wordcount');

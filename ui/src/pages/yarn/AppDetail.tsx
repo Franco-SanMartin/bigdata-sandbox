@@ -123,8 +123,8 @@ function Logs({ logs, onContainer, live }: { logs: Res<AppLogs>; onContainer: (i
         <ul>
           {l?.containers.map(c => (
             <li key={c.id}><button type="button" aria-current={c.id === l.container || undefined} onClick={() => onContainer(c.id)}>
-              <span className="lg-k">{c.kind === 'am' ? 'AM' : c.kind === 'executor' ? 'EX' : 'T'}</span>
-              <span className="lg-c"><b>{c.label}</b><span className="mono">{c.id.replace(/^container_\d+_/, '…')}</span></span>
+              <span className="lg-k">{c.id === 'cliente' ? '$' : c.kind === 'am' ? 'AM' : c.kind === 'executor' ? 'EX' : 'T'}</span>
+              <span className="lg-c"><b>{c.label}</b><span className="mono">{c.id === 'cliente' ? 'con los contadores del final' : c.id.replace(/^container_\d+_/, '…')}</span></span>
             </button></li>
           ))}
         </ul>

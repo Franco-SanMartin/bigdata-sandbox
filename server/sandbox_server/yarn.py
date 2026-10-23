@@ -100,6 +100,7 @@ VENTAS = "/user/root/ventas"
 # ---------------------------------------------------------------------------
 
 TEXTO = "/user/root/texto.txt"          # entrada por defecto: se sube sola si falta
+CLIENT = "cliente"                      # el "contenedor" de logs con la salida del comando que mandó el trabajo
 GREP_PATTERN = r"^[\w\s.\-\[\]\\]{1,64}$"
 EXAMPLES_JAR = "hadoop-mapreduce-examples-3.3.6.jar"
 SPARK_JAR = "spark-examples_2.12-3.5.9.jar"
@@ -777,6 +778,12 @@ class Yarn:
 
     async def logs(self, app_id: str, container: str | None) -> dict:
         self._need_rm()
+        # Lo que imprimió el comando que lo mandó (hadoop jar, spark-submit, beeline): ahí están los
+        # contadores del final ("Map input records=…"). Solo existe para lo que se mandó desde acá.
+        sub = self.submitted.get(app_id)
+        run: Run | None = sub.get("run") if sub else None
+        client = [{"id": CLIENT, "kind": "am", "label": "Salida del comando"}] \
+            if run is not None and run.lines else []
         a, nm = await asyncio.gather(self.rm_app(app_id), self.nm_containers())
         typ = a.get("applicationType", "MAPREDUCE").upper()
         state = app_state(a)
@@ -793,7 +800,10 @@ class Yarn:
         cur = container if container in ids else am
         containers = [{"id": c, "kind": container_kind(c, typ), "label": container_label(c, typ)} for c in ids]
         files: dict[str, list[str]] = {}
-        if cur and cur in live:
+        if client and container == CLIENT:
+            cur = CLIENT
+            files = {"stdout": [l["text"] for l in run.lines]}
+        elif cur and cur in live:
             texts = await asyncio.gather(*(self.text(f"{NM}/ws/v1/node/containerlogs/{cur}/{f}") for f in
                                            ("stdout", "stderr", "syslog")))
             files = {f: (t or "").splitlines()[-500:] for f, t in zip(("stdout", "stderr", "syslog"), texts)}
@@ -806,7 +816,7 @@ class Yarn:
                 while len(self._logs_cache) > 20:
                     self._logs_cache.pop(next(iter(self._logs_cache)))
             files = self._logs_cache[key]
-        return {"appId": app_id, "containers": containers, "container": cur or "",
+        return {"appId": app_id, "containers": client + containers, "container": cur or "",
                 "files": [{"name": f, "lines": files.get(f, [])[-500:]} for f in ("stdout", "stderr", "syslog")]}
 
     async def _exec(self, argv: list[str]) -> tuple[int, str, str]:
@@ -919,6 +929,10 @@ class Yarn:
                                  "El texto de ejemplo, para que el trabajo tenga qué leer")
             elif st is None:
                 raise ApiError(f"No existe la entrada {src}: subila primero", "not_found")
+        if dst and (dst in hdfs_mod.NO_MOVE or (src and hdfs_mod.inside(src, dst))):
+            # Con «pisar» se borra la salida: nunca una carpeta del sistema ni la que tiene la entrada
+            raise ApiError(f"La salida no puede ser {dst}: elegí una carpeta nueva, como /user/root/resultados/x",
+                           "invalid")
         if dst:
             dst_st = await h.status_of(dst)
             if dst_st is not None:

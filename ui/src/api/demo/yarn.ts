@@ -103,7 +103,15 @@ export class DemoYarn {
       const k = a.executors ? 'executor' : 'task';
       seen.set(t.container, { id: t.container, kind: k, label: k === 'executor' ? `exec ${(t.slot ?? 0) + 1}` : `${s.name} tarea ${t.index + 1}` });
     }));
-    const containers = [...seen.values()];
+    // Lo que imprimió el comando que lo mandó (como en el servidor): ahí quedan los contadores del final
+    const client = a.cmd ? [{ id: 'cliente', kind: 'am' as const, label: 'Salida del comando' }] : [];
+    const containers = [...client, ...seen.values()];
+    if (client.length && container === 'cliente') {
+      return {
+        appId: id, containers, container: 'cliente',
+        files: [{ name: 'stdout', lines: [`$ ${a.cmd}`, ...a.log.map(l => `${iso(l.t)} ${l.level} ${l.text}`)] }, { name: 'stderr', lines: [] }, { name: 'syslog', lines: [] }],
+      };
+    }
     const cur = container && seen.has(container) ? container : am;
     const short = cur.replace('container_', '');
     const lines = (cur === am ? a.log : a.log.filter(l => l.text.includes(short))).map(l => `${iso(l.t)} ${l.level} ${l.text}`);
