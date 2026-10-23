@@ -528,7 +528,14 @@ class Hdfs:
     async def files(self) -> list[dict]:
         if self.c.phase != "running" or not self.c.hdfs.get("available"):
             return []
-        files = [dict(f) for f in await self.fsck_all()]
+        try:
+            files = [dict(f) for f in await self.fsck_all()]
+        except ApiError:
+            # El cluster se apagó mientras corría el fsck (la interfaz sigue
+            # sondeando un instante): no es un error, ya no hay archivos que ver.
+            if self.c.phase != "running" or not self.c.hdfs.get("available"):
+                return []
+            raise
         # Fecha de modificación: un LISTSTATUS por carpeta (WebHDFS, sin JVM)
         mtimes: dict[str, int] = {}
         for d in sorted({parent_of(f["path"]) or "/" for f in files})[:100]:

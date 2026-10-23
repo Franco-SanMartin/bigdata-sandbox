@@ -205,6 +205,26 @@ def test_archivos_y_detalle(settings, tmp_path, fake_hdfs):
     asyncio.run(main())
 
 
+def test_archivos_con_el_cluster_apagandose(settings, tmp_path, fake_hdfs):
+    """Si el cluster se apaga mientras corre el fsck, la lista vuelve vacía (no 500)."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        apagar = [True]
+
+        async def apagando(*_a, **_k):
+            if apagar[0]:
+                cl.phase = "stopping"
+            return 1, "", "Connection refused"
+        h.exec = apagando
+        assert await h.files() == []
+        # Con el cluster en marcha, la misma falla sí es un error
+        cl.phase, apagar[0] = "running", False
+        with pytest.raises(ApiError) as e:
+            await h.files()
+        assert e.value.code == "failed"
+    asyncio.run(main())
+
+
 def test_transferencias_entre_dos_fsck(settings, tmp_path, fake_hdfs, monkeypatch):
     async def main():
         cl, h, bus = make(settings, tmp_path)

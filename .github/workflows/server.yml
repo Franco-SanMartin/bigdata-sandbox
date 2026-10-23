@@ -7,7 +7,7 @@ name: Servidor
 
 on:
   push:
-    branches: [full, main, ui2]
+    branches: [full, main, ui2, 'ui2-*']
     paths:
       - "server/**"
       - ".github/workflows/server.yml"
