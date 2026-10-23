@@ -25,8 +25,10 @@ Hace dos arranques:
      y sus variantes, Datos y Machine Learning.
 """
 import json
+import math
 import os
 import re
+import struct
 import subprocess
 import sys
 import threading
@@ -865,6 +867,95 @@ def revisar_modelo(m: dict) -> str:
     return det
 
 
+# ---------------------------------------------------------------- lo de adentro de cada modelo (viz)
+# La misma cuenta que hace la interfaz (ui/src/lib/viz) en Python puro, sin numpy: con lo que devuelve
+# GET /api/ml/models/{id}/viz tiene que salir lo que predijo el servidor para la muestra.
+TOL_VIZ = 1e-6
+
+
+def _escalar(sc: dict, x: list) -> list:
+    out = []
+    for i, v in enumerate(x):
+        val = math.log(v) if sc.get("log") and sc["log"][i] else v
+        s = sc["scale"][i]
+        out.append((0.0 if sc.get("zeroScale") == "zero" else val - sc["mean"][i]) if s == 0 else (val - sc["mean"][i]) / s)
+    return out
+
+
+def _sigmoide(z: float) -> float:
+    return 1 / (1 + math.exp(-z)) if z >= 0 else math.exp(z) / (1 + math.exp(z))
+
+
+def _pasada(v: dict, x: list) -> list:
+    """proba (o [valor] o [grupo]) de una fila con lo que mandó el servidor"""
+    k = v["kind"]
+    if k == "mlp":
+        act = {"relu": lambda z: max(z, 0.0), "logistic": _sigmoide, "tanh": math.tanh, "identity": lambda z: z}[v["hidden"]]
+        a = _escalar(v["scaler"], x)
+        for n, (w, b) in enumerate(zip(v["weights"], v["biases"])):
+            z = [sum(a[i] * w[i][j] for i in range(len(a))) + b[j] for j in range(len(b))]
+            if n < len(v["weights"]) - 1:
+                a = [act(t) for t in z]
+            elif v["out"] == "softmax":
+                mx = max(z)
+                e = [math.exp(t - mx) for t in z]
+                a = [t / sum(e) for t in e]
+            else:
+                a = [_sigmoide(z[0])]
+        return a if v["out"] == "softmax" else [1 - a[0], a[0]]
+    if k == "tree":
+        xs = [struct.unpack("f", struct.pack("f", t))[0] for t in x] if v.get("float32") else x
+        i = 0
+        while v["nodes"][i]["f"] != -1 and not v["nodes"][i].get("cut"):
+            n = v["nodes"][i]
+            i = n["l"] if xs[n["f"]] <= n["t"] else n["r"]
+        return None if v["nodes"][i].get("cut") else v["nodes"][i]["p"]
+    if k == "logistic":
+        z = v["intercept"] + sum(c * t for c, t in zip(v["coef"], _escalar(v["scaler"], x)))
+        return [1 - _sigmoide(z), _sigmoide(z)]
+    if k == "linear":
+        return [v["intercept"] + sum(c * t for c, t in zip(v["coef"], x))]
+    if k == "dummy":
+        pr = v["prior"]
+        top = max(range(len(pr)), key=lambda i: pr[i])
+        return {"most_frequent": [float(i == top) for i in range(len(pr))], "prior": list(pr),
+                "uniform": [1 / len(pr)] * len(pr)}.get(v["strategy"])
+    if k == "kmeans":
+        z = _escalar(v["transform"], x)
+        cs = v["frames"][-1]["centers"]
+        return [min(range(len(cs)), key=lambda g: sum((a - b) ** 2 for a, b in zip(z, cs[g])))]
+    raise AssertionError(f"tipo de viz desconocido: {k}")
+
+
+def revisar_viz(m: dict) -> str:
+    """Que el modelo tenga su viz y que la cuenta con ella dé lo que predijo el servidor"""
+    assert m.get("hasViz"), f"{m['engine']} {m['model']} sin viz: {m.get('vizError')}"
+    codigo, v = pedir("GET", f"/api/ml/models/{m['id']}/viz")
+    assert codigo == 200 and isinstance(v, dict), (codigo, str(v)[:300])
+    guardar(f"viz_{m['engine']}_{m['model']}", v)
+    s = v.get("sample") or {}
+    filas = s.get("rows") or []
+    assert filas, f"viz {v['kind']} sin muestra"
+    peor, n = 0.0, 0
+    for i, x in enumerate(filas):
+        r = _pasada(v, x)
+        if r is None:
+            continue
+        if v["kind"] == "kmeans":
+            assert r[0] == int(s["pred"][i]), f"fila {i}: grupo {r[0]}, el servidor dijo {s['pred'][i]}"
+        elif v["kind"] == "linear":
+            peor = max(peor, abs(r[0] - s["pred"][i]) / max(1.0, abs(s["pred"][i])))
+        else:
+            peor = max(peor, max(abs(a - b) for a, b in zip(r, s["proba"][i])))
+        n += 1
+    if v["kind"] == "dummy" and v.get("strategy") == "stratified":
+        return "viz dummy stratified (al azar: no se rehace)"
+    assert n, f"viz {v['kind']}: ninguna fila se pudo rehacer"
+    assert peor <= TOL_VIZ, f"viz {v['kind']} {m['engine']}: la cuenta difiere {peor:.2e} de lo que predijo el servidor"
+    extra = f", {len(v['weights'])} matrices" if v["kind"] == "mlp" and v.get("weights") else ""
+    return f"viz {v['kind']} {n} filas, dif máx {peor:.1e}{extra}"
+
+
 def ml() -> None:
     def entrenar(task: str, model: str, engine: str, **extra) -> dict:
         t0 = time.time()
@@ -921,14 +1012,14 @@ def ml() -> None:
     with Chequeo("ML: scikit-learn igual que modelos_sklearn.py") as c:
         m = entrenar("clasificacion", "arbol", "sklearn", target="vuelve", params={"max_depth": 3})
         mat = m.get("confusion", {}).get("matrix")
-        c.detalle = f"{TIEMPOS['ML sklearn clasificacion arbol']} s; {revisar_modelo(m)}{contra_esperado(m)}"
+        c.detalle = f"{TIEMPOS['ML sklearn clasificacion arbol']} s; {revisar_modelo(m)}{contra_esperado(m)}; {revisar_viz(m)}"
         assert mat == referencia, (mat, referencia)
     arbol_sk = m["metrics"].get("aciertos") if m else None
 
     with Chequeo("ML: MLlib con appId de YARN") as c:
         m = entrenar("clasificacion", "arbol", "mllib", target="vuelve", params={"max_depth": 3})
         app = m.get("appId")
-        c.detalle = f"{TIEMPOS['ML mllib clasificacion arbol']} s; appId {app}; {revisar_modelo(m)}{contra_esperado(m)}"
+        c.detalle = f"{TIEMPOS['ML mllib clasificacion arbol']} s; appId {app}; {revisar_modelo(m)}{contra_esperado(m)}; {revisar_viz(m)}"
         d = esperar_app(app, 120)
         guardar("yarn_app_mllib", d)
         assert d["state"] == "FINISHED", d.get("state")
@@ -949,7 +1040,7 @@ def ml() -> None:
     for task, model, engine, extra in otros:
         with Chequeo(f"ML: {engine} {task} {model} con la métrica en rango") as c:
             m = entrenar(task, model, engine, **extra)
-            det = revisar_modelo(m)
+            det = f"{revisar_modelo(m)}; {revisar_viz(m)}"
             medidos[f"{engine}:{model}"] = m["metrics"]
             c.detalle = f"{TIEMPOS[f'ML {engine} {task} {model}']} s; {det}{contra_esperado(m)}" \
                         f"; {m['trainRows']}/{m['testRows']} filas"
