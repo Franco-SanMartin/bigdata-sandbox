@@ -154,6 +154,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
 
     hdfs = hdfs_mod.Hdfs(cluster, runner, bus)
     yarn = yarn_mod.Yarn(cluster, runner, bus)
+    yarn.hdfs = hdfs
     datos = datos_mod.Datos(cluster, runner, bus, hdfs)
     ml = ml_mod.Ml(cluster, runner, bus, hdfs)
     pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)

@@ -510,3 +510,160 @@ def test_kill_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, monkeypatch)
             await y.kill("application_1792695340081_0099")
         assert e.value.code == "not_found" and len(llamadas) == 1
     asyncio.run(main())
+
+
+# ------------------------------------------------------------- plantillas
+
+
+class FakeHdfs:
+    """Lo único que usa submit_template de Hdfs: si una ruta existe."""
+
+    def __init__(self, *existen):
+        self.existen = set(existen)
+
+    async def status_of(self, path):
+        return {"type": "FILE"} if path in self.existen else None
+
+
+@pytest.fixture
+def fake_hadoop(fake_bin, tmp_path):
+    f = tmp_path / "fakebin" / "hadoop"
+    f.write_text(f"""#!/bin/bash
+printf 'hadoop' >> {fake_bin}; for a in "$@"; do printf ' [%s]' "$a" >> {fake_bin}; done; echo >> {fake_bin}
+echo "INFO impl.YarnClientImpl: Submitted application {NUEVA}" >&2
+echo "Map input records=4"
+""")
+    f.chmod(0o755)
+    return fake_bin
+
+
+def hadoop_args(log):
+    return [l for l in log.read_text().splitlines() if l.startswith("hadoop ")] if log.exists() else []
+
+
+def test_lista_de_plantillas():
+    ids = [t["id"] for t in Y.TEMPLATES]
+    assert ids == ["mr-wordcount", "mr-pi", "mr-grep", "mr-ventas", "hive-ventas", "spark-pi", "spark-ventas"]
+    for t in Y.TEMPLATES:
+        assert t["engine"] in ("mr", "tez", "spark") and t["needs"] and t["description"]
+        for p in t["params"]:
+            assert "{" + p["name"] + "}" in t["command"] or p["type"] == "bool"
+    pi = Y.TEMPLATE["mr-pi"]["params"]
+    assert [(p["min"], p["max"]) for p in pi] == [(1, 16), (10, 100000)]
+    assert Y.TEMPLATE["mr-grep"]["params"][2]["pattern"] == r"^[\w\s.\-\[\]\\]{1,64}$"
+
+
+def test_validar_parametros():
+    v = Y.validate_params(Y.TEMPLATE["mr-pi"], {"maps": "8", "samples": 500})
+    assert v == {"maps": 8, "samples": 500}
+    assert Y.validate_params(Y.TEMPLATE["mr-pi"], {}) == {"maps": 4, "samples": 1000}
+    v = Y.validate_params(Y.TEMPLATE["mr-wordcount"], {"in": "user//root/texto.txt", "out": "/tmp/wc/", "overwrite": "false"})
+    assert v == {"in": "/user/root/texto.txt", "out": "/tmp/wc", "overwrite": False}
+
+
+@pytest.mark.parametrize("tid,params", [
+    ("mr-pi", {"maps": 0}), ("mr-pi", {"maps": 17}), ("mr-pi", {"samples": 9}), ("mr-pi", {"samples": 100001}),
+    ("mr-pi", {"maps": "4; rm -rf /"}), ("mr-pi", {"maps": True}), ("mr-pi", {"maps": 2.5}),
+    ("mr-pi", {"otro": 1}), ("mr-pi", ["maps", 4]),
+    ("spark-pi", {"partitions": 0}), ("spark-pi", {"partitions": 99}),
+    ("mr-grep", {"regex": "a; touch /tmp/x"}), ("mr-grep", {"regex": "$(id)"}), ("mr-grep", {"regex": "`id`"}),
+    ("mr-grep", {"regex": "a|b"}), ("mr-grep", {"regex": "x" * 65}), ("mr-grep", {"regex": "-Dfs.defaultFS"}),
+    ("mr-grep", {"regex": "a\nb"}), ("mr-grep", {"regex": 5}),
+    ("mr-wordcount", {"out": "/"}), ("mr-wordcount", {"out": "/user/root"}), ("mr-wordcount", {"out": "/etc/x"}),
+    ("mr-wordcount", {"out": "/user/root/../../etc"}), ("mr-wordcount", {"in": "/user/root/d", "out": "/user/root/d"}),
+    ("mr-wordcount", {"in": "/user/root/d", "out": "/user/root/d/salida"}),
+    ("mr-wordcount", {"in": "/user/root/d/x", "out": "/user/root/d"}),
+    ("mr-wordcount", {"in": "/x\0"}), ("mr-wordcount", {"in": ["/x"]}), ("mr-wordcount", {"overwrite": "quizás"}),
+])
+def test_inyeccion_y_rangos(tid, params):
+    with pytest.raises(ApiError) as e:
+        Y.validate_params(Y.TEMPLATE[tid], params)
+    assert e.value.code == "invalid"
+
+
+def test_grep_regex_permitida():
+    for ok in ("datos", "[a-z]+".replace("+", ""), r"\w\w\s", "a.b-c", "[A-Z][a-z]"):
+        assert Y.validate_params(Y.TEMPLATE["mr-grep"], {"regex": ok})["regex"] == ok
+
+
+def test_argv_sin_shell():
+    argv, shown = Y.template_argv("mr-wordcount", {"in": "/user/root/a b.txt", "out": "/tmp/o", "overwrite": True})
+    assert argv[:2] == ["hadoop", "jar"] and argv[2].endswith(".jar") and argv[3:] == ["wordcount", "/user/root/a b.txt", "/tmp/o"]
+    assert shown == "hadoop jar hadoop-mapreduce-examples-3.3.6.jar wordcount '/user/root/a b.txt' /tmp/o"
+    argv, shown = Y.template_argv("spark-pi", {"partitions": 3})
+    assert argv[0] == "spark-submit" and argv[-1] == "3" and "SparkPi" in shown
+
+
+def test_mandar_wordcount(settings, tmp_path, fake_hadoop):
+    async def main():
+        cl, y, bus = make(settings, tmp_path)
+        (cl.s.datos_dir / "ejemplos").mkdir()
+        (cl.s.datos_dir / "ejemplos" / "texto.txt").write_text("hola mundo\n")
+        y.hdfs = FakeHdfs("/user/root/resultados/wordcount")
+        app = await y.submit_template("mr-wordcount", {})
+        assert app == NUEVA
+        await y.runner.wait_all()
+        cmds = fake_hadoop.read_text().splitlines()
+        # Sube el texto de ejemplo (no estaba) y borra la salida anterior (overwrite por defecto)
+        assert f"hdfs dfs -put -f {cl.s.datos_dir}/ejemplos/texto.txt /user/root/texto.txt" in cmds
+        assert "hdfs dfs -rm -r -f -skipTrash /user/root/resultados/wordcount" in cmds
+        args = hadoop_args(fake_hadoop)[-1]
+        assert args.endswith("[wordcount] [/user/root/texto.txt] [/user/root/resultados/wordcount]")
+        sub = y.submitted[app]
+        assert sub["template"] == "mr-wordcount" and sub["out"] == "/user/root/resultados/wordcount"
+        assert sub["shown"].startswith("hadoop jar hadoop-mapreduce-examples-3.3.6.jar wordcount")
+        assert any("Map input records" in l["text"] for l in sub["run"].lines)
+    asyncio.run(main())
+
+
+def test_mandar_grep_con_caracteres_raros(settings, tmp_path, fake_hadoop):
+    async def main():
+        cl, y, bus = make(settings, tmp_path)
+        y.hdfs = FakeHdfs("/user/root/d")
+        await y.submit_template("mr-grep", {"in": "/user/root/d", "out": "/user/root/g", "regex": r"[a-z] \w"})
+        await y.runner.wait_all()
+        # La regex llega como un solo argumento, tal cual
+        assert hadoop_args(fake_hadoop)[-1].endswith(r"[grep] [/user/root/d] [/user/root/g] [[a-z] \w]")
+        assert "hdfs dfs -mkdir -p /user/root" in fake_hadoop.read_text().splitlines()
+    asyncio.run(main())
+
+
+def test_plantilla_errores(settings, tmp_path, fake_hadoop):
+    async def main():
+        cl, y, bus = make(settings, tmp_path)
+        y.hdfs = FakeHdfs("/user/root/d", "/user/root/sal")
+        with pytest.raises(ApiError) as e:
+            await y.submit_template("rm -rf", {})
+        assert e.value.code == "invalid"
+        with pytest.raises(ApiError) as e:
+            await y.submit_template("mr-wordcount", {"in": "/user/root/nada", "out": "/user/root/o"})
+        assert e.value.code == "not_found"
+        with pytest.raises(ApiError) as e:
+            await y.submit_template("mr-wordcount", {"in": "/user/root/d", "out": "/user/root/sal", "overwrite": False})
+        assert e.value.code == "invalid"
+        cl.processes = up("rm")
+        with pytest.raises(ApiError) as e:
+            await y.submit_template("mr-pi", {})
+        assert e.value.code == "service_down"
+        assert hadoop_args(fake_hadoop) == []
+    asyncio.run(main())
+
+
+def test_ruta_plantillas(settings, tmp_path, fake_hadoop):
+    ui = tmp_path / "ui"
+    ui.mkdir()
+    (ui / "index.html").write_text("<!doctype html>")
+    with TestClient(build_app(settings, ui_dir=ui)) as c:
+        app = c.app
+        cl, y = app.state.cluster, app.state.yarn
+        assert y.hdfs is app.state.hdfs
+        r = c.get("/api/yarn/templates")
+        assert r.status_code == 200 and r.json()[1]["id"] == "mr-pi"
+        cl.phase, cl.config = "running", {**cl.config, **BASE}
+        cl.hdfs = {**cl.hdfs, "available": True}
+        cl.processes = up("rm", "nm", "jh")
+        y.http = Rest()
+        r = c.post("/api/yarn/apps", json={"template": "mr-pi", "params": {"maps": 2, "samples": 100}})
+        assert r.status_code == 202 and r.json() == {"id": NUEVA}
+        r = c.post("/api/yarn/apps", json={"template": "mr-pi", "params": {"maps": 200}})
+        assert r.status_code == 400 and r.json()["code"] == "invalid"
