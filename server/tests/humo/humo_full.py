@@ -516,6 +516,112 @@ def yarn() -> None:
         assert d["state"] == "KILLED"
 
 
+# ---------------------------------------------------------------- 2b. HDFS y Trabajos de la interfaz
+
+def p2() -> None:
+    """Lo que hacen las pantallas de HDFS y Trabajos: subir, ver, mover, bajar y lanzar plantillas."""
+    carpeta, movido = "/user/root/humo_p2", "/user/root/humo_p2/ventas_2024.csv"
+    origen = carpeta + "/ventas_grandes.csv"
+    total = 0
+    with Chequeo("HDFS: subir el ejemplo de ventas a una carpeta nueva") as c:
+        codigo, r = pedir("POST", "/api/hdfs/upload", {"dest": carpeta, "example": "ventas"})
+        assert codigo == 202, (codigo, r)
+        entradas = esperar(lambda: put_terminado(carpeta), 300, "el put de ventas", 2)
+        c.detalle = ", ".join(e["name"] for e in entradas)
+        assert any(e["path"] == origen for e in entradas), entradas
+
+    with Chequeo("HDFS: ver un tramo (cat) y los límites") as c:
+        codigo, r = pedir("GET", f"/api/hdfs/cat?path={q(origen)}&length=4096")
+        guardar("p2_cat", {**r, "text": r.get("text", "")[:400]} if isinstance(r, dict) else r)
+        assert codigo == 200 and r["text"] and r["totalBytes"] > 4096 and r["truncated"], (codigo, r)
+        total = r["totalBytes"]
+        assert r["command"].startswith("hdfs dfs -cat"), r["command"]
+        for mal in ("&length=99999999", "&offset=-1", "&length=abc"):
+            codigo, e = pedir("GET", f"/api/hdfs/cat?path={q(origen)}{mal}")
+            assert codigo == 400 and e["code"] == "invalid", (mal, codigo, e)
+        codigo, e = pedir("GET", "/api/hdfs/cat?path=" + q("/user/root/../../etc/passwd"))
+        assert codigo in (400, 404), (codigo, e)
+        c.detalle = f"{total} bytes en total"
+
+    with Chequeo("HDFS: mover (renombrar)") as c:
+        codigo, r = pedir("POST", "/api/hdfs/move", {"from": origen, "to": movido})
+        assert codigo == 200, (codigo, r)
+        _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(carpeta))
+        nombres = [e["name"] for e in ls["entries"]]
+        c.detalle = str(nombres)
+        assert "ventas_2024.csv" in nombres and "ventas_grandes.csv" not in nombres, nombres
+        codigo, e = pedir("POST", "/api/hdfs/move", {"from": "/user", "to": "/otra"})
+        assert codigo == 400, (codigo, e)
+
+    with Chequeo("HDFS: bajar el archivo entero (mismo tamaño)") as c:
+        with urllib.request.urlopen(URL + "/api/hdfs/download?path=" + q(movido), timeout=300) as r:
+            bajado = 0
+            while trozo := r.read(1 << 20):
+                bajado += len(trozo)
+            disp = r.headers.get("content-disposition", "")
+        c.detalle = f"{bajado} bytes · {disp}"
+        assert bajado == total and "ventas_2024.csv" in disp, (bajado, total, disp)
+
+    with Chequeo("HDFS: cambiar la réplica") as c:
+        codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": movido, "replication": 1})
+        assert codigo == 204, (codigo, r)
+        codigo, d = pedir("GET", "/api/hdfs/file?path=" + q(movido))
+        c.detalle = f"réplica {d.get('replication')}"
+        assert d.get("replication") == 1, d
+        codigo, e = pedir("PATCH", "/api/hdfs/files", {"path": movido, "replication": 99})
+        assert codigo == 400, (codigo, e)
+
+    with Chequeo("Trabajos: plantillas") as c:
+        codigo, t = pedir("GET", "/api/yarn/templates")
+        guardar("p2_templates", t)
+        assert codigo == 200, t
+        ids = [x["id"] for x in t]
+        c.detalle = ", ".join(ids)
+        assert {"mr-wordcount", "mr-pi", "mr-grep"} <= set(ids), ids
+
+    with Chequeo("Trabajos: parámetros que no se aceptan") as c:
+        malos = [("mr-grep", {"regex": "$(id)"}), ("mr-grep", {"regex": "a;rm -rf /"}),
+                 ("mr-pi", {"maps": 500}), ("mr-pi", {"samples": "1e9"}),
+                 ("mr-wordcount", {"out": "/user/root"}), ("nada", {})]
+        for tpl, prm in malos:
+            codigo, e = pedir("POST", "/api/yarn/apps", {"template": tpl, "params": prm})
+            assert codigo == 400 and e["code"] == "invalid", (tpl, prm, codigo, e)
+        c.detalle = f"{len(malos)} rechazados con 400"
+
+    salida = "/user/root/resultados/humo_wordcount"
+    with Chequeo("Trabajos: wordcount con parámetros y sus logs") as c:
+        t0 = time.time()
+        codigo, r = pedir("POST", "/api/yarn/apps", {"template": "mr-wordcount", "params": {"out": salida}},
+                          timeout=180)
+        assert codigo == 202, (codigo, r)
+        app = r["id"]
+        d = esperar_app(app)
+        TIEMPOS["Trabajos wordcount"] = round(time.time() - t0, 1)
+        guardar("p2_wordcount", d)
+        assert d["state"] == "FINISHED", d.get("state")
+        assert d.get("outputPath") == salida, d.get("outputPath")
+        codigo, lg = pedir("GET", f"/api/yarn/apps/{app}/logs?container=cliente", timeout=120)
+        guardar("p2_wordcount_logs", lg)
+        assert codigo == 200 and lg["container"] == "cliente", (codigo, lg)
+        assert lg["containers"][0]["id"] == "cliente", lg["containers"]
+        lineas = [l for f in lg["files"] for l in f["lines"]]
+        assert any("Map input records" in l for l in lineas), lineas[-20:]
+        _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(salida))
+        assert any(e["name"].startswith("part-r-") for e in ls["entries"]), ls
+        c.detalle = f"{app} en {TIEMPOS['Trabajos wordcount']} s, {len(lineas)} líneas del cliente"
+
+    for tpl, prm in (("mr-pi", {"maps": 2, "samples": 100}),
+                     ("mr-grep", {"in": movido, "out": "/user/root/resultados/humo_grep", "regex": "Centro"})):
+        with Chequeo(f"Trabajos: {tpl} con {prm}") as c:
+            t0 = time.time()
+            codigo, r = pedir("POST", "/api/yarn/apps", {"template": tpl, "params": prm}, timeout=180)
+            assert codigo == 202, (codigo, r)
+            d = esperar_app(r["id"])
+            TIEMPOS[f"Trabajos {tpl}"] = round(time.time() - t0, 1)
+            c.detalle = f"{r['id']} {d['state']} a los {TIEMPOS[f'Trabajos {tpl}']} s"
+            assert d["state"] == "FINISHED", d.get("state")
+
+
 def paso(stage: str, tool: str, opciones: dict | None = None, segundos=1200) -> dict:
     nombre = f"{stage}:{tool}" + (f" {opciones}" if opciones else "")
     paso.ultimo = {}
@@ -743,6 +849,7 @@ def main() -> int:
                     300, "servicios")
             c.detalle = str(procesos())
         yarn()
+        p2()
         pipeline()
         datos()
         ml()
