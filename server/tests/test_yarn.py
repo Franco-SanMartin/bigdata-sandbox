@@ -626,6 +626,30 @@ def test_mandar_wordcount(settings, tmp_path, fake_hadoop):
     asyncio.run(main())
 
 
+def test_salida_del_comando_espera_al_cliente(settings, tmp_path, fake_hadoop):
+    # YARN da la app por FINISHED antes de que el cliente imprima los contadores: los logs
+    # de «cliente» esperan a que el comando termine en vez de devolverlos por la mitad.
+    async def main():
+        from sandbox_server.actions import Action, Run
+        cl, y, bus = make(settings, tmp_path)
+        run = Run("r1", Action("MAPREDUCE: mr-wordcount", ["true"]),
+                  lines=[{"text": "mapreduce.Job:  map 100% reduce 0%"}])
+        y.submitted[NUEVA] = {"run": run}
+        y.http.apps[NUEVA] = {"id": NUEVA, "state": "FINISHED", "finalStatus": "SUCCEEDED",
+                              "applicationType": "MAPREDUCE"}
+
+        async def termina():
+            await asyncio.sleep(0.5)
+            run.lines.append({"text": "\t\tMap input records=2"})
+            run.state = "done"
+        t = asyncio.create_task(termina())
+        r = await y.logs(NUEVA, "cliente")
+        await t
+        assert r["container"] == "cliente"
+        assert any("Map input records" in l for l in r["files"][0]["lines"])
+    asyncio.run(main())
+
+
 def test_mandar_grep_con_caracteres_raros(settings, tmp_path, fake_hadoop):
     async def main():
         cl, y, bus = make(settings, tmp_path)

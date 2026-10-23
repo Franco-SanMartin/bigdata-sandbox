@@ -560,11 +560,12 @@ def test_mover(settings, tmp_path, fake_hdfs):
         r = await h.move("/user/root/humo/humo.csv", "/user/root/humo/ventas.csv")
         assert r["state"] == "done" and r["trace"]["command"] == \
             "hdfs dfs -mv /user/root/humo/humo.csv /user/root/humo/ventas.csv"
-        assert "Renombrado" in r["trace"]["output"]
+        assert "Renombrado" in r["trace"]["output"] and r["path"] == "/user/root/humo/ventas.csv"
         assert comandos(fake_hdfs)[-1] == "dfs -mv /user/root/humo/humo.csv /user/root/humo/ventas.csv"
         # A una carpeta que existe: va adentro (y el nombre final no puede existir)
         r = await h.move("/user/root/humo/humo.csv", "/user/root")
         assert "/user/root/humo.csv" in r["trace"]["output"]
+        assert r["path"] == "/user/root/humo.csv"
         # Un nombre con ; o $( ) es un argumento más (sin shell): no se ejecuta nada
         r = await h.move("/user/root/humo/humo.csv", "/user/root/humo/a;touch pwned$(id).csv")
         assert comandos(fake_hdfs)[-1] == "dfs -mv /user/root/humo/humo.csv /user/root/humo/a;touch pwned$(id).csv"

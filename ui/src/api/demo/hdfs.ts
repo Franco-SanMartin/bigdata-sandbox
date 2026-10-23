@@ -190,7 +190,7 @@ export class DemoHdfs {
   }
 
   /** hdfs dfs -mv: solo cambia metadatos en el NameNode, los bloques no se mueven */
-  move(fromRaw: string, toRaw: string): ActionResult {
+  move(fromRaw: string, toRaw: string): ActionResult & { path: string } {
     needHdfs(this.e);
     const src = clean(fromRaw), dst = clean(toRaw);
     if (PROTECTED.includes(src)) fail('invalid', `${src} la usa el cluster: no se puede mover`);
@@ -220,7 +220,7 @@ export class DemoHdfs {
       `${rename ? 'Renombrado' : 'Movido'} a ${final}`, { engine: 'hdfs' });
     this.e.act('Vos', 'info', `${rename ? 'Renombrado' : 'Movido'} ${src} → ${final}`, { ...t });
     this.e.emit({ type: 'hdfs', path: parentOf(src)! }); this.e.emit({ type: 'hdfs', path: parentOf(final)! }); this.e.emit();
-    return { id: final, state: 'done', trace: t };
+    return { id: final, state: 'done', trace: t, path: final };
   }
 
   fsck(raw: string): FsckReport {

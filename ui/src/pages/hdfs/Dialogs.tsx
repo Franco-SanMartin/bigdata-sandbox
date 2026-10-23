@@ -144,8 +144,8 @@ export function MoveDialog({ path, onClose, onMoved }: { path: string | null; on
     setBusy(true);
     try {
       const r = await api().hdfsMove(path, dst);
-      toast({ kind: 'ok', title: parentOf(r.id) === parentOf(path) ? 'Renombrado' : 'Movido', description: `${path} → ${r.id}` });
-      onMoved(r.id); onClose();
+      toast({ kind: 'ok', title: parentOf(r.path) === parentOf(path) ? 'Renombrado' : 'Movido', description: `${path} → ${r.path}` });
+      onMoved(r.path); onClose();
     } catch (e) { setErr(asErr(e)); }
     setBusy(false);
   };

@@ -545,7 +545,7 @@ def p2() -> None:
 
     with Chequeo("HDFS: mover (renombrar)") as c:
         codigo, r = pedir("POST", "/api/hdfs/move", {"from": origen, "to": movido})
-        assert codigo == 200, (codigo, r)
+        assert codigo == 200 and r.get("path") == movido, (codigo, r)
         _, ls = pedir("GET", "/api/hdfs/ls?path=" + q(carpeta))
         nombres = [e["name"] for e in ls["entries"]]
         c.detalle = str(nombres)

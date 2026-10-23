@@ -1045,7 +1045,8 @@ class Hdfs:
                                          action=trace["action"], after=lambda: _const(trace["output"])))
         self.bus.publish("hdfs", {"path": parent_of(src) or "/"})
         self.bus.publish("hdfs", {"path": parent_of(final) or "/"})
-        return {"id": run.id, "state": "done", "trace": trace}
+        # id es el de la acción (GET /api/actions/:id); path, dónde quedó (con destino carpeta, adentro)
+        return {"id": run.id, "state": "done", "trace": trace, "path": final}
 
     # ---------------------------------------------------------------- rutas
 

@@ -116,7 +116,12 @@ function Hdfs() {
       {tab === 'nodes' && status && <div className="grid cols-12 hd-nodes"><DataNodes status={status} nodes={dataNodes} /></div>}
 
       <Viewer path={view} onClose={() => setView(null)} />
-      <MoveDialog path={move} onClose={() => setMove(null)} onMoved={to => { if (sel === move) setSel(to); refresh(); }} />
+      <MoveDialog path={move} onClose={() => setMove(null)} onMoved={to => {
+        // Si lo movido es lo elegido (o lo contiene), la selección sigue a la ruta nueva; el detalle
+        // se pide solo al cambiar sel: recargarlo acá pediría la ruta vieja, que ya no existe
+        if (sel && move && (sel === move || sel.startsWith(move + '/'))) { setSel(to + sel.slice(move.length)); ls.reload(); }
+        else refresh();
+      }} />
       <ReplicaDialog file={rep} live={live} onClose={() => setRep(null)} onDone={refresh} />
       <UploadDialog open={!!up} initialFile={up?.file ?? null} dest={path} defRep={c?.replication ?? 1} defBlock={c?.blockSize ?? '128m'} onClose={() => setUp(null)} onDone={refresh} />
     </div>

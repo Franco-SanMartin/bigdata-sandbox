@@ -101,6 +101,7 @@ VENTAS = "/user/root/ventas"
 
 TEXTO = "/user/root/texto.txt"          # entrada por defecto: se sube sola si falta
 CLIENT = "cliente"                      # el "contenedor" de logs con la salida del comando que mandó el trabajo
+CLIENT_WAIT = 20.0                      # segundos que se espera al cliente cuando YARN ya cerró la app
 GREP_PATTERN = r"^[\w\s.\-\[\]\\]{1,64}$"
 EXAMPLES_JAR = "hadoop-mapreduce-examples-3.3.6.jar"
 SPARK_JAR = "spark-examples_2.12-3.5.9.jar"
@@ -802,6 +803,12 @@ class Yarn:
         files: dict[str, list[str]] = {}
         if client and container == CLIENT:
             cur = CLIENT
+            # YARN da la app por terminada unos segundos antes de que el cliente imprima los
+            # contadores y salga: con la app cerrada se espera (acotado) a que el comando termine.
+            deadline = time.monotonic() + CLIENT_WAIT
+            while state in ("FINISHED", "FAILED", "KILLED") and run.state == "running" \
+                    and time.monotonic() < deadline:
+                await asyncio.sleep(0.25)
             files = {"stdout": [l["text"] for l in run.lines]}
         elif cur and cur in live:
             texts = await asyncio.gather(*(self.text(f"{NM}/ws/v1/node/containerlogs/{cur}/{f}") for f in

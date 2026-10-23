@@ -48,10 +48,10 @@ describe('HDFS del demo', () => {
   it('mueve y renombra, y rechaza lo que no se puede', async () => {
     await api.hdfsMkdir('/user/root/archivo');
     const r = await api.hdfsMove('/user/root/ventas/ventas_grandes.csv', '/user/root/archivo');
-    expect(r.id).toBe('/user/root/archivo/ventas_grandes.csv');
+    expect(r.path).toBe('/user/root/archivo/ventas_grandes.csv');
     const ls = await api.hdfsList('/user/root/archivo');
     expect(ls.entries.map(e => e.name)).toEqual(['ventas_grandes.csv']);
-    const r2 = await api.hdfsMove(r.id, '/user/root/archivo/ventas.csv');
+    const r2 = await api.hdfsMove(r.path, '/user/root/archivo/ventas.csv');
     expect(r2.trace?.output).toMatch(/Renombrado/);
     expect((await api.hdfsCat('/user/root/archivo/ventas.csv', 0, 100)).text).toMatch(/^fecha,/);
     await expect(api.hdfsMove('/user/root', '/tmp/x')).rejects.toMatchObject({ code: 'invalid' });

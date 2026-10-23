@@ -906,8 +906,8 @@ export interface SandboxApi {
   hdfsCat(path: string, offset?: number, length?: number): Promise<HdfsCat>;
   /** GET /api/hdfs/download?path=… (attachment). Devuelve la URL para bajarlo y el nombre del archivo */
   hdfsDownload(path: string): Promise<{ url: string; name: string }>;
-  /** POST /api/hdfs/move { from, to } → ActionResult (hdfs dfs -mv) */
-  hdfsMove(from: string, to: string): Promise<ActionResult>;
+  /** POST /api/hdfs/move { from, to } → ActionResult (hdfs dfs -mv) y la ruta final (con destino carpeta, queda adentro) */
+  hdfsMove(from: string, to: string): Promise<ActionResult & { path: string }>;
 
   /** GET /api/yarn/apps */
   apps(): Promise<YarnApp[]>;
