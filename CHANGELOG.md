@@ -9,6 +9,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+## [1.2.0] - 2026-10-23
+
+Cada modelo de Machine Learning por dentro: el modelo entrenado dibujado en 3D
+con lo que de verdad aprendió y la cuenta de una fila hecha en el navegador,
+igual a la del servidor. Además, el humo de `full` entrena todos los modelos
+en los dos motores y prueba las prácticas de Spark desde la interfaz.
+
 ### Cambiado
 
 - El archivo del aula (release `imagen`) carga un solo nombre,
@@ -174,6 +181,7 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.1.0...main
+[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.2.0...main
+[1.2.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0
