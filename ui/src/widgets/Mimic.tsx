@@ -311,7 +311,7 @@ function useChipFlip(svgRef: RefObject<SVGSVGElement | null>, ghostRef: RefObjec
       if (src) {
         const dx = src.x - x, dy = src.y - y;
         inner.animate([{ transform: `translate(${dx}px, ${dy}px)`, opacity: 1 }, { transform: `translate(${dx / 2}px, ${dy / 2 - 12}px)`, offset: .5 }, { transform: 'translate(0px, 0px)', opacity: 1 }], { duration: Math.hypot(dx, dy) > 40 ? 720 : 380, easing: 'cubic-bezier(.35,.6,.2,1)' });
-        inner.querySelector('rect')?.animate([{ strokeWidth: 3, stroke: '#EDEDED' }, { strokeWidth: 3, stroke: '#EDEDED', offset: .7 }, {}], { duration: 900 });
+        inner.querySelector('rect')?.animate([{ strokeWidth: 3, stroke: '#0E7C73' }, { strokeWidth: 3, stroke: '#0E7C73', offset: .7 }, {}], { duration: 900 });
       } else inner.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
     });
     if (!first && !reduce && ghostRef.current) prev.current.forEach((p, k) => {
