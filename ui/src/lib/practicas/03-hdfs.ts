@@ -1,8 +1,7 @@
 /* Guía 03: HDFS. Lo básico (carpetas, put, ls, cat, réplica, fsck, get) y qué pasa cuando se cae un DataNode. */
 import { errorCode } from '../../api/errors';
-import { mbLabel } from '../format';
 import { waitFor } from './motor';
-import { VENTAS_DIR, VENTAS_FILE, dnUp, ensureExample, entry, fileCheck, lsOut, needDataNodes } from './comun';
+import { VENTAS_DIR, VENTAS_FILE, dnUp, mbLabel, ensureExample, entry, fileCheck, lsOut, needDataNodes } from './comun';
 import type { Practice, StepCtx } from './tipos';
 
 const NAME = 'ventas_grandes.csv';

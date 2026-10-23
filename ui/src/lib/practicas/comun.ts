@@ -1,10 +1,13 @@
 /* Piezas que repiten los catálogos: tablas de un ls, esperar un trabajo, armar la salida de una consulta. */
 import type { AppState, ClusterStatus, DataSource, HdfsEntry, HdfsListing, QueryResult, YarnAppDetail } from '../../api/types';
 import { errorCode } from '../../api/errors';
-import { mbLabel } from '../format';
+import { mbLabel as mbFmt } from '../format';
 import type { Capability } from '../capabilities';
 import { waitFor } from './motor';
 import type { Check, Requirement, StepCtx, StepOut, StepResult } from './tipos';
+
+/** Tamaño legible: los archivos chicos (texto.txt) en KB en vez de "0,0 MB" */
+export const mbLabel = (mb: number) => (mb > 0 && mb < 0.1 ? `${Math.max(1, Math.round(mb * 1024)).toLocaleString('es-AR')} KB` : mbFmt(mb));
 
 export const VENTAS_DIR = '/user/root/ventas';
 export const VENTAS_FILE = `${VENTAS_DIR}/ventas_grandes.csv`;
