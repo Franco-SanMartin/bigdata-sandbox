@@ -12,6 +12,10 @@ una línea '@@resultado@@ {json}' con las métricas, lo aprendido, la matriz de
 confusión y algunas predicciones. Todo lo que devuelve está medido acá: no hay
 valores de referencia.
 
+Si está la variable SANDBOX_VIZ, además deja en ese archivo lo de adentro del
+modelo (pesos de la red con sus épocas, nodos del árbol, centros de KMeans,
+coeficientes) para dibujarlo en la pantalla de ML: ver viz.py.
+
 Los hiperparámetros tienen los nombres de scikit-learn y por defecto valen lo
 mismo que en modelos_sklearn.py: max_depth (árbol, 3), C (logística, 1),
 hidden_layer_sizes ("16,8") y max_iter (500) en la red neuronal, n_clusters (3)
@@ -19,9 +23,14 @@ y n_init (10) en KMeans, strategy (most_frequent) en el tonto. El último
 argumento (opcional) son las columnas de entrada separadas por coma.
 """
 import json
+import os
 import sys
 import time
 import tracemalloc
+import warnings
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import viz  # noqa: E402  (al lado de este archivo)
 
 ENTRADAS = ["antiguedad_meses", "visitas_mes", "ticket_promedio", "reclamos", "edad"]
 REGLA_GASTO = {"antiguedad_meses": "50", "visitas_mes": "1.500", "ticket_promedio": "0,8",
@@ -71,6 +80,7 @@ def main(argv):
     paso(f"train_test_split: {num(n_ent)} / {num(n_prueba)}", 0.35)
 
     res = {"filas": len(clientes), "trainRows": n_ent, "testRows": n_prueba, "metrics": {}, "learned": []}
+    adentro = None   # qué dibujar: una función que arma el JSON de viz.py (se llama al final)
     muestra = X_prueba.head(8)
     nota = "Algunas filas de prueba (no las vio al entrenar): lo real y lo que predijo"
 
@@ -99,11 +109,16 @@ def main(argv):
         res["predictions"] = {"columns": entradas + ["real", "predicho", "diferencia"], "rows": filas,
                               "total": n_prueba, "note": nota}
 
+        def adentro():
+            idx = viz.indices_muestra(n_prueba, viz.TOPE_MUESTRA)
+            Xm = X_prueba.iloc[idx]
+            return viz.lineal("sklearn", entradas, m.coef_, m.intercept_, "gasto_mes_siguiente", X_ent, Xm,
+                              y.iloc[idx], m.predict(Xm))
+
     elif tarea == "clasificacion":
         from sklearn.dummy import DummyClassifier
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import accuracy_score, confusion_matrix
-        from sklearn.neural_network import MLPClassifier
         from sklearn.tree import DecisionTreeClassifier
         if modelo_id == "tonto":
             m = DummyClassifier(strategy=str(params.get("strategy", "most_frequent")))
@@ -113,8 +128,10 @@ def main(argv):
             m = make_pipeline(StandardScaler(), LogisticRegression(C=float(params.get("C", 1))))
         elif modelo_id == "mlp":
             capas = tuple(int(x) for x in str(params.get("hidden_layer_sizes", "16,8")).split(",") if x.strip())
-            m = make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=capas, max_iter=int(params.get("max_iter", 500)),
-                                                              early_stopping=True, random_state=SEMILLA))
+            # La misma MLPClassifier, que además guarda los pesos de cada época (viz.py)
+            red = viz.clase_red_con_epocas()
+            m = make_pipeline(StandardScaler(), red(hidden_layer_sizes=capas, max_iter=int(params.get("max_iter", 500)),
+                                                    early_stopping=True, random_state=SEMILLA))
         else:
             raise SystemExit(f"{modelo_id} no sirve para clasificación")
         paso("Entrenando", 0.5)
@@ -134,6 +151,20 @@ def main(argv):
                                    "rows": reglas_arbol(m, entradas) +
                                    [["regla real", "vuelve", "antiguedad_meses ≥ 36, o visitas_mes ≥ 4 y reclamos ≤ 1"]]})
         p = m.predict(muestra)
+
+        def adentro():
+            if modelo_id == "mlp":
+                return viz.red_sklearn(m[0], m[-1], entradas, X_prueba, y)
+            idx = viz.indices_muestra(n_prueba, viz.TOPE_MUESTRA)
+            Xm = X_prueba.iloc[idx]
+            if modelo_id == "arbol":
+                return viz.arbol_sklearn(m, entradas, Xm, y.iloc[idx])
+            if modelo_id == "logistica":
+                esc, lr = m[0], m[-1]
+                return viz.logistica("sklearn", entradas, lr.coef_[0], lr.intercept_[0], esc.mean_, esc.scale_, X_ent, Xm,
+                                     y.iloc[idx], m.predict(Xm), m.predict_proba(Xm))
+            return viz.tonto(entradas, m.class_prior_, m.strategy, Xm, y.iloc[idx], m.predict(Xm), m.predict_proba(Xm))
+
         res["predictions"] = {"columns": entradas + ["real", "predicho"],
                               "rows": [[int(v) for v in muestra.iloc[i]] + [int(y.loc[muestra.index[i]]), int(p[i])]
                                        for i in range(len(muestra))],
@@ -147,7 +178,8 @@ def main(argv):
         k, n_init = int(params.get("n_clusters", 3)), int(params.get("n_init", 10))
         datos = clientes[entradas]
         # Escalado, y el ticket en logaritmo (6.000 contra 9.000 pesa como 60.000 contra 90.000)
-        escalados = StandardScaler().fit_transform(np.column_stack(
+        escalador = StandardScaler()
+        escalados = escalador.fit_transform(np.column_stack(
             [np.log(datos[c]) if c == "ticket_promedio" else datos[c] for c in entradas]))
         paso("Entrenando (KMeans, columnas escaladas)", 0.5)
         m = KMeans(n_clusters=k, n_init=n_init, random_state=SEMILLA)
@@ -175,11 +207,26 @@ def main(argv):
                                        for i in range(min(8, len(clientes)))],
                               "total": len(clientes),
                               "note": "Primeras filas del archivo con el grupo que les tocó (KMeans no ve segmento_real)"}
+
+        def adentro():
+            idx = viz.indices_muestra(len(clientes), viz.TOPE_MUESTRA)
+            return viz.kmeans("sklearn", entradas, [c == "ticket_promedio" for c in entradas], escalador.mean_,
+                              escalador.scale_, escalados, m.cluster_centers_, k, datos.iloc[idx],
+                              clientes["segmento_real"].iloc[idx], m.predict(escalados[idx]))
     else:
         raise SystemExit(f"No existe el problema {tarea}")
 
     res["seconds"] = round(seg, 3)
     res["memoryMb"] = round(mem, 1)
+    if adentro and os.environ.get("SANDBOX_VIZ"):
+        paso("Guardando lo que aprendió para dibujarlo", 0.95)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                viz.escribir(adentro())
+            res["viz"] = True
+        except Exception as e:  # noqa: BLE001 (sin dibujo, el entrenamiento vale igual)
+            res["vizError"] = f"{type(e).__name__}: {e}"
     paso("Listo", 1)
     print("@@resultado@@ " + json.dumps(res, ensure_ascii=False), flush=True)
 

@@ -6,6 +6,11 @@ Hacen lo mismo que ejemplos/ml/modelos_sklearn.py y modelos_spark.py, pero
 solo con el modelo pedido y con el porcentaje para entrenar elegido. Todo lo
 que devuelve una corrida está medido en ese momento (reference: false).
 
+Además, cada job deja lo de adentro del modelo (pesos de la red, nodos del árbol,
+centros de KMeans, coeficientes: ver jobs/viz.py) en un archivo aparte, que se
+lee al terminar y se sirve en GET /api/ml/models/{id}/viz para dibujarlo. El run
+solo lleva hasViz: el JSON puede pesar cientos de KB y no viaja por los eventos.
+
 La recomendación es una tabla fija: los tiempos y la memoria esperados son los
 que dieron modelos_sklearn.py y modelos_spark.py en la imagen.
 """
@@ -15,6 +20,8 @@ import asyncio
 import json
 import re
 import shlex
+import tempfile
+from collections import OrderedDict
 from pathlib import Path
 from typing import Callable
 
@@ -85,6 +92,8 @@ TARGETS = [
 ]
 STEP = re.compile(r"^== (.*)\|([0-9.]+)$")
 RESULT = "@@resultado@@ "
+VIZ_MAX_BYTES = 3_500_000    # el job ya recorta a 3 MB (viz.TOPE_BYTES); esto es por las dudas
+VIZ_KEEP = 30                # cuántos modelos guardan su viz en memoria (los últimos)
 
 
 def n(x: int | float) -> str:
@@ -115,6 +124,8 @@ class Ml:
         self.runs: list[dict] = []
         self._seq = 0
         self._tasks: set[asyncio.Task] = set()
+        self.viz: "OrderedDict[str, dict]" = OrderedDict()
+        self._viz_dir: Path | None = None
 
     # ------------------------------------------------------------ util
 
@@ -325,7 +336,7 @@ class Ml:
         source = "scikit-learn" if sk else "Spark MLlib"
         run = self.runner.start(Action(
             f"Entrenando {MODEL_LABEL[model]} con {source}", script, display=shown, input=trace["input"],
-            action=trace["action"], source="Vos", timeout=1800))
+            action=trace["action"], source="Vos", timeout=1800, env={"SANDBOX_VIZ": str(self.viz_path(mid))}))
         self.emit(r)
         state = {"seen": 0}
 
@@ -395,6 +406,7 @@ class Ml:
         for k in ("learned", "confusion", "predictions"):
             if res.get(k):
                 r[k] = res[k]
+        self.keep_viz(r, res)
         key = METRIC[task]
         val = metrics.get(key)
         r["message"] = f"{key} = {dec(val)}" if val is not None else "Listo"
@@ -410,6 +422,41 @@ class Ml:
                                else f"Medido ahora con las {n(r['trainRows'])} filas"}
         self.bus.log(source, "ok", f"{MODEL_LABEL[model]}: {r['message']}", output=out, appId=r.get("appId"))
         self.emit(r)
+
+    def viz_path(self, mid: str) -> Path:
+        if self._viz_dir is None:
+            self._viz_dir = Path(tempfile.mkdtemp(prefix="sandbox-viz-"))
+        return self._viz_dir / f"{mid}.json"
+
+    def keep_viz(self, r: dict, res: dict) -> None:
+        """Lee el archivo que dejó el job (si lo dejó) y lo guarda para GET /api/ml/models/{id}/viz."""
+        path = self.viz_path(r["id"])
+        viz = None
+        try:
+            if res.get("viz") and path.is_file() and path.stat().st_size <= VIZ_MAX_BYTES:
+                viz = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            viz = None
+        finally:
+            path.unlink(missing_ok=True)
+        if isinstance(viz, dict) and viz.get("kind"):
+            self.viz[r["id"]] = viz
+            while len(self.viz) > VIZ_KEEP:
+                old, _ = self.viz.popitem(last=False)
+                for x in self.runs:
+                    if x["id"] == old:
+                        x["hasViz"] = False
+            r["hasViz"] = True
+        else:
+            r["hasViz"] = False
+            if res.get("vizError"):
+                r["vizError"] = str(res["vizError"])[:300]
+
+    def get_viz(self, mid: str) -> dict:
+        if mid not in self.viz:
+            raise ApiError(f"El modelo {mid} no tiene nada para dibujar (no existe, falló o es de hace mucho)",
+                           "not_found")
+        return self.viz[mid]
 
     async def yarn_mb(self, app_id: str) -> float | None:
         """Memoria promedio que tuvo la aplicación en YARN (memorySeconds / duración)."""
@@ -450,9 +497,13 @@ class Ml:
         async def models(_: Request) -> JSONResponse:
             return JSONResponse(self.models())
 
+        async def viz(request: Request) -> JSONResponse:
+            return JSONResponse(self.get_viz(request.path_params["id"]))
+
         return [
             Route("/api/ml/datasets", datasets, methods=["GET"]),
             Route("/api/ml/recommend", recommend, methods=["POST"]),
             Route("/api/ml/train", train, methods=["POST"]),
             Route("/api/ml/models", models, methods=["GET"]),
+            Route("/api/ml/models/{id}/viz", viz, methods=["GET"]),
         ]
