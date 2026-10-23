@@ -72,7 +72,9 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 
 - Con el cluster apagado, la interfaz de `full` ya no pide
   `/api/yarn/apps` cada 2 segundos (la consola del navegador se llenaba de
-  409 y el estado quedaba en "Sin conexión con el cluster").
+  409 y el estado quedaba en "Sin conexión con el cluster"). El humo de la
+  interfaz lo prueba y después vuelve a iniciar el cluster con el botón
+  "Iniciar cluster".
 - MySQL de un volumen de la imagen anterior: se pone al día con
   `mariadb-upgrade` y, si se apagó de golpe, el arranque explica cómo
   arreglarlo.
