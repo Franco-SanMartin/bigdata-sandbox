@@ -1,0 +1,69 @@
+# Un aula simulada en una sola compu: el maestro y 2 PCs, cada una un
+# contenedor, en la misma red de Docker. Sirve para probar el cluster del aula
+# antes de armarlo con las compus de verdad. Necesita ~8 GB de RAM libres.
+#
+#   docker compose -f empresa/aula-simulada.yml up -d
+#   docker compose -f empresa/aula-simulada.yml logs -f maestro   (hasta "Cluster LISTO")
+#   docker exec -it pc01 bash          una "PC" del aula: hdfs, yarn, beeline...
+#   docker exec maestro estado         lo que corre en el maestro y los DataNodes vivos
+#   docker compose -f empresa/aula-simulada.yml down -v      apagar y borrar todo
+#
+# UIs: NameNode http://localhost:9870, YARN http://localhost:8088,
+#      JobHistory http://localhost:19888, Spark History http://localhost:18080
+#
+# Los nombres importan: el maestro se llama "maestro" y las PCs pcNN. Con
+# ellos se arman los racks (de a PCS_POR_FILA PCs por fila). Para sumar una
+# PC, copia el bloque de pc02 y cambia el numero.
+name: aula
+
+x-pc: &pc
+  image: franki678/bigdata-sandbox:empresa
+  environment:
+    ROL: trabajador
+    MAESTRO: maestro
+    PCS_POR_FILA: "2"
+  networks: [aula]
+  depends_on: [maestro]
+  stop_grace_period: 20s
+
+services:
+  maestro:
+    image: franki678/bigdata-sandbox:empresa
+    container_name: maestro
+    hostname: maestro
+    environment:
+      ROL: maestro
+      PCS_POR_FILA: "2"
+    ports:
+      - "9870:9870"
+      - "8088:8088"
+      - "19888:19888"
+      - "18080:18080"
+      - "10000:10000"
+    volumes:
+      - maestro:/hadoop
+    networks: [aula]
+    stop_grace_period: 20s
+
+  pc01:
+    <<: *pc
+    container_name: pc01
+    hostname: pc01
+    volumes:
+      - pc01:/hadoop
+
+  pc02:
+    <<: *pc
+    container_name: pc02
+    hostname: pc02
+    volumes:
+      - pc02:/hadoop
+
+networks:
+  aula:
+    name: aula
+
+volumes:
+  maestro:
+  pc01:
+  pc02:

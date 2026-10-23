@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Racks del cluster del aula (version empresa): el NameNode lo llama con las
+# IPs (o nombres) de los DataNodes y espera un rack por cada una, en orden.
+#   maestro           -> /profe
+#   pcNN              -> /filaK  (PCS_POR_FILA PCs por fila: con 5, pc01-pc05
+#                                 son /fila1, pc06-pc10 /fila2...)
+#   cualquier otro    -> /default-rack
+# Con racks, HDFS deja las replicas de un bloque en mas de una fila: si se
+# cae una fila entera, el bloque sigue estando.
+PCS_POR_FILA=${PCS_POR_FILA:-5}
+[[ "$PCS_POR_FILA" =~ ^[1-9][0-9]*$ ]] || PCS_POR_FILA=5
+
+for a in "$@"; do
+  n=$a
+  # Una IP: el nombre sale de /etc/hosts o del DNS de la red
+  if [[ "$a" =~ ^[0-9.]+$ ]]; then
+    n=$(getent hosts "$a" | awk '{ print $2; exit }')
+  fi
+  n=${n%%.*}   # pc07.aula -> pc07
+  if [ "$n" = maestro ] || [ "$n" = "$(hostname)" ]; then   # lo corre el NameNode, en el maestro
+    echo /profe
+  elif [[ "$n" =~ ^pc0*([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -ge 1 ]; then
+    echo "/fila$(( (BASH_REMATCH[1] - 1) / PCS_POR_FILA + 1 ))"
+  else
+    echo /default-rack
+  fi
+done

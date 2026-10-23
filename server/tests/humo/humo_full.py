@@ -40,6 +40,7 @@ URL = os.environ.get("SANDBOX_URL", "http://localhost:8080").rstrip("/")
 CONT = os.environ.get("HUMO_CONTENEDOR", "")
 SALIDAS = Path(os.environ.get("HUMO_SALIDAS", "humo-salidas"))
 ARRANQUE = float(os.environ.get("HUMO_TIMEOUT", "900"))
+TAG = os.environ.get("HUMO_TAG", "full")   # la version empresa corre el mismo humo
 
 SOLO_HDFS = {"datanodes": 2, "replication": 2, "blockSize": "1m", "namenodes": 1, "services": "hdfs",
              "mongodb": False, "jupyter": False, "pigHeapsize": 512}
@@ -231,9 +232,9 @@ def solo_hdfs() -> None:
             assert r.headers["content-type"].startswith("text/event-stream")
             assert r.readline() == b": conectado\n"
 
-    with Chequeo("compose de la versión full") as c:
+    with Chequeo(f"compose de la versión {TAG}") as c:
         codigo, y = pedir("POST", "/api/config/compose", {"config": SOLO_HDFS})
-        assert codigo == 200 and "bigdata-sandbox:full" in y and 'AUTOSTART: "1"' in y and "stop_grace_period: 20s" in y
+        assert codigo == 200 and f"bigdata-sandbox:{TAG}" in y and 'AUTOSTART: "1"' in y and "stop_grace_period: 20s" in y
 
     with Chequeo("sin la interfaz, / contesta igual") as c:
         codigo, html = pedir("GET", "/")

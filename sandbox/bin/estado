@@ -10,6 +10,42 @@ fila() { # $1=nombre $2=puerto que debe escuchar $3=url o descripcion [$4=nota]
   printf '   %-22s %-29s %s %s\n' "$1" "$3" "$st" "${4:-}"
 }
 
+# Version empresa: este contenedor es un nodo del cluster del aula
+if en_aula; then
+  echo
+  echo "  ${NEGRITA}Cluster del aula:${FIN} este nodo es ${NEGRITA}$NODO${FIN} (ROL=$ROL), maestro: $MAESTRO"
+  echo "  ${NEGRITA}Replicacion:${FIN} $REPLICATION   ${NEGRITA}Tamano de bloque:${FIN} $BLOCK_SIZE   ${NEGRITA}Servicios:${FIN} $SERVICIOS"
+  echo
+  if es_maestro; then
+    fila "NameNode" 9870 "http://$NODO:9870"
+    fila "Secondary NameNode" "$SNN_HTTP" "http://$NODO:$SNN_HTTP"
+    fila "DataNode (archivo)" 9864 "http://$NODO:9864"
+    if con_yarn; then
+      fila "ResourceManager" 8088 "http://$NODO:8088"
+      [ "$MAESTRO_NM" = si ] && fila "NodeManager" 8042 "http://$NODO:8042"
+      fila "MapReduce JobHistory" 19888 "http://$NODO:19888"
+      fila "MySQL (tienda + Metastore)" 3306 "jdbc:mysql://$NODO/tienda"
+    fi
+    if con_hive_spark; then
+      fila "Hive Metastore" 9083 "thrift://$NODO:9083"
+      fila "HiveServer2 (JDBC)" 10000 "jdbc:hive2://$NODO:10000"
+      fila "Spark History Server" 18080 "http://$NODO:18080"
+    fi
+  else
+    fila "DataNode" 9864 "http://$NODO:9864"
+    if con_yarn; then fila "NodeManager" 8042 "http://$NODO:8042" "${GRIS}$TRABAJADOR_RAM MB para trabajos${FIN}"; fi
+  fi
+  json=$(curl -s --max-time 3 "http://$MAESTRO:9870/jmx?qry=Hadoop:service=NameNode,name=FSNamesystem*")
+  if [ -n "$json" ]; then
+    echo "   ${GRIS}Segun el NameNode: DataNodes vivos $(jmx_valor NumLiveDataNodes <<<"$json"), muertos $(jmx_valor NumDeadDataNodes <<<"$json")" \
+         "| bloques $(jmx_valor BlocksTotal <<<"$json"), sub-replicados $(jmx_valor UnderReplicatedBlocks <<<"$json")${FIN}"
+  fi
+  echo
+  echo "  ${GRIS}Version de la imagen: $SANDBOX_VERSION | racks: hdfs dfsadmin -printTopology${FIN}"
+  echo
+  exit 0
+fi
+
 if ha; then
   modo="$NAMENODES NameNodes en alta disponibilidad (HA)"
 else

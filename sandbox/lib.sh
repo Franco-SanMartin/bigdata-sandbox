@@ -6,6 +6,33 @@ RUN_DIR=/opt/sandbox/run            # conf generada para cada proceso
 NN_FILE=/hadoop/namenodes           # NAMENODES elegido al crear el volumen
 JOURNALNODES=3                      # quorum de edits en modo HA (siempre impar)
 
+# Rol del contenedor (version empresa: el cluster del aula, un nodo por PC):
+#   solo        todo el cluster en este contenedor (lo de siempre, por defecto)
+#   maestro     la PC del profe: NameNode, ResourceManager, JobHistory, Hive,
+#               historial de Spark y un DataNode "archivo" (guarda una copia
+#               de todo, para que no se pierda nada al apagar el aula)
+#   trabajador  cada PC de alumno: 1 DataNode + 1 NodeManager, contra el maestro
+# RED dice como se ven los nodos: docker = una red de Docker (varios
+# contenedores en la misma compu, o el CI). La red del aula llega despues.
+ROL=${ROL:-solo};  ROL=${ROL,,}
+RED=${RED:-docker};  RED=${RED,,}
+MAESTRO=${MAESTRO:-maestro}             # nombre (o IP) del maestro, para los trabajadores
+NODO=${NODO:-$(hostname)}               # nombre con el que este nodo se anuncia
+PCS_POR_FILA=${PCS_POR_FILA:-5}         # racks: pc01-pc05 = /fila1, pc06-pc10 = /fila2...
+TRABAJADOR_RAM=${TRABAJADOR_RAM:-2048}  # MB de YARN para los trabajos en cada nodo
+MAESTRO_NM=${MAESTRO_NM:-no};  MAESTRO_NM=${MAESTRO_NM,,};  MAESTRO_NM=${MAESTRO_NM//í/i}
+en_aula()       { [ "$ROL" != solo ]; }
+es_maestro()    { [ "$ROL" = maestro ]; }
+es_trabajador() { [ "$ROL" = trabajador ]; }
+
+DATANODES_PEDIDO=${DATANODES:-}
+if en_aula; then
+  # Un DataNode por nodo, con los puertos de fabrica; replicacion 3 de fabrica
+  DATANODES=1
+  REPLICATION=${REPLICATION:-3}
+  # JupyterLab solo si se pide: en el aula cada PC tiene la RAM justa
+  JUPYTER=${JUPYTER:-no}
+fi
 DATANODES=${DATANODES:-1}
 REPLICATION=${REPLICATION:-1}
 BLOCK_SIZE=${BLOCK_SIZE:-128m}
@@ -49,7 +76,11 @@ con_hive_spark() { [ "$SERVICIOS" = todo ]; }
 con_mongodb() { [ "$MONGODB" = si ]; }
 hay_jupyter() { command -v jupyter-lab > /dev/null; }
 con_jupyter() { [ "$JUPYTER" = si ] && hay_jupyter; }
-fs_uri() { if ha; then echo hdfs://sandbox; else echo hdfs://localhost:9000; fi; }
+fs_uri() {
+  if ha; then echo hdfs://sandbox
+  elif en_aula; then echo "hdfs://$MAESTRO:9000"
+  else echo hdfs://localhost:9000; fi
+}
 
 # Puertos de cada instancia (N = numero de nodo)
 nn_rpc()    { echo $((8999 + $1)); }   # NameNode:     9000, 9001, 9002
@@ -129,6 +160,71 @@ hdfs_base() { # deja en HDFS_BASE las propiedades comunes a todos los procesos
       dfs.namenode.checkpoint.period 300
     )
   fi
+  if en_aula; then
+    HDFS_BASE+=(
+      # El NameNode escucha en todas las interfaces y los demas lo buscan por nombre
+      dfs.namenode.rpc-address "$MAESTRO:9000"
+      dfs.namenode.rpc-bind-host 0.0.0.0
+      # Cada DataNode se anuncia con su nombre (dfs.datanode.hostname); no hace
+      # falta que la IP de origen resuelva al revés
+      dfs.namenode.datanode.registration.ip-hostname-check false
+      # Racks por fila del laboratorio (sandbox/bin/topologia)
+      net.topology.script.file.name /opt/sandbox/bin/topologia
+    )
+  fi
+}
+
+# Pone (o reemplaza) propiedades en un XML de Hadoop/Hive ya existente.
+# $1=archivo, resto = pares nombre valor
+xml_poner() {
+  python3 - "$@" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+f, pares = sys.argv[1], sys.argv[2:]
+arbol = ET.parse(f)
+raiz = arbol.getroot()
+for nombre, valor in zip(pares[0::2], pares[1::2]):
+    for p in raiz.findall("property"):
+        if p.findtext("name") == nombre:
+            p.find("value").text = valor
+            break
+    else:
+        p = ET.SubElement(raiz, "property")
+        ET.SubElement(p, "name").text = nombre
+        ET.SubElement(p, "value").text = valor
+arbol.write(f, encoding="unicode", xml_declaration=True)
+PY
+}
+
+# Version empresa: YARN, MapReduce, Hive y Spark apuntan al maestro
+conf_aula() {
+  local ram=$TRABAJADOR_RAM
+  xml_poner "$HADOOP_CONF_DIR/yarn-site.xml" \
+    yarn.resourcemanager.hostname "$MAESTRO" \
+    yarn.resourcemanager.bind-host 0.0.0.0 \
+    yarn.nodemanager.hostname "$NODO" \
+    yarn.nodemanager.bind-host 0.0.0.0 \
+    yarn.nodemanager.address "$NODO:8041" \
+    yarn.nodemanager.resource.memory-mb "$ram" \
+    yarn.scheduler.maximum-allocation-mb "$ram" \
+    yarn.log.server.url "http://$MAESTRO:19888/jobhistory/logs"
+  xml_poner "$HADOOP_CONF_DIR/mapred-site.xml" \
+    mapreduce.jobhistory.address "$MAESTRO:10020" \
+    mapreduce.jobhistory.webapp.address "$MAESTRO:19888" \
+    mapreduce.jobhistory.bind-host 0.0.0.0
+  xml_poner "$HIVE_CONF_DIR/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
+  xml_poner "$SPARK_HOME/conf/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
+  sed -i "s#localhost:18080#$MAESTRO:18080#" "$SPARK_HOME/conf/spark-defaults.conf"
+  if es_maestro; then
+    # Metastore sobre MariaDB (Derby embebido no aguanta una clase entera)
+    xml_poner "$HIVE_CONF_DIR/hive-site.xml" \
+      javax.jdo.option.ConnectionURL "jdbc:mysql://localhost:3306/metastore?useSSL=false" \
+      javax.jdo.option.ConnectionDriverName com.mysql.jdbc.Driver \
+      javax.jdo.option.ConnectionUserName hive \
+      javax.jdo.option.ConnectionPassword hive \
+      datanucleus.connectionPool.maxPoolSize 5 \
+      hive.server2.thrift.bind.host 0.0.0.0
+  fi
 }
 
 generar_conf() { # conf base, la que usan los clientes (hdfs, hive, spark...)
@@ -139,6 +235,7 @@ generar_conf() { # conf base, la que usan los clientes (hdfs, hive, spark...)
   sed "s#@FS@#$fs#g" /opt/sandbox/templates/spark-defaults.conf > "$SPARK_HOME/conf/spark-defaults.conf"
   hdfs_base
   xml_conf "$HADOOP_CONF_DIR/hdfs-site.xml" "${HDFS_BASE[@]}"
+  if en_aula; then conf_aula; fi
 }
 
 conf_instancia() { # $1=instancia, resto=pares propios de ese proceso -> imprime el dir
@@ -150,6 +247,19 @@ conf_instancia() { # $1=instancia, resto=pares propios de ese proceso -> imprime
 }
 
 dn_conf() {
+  if en_aula; then
+    # Puertos de fabrica (uno por nodo). El del maestro es el "archivo": su
+    # disco es ARCHIVE y la politica WARM le manda una copia de cada bloque.
+    local tipo=DISK
+    if es_maestro; then tipo=ARCHIVE; fi
+    conf_instancia "dn$1" \
+      dfs.datanode.data.dir "[$tipo]/hadoop/dfs/dn$1" \
+      dfs.datanode.address 0.0.0.0:9866 \
+      dfs.datanode.ipc.address 0.0.0.0:9867 \
+      dfs.datanode.http.address 0.0.0.0:9864 \
+      dfs.datanode.hostname "$NODO"
+    return
+  fi
   conf_instancia "dn$1" \
     dfs.datanode.data.dir "/hadoop/dfs/dn$1" \
     dfs.datanode.address "0.0.0.0:$(dn_data "$1")" \
