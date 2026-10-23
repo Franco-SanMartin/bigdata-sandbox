@@ -72,6 +72,8 @@
 .mimic-svg .m-rect { fill: var(--surface); stroke: var(--n-8); stroke-width: 1.5; transition: stroke .25s, fill .25s; }
 .mimic-svg .m-box.na .m-rect { fill: none; stroke: var(--n-7); stroke-dasharray: 4 3; stroke-width: 1.2; }
 .mimic-svg .m-box.na text { fill: var(--text-4); }
+.mimic-svg .m-box.na.click .m-rect { pointer-events: all; }
+.mimic-svg .m-box.na.click:hover .m-rect, .mimic-svg .m-box.na.sel .m-rect { stroke: var(--accent); }
 .mimic-svg .m-t { font-size: 13px; font-weight: 600; }
 .mimic-svg .m-s { font-family: var(--f-mono); font-size: 10.5px; fill: var(--text-3); }
 .mimic-svg .m-s.warn { fill: var(--run-text); }

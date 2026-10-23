@@ -117,6 +117,7 @@ function Running({ s, dataNodes }: { s: ClusterStatus; dataNodes: DataNode[] }) 
     (filter === 'all' || (filter === 'problems' ? p.state !== 'up' || dataNodes.find(d => `dn${d.id}` === p.id && d.state !== 'live') : p.layer === filter)) &&
     (!q || `${p.name} ${p.id} ${p.ports.join(' ')}`.toLowerCase().includes(q.toLowerCase()))), [procs, filter, q, dataNodes]);
   const selected = procs.find(p => p.id === sel) || procs[0];
+  const optional = OPTIONAL[sel] && !s.config[OPTIONAL[sel].key] ? OPTIONAL[sel] : null;
   const memK = s.memory.usedMb / s.memory.limitMb > .9 ? 'bad' : s.memory.usedMb / s.memory.limitMb > .75 ? 'run' : undefined;
   const columns: Column<Process>[] = [
     { id: 'name', header: 'Proceso', sort: p => p.name, cell: p => <span className="cell-name"><Dot s={dnState(p, dataNodes)} /><b>{p.name}</b><span className="muted mono">{p.id}</span></span> },
@@ -142,11 +143,11 @@ function Running({ s, dataNodes }: { s: ClusterStatus; dataNodes: DataNode[] }) 
       <div className="grid cols-12">
         <section className="panel span-8" aria-labelledby="h-arch3">
           <div className="panel-h"><h2 id="h-arch3">Arquitectura</h2><span className="sub">elegí un proceso para ver su detalle</span></div>
-          <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><MimicLegend /><Mimic config={s.config} processes={procs} dataNodes={dataNodes} files={snap.files} selected={selected?.id} onSelect={setSel} now={s.now} /></div>
+          <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><MimicLegend /><Mimic config={s.config} processes={procs} dataNodes={dataNodes} files={snap.files} selected={optional ? sel : selected?.id} onSelect={setSel} now={s.now} /></div>
         </section>
         <section className="panel span-4" aria-labelledby="h-det">
           <div className="panel-h"><h2 id="h-det">Detalle</h2></div>
-          <div className="panel-b">{selected && <ProcessDetail p={selected} s={s} dataNodes={dataNodes} />}</div>
+          <div className="panel-b">{optional ? <OptionalDetail o={optional} s={s} /> : selected && <ProcessDetail p={selected} s={s} dataNodes={dataNodes} />}</div>
         </section>
       </div>
       <section className="panel" aria-labelledby="h-procs">
@@ -193,6 +194,24 @@ function RowMenu({ p }: { p: Process }) {
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+  );
+}
+
+// MongoDB y JupyterLab son opcionales: si no están en la configuración, el detalle ofrece activarlos
+const OPTIONAL: Record<string, { name: string; env: string; key: 'mongodb' | 'jupyter' }> = {
+  mongodb: { name: 'MongoDB', env: 'MONGODB', key: 'mongodb' },
+  jupyter: { name: 'JupyterLab', env: 'JUPYTER', key: 'jupyter' },
+};
+
+function OptionalDetail({ o, s }: { o: (typeof OPTIONAL)[string]; s: ClusterStatus }) {
+  return (
+    <div className="pdetail">
+      <div className="pdetail-h"><Dot s="off" /><h3>{o.name}</h3><span className="muted">no incluido</span></div>
+      <p className="muted" style={{ fontSize: 'var(--fs-md)', lineHeight: 1.5 }}>No está en esta configuración ({o.env}=no), así que no arranca con el cluster. Activalo y se suma {s.phase === 'running' ? 'al reiniciar' : 'en el próximo arranque'}.</p>
+      <div className="pdetail-actions">
+        <button className="btn btn-sm" type="button" onClick={() => applyConfig({ ...s.config, [o.key]: true })}><Settings2 size={14} />Activar {o.name}</button>
+      </div>
+    </div>
   );
 }
 

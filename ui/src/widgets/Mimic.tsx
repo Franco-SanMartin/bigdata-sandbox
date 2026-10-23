@@ -104,17 +104,18 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
 
   const keyAct = (id: string) => (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(id); } };
   const lamp = (s: Lamp, cx: number, cy: number) => <>{s === 'start' && <circle className="m-ring" cx={cx} cy={cy} r={8} />}<circle className={`m-lamp l-${s}`} cx={cx} cy={cy} r={5} /></>;
-  const box = (id: string, x: number, yy: number, w: number, h: number, title: string, sub: string, o: { na?: boolean; role?: string; act?: boolean; eng?: string; engName?: string; tag?: Tag; sel?: boolean } = {}) => {
+  const box = (id: string, x: number, yy: number, w: number, h: number, title: string, sub: string, o: { na?: boolean; pick?: boolean; role?: string; act?: boolean; eng?: string; engName?: string; tag?: Tag; sel?: boolean } = {}) => {
     const s = o.na ? 'off' : lampOf(id);
-    const clickable = !!onSelect && live && !o.na;
+    // Lo no incluido igual se puede elegir si tiene arreglo (activarlo desde el detalle)
+    const clickable = !!onSelect && live && (!o.na || !!o.pick);
     const roleW = o.role ? o.role.length * 6.6 + 10 : 0;
     out.push(
       <g key={id} className={`m-box${o.na ? ' na' : ''}${o.tag ? ' tag-' + o.tag : ''}${selected === id ? ' sel' : ''}${clickable ? ' click' : ''}`} data-s={s}
-        {...(clickable ? { role: 'button', tabIndex: 0, 'aria-label': `${title}: ${s === 'up' ? 'arriba' : s === 'down' ? 'caído' : s === 'start' ? 'en transición' : 'apagado'}`, 'aria-pressed': selected === id, onClick: () => onSelect!(id), onKeyDown: keyAct(id) } : {})}>
+        {...(clickable ? { role: 'button', tabIndex: 0, 'aria-label': `${title}: ${o.na ? 'no incluido' : s === 'up' ? 'arriba' : s === 'down' ? 'caído' : s === 'start' ? 'en transición' : 'apagado'}`, 'aria-pressed': selected === id, onClick: () => onSelect!(id), onKeyDown: keyAct(id) } : {})}>
         <rect className="m-rect" x={x} y={yy} width={w} height={h} rx={3} />
         {lamp(s, x + 15, yy + 18)}
         <text className="m-t" x={x + 28} y={yy + 22}>{fit(title, w - 38 - roleW)}</text>
-        <text className="m-s" x={x + 28} y={yy + 39}>{fit(o.na ? 'apagado' : sub, w - 38, 6.5)}</text>
+        <text className="m-s" x={x + 28} y={yy + 39}>{fit(o.na ? 'no incluido' : sub, w - 38, 6.5)}</text>
         {o.role && !o.na && <text className={`m-role${o.act ? ' act' : ''}`} x={x + w - 9} y={yy + 21} textAnchor="end">{o.role}</text>}
         {o.eng && !o.na && <><rect className="m-eng" x={x + 28} y={yy + h - 16} width={8} height={8} rx={1.5} style={{ fill: `var(--eng-${o.eng})` }} /><text className="m-s" x={x + 41} y={yy + h - 8.5}>{fit(o.engName || '', w - 52, 6.6)}</text></>}
         {o.tag && <g className="m-tag"><rect x={x + w - 62} y={yy - 7} width={56} height={14} rx={3} /><text x={x + w - 34} y={yy + 3.5} textAnchor="middle">{o.tag === 'new' ? 'NUEVO' : 'SE APAGA'}</text></g>}
@@ -274,12 +275,12 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   y = sTop;
   const svTop = y;
   const hiveId = live ? (processes!.some(p => p.id === 'hiveserver2') ? 'hiveserver2' : 'hive') : 'hiveserver2';
-  const servs: [string, string, string, number, { na?: boolean; eng?: string; engName?: string; tag?: Tag }][] = [
+  const servs: [string, string, string, number, { na?: boolean; pick?: boolean; eng?: string; engName?: string; tag?: Tag }][] = [
     [hiveId, 'Hive', ':10000 · :10002', 64, { na: !todo && !(base && wasTodo), eng: 'tez', engName: 'motor Tez', tag: yTag(todo, !!wasTodo) }],
     ['sparkhistory', 'Spark', ':18080 · :4040', 64, { na: !todo && !(base && wasTodo), eng: 'spark', engName: 'sobre YARN', tag: yTag(todo, !!wasTodo) }],
     ['mysql', 'MySQL', ':3306 · base tienda', 64, { na: !yarn && !(base && wasYarn), tag: yTag(yarn, wasYarn) }],
-    ['mongodb', 'MongoDB', ':27017 · base tienda', 54, { na: !c.mongodb && tagOf('mongodb') !== 'gone', tag: tagOf('mongodb') }],
-    ['jupyter', 'JupyterLab', ':8888 · notebooks', 54, { na: !c.jupyter && tagOf('jupyter') !== 'gone', tag: tagOf('jupyter') }],
+    ['mongodb', 'MongoDB', ':27017 · base tienda', 54, { na: !c.mongodb && tagOf('mongodb') !== 'gone', pick: true, tag: tagOf('mongodb') }],
+    ['jupyter', 'JupyterLab', ':8888 · notebooks', 54, { na: !c.jupyter && tagOf('jupyter') !== 'gone', pick: true, tag: tagOf('jupyter') }],
     ['ui', 'Esta interfaz', ':8080', 54, {}],
   ];
   // En cada fila manda el módulo más alto
