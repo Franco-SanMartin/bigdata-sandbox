@@ -1,0 +1,8 @@
+filas: {fecha: chararray,sucursal: chararray,producto: chararray,cantidad: int,precio: int}
+(2026-01-02,centro,yerba,2,2652)
+(2026-01-02,norte,,1,)
+resumen: {sucursal: chararray,tickets: long,unidades: long}
+(centro,412,655)
+(norte,390,601)
+(sur,198,0.5)
+(,3,{(a),(b,c)})

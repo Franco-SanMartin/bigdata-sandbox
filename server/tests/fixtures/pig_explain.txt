@@ -1,0 +1,61 @@
+#-----------------------------------------------
+# New Logical Plan:
+#-----------------------------------------------
+resumen: (Name: LOStore Schema: sucursal#28:chararray,tickets#31:long)
+|
+|---resumen: (Name: LOForEach Schema: sucursal#28:chararray,tickets#31:long)
+#-----------------------------------------------
+# Physical Plan:
+#-----------------------------------------------
+resumen: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-31
+|
+|---resumen: New For Each(false,false)[bag] - scope-30
+#--------------------------------------------------
+# Map Reduce Plan                                  
+#--------------------------------------------------
+MapReduce node scope-35
+Map Plan
+por_sucursal: Local Rearrange[tuple]{chararray}(false) - scope-21
+|   |
+|   Project[chararray][1] - scope-22
+|
+|---filas: Filter[bag] - scope-11
+    |   |
+    |   Not Equal To[boolean] - scope-14
+    |   |
+    |   |---Project[chararray][0] - scope-12
+    |   |
+    |   |---Constant(fecha) - scope-13
+    |
+    |---ventas: New For Each(false,false,false,false,false)[bag] - scope-10
+        |   |
+        |   Cast[chararray] - scope-2
+        |
+        |---ventas: Load(/user/root/ventas:PigStorage(',')) - scope-0--------
+Combine Plan
+por_sucursal: Local Rearrange[tuple]{chararray}(false) - scope-36
+|
+|---resumen: New For Each(false,false)[bag] - scope-37
+    |
+    |---por_sucursal: Package(CombinerPackager)[tuple]{chararray} - scope-38--------
+Reduce Plan
+ordenado: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-31
+|
+|---resumen: New For Each(false,false)[bag] - scope-30
+    |
+    |---por_sucursal: Package(CombinerPackager)[tuple]{chararray} - scope-20--------
+Global sort: false
+----------------
+
+MapReduce node scope-40
+Map Plan
+ordenado: Local Rearrange[tuple]{long}(false) - scope-41
+|
+|---Load(hdfs://nn:8020/tmp/temp-1/tmp-2:org.apache.pig.impl.io.InterStorage) - scope-39
+--------
+Reduce Plan
+ordenado: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-44
+|
+|---ordenado: Package(LitePackager)[tuple]{long} - scope-43--------
+Global sort: true
+----------------
