@@ -1,6 +1,6 @@
 /* Reglas puras sobre la configuración: validación, RAM estimada, procesos que levanta y
    el docker-compose.yml equivalente. Las usan el modo demo y las vistas previas. */
-import type { ClusterConfig, ConfigIssue, Layer, ProcKind, RamEstimate } from '../api/types';
+import type { ClusterConfig, ClusterStatus, ConfigIssue, DataNode, Layer, ProcKind, RamEstimate } from '../api/types';
 
 export const DEFAULT_CONFIG: ClusterConfig = {
   datanodes: 3, replication: 2, blockSize: '1m', namenodes: 1, services: 'todo', mongodb: false, jupyter: false, pigHeapsize: 512,
@@ -125,4 +125,69 @@ export function composeYaml(c: ClusterConfig): string {
 
 export function configSummary(c: ClusterConfig): string {
   return `${c.namenodes > 1 ? `${c.namenodes} NameNodes (HA)` : '1 NameNode'} · ${c.datanodes} DataNode${c.datanodes > 1 ? 's' : ''} · réplica ${c.replication} · bloque ${blockSizeLabel(c.blockSize)} · ${c.services}${c.mongodb ? ' + MongoDB' : ''}`;
+}
+
+/* ---------- Salud: una sola lectura para la barra de arriba, Inicio, Cluster y HDFS ---------- */
+
+export type HealthTone = 'off' | 'run' | 'ok' | 'warn' | 'bad';
+export interface Health {
+  tone: HealthTone;
+  /** Dos o tres palabras: "Apagado", "En marcha", "Degradado", "Con fallas" */
+  label: string;
+  /** Qué pasa, en una línea, y si se pierde algo */
+  detail: string;
+  /** Lista de problemas concretos, del más grave al menos grave */
+  issues: { tone: 'warn' | 'bad'; text: string }[];
+}
+
+/** Procesos sin los que algo deja de andar (no solo se achica) */
+const CRITICAL = new Set(['rm', 'nm', 'hiveserver2', 'hive', 'metastore', 'mysql', 'mongodb']);
+
+/** Rojo solo si hay datos perdidos o algo deja de responder; amarillo si anda con menos copias o menos
+    nodos (es lo que HDFS aguanta a propósito: un DataNode caído con réplica 2 no pierde nada). */
+export function clusterHealth(s: ClusterStatus | null, dataNodes: DataNode[] = []): Health {
+  if (!s) return { tone: 'off', label: 'Conectando', detail: 'Esperando al contenedor', issues: [] };
+  if (s.phase === 'stopped') return { tone: 'off', label: 'Apagado', detail: 'Los datos quedan en el volumen', issues: [] };
+  if (s.phase === 'stopping') return { tone: 'run', label: 'Apagando', detail: 'Bajando los procesos en orden', issues: [] };
+  if (s.phase === 'starting') {
+    const st = s.boot?.steps.filter(x => x.state !== 'skipped') ?? [];
+    const done = st.filter(x => x.state === 'done').length;
+    return { tone: 'run', label: 'Arrancando', detail: st.length ? `Paso ${Math.min(done + 1, st.length)} de ${st.length}` : 'Levantando los procesos', issues: [] };
+  }
+  const issues: Health['issues'] = [];
+  const h = s.hdfs;
+  if (!h.available) issues.push({ tone: 'bad', text: s.config.namenodes > 1 ? 'HDFS sin NameNode activo' : 'HDFS no responde: el NameNode está apagado' });
+  if (h.missing) issues.push({ tone: 'bad', text: `${h.missing} bloque${h.missing > 1 ? 's' : ''} sin ninguna copia` });
+  const down = s.processes.filter(p => p.state === 'down');
+  down.filter(p => CRITICAL.has(p.id)).forEach(p => issues.push({ tone: 'bad', text: `${p.name} caído` }));
+  const dnDown = new Set(down.filter(p => p.kind === 'datanode').map(p => p.id));
+  dataNodes.filter(d => d.state === 'dead').forEach(d => dnDown.add(`dn${d.id}`));
+  if (dnDown.size) issues.push({ tone: 'warn', text: `${dnDown.size === 1 ? `DataNode ${[...dnDown][0].slice(2)} caído` : `${dnDown.size} DataNodes caídos`}` });
+  const stale = dataNodes.filter(d => d.state === 'stale');
+  if (stale.length) issues.push({ tone: 'warn', text: `${stale.length === 1 ? `DataNode ${stale[0].id}` : `${stale.length} DataNodes`} sin latidos` });
+  if (h.underReplicated) issues.push({ tone: 'warn', text: `${h.underReplicated} bloque${h.underReplicated > 1 ? 's' : ''} con copias de menos` });
+  down.filter(p => !CRITICAL.has(p.id) && p.kind !== 'datanode' && !(p.kind === 'namenode' && !h.available && s.config.namenodes === 1))
+    .forEach(p => issues.push({ tone: 'warn', text: `${p.name} apagado` }));
+  issues.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'bad' ? -1 : 1));
+  if (issues.some(i => i.tone === 'bad')) return { tone: 'bad', label: 'Con fallas', detail: issues[0].text, issues };
+  if (issues.length) {
+    const safe = !h.missing && h.available;
+    return { tone: 'warn', label: 'Degradado', detail: `${issues[0].text}${safe ? ' · sin pérdida de datos' : ''}`, issues };
+  }
+  return { tone: 'ok', label: 'En marcha', detail: 'Todo responde', issues };
+}
+
+/** Lo que cambia entre dos configuraciones, campo por campo, en palabras */
+export function configDiff(a: ClusterConfig, b: ClusterConfig): { field: keyof ClusterConfig; label: string; from: string; to: string }[] {
+  const f: [keyof ClusterConfig, string, (c: ClusterConfig) => string][] = [
+    ['namenodes', 'NameNodes', c => (c.namenodes > 1 ? `${c.namenodes} (HA)` : '1')],
+    ['datanodes', 'DataNodes', c => String(c.datanodes)],
+    ['replication', 'Réplica', c => String(c.replication)],
+    ['blockSize', 'Bloque', c => blockSizeLabel(c.blockSize)],
+    ['services', 'Servicios', c => c.services],
+    ['mongodb', 'MongoDB', c => (c.mongodb ? 'sí' : 'no')],
+    ['jupyter', 'JupyterLab', c => (c.jupyter ? 'sí' : 'no')],
+    ['pigHeapsize', 'Memoria de pig', c => `${c.pigHeapsize} MB`],
+  ];
+  return f.filter(([k]) => a[k] !== b[k]).map(([field, label, fmt]) => ({ field, label, from: fmt(a), to: fmt(b) }));
 }

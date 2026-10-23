@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import { Tooltip } from 'radix-ui';
 import { route } from './state/ui';
 import { useHotkeys } from './shell/hotkeys';
@@ -9,8 +9,7 @@ import { HelpSheet } from './shell/HelpSheet';
 import { CommandPalette } from './shell/CommandPalette';
 import { ComposeSheet, ConfirmHost, Toaster } from './shell/Overlays';
 import type { PageId } from './state/ui';
-import { useSnapshot } from './state/store';
-import { PageSkeleton } from './components/base';
+import { ConnectionBand, PageFrame } from './shell/PageFrame';
 
 // Cada pantalla en su propio archivo: al abrir la interfaz solo baja la que se ve
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -32,7 +31,6 @@ const PAGE: Record<PageId, ComponentType> = {
 export function App() {
   useHotkeys();
   const page = route.use();
-  const { error } = useSnapshot();
   const Page = PAGE[page];
   return (
     <Tooltip.Provider delayDuration={300}>
@@ -40,9 +38,9 @@ export function App() {
         <Sidebar />
         <Topbar />
         <div className="main">
+          <ConnectionBand />
           <main className="page" id="contenido" key={page}>
-            {error && <div className="page-in" style={{ paddingBottom: 0 }}><div className="callout" data-k="bad"><span><b>Sin conexión con el cluster.</b> {error}. Reintentando…</span></div></div>}
-            <Suspense fallback={<PageSkeleton />}><Page /></Suspense>
+            <PageFrame page={page}><Page /></PageFrame>
           </main>
           <ConsoleDrawer />
         </div>

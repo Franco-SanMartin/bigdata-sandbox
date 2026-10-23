@@ -57,6 +57,17 @@ function useWidth() {
   return [ref, w] as const;
 }
 
+/** Corta un texto corto en renglones de a lo sumo `max` caracteres, sin partir palabras */
+function wrap(t: string, max: number): string[] {
+  const lines: string[] = [];
+  for (const w of t.split(' ')) {
+    const last = lines[lines.length - 1];
+    if (last != null && (last + ' ' + w).length <= max) lines[lines.length - 1] = last + ' ' + w;
+    else lines.push(w);
+  }
+  return lines;
+}
+
 export function Mimic({ config: c, processes, dataNodes = [], files = [], base, highlight, selected, onSelect, now = 0 }: Props) {
   const [wrapRef, width] = useWidth();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -64,7 +75,14 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   const [hb, setHb] = useState<string | null>(null);
   const live = !!processes;
   const W = Math.max(440, width);
-  const LBL = W >= 600 ? 112 : 92, X0 = LBL, CW = W - X0 - 2;
+  // Angosto: los títulos de sección van en su propia fila y el diagrama usa todo el ancho
+  const narrow = W < 620;
+  const LBL = narrow ? 0 : 124, X0 = LBL, CW = W - X0 - 2;
+  const SEC = narrow ? 22 : 0;
+  // Columnas de módulos: si en tres no entran sin cortar el texto, pasan a dos
+  const COLS = (CW - 24) / 3 >= 170 ? 3 : 2;
+  const colW = (CW - (COLS - 1) * 12) / COLS;
+  const grid = (i: number, top: number, rowH: number) => ({ x: X0 + (i % COLS) * (colW + 12), y: top + Math.floor(i / COLS) * (rowH + 12) });
   const parts = new Set(highlight ? PARTS[highlight] || [] : []);
   const ha = c.namenodes > 1, yarn = c.services !== 'hdfs', todo = c.services === 'todo';
   const ids = new Set(processSpecs(c).map(s => s.id));
@@ -96,13 +114,20 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
         <rect className="m-rect" x={x} y={yy} width={w} height={h} rx={3} />
         {lamp(s, x + 15, yy + 18)}
         <text className="m-t" x={x + 28} y={yy + 22}>{fit(title, w - 38 - roleW)}</text>
-        <text className="m-s" x={x + 28} y={yy + 39}>{fit(o.na ? 'apagado' : sub, w - 36, 6.3)}</text>
+        <text className="m-s" x={x + 28} y={yy + 39}>{fit(o.na ? 'apagado' : sub, w - 38, 6.5)}</text>
         {o.role && !o.na && <text className={`m-role${o.act ? ' act' : ''}`} x={x + w - 9} y={yy + 21} textAnchor="end">{o.role}</text>}
-        {o.eng && !o.na && <><rect className="m-eng" x={x + 28} y={yy + h - 16} width={8} height={8} rx={1.5} style={{ fill: `var(--eng-${o.eng})` }} /><text className="m-s" x={x + 41} y={yy + h - 8.5}>{fit(o.engName || '', w - 50, 6.3)}</text></>}
+        {o.eng && !o.na && <><rect className="m-eng" x={x + 28} y={yy + h - 16} width={8} height={8} rx={1.5} style={{ fill: `var(--eng-${o.eng})` }} /><text className="m-s" x={x + 41} y={yy + h - 8.5}>{fit(o.engName || '', w - 52, 6.6)}</text></>}
         {o.tag && <g className="m-tag"><rect x={x + w - 62} y={yy - 7} width={56} height={14} rx={3} /><text x={x + w - 34} y={yy + 3.5} textAnchor="middle">{o.tag === 'new' ? 'NUEVO' : 'SE APAGA'}</text></g>}
       </g>);
   };
-  const sec = (key: string, label: string, sub: string, yy: number) => out.push(<g key={`sec-${key}`}><text className="m-sec" x={0} y={yy + 14}>{label}</text>{LBL >= 100 && <text className="m-secs" x={0} y={yy + 30}>{sub}</text>}</g>);
+  // Devuelve cuánto hay que bajar el contenido (sólo en angosto, donde el título ocupa su fila)
+  const sec = (key: string, label: string, sub: string, yy: number) => {
+    // El fondo tapa los cables que bajan por la fila del título
+    if (narrow) { out.push(<g key={`sec-${key}`}><rect className="m-secbg" x={0} y={yy} width={label.length * 7.6 + 12 + sub.length * 6.2} height={17} /><text className="m-sec" x={0} y={yy + 12}>{label}<tspan className="m-secs" dx={8}>{sub}</tspan></text></g>); return SEC; }
+    const lines = wrap(sub, Math.floor((LBL - 14) / 5.9));
+    out.push(<g key={`sec-${key}`}><text className="m-sec" x={0} y={yy + 14}>{label}</text>{lines.map((l, i) => <text key={i} className="m-secs" x={0} y={yy + 30 + i * 14}>{l}</text>)}</g>);
+    return 0;
+  };
   const wire = (key: string, d: string, na?: boolean) => out.push(<path key={key} className={`m-wire${na ? ' na' : ''}`} d={d} />);
   const dot = (key: string, x: number, yy: number) => out.push(<circle key={key} className="m-node" cx={x} cy={yy} r={2.6} />);
   const wlabel = (key: string, x: number, yy: number, t: string) => out.push(<text key={key} className="m-wl" x={x + 8} y={yy}>{t}</text>);
@@ -113,14 +138,14 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   let nnCenters: number[] = [];
   if (!ha) {
     const bw = (CW - 22) / 2;
-    sec('meta', 'METADATOS', 'qué bloque está dónde', y);
+    y += sec('meta', 'METADATOS', 'qué bloque está dónde', y);
     box('nn1', X0, y, bw, 54, 'NameNode', 'nn1 · :9870 · RPC :9000', { tag: tagOf('nn1') });
     box('snn', X0 + bw + 22, y, bw, 54, 'Secondary NameNode', ':9868 · copia cada 5 min', { tag: tagOf('snn') });
     wire('w-nn-snn', `M${X0 + bw} ${y + 27}H${X0 + bw + 22}`);
     nnCenters = [X0 + bw / 2]; y += 54;
     band('meta', metaTop - 4, y + 4);
   } else {
-    sec('coord', 'COORDINACIÓN', 'elige al activo', y);
+    y += sec('coord', 'COORDINACIÓN', 'elige al activo', y);
     const zw = CW * .27, jw = (CW - zw - 30) / 3;
     box('zk', X0, y, zw, 44, 'ZooKeeper', ':2181', { tag: tagOf('zk') });
     [1, 2, 3].forEach(j => box(`jn${j}`, X0 + zw + 10 + (j - 1) * (jw + 10), y, jw, 44, jw > 140 ? `JournalNode ${j}` : `Journal ${j}`, `jn${j} · :${8479 + j}`, { tag: tagOf(`jn${j}`) }));
@@ -130,7 +155,7 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
     wire('w-bus1', `M${X0 + zw / 2} ${bus}H${X0 + zw + 10 + 2 * (jw + 10) + jw / 2}`);
     y = bus + 14;
     const mt = y;
-    sec('meta', 'METADATOS', `${c.namenodes} NameNodes`, y);
+    y += sec('meta', 'METADATOS', `${c.namenodes} NameNodes`, y);
     const n = c.namenodes, w = (CW - (n - 1) * 12) / n;
     for (let j = 0; j < n; j++) {
       const x = X0 + j * (w + 12), id = `nn${j + 1}`;
@@ -144,13 +169,13 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   }
 
   /* ---------- Datos: el rack ---------- */
-  const busY = y + 15, rackTop = y + 30;
+  const busY = y + 15, rackTop = y + 30 + SEC;
   nnCenters.forEach((x, i) => wire(`w-nnd${i}`, `M${x} ${y}V${busY}`));
   if (nnCenters.length > 1) wire('w-bus2', `M${nnCenters[0]} ${busY}H${nnCenters[nnCenters.length - 1]}`);
   wire('w-rack', `M${X0 + CW / 2} ${busY}V${rackTop}`); dot('d-rack', X0 + CW / 2, busY);
   wlabel('l-hb', X0 + CW / 2, busY + 11, 'latidos cada 3 s');
+  sec('datos', 'DATOS', 'los bloques, en HDFS', narrow ? rackTop - SEC : rackTop + 4);
   y = rackTop;
-  sec('datos', 'DATOS', 'los bloques, en HDFS', y + 4);
   const plan = blockPlan(c);
   const dnIds = Array.from({ length: c.datanodes }, (_, i) => i + 1);
   if (live) dataNodes.filter(d => d.id > c.datanodes && d.state !== 'off').forEach(d => dnIds.push(d.id));
@@ -160,8 +185,12 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   const rackH = headH + 8 + rows * (unitH + gap) + 2;
   out.push(<rect key="rack" className="m-rack" x={X0} y={y} width={CW} height={rackH} rx={3} />);
   out.push(<rect key="rack-h" className="m-rack-h" x={X0} y={y} width={CW} height={headH} rx={2} />);
-  out.push(<text key="rack-ht" className="m-rack-t" x={X0 + 11} y={y + 16}>{fit(`RACK · ${dnIds.length} DATANODE${dnIds.length > 1 ? 'S' : ''} · BLOQUE ${blockSizeLabel(c.blockSize).toUpperCase()} · RÉPLICA ${c.replication}`, CW - (W >= 600 ? 170 : 20), 6.9)}</text>);
-  if (W >= 600) out.push(<text key="rack-hr" className="m-rack-t" x={X0 + CW - 11} y={y + 16} textAnchor="end">{live ? 'EN VIVO' : 'VISTA PREVIA · VENTAS_GRANDES.CSV'}</text>);
+  // Rótulo del rack: el de la derecha se acorta (o se va) antes de pisar al de la izquierda
+  const rackL = `RACK · ${dnIds.length} DATANODE${dnIds.length > 1 ? 'S' : ''} · BLOQUE ${blockSizeLabel(c.blockSize).toUpperCase()} · RÉPLICA ${c.replication}`;
+  const rackRs = live ? ['EN VIVO'] : ['VISTA PREVIA · VENTAS_GRANDES.CSV', 'VISTA PREVIA'];
+  const rackR = rackRs.find(r => CW - 22 - r.length * 6.9 - 16 >= rackL.length * 6.9) ?? (CW - 22 - rackRs[rackRs.length - 1].length * 6.9 - 16 >= 200 ? rackRs[rackRs.length - 1] : '');
+  out.push(<text key="rack-ht" className="m-rack-t" x={X0 + 11} y={y + 16}>{fit(rackL, CW - 22 - (rackR ? rackR.length * 6.9 + 16 : 0), 6.9)}</text>);
+  if (rackR) out.push(<text key="rack-hr" className="m-rack-t" x={X0 + CW - 11} y={y + 16} textAnchor="end">{rackR}</text>);
   const chipArea = CW - 16 - 144 - 82;
   const maxChips = Math.max(2, Math.floor(chipArea / 34));
   const chipsFor = (dn: number): Chip[] => {
@@ -215,45 +244,58 @@ export function Mimic({ config: c, processes, dataNodes = [], files = [], base, 
   y += rackH;
 
   /* ---------- Cómputo ---------- */
-  const cTop = y + 34;
+  const cTop = y + 34 + SEC;
   wire('w-comp', `M${X0 + CW / 2} ${y}V${cTop}`, !yarn);
   wlabel('l-comp', X0 + CW / 2, y + 21, 'los trabajos leen bloques');
+  sec('comp', 'CÓMPUTO', yarn ? 'YARN reparte 4 GB' : 'sin YARN', cTop - SEC);
   y = cTop;
-  sec('comp', 'CÓMPUTO', yarn ? 'YARN reparte 4 GB' : 'sin YARN', y);
-  const cw3 = (CW - 24) / 3;
   const yTag = (on: boolean, was: boolean): Tag => (!base || live ? undefined : on && !was ? 'new' : !on && was ? 'gone' : undefined);
   const wasYarn = base ? base.services !== 'hdfs' : false, wasTodo = base?.services === 'todo';
-  box('rm', X0, y, cw3, 54, 'ResourceManager', ':8088 · los trabajos', { na: !yarn && !(base && wasYarn), tag: yTag(yarn, wasYarn) });
-  box('nm', X0 + cw3 + 12, y, cw3, 64, 'NodeManager', ':8042 · presta 4 GB', { na: !yarn && !(base && wasYarn), eng: 'mr', engName: 'MapReduce, Pig, Sqoop', tag: yTag(yarn, wasYarn) });
-  box('jh', X0 + 2 * (cw3 + 12), y, cw3, 54, 'JobHistory', ':19888 · terminados', { na: !yarn && !(base && wasYarn), tag: yTag(yarn, wasYarn) });
-  band('compute', y - 4, y + 68);
-  y += 64;
+  const yarnNa = !yarn && !(base && wasYarn);
+  const comp: [string, string, string, number, { eng?: string; engName?: string }][] = [
+    ['rm', 'ResourceManager', ':8088 · los trabajos', 54, {}],
+    ['nm', 'NodeManager', ':8042 · presta 4 GB', 64, { eng: 'mr', engName: 'MapReduce, Pig, Sqoop' }],
+    ['jh', 'JobHistory', ':19888 · terminados', 54, {}],
+  ];
+  comp.forEach(([id, t, sub, h, o], i) => { const g = grid(i, y, 64); box(id, g.x, g.y, colW, h, t, sub, { na: yarnNa, tag: yTag(yarn, wasYarn), ...o }); });
+  const compH = Math.ceil(comp.length / COLS) * 76 - 12;
+  band('compute', y - 4, y + compH + 4);
+  y += compH;
 
   /* ---------- Servicios ---------- */
-  const sBus = y + 17, sTop = y + 34;
-  const sw = (CW - 24) / 3;
-  const xs = [0, 1, 2].map(i => X0 + i * (sw + 12));
+  const sBus = y + 17, sTop = y + 34 + SEC;
+  const xs = [0, 1].map(i => X0 + i * (colW + 12));
   wire('w-sv', `M${X0 + CW / 2} ${y}V${sBus}`, !todo);
-  wire('w-sbus', `M${xs[0] + sw / 2} ${sBus}H${xs[1] + sw / 2}`, !todo);
-  [0, 1].forEach(i => wire(`w-sv${i}`, `M${xs[i] + sw / 2} ${sBus}V${sTop}`, !todo));
+  wire('w-sbus', `M${xs[0] + colW / 2} ${sBus}H${xs[1] + colW / 2}`, !todo);
+  [0, 1].forEach(i => wire(`w-sv${i}`, `M${xs[i] + colW / 2} ${sBus}V${sTop}`, !todo));
   if (todo) dot('d-sv', X0 + CW / 2, sBus);
   wlabel('l-sv', X0 + CW / 2, y + 13, 'Hive y Spark piden memoria');
+  sec('serv', 'SERVICIOS', 'consultas y bases', sTop - SEC);
   y = sTop;
-  sec('serv', 'SERVICIOS', 'consultas y bases', y);
   const svTop = y;
   const hiveId = live ? (processes!.some(p => p.id === 'hiveserver2') ? 'hiveserver2' : 'hive') : 'hiveserver2';
-  box(hiveId, xs[0], y, sw, 64, 'Hive', ':10000 · :10002', { na: !todo && !(base && wasTodo), eng: 'tez', engName: 'motor Tez', tag: yTag(todo, !!wasTodo) });
-  box('sparkhistory', xs[1], y, sw, 64, 'Spark', ':18080 · :4040', { na: !todo && !(base && wasTodo), eng: 'spark', engName: 'sobre YARN', tag: yTag(todo, !!wasTodo) });
-  box('mysql', xs[2], y, sw, 64, 'MySQL', ':3306 · base tienda', { na: !yarn && !(base && wasYarn), tag: yTag(yarn, wasYarn) });
-  y += 64 + 12;
-  const mongoTop = y;
-  box('mongodb', xs[0], y, sw, 54, 'MongoDB', ':27017 · base tienda', { na: !c.mongodb && tagOf('mongodb') !== 'gone', tag: tagOf('mongodb') });
-  box('jupyter', xs[1], y, sw, 54, 'JupyterLab', ':8888 · notebooks', { na: !c.jupyter && tagOf('jupyter') !== 'gone', tag: tagOf('jupyter') });
-  box('ui', xs[2], y, sw, 54, 'Esta interfaz', ':8080', {});
-  band('services', svTop - 4, y + 58);
-  if (parts.has('mongo')) bands.push(<rect key="hl-mongo" className="m-hl" x={xs[0] - 4} y={mongoTop - 4} width={sw + 8} height={62} rx={6} />);
-  if (parts.has('jupyter')) bands.push(<rect key="hl-jup" className="m-hl" x={xs[1] - 4} y={mongoTop - 4} width={sw + 8} height={62} rx={6} />);
-  y += 54 + 8;
+  const servs: [string, string, string, number, { na?: boolean; eng?: string; engName?: string; tag?: Tag }][] = [
+    [hiveId, 'Hive', ':10000 · :10002', 64, { na: !todo && !(base && wasTodo), eng: 'tez', engName: 'motor Tez', tag: yTag(todo, !!wasTodo) }],
+    ['sparkhistory', 'Spark', ':18080 · :4040', 64, { na: !todo && !(base && wasTodo), eng: 'spark', engName: 'sobre YARN', tag: yTag(todo, !!wasTodo) }],
+    ['mysql', 'MySQL', ':3306 · base tienda', 64, { na: !yarn && !(base && wasYarn), tag: yTag(yarn, wasYarn) }],
+    ['mongodb', 'MongoDB', ':27017 · base tienda', 54, { na: !c.mongodb && tagOf('mongodb') !== 'gone', tag: tagOf('mongodb') }],
+    ['jupyter', 'JupyterLab', ':8888 · notebooks', 54, { na: !c.jupyter && tagOf('jupyter') !== 'gone', tag: tagOf('jupyter') }],
+    ['ui', 'Esta interfaz', ':8080', 54, {}],
+  ];
+  // En cada fila manda el módulo más alto
+  const rowH = (r: number) => Math.max(...servs.slice(r * COLS, r * COLS + COLS).map(x => x[3]));
+  const rowY = (r: number) => svTop + Array.from({ length: r }, (_, k) => rowH(k) + 12).reduce((a, b) => a + b, 0);
+  const servAt = (i: number) => ({ x: X0 + (i % COLS) * (colW + 12), y: rowY(Math.floor(i / COLS)) });
+  servs.forEach(([id, t, sub, h, o], i) => { const g = servAt(i); box(id, g.x, g.y, colW, h, t, sub, o); });
+  const rowsS = Math.ceil(servs.length / COLS);
+  const svEnd = rowY(rowsS - 1) + rowH(rowsS - 1);
+  band('services', svTop - 4, svEnd + 4);
+  ([['mongo', 3], ['jupyter', 4]] as const).forEach(([part, i]) => {
+    if (!parts.has(part)) return;
+    const g = servAt(i);
+    bands.push(<rect key={`hl-${part}`} className="m-hl" x={g.x - 4} y={g.y - 4} width={colW + 8} height={62} rx={6} />);
+  });
+  y = svEnd + 8;
 
   /* ---------- Bloques (con animación) ---------- */
   const chipEls = allChips.map(({ x, y: cy, c: ch }) => (

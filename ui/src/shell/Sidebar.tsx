@@ -4,6 +4,9 @@ import { api } from '../api';
 import { SPEED as DEMO_SPEED } from '../api/demo/speed';
 import { NAV, NAV_GROUPS } from './nav';
 import { Dot, Tip } from '../components/ui';
+import { clusterHealth } from '../lib/cluster';
+
+const DOT = { ok: 'up', run: 'starting', warn: 'warn', bad: 'down', off: 'off' } as const;
 
 function Mark() {
   return (
@@ -23,14 +26,16 @@ export function Sidebar() {
   const badge = (id: string) => {
     if (!st || st.phase !== 'running') return null;
     if (id === 'hdfs' && (st.hdfs.missing || st.hdfs.underReplicated || st.hdfs.deadDataNodes || st.hdfs.staleDataNodes))
-      return <span className="badge-count" data-k={st.hdfs.missing || st.hdfs.deadDataNodes ? 'bad' : 'run'}>{st.hdfs.missing + st.hdfs.underReplicated || st.hdfs.deadDataNodes + st.hdfs.staleDataNodes}</span>;
+      return <span className="badge-count" data-k={st.hdfs.missing || !st.hdfs.available ? 'bad' : 'run'}>{st.hdfs.missing + st.hdfs.underReplicated || st.hdfs.deadDataNodes + st.hdfs.staleDataNodes}</span>;
     if (id === 'yarn' && st.yarn.running + st.yarn.pending) return <span className="badge-count" data-k="run">{st.yarn.running + st.yarn.pending}</span>;
     return null;
   };
   const demo = api().mode === 'demo';
+  const h = clusterHealth(st, s.dataNodes);
+  const versions = st ? <>Imagen {st.image.name}:{st.image.tag}<br />Hadoop {st.image.hadoop} · Hive {st.image.hive} · Spark {st.image.spark}</> : 'Esperando al contenedor';
   return (
     <aside className="side" aria-label="Navegación">
-      <div className="side-brand"><Mark /><b>BigData Sandbox</b><span className="tag">full</span></div>
+      <div className="side-brand"><span className="side-mark"><Mark /></span><b>BigData Sandbox</b><span className="tag">full</span></div>
       <nav className="side-nav">
         {NAV_GROUPS.map(g => (
           <div className="nav-group" key={g} role="group" aria-label={g}>
@@ -48,9 +53,16 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="side-foot">
-        <span className="mode"><Dot s={demo ? 'warn' : 'up'} />{demo ? `Modo demo · tiempos ×${DEMO_SPEED}` : 'Conectado al contenedor'}</span>
-        <span>{st ? `${st.image.name}:${st.image.tag}` : ''}</span>
-        <span>Hadoop {st?.image.hadoop} · Hive {st?.image.hive} · Spark {st?.image.spark}</span>
+        <button type="button" className="side-status" data-k={h.tone} onClick={() => navigate('cluster')} aria-label={`Estado del cluster: ${h.label}. Ver el cluster`}>
+          <Dot s={DOT[h.tone]} />
+          <span className="side-status-t"><b>{h.label}</b><span>{h.detail}</span></span>
+        </button>
+        <Tip content={versions} side="right">
+          <span className="side-meta" tabIndex={0}>
+            {demo ? <span className="side-demo">Demo · ×{DEMO_SPEED}</span> : <span className="side-live">Contenedor</span>}
+            <span className="mono">{st ? `${st.image.tag}` : '—'}</span>
+          </span>
+        </Tip>
       </div>
     </aside>
   );

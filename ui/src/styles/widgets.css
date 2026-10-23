@@ -68,6 +68,7 @@
 .mimic-svg text { font-family: var(--f-sans); fill: var(--text); }
 .mimic-svg .m-sec { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; fill: var(--text-3); }
 .mimic-svg .m-secs { font-size: 11px; fill: var(--text-4); }
+.mimic-svg .m-secbg { fill: var(--surface); }
 .mimic-svg .m-rect { fill: var(--surface); stroke: var(--n-8); stroke-width: 1.5; transition: stroke .25s, fill .25s; }
 .mimic-svg .m-box.na .m-rect { fill: none; stroke: var(--n-7); stroke-dasharray: 4 3; stroke-width: 1.2; }
 .mimic-svg .m-box.na text { fill: var(--text-4); }
@@ -141,6 +142,24 @@
   .split-main, .split-side { overflow: visible; }
   .split-side { border-left: 0; border-top: 1px solid var(--line-soft); }
 }
-.field.stack { grid-template-columns: minmax(0, 1fr); }
-.field.stack .field-c { justify-content: flex-start; flex-wrap: wrap; }
+.field.wide { grid-template-columns: minmax(0, 1fr); gap: 10px 24px; }
+.field.wide .field-c { justify-content: flex-start; flex-wrap: wrap; align-items: stretch; }
+.field.wide .field-c > .cards { flex: 1; }
+.field-l .helptip { margin-left: -2px; }
+.card-opt[data-locked] { cursor: not-allowed; background: var(--n-2, var(--surface)); box-shadow: none; }
+.card-opt[data-locked] b { color: var(--text-3); }
+.card-opt[data-locked] b small { display: inline-flex; align-items: center; gap: 4px; }
+/* Configuración: antes → después */
+.diffbar { flex-wrap: wrap; gap: 10px 16px; margin: 16px 0 0; padding: 12px 14px; }
+.diffbar-l { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.diffbar-t { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--fs-sm); }
+.diffbar-t svg { color: var(--bad-text); }
+.diff-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.diff-list li { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: var(--fs-sm); }
+.diff-list .diff-k { color: var(--text-3); }
+.diff-list s { color: var(--text-4); font-family: var(--f-mono); font-size: var(--fs-xs); }
+.diff-list b { font-family: var(--f-mono); font-size: var(--fs-xs); font-weight: 600; }
+.diff-list svg { color: var(--text-4); }
+.diffbar-n { color: var(--text-3); font-size: var(--fs-xs); }
+.diffbar-a { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .mimic-svg .m-t { font-size: 12.5px; }

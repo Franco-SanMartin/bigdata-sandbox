@@ -12,19 +12,36 @@ function store<T>(init: T) {
 }
 
 /* ---------- Rutas (#inicio, #hdfs/user/root…) ---------- */
-import { parseHash, type PageId } from '../lib/route';
-export { PAGES, parseHash, type PageId } from '../lib/route';
+import { parseHash, routeHash, routeParts, type PageId } from '../lib/route';
+export { PAGES, parseHash, routeHash, routeParts, type PageId } from '../lib/route';
 /** #hdfs/user/root → ['hdfs', 'user/root']. Lo que no es una pantalla conocida va a Inicio */
 export const route = store<PageId>(parseHash(location.hash)[0]);
 /** Lo que sigue a la pantalla en la ruta (carpeta de HDFS, id de trabajo, práctica…) */
 export const routeArgStore = store<string>(parseHash(location.hash)[1]);
 export const useRouteArg = () => routeArgStore.use();
-addEventListener('hashchange', () => { const [p, a] = parseHash(location.hash); route.set(p); routeArgStore.set(a); });
-export function navigate(p: PageId, arg = '') {
-  const h = arg ? `${p}/${arg}` : p;
-  if (decodeURIComponent(location.hash.slice(1)) !== h) location.hash = h;
-  route.set(p); routeArgStore.set(arg);
+/** El sufijo partido en tramos: #hdfs/user/root → ['user', 'root'] */
+export const useRouteParts = () => routeParts(routeArgStore.use());
+/** Ruta actual: la pantalla y su sufijo, para leer fuera de React */
+export const currentRoute = (): [PageId, string] => [route.get(), routeArgStore.get()];
+addEventListener('hashchange', () => {
+  const [p, a] = parseHash(location.hash);
+  if (p !== route.get()) route.set(p);
+  if (a !== routeArgStore.get()) routeArgStore.set(a);
+});
+/** Va a una pantalla (y a lo que sigue: carpeta, proceso, evento…). Con replace no suma un paso al
+    historial: sirve para elegir una fila sin que "atrás" tenga que recorrer cada clic */
+export function navigate(p: PageId, arg = '', opts: { replace?: boolean } = {}) {
+  const h = routeHash(p, arg);
+  const [cp, ca] = parseHash(location.hash);
+  if (cp !== p || ca !== arg.replace(/^\/+|\/+$/g, '')) {
+    if (opts.replace) history.replaceState(history.state, '', h);
+    else location.hash = h;
+  }
+  if (p !== route.get()) route.set(p);
+  routeArgStore.set(arg.replace(/^\/+|\/+$/g, ''));
 }
+/** Cambia solo el sufijo de la pantalla actual */
+export const setRouteArg = (arg: string, opts: { replace?: boolean } = { replace: true }) => navigate(route.get(), arg, opts);
 
 /* ---------- Paneles ---------- */
 export const consoleOpen = store(false);
@@ -43,7 +60,15 @@ export interface ToastMsg {
 }
 export const toasts = store<ToastMsg[]>([]);
 let tid = 0;
-export function toast(t: Omit<ToastMsg, 'id'>) { toasts.set(l => [...l.slice(-3), { ...t, id: ++tid }]); }
+/** Lo que está pasando y lo que falló deja rastro en la consola: esos avisos traen "Ver en consola"
+    salvo que traigan su propia acción o pidan no tenerla (console: false) */
+export function toast(t: Omit<ToastMsg, 'id'> & { console?: boolean }) {
+  const { console: withConsole = t.kind === 'bad' || t.kind === 'run', ...rest } = t;
+  const action = rest.action ?? (withConsole ? { label: 'Ver en consola', run: openConsole } : undefined);
+  toasts.set(l => [...l.slice(-3), { ...rest, action, id: ++tid }]);
+}
+/** Abre el cajón de la consola sin filtro, con lo último arriba */
+export function openConsole() { consoleFilter.set(null); consoleOpen.set(true); }
 export function dismissToast(id: number) { toasts.set(l => l.filter(x => x.id !== id)); }
 
 /* ---------- Confirmaciones ---------- */
