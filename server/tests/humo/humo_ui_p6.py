@@ -47,9 +47,13 @@ def _comparar(mv, v: dict) -> str:
 def _abrir(page, h, m: dict):
     h.ir(page, "ml")
     page.locator(f'tr[data-key="{m["id"]}"]').click()
+    # mientras trae /viz la sección es un esqueleto sin data-viz-mode: esperar a que cargue (o falle)
     mv = page.locator("section.mv")
-    expect(mv).to_be_visible(timeout=30_000)
-    assert mv.get_attribute("data-viz-mode") == "3d", page.locator(".mv-nogl").inner_text()[:300]
+    listo = page.locator("section.mv[data-viz-mode], section.mv .callout[data-k=bad]")
+    expect(listo.first).to_be_visible(timeout=30_000)
+    modo = mv.get_attribute("data-viz-mode")
+    assert modo, f"no trajo el dibujo: {mv.inner_text()[:300]}"
+    assert modo == "3d", page.locator(".mv-nogl").inner_text()[:300]
     page.wait_for_function("() => Number(document.querySelector('.mv-canvas')?.dataset.frames) > 0", timeout=30_000)
     mv.scroll_into_view_if_needed()
     page.wait_for_timeout(2500)      # que termine la primera pasada
