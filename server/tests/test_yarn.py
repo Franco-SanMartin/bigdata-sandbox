@@ -512,6 +512,31 @@ def test_kill_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, monkeypatch)
     asyncio.run(main())
 
 
+def test_mandar_espera_a_que_el_rm_conozca_la_app(settings, tmp_path, fake_bin, monkeypatch):
+    """Visto en el humo real: la práctica de Spark pedía el detalle apenas volvía el id y
+    el RM todavía no la tenía. submit vuelve recién cuando el RM la conoce."""
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        llamadas = []
+
+        async def rm_app(app_id):
+            llamadas.append(app_id)
+            if len(llamadas) < 3:
+                raise ApiError(f"No existe el trabajo {app_id}", "not_found")
+            return {"id": app_id, "state": "ACCEPTED"}
+        monkeypatch.setattr(y, "rm_app", rm_app)
+        corre = type("Run", (), {"state": "running", "lines": [{"text": f"Submitting application {NUEVA} to ResourceManager"}],
+                                 "action": None, "error": None})()
+        monkeypatch.setattr(y.runner, "start", lambda action: (setattr(corre, "action", action), corre)[1])
+        app = await y.submit("spark-ventas")
+        assert app == NUEVA and llamadas == [NUEVA] * 3
+        # Si el cliente ya terminó (falló antes de llegar al RM), no se queda esperando
+        llamadas.clear()
+        corre.state = "failed"
+        assert await y.submit("spark-ventas") == NUEVA and len(llamadas) == 1
+    asyncio.run(main())
+
+
 # ------------------------------------------------------------- plantillas
 
 

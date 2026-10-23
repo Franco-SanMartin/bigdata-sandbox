@@ -25,6 +25,12 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   Spark MLlib y Sqoop), la práctica de Spark, y regresión, árbol con MLlib y
   KMeans desde la pantalla de ML.
 
+### Arreglado
+
+- La práctica de Spark ya no dice «No existe el trabajo» al lanzar SparkPi o las
+  ventas: el servidor devuelve el id recién cuando el ResourceManager conoce la
+  aplicación (spark-submit lo imprime antes de que YARN la acepte).
+
 ## [1.1.0] - 2026-10-23
 
 La interfaz de `full`, rediseñada: tema claro, una pantalla de inicio que dice
