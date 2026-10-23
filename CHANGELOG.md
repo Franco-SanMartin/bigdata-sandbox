@@ -82,5 +82,5 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/commits/main
-[1.0.0]: https://github.com/Franki-678/bigdata-sandbox/commits/main
+[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.0.0...main
+[1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0
