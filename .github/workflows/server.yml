@@ -7,7 +7,7 @@ name: Servidor
 
 on:
   push:
-    branches: [full, main, vitrina]
+    branches: [full, main]
     paths:
       - "server/**"
       - ".github/workflows/server.yml"

@@ -14,7 +14,7 @@ name: Documentacion
 
 on:
   push:
-    branches: [main, vitrina]
+    branches: [main]
     paths:
       - '**.md'
       - 'guias/**'
