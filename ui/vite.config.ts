@@ -13,9 +13,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Las librerías cambian poco: en un archivo aparte quedan en la caché del navegador
-        manualChunks: { ui: ['radix-ui', 'cmdk', 'lucide-react'], graficos: ['d3-scale', 'd3-shape', 'd3-array'] },
+        // three.js va aparte y solo lo pide el dibujo 3D de los modelos (chunk diferido)
+        manualChunks: { ui: ['radix-ui', 'cmdk', 'lucide-react'], graficos: ['d3-scale', 'd3-shape', 'd3-array'], three: ['three'] },
       },
     },
+    // three.js minificado pesa ~560 kB (150 kB con gzip): es un solo archivo que se baja recién al abrir un modelo
+    chunkSizeWarningLimit: 600,
   },
   // Las pruebas leen el CSS de las pantallas como texto para buscar clases repetidas
   test: { css: { include: [/\/src\/(pages|styles)\/.+\.css/] } },

@@ -202,6 +202,8 @@ class Ml:
                 c("logistica", "sklearn", "sirve", 'Separa con una sola recta: la regla real tiene un "o", por eso acierta menos'),
                 c("tonto", "sklearn", "línea base", "Contesta siempre la clase más común: cualquier modelo que no le gane no sirve"),
                 c("arbol", "mllib", "sirve", mllib),
+                c("mlp", "mllib", "sirve", "La misma forma de red con MultilayerPerceptronClassifier (sigmoide en las ocultas); "
+                                         "arranca una sesión de Spark en YARN y pide 3 GB"),
             ]
             why = "Lo que querés predecir es una categoría (vuelve o no vuelve): es clasificación"
         else:

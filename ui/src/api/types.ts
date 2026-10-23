@@ -821,7 +821,70 @@ export interface ModelRun {
   params?: Record<string, number | string>;
   trace?: ActionTrace;
   error?: string;
+  /** Hay algo para dibujar en GET /api/ml/models/{id}/viz (los últimos 30 modelos) */
+  hasViz?: boolean;
+  /** Por qué no se pudo armar el dibujo (el modelo vale igual) */
+  vizError?: string;
 }
+
+/* ---------- Lo de adentro de un modelo (GET /api/ml/models/{id}/viz, server/sandbox_server/jobs/viz.py) ---------- */
+
+/** Filas de muestra con lo que predijo el modelo de verdad (la interfaz rehace la cuenta y tiene que dar lo mismo) */
+export interface VizSample {
+  rows: number[][];
+  /** Lo real: 0/1 en clasificación, el gasto en regresión, el segmento en KMeans */
+  real?: (number | string)[];
+  pred?: number[];
+  /** Probabilidad de cada clase (clasificación) */
+  proba?: number[][];
+}
+/** Cómo se escalan las entradas: (x − mean) / scale. zeroScale: qué pasa si scale es 0 ('zero' = Spark da 0, 'one' = scikit-learn divide por 1) */
+export interface VizScaler { mean: number[]; scale: number[]; zeroScale?: 'zero' | 'one' }
+interface VizBase { v: number; engine: 'sklearn' | 'mllib'; features: string[]; sample?: VizSample; truncated?: string }
+export interface VizEpochFrame { epoch: number; weights: number[][][]; biases: number[][] }
+export interface MlpViz extends VizBase {
+  kind: 'mlp';
+  classes: string[];
+  /** Neuronas por capa, de la entrada a la salida */
+  layers: number[];
+  hidden: 'relu' | 'logistic' | 'tanh' | 'identity';
+  /** logistic: una salida (scikit-learn, binaria); softmax: una por clase (Spark) */
+  out: 'logistic' | 'softmax';
+  scaler: VizScaler;
+  /** weights[k][i][j]: de la neurona i de la capa k a la j de la capa k+1. null si la red pasa del tope */
+  weights: number[][][] | null;
+  biases: number[][] | null;
+  /** Cómo fue aprendiendo (solo scikit-learn): pérdida y validación por época, y los pesos de algunas épocas */
+  epochs?: { loss: number[]; val: number[] | null; best: number | null; frames: VizEpochFrame[]; chosen: string; note?: string } | null;
+  epochsNote?: string;
+}
+/** Nodo del árbol (a lo ancho): f = columna (−1 hoja), t = umbral (va a la izquierda si x ≤ t), p = proporción de cada clase */
+export interface TreeNode { f: number; t: number | null; imp: number; n: number; p: number[]; d: number; l: number; r: number; cut: boolean }
+export interface TreeViz extends VizBase {
+  kind: 'tree';
+  classes: string[];
+  impurity: string;
+  nodes: TreeNode[];
+  /** scikit-learn compara en float32 */
+  float32: boolean;
+}
+export interface KMeansViz extends VizBase {
+  kind: 'kmeans';
+  k: number;
+  /** log: columnas que se pasan a logaritmo antes de escalar (ticket_promedio) */
+  transform: { log: boolean[]; mean: number[]; scale: number[]; zeroScale?: 'zero' | 'one' };
+  /** Centros de cada iteración (en el espacio escalado); el último son los del modelo */
+  frames: { it: number; centers: number[][] }[];
+  /** Si el recorrido rehecho desde k-means++ llegó a los centros del modelo */
+  replaySame: boolean;
+  /** Para dibujar más de 3 columnas: media y 3 direcciones principales */
+  pca: { mean: number[]; comps: number[][] } | null;
+}
+export interface Ranges { mean: number[]; min: number[]; max: number[] }
+export interface LinearViz extends VizBase { kind: 'linear'; target: string; coef: number[]; intercept: number; ranges: Ranges }
+export interface LogisticViz extends VizBase { kind: 'logistic'; classes: string[]; coef: number[]; intercept: number; scaler: VizScaler; ranges: Ranges }
+export interface DummyViz extends VizBase { kind: 'dummy'; classes: string[]; prior: number[]; strategy: string }
+export type ModelViz = MlpViz | TreeViz | KMeansViz | LinearViz | LogisticViz | DummyViz;
 
 /* ---------- Eventos en vivo (SSE en GET /api/events) ---------- */
 
@@ -957,4 +1020,6 @@ export interface SandboxApi {
   train(req: TrainRequest): Promise<string>;
   /** GET /api/ml/models */
   models(): Promise<ModelRun[]>;
+  /** GET /api/ml/models/{id}/viz → lo de adentro del modelo, para dibujarlo */
+  modelViz(id: string): Promise<ModelViz>;
 }
