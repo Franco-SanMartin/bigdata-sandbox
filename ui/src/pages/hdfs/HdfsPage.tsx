@@ -74,6 +74,7 @@ function Hdfs() {
     : h.safeMode ? { k: 'run', label: 'safe mode' }
     : h.missing ? { k: 'bad', label: `${nf(h.missing)} bloques perdidos` }
     : h.underReplicated ? { k: 'run', label: 're-replicando' }
+    : live < dataNodes.length ? { k: 'run', label: `${dataNodes.length - live} DataNode${dataNodes.length - live > 1 ? 's' : ''} caído${dataNodes.length - live > 1 ? 's' : ''}` }
     : { k: 'ok', label: 'sano' };
 
   const refresh = () => { ls.reload(); file.reload(); };

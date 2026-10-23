@@ -140,3 +140,8 @@
 /* ---------- Toast con acción ---------- */
 .toast-a { grid-column: 2; justify-self: start; margin-top: 4px; }
 .confirm-type { display: grid; gap: 6px; margin-top: var(--s-2); font-size: var(--fs-sm); color: var(--text-3); }
+
+/* ---------- Enlace en línea (botón que se ve como link, dentro de un texto) ---------- */
+button.link { all: unset; color: var(--accent-text); cursor: pointer; border-bottom: 1px dotted var(--accent-line); }
+button.link:hover { border-bottom-style: solid; }
+button.link:focus-visible { outline: 2px solid var(--focus); border-radius: 3px; }

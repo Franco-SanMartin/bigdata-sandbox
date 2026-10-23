@@ -30,11 +30,12 @@ const WHAT: Record<DataSource, string> = {
   mongodb: 'Documentos de la base tienda',
   pig: 'Scripts de flujo de datos sobre HDFS',
 };
+/* El editor vacío dice qué escribir, como comentario: un ejemplo en gris parecía escrito y no corría */
 const PLACEHOLDER: Record<DataSource, string> = {
-  hive: 'SELECT sucursal, COUNT(*) FROM ventas GROUP BY sucursal;',
-  mysql: 'SELECT * FROM productos;',
-  mongodb: 'db.pedidos.find({ cliente_id: 42 })',
-  pig: "ventas = LOAD '/user/root/ventas' USING PigStorage(',');\nprimeras = LIMIT ventas 10;\nDUMP primeras;",
+  hive: '-- Escribí SQL de Hive y corrélo con Ctrl+Enter, o elegí un ejemplo de arriba.\n-- Por ejemplo: SELECT sucursal, COUNT(*) FROM ventas GROUP BY sucursal;',
+  mysql: '-- Escribí SQL de MariaDB (base tienda) y corrélo con Ctrl+Enter, o elegí un ejemplo de arriba.\n-- Por ejemplo: SELECT * FROM productos;',
+  mongodb: '// Escribí una consulta de mongosh y corréla con Ctrl+Enter, o elegí un ejemplo de arriba.\n// Por ejemplo: db.pedidos.find({ cliente_id: 42 })',
+  pig: "-- Escribí un script de Pig Latin y corrélo con Ctrl+Enter, o elegí un ejemplo de arriba.\n-- Por ejemplo: ventas = LOAD '/user/root/ventas' USING PigStorage(','); DUMP ventas;",
 };
 /** Qué se puede y qué no en cada motor, en una línea */
 const RULES: Record<DataSource, string> = {
@@ -188,7 +189,7 @@ export function DatosPage() {
     <div className="page-in qx-page">
       <PageHeader title="Consultas"
         sub="Escribí SQL en Hive o MariaDB, consultas de MongoDB o scripts de Pig, y mirá el resultado, el plan y quién lo resolvió."
-        status={!status ? undefined : !up ? { k: 'off', label: 'Cluster apagado' } : { k: ready === SOURCES.length ? 'ok' : ready ? 'run' : 'bad', label: `${ready} de ${SOURCES.length} motores listos` }}
+        status={!status ? undefined : status.phase === 'starting' ? { k: 'run', label: 'Arrancando' } : !up ? { k: 'off', label: 'Cluster apagado' } : { k: ready === SOURCES.length ? 'ok' : ready ? 'run' : 'bad', label: `${ready} de ${SOURCES.length} motores listos` }}
         help={<>Hive y Pig trabajan sobre los archivos de HDFS y lanzan trabajos en YARN; MariaDB y MongoDB resuelven en su propio proceso. El historial y las guardadas quedan en este navegador.</>} />
 
       <div className="qx">
@@ -251,7 +252,7 @@ export function DatosPage() {
                 onClick={() => void exec('consulta')} inline={cap.state !== 'ready' || !doc.text.trim()}><Play size={14} />Correr</GatedButton>
               <GatedButton cap={source} blockedBy={!doc.text.trim() && 'Escribí una consulta'} className="btn" busy={!!running} onClick={() => void exec('plan')}
                 title="Ver qué va a hacer el motor, sin correrla (Ctrl+Shift+Enter)"><GitBranch size={14} />Plan</GatedButton>
-              <button type="button" className="btn btn-ghost" onClick={save} disabled={!doc.text.trim()} title="Guardar en este navegador"><BookmarkPlus size={14} />Guardar</button>
+              <GatedButton className="btn btn-ghost" onClick={save} blockedBy={!doc.text.trim() && 'Escribí una consulta para guardarla'} title="Guardar en este navegador"><BookmarkPlus size={14} />Guardar</GatedButton>
               {!doc.text.trim() && ex[0] && <button type="button" className="btn btn-ghost" onClick={() => { setDoc({ text: ex[0].text }); focusEditor(); }}>Cargar un ejemplo</button>}
             </div>
           </section>
@@ -401,11 +402,11 @@ function HistoryList({ items, onOpen, onClear }: { items: HistoryEntry[]; onOpen
 
 function ResultPanel({ doc, st, running, now, onTab }: { doc: QueryDoc; st: DocState; running: { what: 'consulta' | 'plan'; t0: number } | null; now: number; onTab: (t: ResTab) => void }) {
   const { res, plan, err, tab, log } = st;
-  const tabs: { id: ResTab; label: string; on: boolean }[] = [
+  const tabs: { id: ResTab; label: string; on: boolean; why?: string }[] = [
     { id: 'res', label: 'Resultado', on: true },
-    { id: 'plan', label: 'Plan', on: !!plan || err?.what === 'plan' || running?.what === 'plan' },
-    { id: 'trace', label: 'Trace', on: !!res?.trace },
-    { id: 'log', label: 'Log', on: log.length > 0 },
+    { id: 'plan', label: 'Plan', on: !!plan || err?.what === 'plan' || running?.what === 'plan', why: 'Pedí el Plan (Ctrl+Shift+Enter) para ver qué va a hacer el motor' },
+    { id: 'trace', label: 'Trace', on: !!res?.trace, why: 'Corré la consulta para ver quién la resolvió, paso a paso' },
+    { id: 'log', label: 'Log', on: log.length > 0, why: 'Cada corrida deja acá su comando y cómo terminó' },
   ];
   const secs = (ms: number) => (ms < 1000 ? `${nf(ms)} ms` : `${nf(ms / 1000, 1)} s`);
   const fileName = `${doc.source}-${doc.title.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '_').replace(/^_|_$/g, '') || 'resultado'}`;
@@ -413,7 +414,7 @@ function ResultPanel({ doc, st, running, now, onTab }: { doc: QueryDoc; st: DocS
     <section className="panel qx-res" aria-label="Resultado">
       <div className="qx-res-tabs" role="tablist" aria-label="Vista del resultado">
         {tabs.map(t => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} disabled={!t.on && tab !== t.id} onClick={() => onTab(t.id)}>{t.label}</button>
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} disabled={!t.on && tab !== t.id} title={!t.on && tab !== t.id ? t.why : undefined} onClick={() => onTab(t.id)}>{t.label}</button>
         ))}
         {res && !running && !err && tab === 'res' && (
           <span className="qx-res-meta">

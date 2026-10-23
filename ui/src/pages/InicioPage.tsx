@@ -9,7 +9,7 @@ import { useApi } from '../state/useApi';
 import { CAP_INFO, capSummary, type Capabilities, type CapId, type Capability } from '../lib/capabilities';
 import { clusterHealth } from '../lib/cluster';
 import { ago, mbLabel, nf, plural } from '../lib/format';
-import { bootLine, EmptyState, GatedButton, PageHeader, Panel } from '../components/base';
+import { bootLine, EmptyState, PageHeader, Panel } from '../components/base';
 import type { ReactNode } from 'react';
 import type { Activity, ClusterStatus, DataNode } from '../api/types';
 import type { PageId } from '../lib/route';
@@ -75,7 +75,8 @@ function CapAction({ c, page }: { c: Capability; page: PageId }) {
   if (c.state === 'ready') return <button type="button" className="btn btn-sm" onClick={() => navigate(page)}>Abrir<ArrowRight size={13} /></button>;
   // Con el cluster apagado el arreglo es el mismo para todas: lo ofrece el estado de arriba, no once botones iguales
   if (c.state === 'blocked' && c.fix && c.fix.kind !== 'wait' && c.fix.kind !== 'start') return <button type="button" className="btn btn-sm" onClick={() => runFix(c.fix)}>{c.fixLabel}</button>;
-  return <GatedButton cap={c} className="btn btn-sm" onClick={() => navigate(page)}>Abrir<ArrowRight size={13} /></GatedButton>;
+  // Apagado o arrancando: igual se puede entrar a mirar (la pantalla dice qué va a poder hacer y muestra ejemplos y plantillas)
+  return <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate(page)} title={c.reason ? `${c.reason}: igual podés entrar a mirar` : undefined}>Ver la pantalla<ArrowRight size={13} /></button>;
 }
 
 function CapGrid({ caps }: { caps: Capabilities }) {

@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { EmptyState, SkeletonLines, useBlock } from '../../components/base';
 import { Tip } from '../../components/ui';
 import { hdfsDelete, hdfsMkdir, hdfsUpload } from '../../state/actions';
+import { useSnapshot } from '../../state/store';
 import { clock, sizeLabel } from '../../lib/format';
 import { ErrorLine, type Res } from './common';
 import { downloadFile } from './Dialogs';
@@ -81,6 +82,10 @@ export function Explorer({ path, setPath, ls, sel, setSel, act, compact }: {
   const cols = compact ? all.filter(c => !['blocks', 'mod', 'rep'].includes(c.id)) : all;
   const rows = (ls.data?.entries ?? []).filter(e => !q.trim() || e.name.toLowerCase().includes(q.trim().toLowerCase()));
   const empty = ls.data && !ls.data.entries.length;
+  // Carpeta vacía pero HDFS cuenta archivos: dónde están (si no, parece que el resumen miente)
+  const { files } = useSnapshot();
+  const others = empty ? files.filter(f => !f.path.startsWith(path === '/' ? '/' : path + '/')) : [];
+  const otherDirs = [...new Set(others.map(f => f.path.slice(0, f.path.lastIndexOf('/')) || '/'))].sort().slice(0, 3);
 
   return (
     <section className="panel hd-main" aria-label="Explorador"
@@ -123,6 +128,8 @@ export function Explorer({ path, setPath, ls, sel, setSel, act, compact }: {
               </>}
               foot={wb ? `No se puede escribir: ${wb}` : 'También podés soltar un archivo acá encima.'}>
               Subí un archivo para ver cómo HDFS lo parte en bloques y reparte las copias entre los DataNodes.
+              {others.length > 0 && <> {others.length === 1 ? 'El único archivo que cuenta HDFS está en' : `Los ${others.length} archivos que cuenta HDFS están en`}{' '}
+                {otherDirs.map((d, i) => <span key={d}>{i > 0 && ', '}<button type="button" className="link mono" onClick={() => setPath(d)}>{d}</button></span>)}.</>}
             </EmptyState>
           ) : ls.data && (
             <DataTable label={`Contenido de ${path}`} columns={cols} rows={rows} rowKey={r => r.path} selected={sel}
