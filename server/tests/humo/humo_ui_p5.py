@@ -43,7 +43,11 @@ def _etapa(page, h, i: int, stage: str, herramienta: str) -> dict:
     panel.locator(".pl-tool", has=page.locator(".t", has_text=re.compile(rf"^{re.escape(herramienta)}$"))).click()
     correr = page.get_by_role("button", name=f"Correr {herramienta}")
     expect(correr).to_be_visible()
-    assert correr.get_attribute("data-gated") != "true", correr.get_attribute("aria-description")
+    # La pantalla se entera por eventos de que terminó la etapa anterior: se le da un rato
+    try:
+        expect(correr).not_to_have_attribute("data-gated", "true", timeout=30_000)
+    except AssertionError:
+        raise AssertionError(correr.get_attribute("aria-description")) from None
     correr.click()
     r = h.esperar(lambda: next((x for x in h.pedir("GET", "/api/pipeline/steps")[1] or []
                                 if x["id"] not in ids and x["state"] != "running"), None), 1800, f"la etapa {stage}")

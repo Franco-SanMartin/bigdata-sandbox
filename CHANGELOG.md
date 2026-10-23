@@ -30,6 +30,8 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 - La práctica de Spark ya no dice «No existe el trabajo» al lanzar SparkPi o las
   ventas: el servidor devuelve el id recién cuando el ResourceManager conoce la
   aplicación (spark-submit lo imprime antes de que YARN la acepte).
+- El paso «Mirar el DAG» de la práctica de Spark espera a que Spark History
+  cargue el trabajo recién terminado en vez de mostrar 0 etapas.
 
 ## [1.1.0] - 2026-10-23
 
