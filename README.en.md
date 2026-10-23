@@ -27,7 +27,7 @@ With Docker installed and 7 GB of RAM for Docker
 [guide 2](guias/02-arrancar-y-apagar.md)):
 
 ```bash
-docker pull franki678/bigdata-sandbox
+docker pull franki678/bigdata-sandbox:base
 docker run -d --name bigdata --stop-timeout 20 \
   -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si \
   -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 \
@@ -36,7 +36,7 @@ docker run -d --name bigdata --stop-timeout 20 \
   -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 \
   -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 \
   -v bigdata_hadoop:/hadoop -v "$(pwd)/datos:/datos" \
-  franki678/bigdata-sandbox
+  franki678/bigdata-sandbox:base
 docker logs -f bigdata
 ```
 

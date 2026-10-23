@@ -1,7 +1,7 @@
 # 1. Instalación: Docker y la imagen
 
 Lo que se hace **una sola vez por compu**: instalar Docker y tener la imagen
-`franki678/bigdata-sandbox`. No hace falta clonar este repo ni bajar nada más:
+`franki678/bigdata-sandbox:base`. No hace falta clonar este repo ni bajar nada más:
 los ejemplos vienen adentro de la imagen.
 
 [← Índice de guías](README.md) · Siguiente: [2. Arrancar y apagar →](02-arrancar-y-apagar.md)
@@ -90,20 +90,22 @@ AVX` y sigue sin MongoDB. Las Mac M1–M4 siempre andan.
 ## Paso 2. Tener la imagen
 
 Hay tres formas. Las tres terminan igual: una imagen llamada
-`franki678/bigdata-sandbox` en tu compu.
+`franki678/bigdata-sandbox:base` en tu compu.
 
 ### A) Bajarla de Docker Hub (en tu casa)
 
 <!-- prueba: no (en la prueba ya esta la imagen a probar: un pull la pisaria con la publicada) -->
 ```bash
-docker pull franki678/bigdata-sandbox
+docker pull franki678/bigdata-sandbox:base
 ```
 
 - Baja ~1,4 GB. Sirve para Windows, Linux y Mac: Docker elige sola la versión
   de tu procesador (Intel/AMD o ARM).
 - No hace falta cuenta ni `docker login`.
-- Sin tag (`franki678/bigdata-sandbox`) es `:latest`, que es la versión
-  `base`. Las otras versiones están en el [README](../README.md#versiones-de-la-imagen).
+- `:base` es la versión de la materia (en Docker Hub, `:latest` es la misma
+  imagen). Las guías usan siempre `:base`, así el mismo comando sirve con la
+  imagen bajada o con el archivo del aula. Las otras versiones están en el
+  [README](../README.md#versiones-de-la-imagen).
 
 ### B) En el aula: el archivo del profesor
 
@@ -130,7 +132,7 @@ Descargas). Si esa PC se borra al reiniciar, conviene tenerlo en un pendrive.
 
   <!-- prueba: no (CMD de Windows; deja un servidor prendido) -->
   ```bat
-  docker run -d --rm --name compartir -p 8000:8000 -v "%cd%:/srv:ro" -w /srv --entrypoint python3 franki678/bigdata-sandbox -m http.server 8000
+  docker run -d --rm --name compartir -p 8000:8000 -v "%cd%:/srv:ro" -w /srv --entrypoint python3 franki678/bigdata-sandbox:base -m http.server 8000
   ipconfig
   ```
 
@@ -153,8 +155,12 @@ terminal nueva (arranca en la carpeta del usuario, donde quedó el archivo):
 docker load -i bigdata-sandbox.tar.gz
 ```
 
-Tarda 1-2 min y termina con `Loaded image: franki678/bigdata-sandbox:latest`.
+Tarda 1-2 min y termina con `Loaded image: franki678/bigdata-sandbox:base`.
 Después ya no hace falta el archivo: se puede borrar.
+
+El archivo trae un solo nombre, `franki678/bigdata-sandbox:base`: es el que
+usan todas las guías y anda sin internet. Escribilo siempre con el `:base`
+(sin tag, Docker busca `:latest` y sale a bajarla de internet).
 
 ### C) Pasarla entre compañeros
 
@@ -162,18 +168,23 @@ El que la tiene la guarda en un archivo y los demás la cargan:
 
 <!-- prueba: no (escribe un archivo de varios GB) -->
 ```bash
-docker save franki678/bigdata-sandbox -o bigdata-sandbox.tar
+docker save franki678/bigdata-sandbox:base -o bigdata-sandbox.tar
 docker load -i bigdata-sandbox.tar
 ```
 
 ## Paso 3. Comprobar que la imagen está
 
-<!-- prueba: compu | espera: franki678/bigdata-sandbox -->
+<!-- prueba: compu | espera: franki678/bigdata-sandbox | espera: base -->
 ```bash
 docker image ls franki678/bigdata-sandbox
 ```
 
-Tiene que aparecer una línea con `franki678/bigdata-sandbox` y `latest`.
+Tiene que aparecer una línea con `franki678/bigdata-sandbox` y `base`.
+Si cargaste un archivo del aula de antes, que traía la misma imagen con dos
+nombres, vas a ver también una línea con `latest` y el mismo IMAGE ID. Sobra:
+`docker rmi franki678/bigdata-sandbox:latest` saca solo ese nombre, la imagen
+queda.
+
 Listo: ya podés [arrancar el cluster](02-arrancar-y-apagar.md).
 
 ## Actualizarla más adelante

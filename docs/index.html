@@ -244,7 +244,7 @@ svg text { font-family: var(--sans); }
       <a href="demo/index.html">interfaz :full (demo)</a>
       <a href="https://github.com/Franki-678/bigdata-sandbox">repositorio</a>
       <a href="https://hub.docker.com/r/franki678/bigdata-sandbox">docker hub</a>
-      <span>imagen franki678/bigdata-sandbox:latest</span>
+      <span>imagen franki678/bigdata-sandbox:base</span>
     </div>
   </aside>
 
@@ -994,7 +994,7 @@ function dockerRun(cfg) {
   if (cfg.mongo && cfg.p27017) p.push("27017:27017");
   const datos = { bash: "\"$(pwd)/datos:/datos\"", ps: "\"${PWD}/datos:/datos\"", cmd: "\"%cd%\\datos:/datos\"" }[cfg.consola];
   const partes = ["docker run -d --name bigdata --stop-timeout 20", e.map(x => "-e " + x).join(" "),
-    p.map(x => "-p 127.0.0.1:" + x).join(" "), `-v bigdata_hadoop:/hadoop -v ${datos}`, "franki678/bigdata-sandbox"];
+    p.map(x => "-p 127.0.0.1:" + x).join(" "), `-v bigdata_hadoop:/hadoop -v ${datos}`, "franki678/bigdata-sandbox:base"];
   if (cfg.consola !== "bash") return partes.join(" ");
   // mac/linux: en varias líneas, como en la guía 2
   const ps = p.map(x => "-p 127.0.0.1:" + x);

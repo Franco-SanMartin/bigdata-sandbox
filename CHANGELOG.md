@@ -9,6 +9,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- El archivo del aula (release `imagen`) carga un solo nombre,
+  `franki678/bigdata-sandbox:base`, y las guías, el README y el
+  `docker-compose.yml` usan ese mismo con el tag escrito, para que todo ande
+  sin internet después del `docker load`.
+
 ## [1.1.0] - 2026-10-23
 
 La interfaz de `full`, rediseñada: tema claro, una pantalla de inicio que dice

@@ -478,8 +478,13 @@ volumen_cortado() { # un volumen de la imagen anterior que se apago de golpe (si
 
 tutoriales() { # los comandos de las guias (guias/*.md), en orden, como los haria un alumno
   [ "$VERSION" = base ] || no_aplica "las guias son de la version base"
-  # Las guias usan franki678/bigdata-sandbox (= latest) y el contenedor 'bigdata'
-  docker tag "$IMAGEN" franki678/bigdata-sandbox:latest
+  # Las guias usan franki678/bigdata-sandbox:base y el contenedor 'bigdata'.
+  # Siempre con el tag: el archivo del aula trae solo ese nombre, y sin tag
+  # Docker buscaria :latest en internet.
+  if grep -nE '(docker (run|pull|save|create) .*|^ +)franki678/bigdata-sandbox( |$)' guias/[0-9]*.md; then
+    falla "las guias tienen la imagen sin tag: va con :base"
+  fi
+  docker tag "$IMAGEN" franki678/bigdata-sandbox:base
   local pisar=no; [ -n "${GITHUB_ACTIONS:-}" ] && pisar=si
   TUTORIALES_PISAR=$pisar TUTORIALES_LIMPIAR=si python3 -I pruebas/tutoriales.py guias/[0-9]*.md
 }

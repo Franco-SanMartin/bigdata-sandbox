@@ -1,7 +1,7 @@
 # Guías
 
 Un cluster de Big Data entero en tu compu, con la imagen
-`franki678/bigdata-sandbox` (la versión `base`: Hadoop, Hive, Spark, Pig,
+`franki678/bigdata-sandbox:base` (la versión `base`: Hadoop, Hive, Spark, Pig,
 Sqoop, ZooKeeper, MySQL y MongoDB). Las guías van en orden: cada una usa lo
 que quedó armado en las anteriores.
 
