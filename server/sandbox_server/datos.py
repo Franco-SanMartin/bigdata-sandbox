@@ -852,9 +852,10 @@ EXAMPLES: list[dict] = [
     {"source": "mongodb", "label": "Índice: IXSCAN en vez de COLLSCAN", "script": _JS,
      "text": 'db.pedidos.find({ cliente_id: 42 }).explain("executionStats")'},
     {"source": "pig", "label": "Ventas por sucursal", "script": _PIG, "text": _PIG_LOAD +
-     "por_sucursal = GROUP filas BY sucursal;\n"
+     "lineas = FOREACH filas GENERATE sucursal, (long) cantidad * precio AS importe;\n"
+     "por_sucursal = GROUP lineas BY sucursal;\n"
      "resumen = FOREACH por_sucursal GENERATE group AS sucursal,\n"
-     "          COUNT(filas) AS tickets,\n          SUM(filas.cantidad) AS unidades;\n"
+     "          COUNT(lineas) AS tickets,\n          SUM(lineas.importe) AS facturado;\n"
      "DUMP resumen;"},
     {"source": "pig", "label": "Ventas por producto, ordenado", "script": _PIG, "text": _PIG_LOAD +
      "lineas = FOREACH filas GENERATE producto, cantidad,\n"

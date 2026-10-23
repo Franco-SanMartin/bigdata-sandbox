@@ -1,9 +1,9 @@
-/* Datos en el modo demo: catálogo, esquema, consultas y planes de Hive, MySQL y MongoDB.
+/* Datos en el modo demo: catálogo, esquema, consultas y planes de Hive, MySQL, MongoDB y Pig.
    Las consultas de ejemplo devuelven lo que dan los scripts reales; las demás, una nota. */
 import type { CatalogEntry, DataSample, DataSource, QueryExample, QueryPlan, QueryResult, TableSchema } from '../types';
 import { ApiFailure, fail } from '../errors';
 import type { DemoEngine, StageDef } from './engine';
-import { EXAMPLES, LIMPIAS_HEAD, MONGO_COLLECTIONS, MYSQL_TABLES, POR_CATEGORIA, VENTAS_HEAD, answer } from './datasets';
+import { EXAMPLES, LIMPIAS_HEAD, MONGO_COLLECTIONS, MYSQL_TABLES, POR_CATEGORIA, POR_PRODUCTO, POR_SUCURSAL, VENTAS_HEAD, answer } from './datasets';
 import { LIMPIAS_COLS, POR, PRODUCTOS_ROWS, VENTAS_COLS, n, procUp, needProc, trace } from './common';
 
 const PROC: Record<DataSource, [string, string]> = { hive: ['hiveserver2', 'HiveServer2'], mysql: ['mysql', 'MySQL'], mongodb: ['mongodb', 'MongoDB'], pig: ['rm', 'ResourceManager'] };
@@ -23,6 +23,50 @@ const MYSQL_DDL: Record<string, string> = {
   'tienda.resumen_categoria': 'CREATE TABLE resumen_categoria (\n  categoria VARCHAR(20) PRIMARY KEY,\n  unidades  INT         NOT NULL,\n  facturado BIGINT      NOT NULL\n);',
 };
 
+/* Pig: los mismos ejemplos y los mismos controles que el server (sandbox_server/datos.py) */
+const PIG_LOAD = "ventas = LOAD '/user/root/ventas' USING PigStorage(',')\n         AS (fecha:chararray, sucursal:chararray, producto:chararray,\n             cantidad:int, precio:int);\n-- la primera línea del CSV es el encabezado\nfilas = FILTER ventas BY fecha != 'fecha';\n";
+const PIG_IMPORTE = "lineas = FOREACH filas GENERATE producto, cantidad,\n         (long) cantidad * precio AS importe;\npor_producto = GROUP lineas BY producto;\n";
+export const PIG_EXAMPLES: QueryExample[] = [
+  { source: 'pig', label: 'Ventas por sucursal', script: 'ejemplos/ventas.pig', text: PIG_LOAD + "lineas = FOREACH filas GENERATE sucursal, (long) cantidad * precio AS importe;\npor_sucursal = GROUP lineas BY sucursal;\nresumen = FOREACH por_sucursal GENERATE group AS sucursal,\n          COUNT(lineas) AS tickets,\n          SUM(lineas.importe) AS facturado;\nDUMP resumen;" },
+  { source: 'pig', label: 'Ventas por producto, ordenado', script: 'ejemplos/ventas.pig', text: PIG_LOAD + PIG_IMPORTE + "totales = FOREACH por_producto GENERATE group AS producto,\n          SUM(lineas.cantidad) AS unidades,\n          SUM(lineas.importe) AS facturado;\nordenado = ORDER totales BY facturado DESC;\nDUMP ordenado;" },
+  { source: 'pig', label: 'Primeras 10 filas', script: 'ejemplos/ventas.pig', text: PIG_LOAD + 'primeras = LIMIT filas 10;\nDUMP primeras;' },
+  { source: 'pig', label: 'Guardar el resultado en HDFS (STORE)', script: 'ejemplos/ventas.pig', text: PIG_LOAD + PIG_IMPORTE + "totales = FOREACH por_producto GENERATE group AS producto, SUM(lineas.importe) AS facturado;\nfs -rm -r -f /user/root/resultados/pig_por_producto;\nSTORE totales INTO '/user/root/resultados/pig_por_producto' USING PigStorage(',');" },
+];
+const HIVE_CREATE_VENTAS: QueryExample = { source: 'hive', label: 'Crear tabla ventas desde HDFS', script: 'ejemplos/ventas.hql', text: "CREATE EXTERNAL TABLE IF NOT EXISTS ventas (\n  fecha STRING, sucursal STRING, producto STRING,\n  cantidad INT, precio INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\nLOCATION '/user/root/ventas'\nTBLPROPERTIES ('skip.header.line.count' = '1');" };
+
+/** Sin comentarios y con lo de adentro de las comillas en blanco, para buscar palabras clave */
+const pigMask = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/--[^\n]*/g, m => ' '.repeat(m.length));
+const PIG_HINT = ' Si lo necesitás, corrélo con pig en la terminal del contenedor.';
+/** Un borrado solo puede ir adentro de /user/<alguien>/… (no /user entero, ni /tmp, ni el warehouse de Hive) */
+export function pigPathOk(raw: string): boolean {
+  let p = raw.replace(/^['"]|['"]$/g, '').replace(/^hdfs:\/\/[^/]*/, '') || '/';
+  if (p.includes('$')) return false;
+  if (!p.startsWith('/')) p = `/user/root/${p}`;
+  const parts: string[] = [];
+  for (const c of p.split('/')) { if (c === '..') parts.pop(); else if (c && c !== '.') parts.push(c); }
+  return parts.length >= 3 && parts[0] === 'user' && parts[1] !== 'hive' && !/[*?[{]/.test(parts.slice(0, 2).join('/'));
+}
+/** Lo que el server no deja correr desde la interfaz */
+export function pigCheck(text: string) {
+  const m = pigMask(text).replace(/'[^'\n]*'/g, q => `'${' '.repeat(q.length - 2)}'`);
+  if (m.includes('`')) fail('invalid', 'Pig desde la interfaz no corre comandos entre comillas invertidas (`…`): ni STREAM, ni DEFINE ni %declare con un comando.' + PIG_HINT);
+  const sh = /(?:^|;)[ \t]*(sh|exec|run)\b/im.exec(m);
+  if (sh) fail('invalid', `Pig desde la interfaz no permite ${sh[1].toLowerCase()}: ${sh[1].toLowerCase() === 'sh' ? 'corre comandos del sistema' : 'corre otro script'}.` + PIG_HINT);
+  if (/\bstream\b[^;]*\bthrough\b/i.test(m)) fail('invalid', 'Pig desde la interfaz no permite STREAM … THROUGH (pasa los datos por un programa del sistema).' + PIG_HINT);
+  const params = Object.fromEntries([...pigMask(text).matchAll(/^[ \t]*%(?:default|declare)[ \t]+(\w+)[ \t]+['"]?([^'"\n]*?)['"]?[ \t]*$/gim)].map(x => [x[1], x[2]]));
+  for (const st of pigMask(text).split(';').map(x => x.replace(/^[ \t]*%[^\n]*$/gm, '').trim())) {
+    if (/^register\b/i.test(st) && !/^register\s+['"]?[^\s'"]+\.jar['"]?$/i.test(st)) fail('invalid', 'Desde la interfaz, REGISTER solo acepta .jar (los UDF en Python o JavaScript corren código del sistema).' + PIG_HINT);
+    const f = /^(fs\s+(-\w+)|rmf|rm|copytolocal)\b(?!\s*=)([\s\S]*)$/i.exec(st);
+    if (!f) continue;
+    const sub = (f[2] || f[1]).toLowerCase();
+    if (['-get', '-copytolocal', '-movetolocal', '-getmerge', 'copytolocal'].includes(sub)) fail('invalid', 'Desde la interfaz Pig no escribe en el disco del contenedor (fs -get, copyToLocal).' + PIG_HINT);
+    if (!['-rm', '-rmr', '-rmdir', 'rmf', 'rm'].includes(sub)) continue;
+    const paths = f[3].replace(/\$\{?(\w+)\}?/g, (x, k) => params[k] ?? x).split(/\s+/).filter(a => a && !a.startsWith('-'));
+    const bad = paths.find(a => !pigPathOk(a)) ?? (paths.length ? undefined : '(sin ruta)');
+    if (bad) fail('invalid', `Pig desde la interfaz solo borra adentro de /user/<usuario>/…: ${bad} no se puede borrar desde acá.` + PIG_HINT);
+  }
+}
+
 const hiveCols = (ddl: string) => [...ddl.matchAll(/^\s+(\w+)\s+(STRING|INT|BIGINT|TIMESTAMP)/gm)].map(m => ({ name: m[1], type: m[2] }));
 
 export class DemoData {
@@ -40,7 +84,7 @@ export class DemoData {
     const out: CatalogEntry[] = [];
     if (procUp(this.e, 'hiveserver2')) {
       const t = (name: string, rows: number, location: string) => out.push({ source: 'hive', name, kind: 'externa', rows, location, columns: hiveCols(HIVE_DDL[name]) });
-      if (this.has('/user/root/ventas/')) t('default.ventas', 200000, '/user/root/ventas');
+      if (this.has('/user/root/ventas/') || this.hiveExtra.has('default.ventas')) t('default.ventas', this.has('/user/root/ventas/') ? 200000 : 0, '/user/root/ventas');
       if (this.has('/user/root/tienda/ventas/')) t('default.tienda_ventas', 200000, '/user/root/tienda/ventas');
       if (this.has('/user/root/tienda/productos/')) t('default.tienda_productos', 8, '/user/root/tienda/productos');
       if (this.hiveExtra.has('default.ventas_limpias')) t('default.ventas_limpias', 97200, '/user/root/ml/ventas_limpias');
@@ -54,6 +98,7 @@ export class DemoData {
   }
 
   schema(source: DataSource, name: string): TableSchema {
+    if (source === 'pig') fail('invalid', 'Pig no tiene catálogo propio: lee y escribe archivos de HDFS');
     needProc(this.e, ...PROC[source]);
     const entry = this.catalog().find(c => c.source === source && c.name === name);
     if (!entry) fail('not_found', `No existe ${name} en ${PROC[source][1]}`);
@@ -92,6 +137,14 @@ export class DemoData {
       if (key && POR[key]) return { columns: POR[key].columns, rows: POR[key].rows };
       if (/limit/.test(q)) return { columns: LIMPIAS_COLS, rows: LIMPIAS_HEAD };
     }
+    const created = source === 'hive' ? /^create (external )?table (if not exists )?(?:default\.)?(\w+)/.exec(q.trim()) : null;
+    if (created) {
+      const name = `default.${created[3]}`;
+      const had = this.catalog().some(c => c.source === 'hive' && c.name === name);
+      if (had && !created[2]) fail('failed', `Error: Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. AlreadyExistsException(message:Table hive.default.${created[3]} already exists)`);
+      if (name === 'default.ventas') this.hiveExtra.add(name);
+      return { columns: [], rows: [], note: had ? `La tabla ${name} ya existía: IF NOT EXISTS no la toca` : `Tabla ${name} creada: apunta a los archivos de HDFS, no los copia` };
+    }
     if (source === 'hive' && /join/.test(q) && /categoria/.test(q)) return { columns: ['categoria', 'unidades', 'facturado'], rows: POR_CATEGORIA };
     if (source === 'hive' && /from tienda_productos/.test(q)) return { columns: ['producto', 'categoria', 'precio'], rows: PRODUCTOS_ROWS };
     if (source === 'mysql' && /from resumen_categoria/.test(q)) return this.resumenCategoria ? { columns: ['categoria', 'unidades', 'facturado'], rows: POR_CATEGORIA } : { columns: ['categoria', 'unidades', 'facturado'], rows: [], note: 'Vacía hasta que sqoop export traiga el resultado de Hadoop' };
@@ -128,6 +181,7 @@ export class DemoData {
 
   query(source: DataSource, text: string): Promise<QueryResult> {
     if (!text.trim()) fail('invalid', 'La consulta está vacía');
+    if (source === 'pig') return this.pig(text);
     needProc(this.e, ...PROC[source]);
     this.check(source, text);
     const t0 = this.e.now();
@@ -161,6 +215,7 @@ export class DemoData {
 
   explain(source: DataSource, text: string): QueryPlan {
     if (!text.trim()) fail('invalid', 'La consulta está vacía');
+    if (source === 'pig') return this.pigExplain(text);
     needProc(this.e, ...PROC[source]);
     this.check(source, text);
     const q = text.toLowerCase().replace(/\s+/g, ' ');
@@ -194,6 +249,80 @@ export class DemoData {
     };
   }
 
+  /** Qué haría el script: trabajos MapReduce, alias que se muestra y sus filas */
+  private pigPlan(text: string) {
+    needProc(this.e, 'rm', 'YARN');
+    needProc(this.e, 'nm', 'El NodeManager');
+    pigCheck(text);
+    const m = pigMask(text);
+    const load = /\bload\s+'([^']+)'/i.exec(m);
+    if (!load) fail('failed', "ERROR 1000: Error during parsing. El script no lee nada: falta un alias = LOAD '/ruta' …;");
+    const path = load[1].replace(/\/$/, '');
+    if (!this.e.files.some(f => f.path.startsWith(path + '/') && !f.writing)) fail('failed', `ERROR 2118: Input path does not exist: hdfs://nn:8020${path}`);
+    const dumps = [...m.matchAll(/^\s*dump\s+(\w+)/gim)].map(x => x[1]);
+    const stores = [...m.matchAll(/^\s*store\s+(\w+)\s+into\s+'([^']+)'/gim)].map(x => ({ alias: x[1], path: x[2] }));
+    const group = /\bgroup\s+\w+\s+by\s+(\w+)/i.exec(m)?.[1]?.toLowerCase();
+    const order = /\border\s+\w+\s+by\s+\w+(\s+desc)?/i.exec(m);
+    const limit = /\blimit\s+\w+\s+(\d+)/i.exec(m);
+    const jobs: { name: string; ops: { map: string[]; reduce: string[] } }[] = [];
+    if (group) jobs.push({ name: `GROUP BY ${group}`, ops: { map: ['Load', 'Filter', 'New For Each', 'Local Rearrange'], reduce: ['Package', 'New For Each', order ? 'Store (temporal)' : 'Store'] } });
+    if (order) jobs.push({ name: 'ORDER BY (muestreo)', ops: { map: ['Load', 'Local Rearrange'], reduce: ['Package', 'Store (temporal)'] } }, { name: 'ORDER BY (orden)', ops: { map: ['Load', 'Local Rearrange'], reduce: ['Package', 'Store'] } });
+    if (!jobs.length) jobs.push({ name: limit ? 'LIMIT' : 'Load', ops: { map: ['Load', 'Filter', ...(limit ? ['Limit'] : [])], reduce: limit ? ['Limit', 'Store'] : [] } });
+    let columns: string[] = ['fecha', 'sucursal', 'producto', 'cantidad', 'precio'];
+    let rows: (string | number | null)[][] = VENTAS_HEAD.map(r => [...r]);
+    if (group === 'sucursal' || group === 'producto') {
+      rows = (group === 'sucursal' ? POR_SUCURSAL : POR_PRODUCTO).map(r => [...r]);
+      if (order) rows.sort((a, b) => (order[1] ? -1 : 1) * (Number(a[a.length - 1]) - Number(b[b.length - 1])));
+      else rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+      const names = [...(/generate\s+([\s\S]*?);/i.exec(m.slice(m.search(/\bgroup\s+\w+\s+by/i)))?.[1] ?? '').matchAll(/\bas\s+(\w+)/gi)].map(x => x[1]);
+      columns = names.length >= 2 ? names : [group, 'tickets', 'facturado'];
+      rows = rows.map(r => columns.map((_, i) => r[i] ?? null));
+    } else if (limit) rows = rows.slice(0, Number(limit[1]));
+    if (columns.length !== (rows[0]?.length ?? columns.length)) columns = rows[0].map((_, i) => `$${i}`);
+    return { dumps, stores, jobs, columns, rows, path };
+  }
+
+  /** Pig compila el script a trabajos MapReduce: acá se corre uno solo con todas sus etapas */
+  private pig(text: string): Promise<QueryResult> {
+    const p = this.pigPlan(text);
+    const t0 = this.e.now();
+    const command = 'pig -x mapreduce -f consulta.pig';
+    const bl = this.e.files.filter(f => f.path.startsWith(p.path + '/')).flatMap(f => f.blocks.map(b => b.id));
+    const stages: StageDef[] = p.jobs.flatMap((j, i) => [
+      { id: `m${i}`, name: `Map ${i + 1}`, description: `${j.name}: ${j.ops.map.join(' → ')}`, dependsOn: i ? [`r${i - 1}`] : [], durSec: 5, n: i ? 1 : Math.max(1, bl.length), blocks: i ? undefined : bl, ops: j.ops.map },
+      ...(j.ops.reduce.length ? [{ id: `r${i}`, name: `Reduce ${i + 1}`, description: `${j.name}: ${j.ops.reduce.join(' → ')}`, dependsOn: [`m${i}`], edge: 'shuffle + sort', durSec: 4, n: 1, ops: j.ops.reduce }] : []),
+    ]);
+    for (const s of stages) if (s.dependsOn[0] && !stages.some(x => x.id === s.dependsOn[0])) s.dependsOn = [`m${Number(s.dependsOn[0].slice(1))}`];
+    const store = p.stores[p.stores.length - 1];
+    const appId = this.e.submitApp({ type: 'MAPREDUCE', name: 'PigLatin:consulta.pig', am: 512, amStart: 6, taskMb: 512, executors: 0, stages, rowsIn: 200000, rowsOut: p.rows.length, out: store?.path }, { command, input: `${p.path} · ${Math.max(1, bl.length)} bloques`, quiet: true });
+    return new Promise((ok, ko) => this.e.watch(appId, {
+      done: () => {
+        const shown = p.dumps.length > 0;
+        const columns = shown ? p.columns : [];
+        const rows = shown ? p.rows : [];
+        const note = !shown ? 'El script no tiene DUMP: lo que guardó con STORE quedó en HDFS'
+          : p.dumps.length > 1 ? `El script tiene ${p.dumps.length} DUMP: se muestra el último (${p.dumps[p.dumps.length - 1]})`
+            : !/\bgroup\b/i.test(text) ? 'En el modo demo se muestran unas pocas filas de ejemplo' : undefined;
+        const ms = Math.round(this.e.now() - t0);
+        const output = shown ? `${n(rows.length)} fila${rows.length !== 1 ? 's' : ''} · ${(ms / 1000).toLocaleString('es-AR')} s` : `Listo · ${(ms / 1000).toLocaleString('es-AR')} s`;
+        const action = `Pig compila el script a ${p.jobs.length} trabajo${p.jobs.length !== 1 ? 's' : ''} MapReduce y los manda a YARN`;
+        const res: QueryResult = { columns, rows, ms, appId, engine: 'mr', note,
+          trace: trace(command, 'el script', action, output, { engine: 'mr', appIds: [appId], after: { columns, rows: rows.slice(0, 20), total: rows.length, note } }) };
+        this.e.act('Vos', 'info', 'Script de Pig', { command, input: 'el script', action, output, appId });
+        ok(res);
+      },
+      fail: why => ko(new ApiFailure(why, 'failed')),
+    }));
+  }
+
+  private pigExplain(text: string): QueryPlan {
+    const p = this.pigPlan(text);
+    const nodes = [...p.jobs].reverse().map((j, i, all) => ({ id: i, label: `Trabajo MapReduce ${all.length - i}`, detail: `map: ${j.ops.map.join(' → ')}${j.ops.reduce.length ? ` · reduce: ${j.ops.reduce.join(' → ')}` : ''}`, children: i + 1 < all.length ? [i + 1] : [] }));
+    const raw = ['#--------------------------------------------------', '# Map Reduce Plan', '#--------------------------------------------------',
+      ...p.jobs.flatMap((j, i) => [`MapReduce node scope-${10 * (i + 1)}`, 'Map Plan', ...[...j.ops.map].reverse().map((o, k) => `${'    '.repeat(k)}${k ? '|---' : ''}${o} - scope-${10 * (i + 1) + k}`), ...(j.ops.reduce.length ? ['Reduce Plan', ...[...j.ops.reduce].reverse().map((o, k) => `${'    '.repeat(k)}${k ? '|---' : ''}${o} - scope-${10 * (i + 1) + 5 + k}`)] : []), '----------------', ''])];
+    return { source: 'pig', engine: 'mr', yarnStages: p.jobs.length, nodes, raw };
+  }
+
   examples(): QueryExample[] {
     const hql: QueryExample[] = EXAMPLES.hive.map(x => ({ source: 'hive' as const, ...x, script: 'ejemplos/ventas.hql' }));
     hql.push({ source: 'hive', label: 'JOIN de lo que trajo Sqoop: por categoría', script: 'ejemplos/tienda.hql', text: 'SELECT p.categoria,\n       SUM(v.cantidad) AS unidades,\n       SUM(CAST(v.cantidad AS BIGINT) * v.precio) AS facturado\nFROM tienda_ventas v\nJOIN tienda_productos p ON v.producto = p.producto\nGROUP BY p.categoria\nORDER BY facturado DESC;' });
@@ -209,6 +338,6 @@ export class DemoData {
       { source: 'mongodb', label: 'JOIN con $lookup: mejores clientes', text: 'db.pedidos.aggregate([\n  { $group: { _id: "$cliente_id", gastado: { $sum: "$total" }, pedidos: { $sum: 1 } } },\n  { $sort: { gastado: -1 } },\n  { $limit: 3 },\n  { $lookup: { from: "clientes", localField: "_id", foreignField: "_id", as: "cliente" } },\n  { $project: { gastado: 1, pedidos: 1, nombre: { $first: "$cliente.nombre" } } }\n])', script: js },
       { source: 'mongodb', label: 'Índice: IXSCAN en vez de COLLSCAN', text: 'db.pedidos.find({ cliente_id: 42 }).explain("executionStats")', script: js },
     ];
-    return [...hql, ...sql, ...mongo];
+    return [...hql, HIVE_CREATE_VENTAS, ...sql, ...mongo, ...PIG_EXAMPLES];
   }
 }

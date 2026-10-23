@@ -73,9 +73,9 @@ export function createDemoApi(): SandboxApi {
     pipelineReset: () => call(() => pipe.reset()),
 
     catalog: () => call(() => data.catalog()),
-    schema: (s, n) => s === 'pig' ? pending('Pig') : call(() => data.schema(s, n)),
-    query: (s, t) => s === 'pig' ? pending('Pig') : call(() => data.query(s, t)),
-    explain: (s, t) => s === 'pig' ? pending('Pig') : call(() => data.explain(s, t)),
+    schema: (s, n) => call(() => data.schema(s, n)),
+    query: (s, t) => call(() => data.query(s, t)),
+    explain: (s, t) => call(() => data.explain(s, t)),
     queryExamples: () => call(() => data.examples()),
 
     mlDatasets: () => call(() => ml.datasets()),

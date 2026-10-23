@@ -78,10 +78,12 @@ describe('capabilities', () => {
     expect(capabilities(status('running', { namenodes: 2 })).ha.state).toBe('ready');
   });
 
-  it('lo que la interfaz todavía no implementa queda bloqueado con motivo y sin arreglo', () => {
-    const c = capabilities(status('running'));
-    expect(c.pig.state).toBe('blocked');
-    expect(c.pig.fix).toBeUndefined();
+  it('Pig corre desde la interfaz si está YARN; sin MapReduce, dice cómo agregarlo', () => {
+    expect(capabilities(status('running')).pig.state).toBe('ready');
+    const solo = capabilities(status('running', { services: 'hdfs' })).pig;
+    expect(solo.state).not.toBe('ready');
+    expect(solo.reason).toBeTruthy();
+    expect(solo.fix).toBeDefined();
   });
 
   it('todo lo bloqueado tiene motivo', () => {

@@ -1,315 +1,474 @@
-/* Datos: catálogo de Hive, MySQL y MongoDB, esquema de cada tabla, editor de consultas con resultado, plan y trace. */
-import { useEffect, useRef, useState } from 'react';
-import { Database, GitBranch, Loader2, Play, Power } from 'lucide-react';
-import type { CatalogEntry, DataSource, Engine, QueryPlan, QueryResult, TableSchema } from '../../api/types';
+/* Consultas: un editor por motor (Hive, MariaDB, MongoDB y Pig) con documentos, ejemplos, historial y
+   consultas guardadas; el catálogo a la izquierda y el resultado abajo (tabla, plan, trace y log). */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BookmarkPlus, Clock, Database, GitBranch, Play, Plus, Search, Star, Table2, Trash2, X } from 'lucide-react';
+import type { CatalogEntry, ClusterPhase, DataSource, Engine, QueryExample, QueryPlan, QueryResult } from '../../api/types';
 import { api } from '../../api';
 import { errorCode } from '../../api/errors';
-import { EngineTag, SampleTable, TraceView } from '../../components/Trace';
-import { CodeBlock, Dot, Empty, Kbd, Meter, Seg, Tip } from '../../components/ui';
-import { HELP } from '../../help/content';
-import { navigate } from '../../state/ui';
+import { CapabilityNotice, Chip, CodeEditor, EmptyState, GatedButton, PageHeader, ResultTable, SkeletonLines } from '../../components/base';
+import { EngineTag, TraceView } from '../../components/Trace';
+import { Dot } from '../../components/ui';
+import type { Capability } from '../../lib/capabilities';
+import { nf } from '../../lib/format';
+import { runFix, useCapabilities } from '../../state/capabilities';
 import { useStatus } from '../../state/store';
+import { toast } from '../../state/ui';
 import { useApi } from '../../state/useApi';
-import { nf, sizeLabel } from '../../lib/format';
 import { PlanTree } from './PlanTree';
-import { ResultGrid } from './ResultGrid';
+import {
+  SOURCES, SOURCE_LABEL, addSaved, ago, loadDocs, loadHistory, loadSaved, newDoc, pushHistory, removeSaved,
+  saveDocs, saveHistory, saveSaved, starter, suggestName, type HistoryEntry, type QueryDoc, type SavedQuery,
+} from './consultas';
 import './datos.css';
 
-const SOURCES: DataSource[] = ['hive', 'mysql', 'mongodb'];
-const SOURCE: Record<DataSource, string> = { hive: 'Hive', mysql: 'MySQL', mongodb: 'MongoDB', pig: 'Pig' };
-/** Proceso que atiende cada motor y su puerto */
-const PROC: Record<DataSource, { id: string; port: number }> = { hive: { id: 'hiveserver2', port: 10000 }, mysql: { id: 'mysql', port: 3306 }, mongodb: { id: 'mongodb', port: 27017 }, pig: { id: 'rm', port: 8088 } };
-/** Quién resuelve las consultas: Hive las pasa a Tez si hay que agrupar u ordenar; MySQL y MongoDB, en su propio proceso */
+/** Quién resuelve: Hive pasa a Tez si hay que agrupar u ordenar; Pig compila a MapReduce; MariaDB y MongoDB, en su proceso */
 const ENGINE: Record<DataSource, Engine> = { hive: 'tez', mysql: 'uno', mongodb: 'uno', pig: 'mr' };
-const CLIENT: Record<DataSource, string> = { hive: 'beeline -u jdbc:hive2://localhost:10000', mysql: 'mysql tienda', mongodb: 'mongosh tienda', pig: 'pig -x mapreduce' };
-const PLACEHOLDER: Record<DataSource, string> = { hive: 'SELECT sucursal, SUM(cantidad) FROM ventas GROUP BY sucursal;', mysql: 'SELECT * FROM clientes LIMIT 10;', mongodb: 'db.pedidos.find({ cliente_id: 42 })', pig: "v = LOAD '/user/root/ventas' USING PigStorage(',');\nDUMP v;" };
+const CLIENT: Record<DataSource, string> = { hive: 'beeline -u jdbc:hive2://localhost:10000', mysql: 'mysql tienda', mongodb: 'mongosh tienda', pig: 'pig -x mapreduce -f consulta.pig' };
+const WHAT: Record<DataSource, string> = {
+  hive: 'SQL sobre los archivos de HDFS',
+  mysql: 'SQL sobre la base relacional tienda',
+  mongodb: 'Documentos de la base tienda',
+  pig: 'Scripts de flujo de datos sobre HDFS',
+};
+const PLACEHOLDER: Record<DataSource, string> = {
+  hive: 'SELECT sucursal, COUNT(*) FROM ventas GROUP BY sucursal;',
+  mysql: 'SELECT * FROM productos;',
+  mongodb: 'db.pedidos.find({ cliente_id: 42 })',
+  pig: "ventas = LOAD '/user/root/ventas' USING PigStorage(',');\nprimeras = LIMIT ventas 10;\nDUMP primeras;",
+};
+/** Qué se puede y qué no en cada motor, en una línea */
+const RULES: Record<DataSource, string> = {
+  hive: 'SELECT, CREATE, INSERT y DROP. Agrupar, unir u ordenar lanza un trabajo Tez en YARN.',
+  mysql: 'SQL de MariaDB sobre la base tienda. Lo que escribas cambia la base de verdad.',
+  mongodb: 'find, aggregate, countDocuments y explain. Una expresión por vez.',
+  pig: 'LOAD, FILTER, GROUP, DUMP, STORE. Desde acá no se permite sh, exec, STREAM ni borrar fuera de /user.',
+};
 
-const short = (name: string) => name.split('.').slice(1).join('.') || name;
-const starter = (s: DataSource, name: string) => (s === 'mongodb' ? `db.${short(name)}.find().limit(10)` : `SELECT * FROM ${short(name)} LIMIT 10;`);
-
-type Tab = 'res' | 'plan' | 'trace';
-interface Failure { code: string; message: string; source: DataSource; what: 'consulta' | 'plan' }
+type ResTab = 'res' | 'plan' | 'trace' | 'log';
+type SideTab = 'cat' | 'saved' | 'hist';
+interface LogLine { at: number; k: 'ok' | 'bad' | 'run'; text: string }
+interface DocState { res?: QueryResult; plan?: QueryPlan; err?: { code: string; message: string; what: 'consulta' | 'plan' }; tab: ResTab; log: LogLine[] }
 
 export function DatosPage() {
   const status = useStatus();
-  const phase = status?.phase ?? 'stopped';
-  const up = phase === 'running';
-  const [source, setSource] = useState<DataSource>('hive');
-  const [sel, setSel] = useState<{ source: DataSource; name: string } | null>(null);
-  const [texts, setTexts] = useState<Record<DataSource, string>>({ hive: '', mysql: '', mongodb: '', pig: '' });
-  const text = texts[source];
-  const setText = (v: string) => setTexts(t => ({ ...t, [source]: v }));
+  const caps = useCapabilities();
+  const up = status?.phase === 'running';
 
-  const refresh = (e: { type: string }) => e.type === 'step' || e.type === 'hdfs' || e.type === 'status';
-  const catalog = useApi(a => (up ? a.catalog() : Promise.resolve([])), [up], refresh);
-  const examples = useApi(a => a.queryExamples(), []);
-  const schema = useApi(a => (up && sel ? a.schema(sel.source, sel.name) : Promise.resolve(null)), [sel?.source, sel?.name, up]);
+  const [docs, setDocs] = useState<QueryDoc[]>(() => { const d = loadDocs(); return d.length ? d : [newDoc([], 'hive')]; });
+  const [active, setActive] = useState(() => docs[0].id);
+  const doc = docs.find(d => d.id === active) ?? docs[0];
+  const [state, setState] = useState<Record<string, DocState>>({});
+  const st: DocState = state[doc.id] ?? { tab: 'res', log: [] };
+  const [running, setRunning] = useState<{ id: string; what: 'consulta' | 'plan'; t0: number } | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const [saved, setSaved] = useState<SavedQuery[]>(loadSaved);
+  const [side, setSide] = useState<SideTab>('cat');
+  const editorRef = useRef<HTMLDivElement>(null);
 
-  const pick = (c: CatalogEntry) => {
-    setSel({ source: c.source, name: c.name });
-    setSource(c.source);
-    setTexts(t => (t[c.source].trim() ? t : { ...t, [c.source]: starter(c.source, c.name) }));
-  };
-
-  // Si la tabla elegida desaparece del catálogo (se apagó su motor o se reinició el pipeline), se suelta
+  useEffect(() => saveDocs(docs), [docs]);
+  useEffect(() => saveHistory(history), [history]);
+  useEffect(() => saveSaved(saved), [saved]);
   useEffect(() => {
-    if (sel && catalog.data && !catalog.data.some(c => c.source === sel.source && c.name === sel.name)) setSel(null);
-  }, [catalog.data, sel]);
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, [running]);
+
+  // Apagado no se pide el catálogo (contestaría 409); los ejemplos no dependen del cluster
+  const refresh = (e: { type: string }) => e.type === 'step' || e.type === 'hdfs' || e.type === 'status';
+  const catalog = useApi(a => (up ? a.catalog() : Promise.resolve([] as CatalogEntry[])), [up], refresh);
+  const examples = useApi(a => a.queryExamples(), []);
+
+  const cap = caps[doc.source];
+  const source = doc.source;
+  const patch = (id: string, p: Partial<DocState>) => setState(s => ({ ...s, [id]: { ...(s[id] ?? { tab: 'res', log: [] }), ...p } }));
+  const log = (id: string, k: LogLine['k'], text: string) => setState(s => {
+    const cur = s[id] ?? { tab: 'res', log: [] };
+    return { ...s, [id]: { ...cur, log: [...cur.log.slice(-49), { at: Date.now(), k, text }] } };
+  });
+  const setDoc = (p: Partial<QueryDoc>) => setDocs(ds => ds.map(d => (d.id === doc.id ? { ...d, ...p } : d)));
+  const focusEditor = () => requestAnimationFrame(() => editorRef.current?.querySelector('textarea')?.focus());
+
+  /** Abre un texto: en el documento actual si está vacío, si no en uno nuevo */
+  function open(src: DataSource, text: string, title?: string) {
+    if (!doc.text.trim()) setDoc({ source: src, text, ...(title ? { title } : {}) });
+    else {
+      const d = newDoc(docs, src, text, title);
+      setDocs(ds => [...ds, d]);
+      setActive(d.id);
+    }
+    focusEditor();
+  }
+  function addDoc() {
+    const d = newDoc(docs, source);
+    setDocs(ds => [...ds, d]);
+    setActive(d.id);
+    focusEditor();
+  }
+  function closeDoc(id: string) {
+    const rest = docs.filter(d => d.id !== id);
+    const next = rest.length ? rest : [newDoc([], source)];
+    setDocs(next);
+    if (id === active) setActive(next[Math.max(0, docs.findIndex(d => d.id === id) - 1)]?.id ?? next[0].id);
+  }
+
+  async function exec(what: 'consulta' | 'plan', d: QueryDoc = doc) {
+    if (!d.text.trim() || running || caps[d.source].state !== 'ready') return;
+    const id = d.id, src = d.source, q = d.text;
+    const t0 = Date.now();
+    setRunning({ id, what, t0 });
+    setNow(t0);
+    patch(id, { err: undefined, tab: what === 'plan' ? 'plan' : 'res' });
+    log(id, 'run', `${what === 'plan' ? 'Plan' : 'Correr'} en ${SOURCE_LABEL[src]}: $ ${CLIENT[src]}`);
+    try {
+      if (what === 'plan') {
+        const plan = await api().explain(src, q);
+        patch(id, { plan });
+        log(id, 'ok', `Plan: ${plan.nodes.length} pasos${plan.yarnStages ? ` · ${plan.yarnStages} en YARN` : ''}`);
+      } else {
+        const res = await api().query(src, q);
+        patch(id, { res, plan: undefined });
+        log(id, 'ok', `${res.trace?.output ?? `${nf(res.rows.length)} filas`}${res.appId ? ` · ${res.appId}` : ''}${res.note && res.note !== res.trace?.output ? ` · ${res.note}` : ''}`);
+        setHistory(h => pushHistory(h, { source: src, text: q, at: t0, ok: true, rows: res.rows.length, ms: res.ms }));
+        if (/^\s*(create|drop|alter)\b/i.test(q)) catalog.reload();
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      patch(id, { err: { code: errorCode(e) ?? 'failed', message, what } });
+      log(id, 'bad', message);
+      if (what === 'consulta') setHistory(h => pushHistory(h, { source: src, text: q, at: t0, ok: false, error: message }));
+    } finally { setRunning(null); }
+  }
+
+  /** Tabla ventas en Hive: sube ventas a HDFS si falta (hdfs dfs -put) y corre el CREATE EXTERNAL TABLE en un documento propio */
+  async function createTable() {
+    if (!createVentas || running) return;
+    const d = newDoc(docs, 'hive', createVentas.text, 'Crear ventas');
+    setDocs(ds => [...ds, d]);
+    setActive(d.id);
+    const has = async () => (await api().hdfsList('/user/root/ventas').catch(() => null))?.entries.some(e => e.type === 'file' && !e.name.endsWith('._COPYING_')) ?? false;
+    if (!(await has())) {
+      const t0 = Date.now();
+      setRunning({ id: d.id, what: 'consulta', t0 });
+      log(d.id, 'run', '$ hdfs dfs -put ventas_grandes.csv /user/root/ventas');
+      try {
+        await api().putExample('ventas');
+        for (let i = 0; i < 240 && !(await has()); i++) await new Promise(r => setTimeout(r, 1000));
+        if (!(await has())) throw new Error('ventas no terminó de subir a HDFS: mirá el avance en HDFS y volvé a probar');
+        log(d.id, 'ok', 'ventas_grandes.csv quedó en /user/root/ventas');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        patch(d.id, { err: { code: errorCode(e) ?? 'failed', message, what: 'consulta' } });
+        log(d.id, 'bad', message);
+        setRunning(null);
+        return;
+      }
+      setRunning(null);
+    }
+    await exec('consulta', d);
+  }
+
+  function save() {
+    if (!doc.text.trim()) return;
+    const name = doc.title.startsWith('Consulta ') ? suggestName(doc.text) || doc.title : doc.title;
+    setSaved(s => addSaved(s, { name, source, text: doc.text }));
+    setSide('saved');
+    toast({ title: 'Consulta guardada', description: `${name} · queda en este navegador`, kind: 'ok' });
+  }
+
+  const ex = (examples.data ?? []).filter(x => x.source === source);
+  const hiveTables = (catalog.data ?? []).filter(c => c.source === 'hive');
+  const createVentas = (examples.data ?? []).find(x => x.source === 'hive' && /^Crear tabla ventas/.test(x.label));
+  const showCreate = up && caps.hive.state === 'ready' && catalog.data && !catalog.loading && !hiveTables.some(t => /\.ventas$/.test(t.name)) && !!createVentas;
+  const ready = SOURCES.filter(s => caps[s].state === 'ready').length;
+  const busyHere = running?.id === doc.id;
 
   return (
-    <div className="page-in">
-      <div className="page-head">
-        <div><h1>Datos</h1><p>{HELP.datos.intro}</p></div>
-        {up && <div className="page-actions"><span className="muted" style={{ fontSize: 12 }}>{nf(catalog.data?.length ?? 0)} tablas y colecciones</span></div>}
-      </div>
-      {!up ? (
-        <section className="panel">
-          {phase === 'starting'
-            ? <Empty icon={<Loader2 size={20} className="spin" />} title="El cluster está arrancando">El catálogo aparece cuando HiveServer2, MySQL y MongoDB respondan.</Empty>
-            : <Empty icon={<Database size={20} />} title="El cluster está apagado" action={<button className="btn btn-sm" type="button" onClick={() => navigate('cluster')}><Power size={12} />Ir a Cluster</button>}>
-                Hive, MySQL y MongoDB corren adentro del cluster: prendelo para ver sus tablas y consultarlas.
-              </Empty>}
-        </section>
-      ) : (
-        <div className="grid cols-12">
-          <section className="panel span-4">
-            <div className="panel-h"><h2>Catálogo</h2><span className="sub">por motor</span></div>
-            <div className="panel-b flush">
-              <Catalog entries={catalog.data} error={catalog.error} sel={sel} onPick={pick} />
+    <div className="page-in qx-page">
+      <PageHeader title="Consultas"
+        sub="Escribí SQL en Hive o MariaDB, consultas de MongoDB o scripts de Pig, y mirá el resultado, el plan y quién lo resolvió."
+        status={!status ? undefined : !up ? { k: 'off', label: 'Cluster apagado' } : { k: ready === SOURCES.length ? 'ok' : ready ? 'run' : 'bad', label: `${ready} de ${SOURCES.length} motores listos` }}
+        help={<>Hive y Pig trabajan sobre los archivos de HDFS y lanzan trabajos en YARN; MariaDB y MongoDB resuelven en su propio proceso. El historial y las guardadas quedan en este navegador.</>} />
+
+      <div className="qx">
+        <aside className="panel qx-side" aria-label="Catálogo, guardadas e historial">
+          <div className="qx-side-tabs" role="tablist" aria-label="Panel lateral">
+            {([['cat', 'Tablas', Table2], ['saved', 'Guardadas', Star], ['hist', 'Historial', Clock]] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" role="tab" aria-selected={side === id} onClick={() => setSide(id)}>
+                <Icon size={13} aria-hidden="true" />{label}
+                {id === 'saved' && saved.length > 0 && <span className="n">{saved.length}</span>}
+                {id === 'hist' && history.length > 0 && <span className="n">{history.length}</span>}
+              </button>
+            ))}
+          </div>
+          {side === 'cat' && <Catalog up={up} phase={status?.phase} entries={catalog.data} error={catalog.error} loading={catalog.loading} caps={caps}
+            onPick={c => open(c.source, starter(c.source, c.name))} />}
+          {side === 'saved' && <SavedList items={saved} onOpen={q => open(q.source, q.text, q.name)} onRemove={id => setSaved(s => removeSaved(s, id))} />}
+          {side === 'hist' && <HistoryList items={history} onOpen={h => open(h.source, h.text)} onClear={() => setHistory([])} />}
+        </aside>
+
+        <div className="qx-main">
+          <section className="panel qx-editor">
+            <div className="qx-docs" role="tablist" aria-label="Consultas abiertas">
+              {docs.map(d => (
+                <div key={d.id} className="qx-doc" data-on={d.id === doc.id || undefined}>
+                  <button type="button" role="tab" aria-selected={d.id === doc.id} onClick={() => setActive(d.id)} title={`${d.title} · ${SOURCE_LABEL[d.source]}`}>
+                    <span className="eng-dot" data-e={ENGINE[d.source]} aria-hidden="true" />{d.title}
+                    {running?.id === d.id && <Dot s="running" label="corriendo" />}
+                  </button>
+                  <button type="button" className="x" aria-label={`Cerrar ${d.title}`} onClick={() => closeDoc(d.id)}><X size={12} /></button>
+                </div>
+              ))}
+              <button type="button" className="qx-doc-add" onClick={addDoc} aria-label="Consulta nueva" title="Consulta nueva"><Plus size={14} /></button>
+            </div>
+
+            <div className="qx-engine-row">
+              <EnginePicker value={source} caps={caps} onChange={s => { if (s !== source) { setDoc({ source: s }); patch(doc.id, { res: undefined, plan: undefined, err: undefined, tab: 'res' }); } }} disabled={busyHere} />
+              <span className="qx-rule"><EngineTag engine={ENGINE[source]} /><span><b>{WHAT[source]}.</b> {RULES[source]}</span></span>
+            </div>
+
+            <CapabilityNotice cap={source} what={`${SOURCE_LABEL[source]} no está disponible`} />
+
+            {showCreate && (
+              <div className="qx-hint" role="note">
+                <Database size={15} aria-hidden="true" />
+                <span><b>Hive todavía no tiene la tabla ventas.</b> Se crea como tabla externa sobre /user/root/ventas: apunta a los archivos de HDFS, no los copia. Si no están, primero los sube.</span>
+                <GatedButton cap="hive" className="btn btn-sm" busy={!!running} onClick={() => void createTable()}><Plus size={13} />Crear tabla ventas desde HDFS</GatedButton>
+              </div>
+            )}
+
+            <Snippets items={showCreate ? ex.filter(x => x !== createVentas) : ex} onPick={x => open(x.source, x.text, x.label.length <= 28 ? x.label : undefined)} />
+
+            <div className="qe" ref={editorRef}>
+              <CodeEditor value={doc.text} onChange={v => setDoc({ text: v })} label={`Consulta para ${SOURCE_LABEL[source]}`} rows={9}
+                placeholder={PLACEHOLDER[source]} onRun={() => void exec('consulta')} onRunAlt={() => void exec('plan')}
+                foot={<span className="mono">$ {CLIENT[source]}</span>} />
+            </div>
+
+            <div className="qx-actions">
+              <GatedButton cap={source} blockedBy={!doc.text.trim() && 'Escribí una consulta o elegí un ejemplo'} className="btn btn-primary" busy={!!running}
+                onClick={() => void exec('consulta')} inline={cap.state !== 'ready' || !doc.text.trim()}><Play size={14} />Correr</GatedButton>
+              <GatedButton cap={source} blockedBy={!doc.text.trim() && 'Escribí una consulta'} className="btn" busy={!!running} onClick={() => void exec('plan')}
+                title="Ver qué va a hacer el motor, sin correrla (Ctrl+Shift+Enter)"><GitBranch size={14} />Plan</GatedButton>
+              <button type="button" className="btn btn-ghost" onClick={save} disabled={!doc.text.trim()} title="Guardar en este navegador"><BookmarkPlus size={14} />Guardar</button>
+              {!doc.text.trim() && ex[0] && <button type="button" className="btn btn-ghost" onClick={() => { setDoc({ text: ex[0].text }); focusEditor(); }}>Cargar un ejemplo</button>}
             </div>
           </section>
-          <section className="panel span-8">
-            <SchemaPanel sel={sel} data={schema.data ?? null} loading={schema.loading} error={schema.error} />
-          </section>
-          <QueryPanel source={source} setSource={s => setSource(s)} text={text} setText={setText}
-            examples={(examples.data ?? []).filter(x => x.source === source)}
-            available={(catalog.data ?? []).some(c => c.source === source) || procState(status?.processes, source) === 'up'} />
+
+          <ResultPanel doc={doc} st={st} running={running?.id === doc.id ? running : null} now={now} onTab={t => patch(doc.id, { tab: t })} />
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function procState(ps: { id: string; state: string }[] | undefined, s: DataSource) { return ps?.find(p => p.id === PROC[s].id)?.state; }
+/* ---------- Motor ---------- */
 
-/* ---------- Catálogo ---------- */
-
-function Catalog({ entries, error, sel, onPick }: { entries: CatalogEntry[] | undefined; error: string | null; sel: { source: DataSource; name: string } | null; onPick: (c: CatalogEntry) => void }) {
-  const status = useStatus();
-  if (error) return <div className="callout" data-k="bad" style={{ margin: 14 }}><span>{error}</span></div>;
-  if (!entries) return <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>{[0, 1, 2, 3].map(i => <div key={i} className="skel" style={{ height: 22 }} />)}</div>;
+function EnginePicker({ value, caps, onChange, disabled }: { value: DataSource; caps: Record<DataSource, Capability>; onChange: (s: DataSource) => void; disabled?: boolean }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const move = (i: number) => { const s = SOURCES[(i + SOURCES.length) % SOURCES.length]; onChange(s); refs.current[SOURCES.indexOf(s)]?.focus(); };
   return (
-    <div className="cat">
-      {SOURCES.map(s => {
-        const st = procState(status?.processes, s);
-        const items = entries.filter(c => c.source === s);
-        const msg = st == null ? (s === 'mongodb' && !status?.config.mongodb ? 'No está en esta configuración (MONGODB=no).' : 'No está en esta configuración: hace falta SERVICIOS=todo.')
-          : st !== 'up' ? `${PROC[s].id} está ${st === 'starting' ? 'arrancando' : st === 'stopping' ? 'parando' : 'apagado'}: prendelo desde Cluster.`
-          : !items.length ? (s === 'hive' ? 'Sin tablas: corré el pipeline para crearlas sobre HDFS.' : 'Sin tablas.') : null;
+    <div className="qx-engines" role="radiogroup" aria-label="Motor de la consulta">
+      {SOURCES.map((s, i) => {
+        const c = caps[s];
+        const dot = c.state === 'ready' ? 'up' : c.state === 'starting' ? 'starting' : 'off';
         return (
-          <div key={s} className="cat-g">
-            <div className="cat-gh">
-              <Dot s={st ?? 'off'} label={`${PROC[s].id}: ${st ?? 'no configurado'}`} />
-              <b>{SOURCE[s]}</b>
-              <EngineTag engine={ENGINE[s]} />
-              <span className="proc">{PROC[s].id}:{PROC[s].port}</span>
-              <span className="n">{items.length || ''}</span>
-            </div>
-            {msg && <p className="cat-msg" data-k={st != null && st !== 'up' ? 'bad' : undefined}>{msg}</p>}
-            {items.length > 0 && (
-              <ul className="cat-list">
-                {items.map(c => (
-                  <li key={c.name}>
-                    <button type="button" className="cat-item" aria-current={sel?.source === s && sel.name === c.name} onClick={() => onPick(c)}>
-                      <span className="nm">{c.name}</span>
-                      <span className="k">{c.kind}</span>
-                      <span className="r" title={c.rows == null ? 'Sin estadísticas (ANALYZE TABLE … COMPUTE STATISTICS)' : undefined}>{c.rows == null ? '—' : nf(c.rows)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <button key={s} ref={el => { refs.current[i] = el; }} type="button" role="radio" aria-checked={value === s} aria-label={SOURCE_LABEL[s]}
+            tabIndex={value === s ? 0 : -1} disabled={disabled && value !== s} title={c.state === 'ready' ? `${SOURCE_LABEL[s]}: listo` : c.reason}
+            onClick={() => onChange(s)}
+            onKeyDown={e => { if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(i + 1); } if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(i - 1); } }}>
+            <Dot s={dot} label={c.state === 'ready' ? 'listo' : c.reason || 'no disponible'} />
+            {SOURCE_LABEL[s]}
+          </button>
         );
       })}
     </div>
   );
 }
 
-/* ---------- Esquema ---------- */
+/* ---------- Ejemplos ---------- */
 
-type SchTab = 'cols' | 'sample' | 'ddl';
-
-function SchemaPanel({ sel, data, loading, error }: { sel: { source: DataSource; name: string } | null; data: TableSchema | null; loading: boolean; error: string | null }) {
-  const [tab, setTab] = useState<SchTab>('cols');
-  if (!sel) return <>
-    <div className="panel-h"><h2>Esquema</h2></div>
-    <div className="panel-b"><Empty icon={<Database size={20} />} title="Elegí una tabla o colección">Se ven sus columnas con tipo y clave, una muestra y el DDL.</Empty></div>
-  </>;
-  const mongo = sel.source === 'mongodb';
-  return <>
-    <div className="panel-h">
-      <h2 className="mono">{sel.name}</h2>
-      <span className="end tabs-h">
-        <Seg value={tab} onChange={setTab} label="Vista del esquema" options={[{ value: 'cols', label: mongo ? 'campos' : 'columnas' }, { value: 'sample', label: 'muestra' }, { value: 'ddl', label: mongo ? 'índices' : 'ddl' }]} />
-      </span>
+function Snippets({ items, onPick }: { items: QueryExample[]; onPick: (x: QueryExample) => void }) {
+  if (!items.length) return null;
+  return (
+    <div className="qx-snips" aria-label="Ejemplos">
+      <span className="lbl">Ejemplos</span>
+      {items.map(x => (
+        <button key={x.label} type="button" className="qx-snip" onClick={() => onPick(x)} title={x.script ? `De ${x.script}` : undefined}>{x.label}</button>
+      ))}
     </div>
-    {error ? <div className="panel-b"><div className="callout" data-k="bad"><span>{error}</span></div></div>
-      : !data || (loading && data.name !== sel.name) ? <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[0, 1, 2].map(i => <div key={i} className="skel" style={{ height: 22 }} />)}</div>
-      : <>
-        <div className="sch-meta">
-          <span>{data.kind}</span>
-          {data.format && <span>formato<b>{data.format}</b></span>}
-          <span>{mongo ? 'documentos' : 'filas'}<b>{data.rows == null ? 'sin estadísticas' : nf(data.rows)}</b></span>
-          {data.sizeMb != null && <span>tamaño<b>{sizeLabel(data.sizeMb)}</b></span>}
-          {data.location && <span className="mono">hdfs<b>{data.location}</b></span>}
-        </div>
-        {tab === 'cols' && <>
-          <div className="tbl-wrap">
-            <table className="tbl" aria-label={`Columnas de ${data.name}`}>
-              <thead><tr><th>{mongo ? 'campo' : 'columna'}</th><th>tipo</th>{mongo ? <th>presencia</th> : <th>nulos</th>}<th>clave</th><th>comentario</th></tr></thead>
-              <tbody>
-                {data.columns.map(c => (
-                  <tr key={c.name}>
-                    <td className="mono">{c.name}</td>
-                    <td className="mono muted">{c.type}</td>
-                    {mongo ? <td>{c.presence != null ? <span className="presence"><Meter value={c.presence} max={100} label={`${c.name} aparece en el ${nf(c.presence)} %`} /><span className="muted">{nf(c.presence)} %</span></span> : '—'}</td>
-                      : <td className="muted">{c.nullable === false ? 'not null' : c.nullable ? 'sí' : '—'}</td>}
-                    <td>{c.key ? <span className="tag">{c.key === 'PK' ? 'pk' : 'índice'}</span> : ''}</td>
-                    <td className="muted">{c.comment ?? ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {(data.indexes?.length || data.partitions?.length) ? (
-            <div className="sch-side">
-              {data.indexes?.length ? <><h3>índices</h3>{data.indexes.map(i => <div key={i.name} className="sch-idx"><span className="mono">{i.name}</span><span className="muted mono">({i.columns.join(', ')})</span>{i.unique && <span className="tag">único</span>}</div>)}</> : null}
-              {data.partitions?.length ? <><h3>particiones</h3><span className="mono muted">{data.partitions.join('  ')}</span></> : null}
-            </div>
-          ) : null}
-        </>}
-        {tab === 'sample' && <SampleTable sample={data.sample} label={`Muestra de ${data.name}`} />}
-        {tab === 'ddl' && <div className="panel-b">{data.ddl ? <div className="ddl"><CodeBlock lines={data.ddl.split('\n')} prompt={null} label="DDL" /></div>
-          : mongo && data.indexes ? <CodeBlock lines={data.indexes.map(i => `db.${short(data.name)}.createIndex({ ${i.columns.map(c => `"${c}": 1`).join(', ')} }${i.unique ? ', { unique: true }' : ''})`)} prompt={null} label="Índices" />
-          : <span className="muted">Sin DDL.</span>}</div>}
-      </>}
-  </>;
+  );
 }
 
-/* ---------- Editor, resultado, plan y trace ---------- */
+/* ---------- Catálogo ---------- */
 
-function QueryPanel({ source, setSource, text, setText, examples, available }: {
-  source: DataSource; setSource: (s: DataSource) => void; text: string; setText: (v: string) => void;
-  examples: { label: string; text: string; script?: string }[]; available: boolean;
+function Catalog({ up, phase, entries, error, loading, caps, onPick }: {
+  up: boolean; phase?: ClusterPhase; entries: CatalogEntry[] | undefined; error: string | null; loading: boolean; caps: Record<DataSource, Capability>; onPick: (c: CatalogEntry) => void;
 }) {
-  const [tab, setTab] = useState<Tab>('res');
-  const [res, setRes] = useState<(QueryResult & { source: DataSource }) | null>(null);
-  const [plan, setPlan] = useState<QueryPlan | null>(null);
-  const [err, setErr] = useState<Failure | null>(null);
-  const [running, setRunning] = useState<{ what: 'consulta' | 'plan'; t0: number } | null>(null);
-  const [now, setNow] = useState(0);
-  const gutter = useRef<HTMLPreElement>(null);
-  const area = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(t);
-  }, [running]);
-
-  async function exec(what: 'consulta' | 'plan') {
-    if (!text.trim() || running) return;
-    const src = source, q = text;
-    setRunning({ what, t0: Date.now() });
-    setNow(Date.now());
-    setErr(null);
-    setTab(what === 'plan' ? 'plan' : 'res');
-    try {
-      if (what === 'plan') setPlan(await api().explain(src, q));
-      else { setRes({ ...(await api().query(src, q)), source: src }); setPlan(null); }
-    } catch (e) {
-      setErr({ code: errorCode(e) ?? 'failed', message: e instanceof Error ? e.message : String(e), source: src, what });
-    } finally { setRunning(null); }
+  const [q, setQ] = useState('');
+  const all = useMemo(() => entries ?? [], [entries]);
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? all.filter(c => c.name.toLowerCase().includes(t) || c.columns.some(col => col.name.toLowerCase().includes(t))) : all;
+  }, [all, q]);
+  if (!up) {
+    return (
+      <div className="qx-side-b">
+        <EmptyState kind="blocked" compact title={phase === 'starting' ? 'El cluster está arrancando' : 'El catálogo aparece con el cluster prendido'}
+          actions={phase === 'stopped' ? <button type="button" className="btn btn-sm btn-primary" onClick={() => runFix({ kind: 'start' })}><Play size={13} />Iniciar cluster</button> : undefined}>
+          Igual podés escribir y guardar consultas, y abrir los ejemplos.
+        </EmptyState>
+      </div>
+    );
   }
-
-  const lines = Math.max(6, text.split('\n').length);
-  const hasRes = !!res || !!err || !!running;
-
+  if (error) return <div className="qx-side-b"><div className="callout" data-k="bad"><span>{error}</span></div></div>;
+  if (!entries && loading) return <div className="qx-side-b"><SkeletonLines n={6} /></div>;
   return (
-    <section className="panel span-12">
-      <div className="panel-h">
-        <h2>Consulta</h2>
-        <span className="qe-src">
-          <Seg value={source} onChange={setSource} label="Motor de la consulta" options={SOURCES.map(s => ({ value: s, label: SOURCE[s] }))} />
-          <EngineTag engine={ENGINE[source]} />
-        </span>
-        <span className="end">
-          <select className="btn btn-sm" aria-label="Ejemplos" value="" disabled={!examples.length} onChange={e => { const x = examples[Number(e.target.value)]; if (x) { setText(x.text); area.current?.focus(); } }}>
-            <option value="">ejemplos ({examples.length})</option>
-            {examples.map((x, i) => <option key={i} value={i}>{x.label}</option>)}
-          </select>
-          <Tip content={<>Ver el plan sin correrla <Kbd k="Ctrl+Shift+Enter" /></>}>
-            <button className="btn btn-sm" type="button" disabled={!!running || !text.trim() || !available} onClick={() => exec('plan')}><GitBranch size={12} />Plan</button>
-          </Tip>
-          <Tip content={<>Correr <Kbd k="Ctrl+Enter" /></>}>
-            <button className="btn btn-sm btn-primary" type="button" disabled={!!running || !text.trim() || !available} onClick={() => exec('consulta')}><Play size={12} />Correr</button>
-          </Tip>
-        </span>
-      </div>
-      <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div className="qe">
-          <pre className="qe-gutter" ref={gutter} aria-hidden="true">{Array.from({ length: lines }, (_, i) => i + 1).join('\n')}</pre>
-          <textarea ref={area} aria-label={`Consulta para ${SOURCE[source]}`} spellCheck={false} rows={lines} value={text} placeholder={PLACEHOLDER[source]}
-            onChange={e => setText(e.target.value)}
-            onScroll={e => { if (gutter.current) gutter.current.scrollTop = e.currentTarget.scrollTop; }}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec(e.shiftKey ? 'plan' : 'consulta'); }
-              else if (e.key === 'Tab' && !e.shiftKey) {
-                e.preventDefault();
-                const el = e.currentTarget, a = el.selectionStart, b = el.selectionEnd;
-                setText(text.slice(0, a) + '  ' + text.slice(b));
-                requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + 2; });
-              }
-            }} />
-        </div>
-        <div className="qe-bar">
-          <span className="cmd">$ {CLIENT[source]}</span>
-          <span className="grow" />
-          {!available && <span style={{ color: 'var(--bad-text)' }}>{PROC[source].id} no responde</span>}
-          <span><Kbd k="Ctrl+Enter" /> correr · <Kbd k="Ctrl+Shift+Enter" /> plan</span>
-        </div>
-      </div>
-      {(hasRes || plan) && (
-        <div style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <div className="res-h">
-            <Seg value={tab} onChange={setTab} label="Vista del resultado" options={[
-              { value: 'res', label: 'resultado' },
-              { value: 'plan', label: 'plan', disabled: !plan && !(err?.what === 'plan') && running?.what !== 'plan' },
-              { value: 'trace', label: 'trace', disabled: !res?.trace },
-            ]} />
-            {res && !running && !err && tab !== 'plan' && <>
-              <span><b>{nf(res.rows.length)}</b> {res.source === 'mongodb' ? 'documentos' : 'filas'}</span>
-              {res.scanned != null && <span>leyó <b>{nf(res.scanned)}</b></span>}
-              <span><b>{res.ms < 1000 ? `${nf(res.ms)} ms` : `${nf(res.ms / 1000, 1)} s`}</b></span>
-              {res.engine && <EngineTag engine={res.engine} />}
-              {res.appId && <span className="mono">{res.appId}</span>}
-            </>}
-            {res?.note && !running && !err && tab === 'res' && <span className="end muted">{res.note}</span>}
+    <div className="qx-cat">
+      <label className="qx-search">
+        <Search size={13} aria-hidden="true" />
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar tabla o columna" aria-label="Buscar en el catálogo" />
+      </label>
+      {(['hive', 'mysql', 'mongodb'] as DataSource[]).map(s => {
+        const items = shown.filter(c => c.source === s);
+        const c = caps[s];
+        if (q && !items.length) return null;
+        return (
+          <div key={s} className="qx-cat-g">
+            <div className="qx-cat-h"><Dot s={c.state === 'ready' ? 'up' : c.state === 'starting' ? 'starting' : 'off'} label={c.state === 'ready' ? 'listo' : c.reason || ''} /><b>{SOURCE_LABEL[s]}</b><span className="n">{items.length || ''}</span></div>
+            {c.state !== 'ready' ? <p className="qx-cat-msg">{c.reason}{c.fix && c.fix.kind !== 'wait' && <button type="button" className="btn btn-sm" onClick={() => runFix(c.fix)}>{c.fixLabel}</button>}</p>
+              : !items.length ? <p className="qx-cat-msg">{s === 'hive' ? 'Sin tablas todavía.' : 'Sin tablas.'}</p>
+                : (
+                  <ul>
+                    {items.map(e => (
+                      <li key={e.name}>
+                        <button type="button" className="qx-cat-item" onClick={() => onPick(e)} title={`${e.columns.map(x => x.name).join(', ')}\nClic: ${s === 'mongodb' ? 'find().limit(100)' : 'SELECT * … LIMIT 100'}`}>
+                          <span className="nm">{e.name}</span>
+                          <span className="r">{e.rows == null ? '—' : nf(e.rows)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
           </div>
-          {running && (tab === 'res' || tab === 'plan') ? (
-            <div className="res-run"><Dot s="running" />{running.what === 'plan' ? 'Pidiendo el plan' : 'Corriendo'} en {SOURCE[source]}<span className="mono muted">{nf((now - running.t0) / 1000, 1)} s</span>
-              {source === 'hive' && running.what === 'consulta' && now - running.t0 > 3000 && <span className="muted">· si lanza un trabajo de Tez, abrir la sesión en YARN lleva 10–20 s</span>}</div>
-          ) : err && (tab === 'res' || (tab === 'plan' && err.what === 'plan')) ? (
-            <div className="callout res-err" data-k="bad" role="alert">
-              <span className="head"><span className="badge" data-k="bad">{err.code}</span><b>{err.what === 'plan' ? 'El plan' : 'La consulta'} falló en {SOURCE[err.source]}</b></span>
-              <span className="msg">{err.message}</span>
-            </div>
-          ) : tab === 'plan' && plan ? <PlanTree plan={plan} />
-            : tab === 'trace' && res?.trace ? <div className="panel-b"><TraceView trace={res.trace} /></div>
-            : res ? <ResultGrid res={res} /> : null}
-        </div>
-      )}
+        );
+      })}
+      <p className="qx-cat-msg foot">Pig no tiene catálogo: lee los archivos de HDFS con LOAD.</p>
+    </div>
+  );
+}
+
+/* ---------- Guardadas e historial ---------- */
+
+function SavedList({ items, onOpen, onRemove }: { items: SavedQuery[]; onOpen: (q: SavedQuery) => void; onRemove: (id: string) => void }) {
+  if (!items.length) return <div className="qx-side-b"><EmptyState compact title="Sin consultas guardadas">Con <b>Guardar</b> queda en este navegador, con su motor.</EmptyState></div>;
+  return (
+    <ul className="qx-list">
+      {items.map(q => (
+        <li key={q.id}>
+          <button type="button" className="qx-li" onClick={() => onOpen(q)}>
+            <span className="t"><span className="eng-dot" data-e={ENGINE[q.source]} aria-hidden="true" />{q.name}</span>
+            <span className="s">{SOURCE_LABEL[q.source]} · {ago(q.at)}</span>
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost x" aria-label={`Borrar ${q.name}`} onClick={() => onRemove(q.id)}><Trash2 size={12} /></button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HistoryList({ items, onOpen, onClear }: { items: HistoryEntry[]; onOpen: (h: HistoryEntry) => void; onClear: () => void }) {
+  if (!items.length) return <div className="qx-side-b"><EmptyState compact title="Todavía no corriste nada">Acá quedan las últimas 50 consultas, con su resultado.</EmptyState></div>;
+  return (
+    <>
+      <ul className="qx-list">
+        {items.map((h, i) => (
+          <li key={`${h.at}-${i}`}>
+            <button type="button" className="qx-li" onClick={() => onOpen(h)} title={h.error ?? h.text}>
+              <span className="t mono">{h.text.trim().split('\n')[0]}</span>
+              <span className="s"><span className="dot" data-s={h.ok ? 'ok' : 'bad'} aria-hidden="true" />{SOURCE_LABEL[h.source]} · {h.ok ? `${nf(h.rows ?? 0)} filas` : 'falló'} · {ago(h.at)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="qx-side-f"><button type="button" className="btn btn-sm btn-ghost" onClick={onClear}><Trash2 size={12} />Borrar historial</button></div>
+    </>
+  );
+}
+
+/* ---------- Resultado ---------- */
+
+function ResultPanel({ doc, st, running, now, onTab }: { doc: QueryDoc; st: DocState; running: { what: 'consulta' | 'plan'; t0: number } | null; now: number; onTab: (t: ResTab) => void }) {
+  const { res, plan, err, tab, log } = st;
+  const tabs: { id: ResTab; label: string; on: boolean }[] = [
+    { id: 'res', label: 'Resultado', on: true },
+    { id: 'plan', label: 'Plan', on: !!plan || err?.what === 'plan' || running?.what === 'plan' },
+    { id: 'trace', label: 'Trace', on: !!res?.trace },
+    { id: 'log', label: 'Log', on: log.length > 0 },
+  ];
+  const secs = (ms: number) => (ms < 1000 ? `${nf(ms)} ms` : `${nf(ms / 1000, 1)} s`);
+  const fileName = `${doc.source}-${doc.title.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '_').replace(/^_|_$/g, '') || 'resultado'}`;
+  return (
+    <section className="panel qx-res" aria-label="Resultado">
+      <div className="qx-res-tabs" role="tablist" aria-label="Vista del resultado">
+        {tabs.map(t => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} disabled={!t.on && tab !== t.id} onClick={() => onTab(t.id)}>{t.label}</button>
+        ))}
+        {res && !running && !err && tab === 'res' && (
+          <span className="qx-res-meta">
+            {res.engine && <EngineTag engine={res.engine} />}
+            <span>{secs(res.ms)}</span>
+            {res.scanned != null && <span>leyó <b>{nf(res.scanned)}</b></span>}
+            {res.appId && <span className="mono">{res.appId}</span>}
+          </span>
+        )}
+      </div>
+      <div className="qx-res-b">
+        {running && (tab === 'res' || tab === 'plan') ? (
+          <div className="qx-run" role="status">
+            <Dot s="running" label="corriendo" />
+            <span>{running.what === 'plan' ? 'Pidiendo el plan' : 'Corriendo'} en {SOURCE_LABEL[doc.source]}</span>
+            <span className="mono muted">{nf((now - running.t0) / 1000, 1)} s</span>
+            {running.what === 'consulta' && now - running.t0 > 3000 && (doc.source === 'hive' || doc.source === 'pig') &&
+              <span className="muted">· {doc.source === 'pig' ? 'Pig arma los trabajos MapReduce y los manda a YARN: cada uno tarda 20-40 s' : 'si lanza un trabajo Tez, abrir la sesión en YARN lleva 10-20 s'}</span>}
+          </div>
+        ) : err && (tab === 'res' || (tab === 'plan' && err.what === 'plan')) ? (
+          <div className="callout qx-err" data-k="bad" role="alert">
+            <span className="head"><Chip k="bad">{err.code}</Chip><b>{err.what === 'plan' ? 'El plan' : 'La consulta'} falló en {SOURCE_LABEL[doc.source]}</b></span>
+            <span className="msg mono">{err.message}</span>
+          </div>
+        ) : tab === 'plan' && plan ? <PlanTree plan={plan} />
+          : tab === 'trace' && res?.trace ? <div className="qx-pad"><TraceView trace={res.trace} /></div>
+            : tab === 'log' ? <LogView log={log} />
+              : res ? (
+                res.columns.length ? (
+                  <>
+                    {res.note && <p className="qx-note">{res.note}</p>}
+                    <ResultTable columns={res.columns} rows={res.rows} label={`Resultado de ${doc.title}`} fileName={fileName} maxHeight={460} />
+                  </>
+                ) : <EmptyState compact kind="empty" title="Listo">{res.note ?? 'La sentencia corrió y no devuelve filas.'}{res.trace?.output && res.trace.output !== res.note ? ` ${res.trace.output}` : ''}</EmptyState>
+              ) : (
+                <EmptyState compact title="Todavía no corriste esta consulta">
+                  Escribí arriba o elegí un ejemplo y apretá <b>Correr</b> (Ctrl+Enter). Con <b>Plan</b> (Ctrl+Shift+Enter) ves qué va a hacer el motor sin correrla.
+                </EmptyState>
+              )}
+      </div>
     </section>
+  );
+}
+
+function LogView({ log }: { log: LogLine[] }) {
+  if (!log.length) return <EmptyState compact title="Sin actividad">Cada corrida de esta consulta deja acá su comando y cómo terminó.</EmptyState>;
+  return (
+    <ol className="qx-log">
+      {log.map((l, i) => (
+        <li key={i} data-k={l.k}>
+          <span className="t mono">{new Date(l.at).toLocaleTimeString('es-AR')}</span>
+          <span className="dot" data-s={l.k === 'run' ? 'run' : l.k} aria-hidden="true" />
+          <span className="mono">{l.text}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

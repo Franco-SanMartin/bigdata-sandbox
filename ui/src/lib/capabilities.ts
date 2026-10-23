@@ -51,9 +51,7 @@ export const CAP_INFO: CapInfo[] = [
 ];
 
 /** Capacidades que la interfaz todavía no implementa (las saca el paquete que las agrega) */
-export const NOT_YET: Partial<Record<CapId, string>> = {
-  pig: 'Pig todavía no se puede correr desde la interfaz: usá pig -x mapreduce en la terminal del contenedor',
-};
+export const NOT_YET: Partial<Record<CapId, string>> = {};
 
 const ALL: CapId[] = ['cluster.start', 'cluster.stop', 'config.edit', 'volume.reset', 'hdfs.read', 'hdfs.write', 'yarn.submit',
   'mapreduce', 'tez', 'spark', 'pig', 'sqoop', 'hive', 'mysql', 'mongodb', 'pipeline', 'ml.sklearn', 'ml.mllib', 'ha', 'jupyter'];
