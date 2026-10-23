@@ -161,8 +161,9 @@ def compose_yaml(c: dict) -> str:
     """El docker-compose.yml equivalente (mismo texto que genera la interfaz)."""
     yn = lambda b: "si" if b else "no"  # noqa: E731
     nn, dn, rep = c["namenodes"], c["datanodes"], c["replication"]
+    tag = os.environ.get("SANDBOX_VERSION", "full")  # la empresa sin ROL se usa igual que la full
     L = [
-        "# BigData Sandbox :full, generado desde la interfaz (localhost:8080)",
+        f"# BigData Sandbox :{tag}, generado desde la interfaz (localhost:8080)",
         "#   docker compose up -d        crear y prender",
         '#   docker compose logs -f      seguir el arranque hasta "Cluster LISTO"',
         "#   docker compose stop         apagar en orden (los datos quedan)",
@@ -172,7 +173,7 @@ def compose_yaml(c: dict) -> str:
         "",
         "services:",
         "  bigdata:",
-        "    image: franki678/bigdata-sandbox:full",
+        f"    image: franki678/bigdata-sandbox:{tag}",
         "    container_name: bigdata",
         "    environment:",
         '      AUTOSTART: "1"                 # arranca solo con estas variables; sin ella espera «Iniciar» en la interfaz',

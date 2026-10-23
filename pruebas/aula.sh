@@ -108,7 +108,8 @@ esc_aula() {
   paso "Racks: /profe el maestro, de a 2 PCs por fila"
   racks=$(en maestro "hdfs dfsadmin -printTopology 2>/dev/null" | awk '
     /^Rack:/ { r = $2 }
-    /\(/     { match($0, /\(([^)]*)\)/); print r, substr($0, RSTART + 1, RLENGTH - 2) }' | sort)
+    /\(/     { match($0, /\(([^)]*)\)/); h = substr($0, RSTART + 1, RLENGTH - 2)
+               sub(/\..*/, "", h); print r, h }' | sort)   # pc01.aula -> pc01 (el DNS de la red le suma el dominio)
   echo "$racks"
   [ "$racks" = "$(printf '/fila1 pc01\n/fila1 pc02\n/fila2 pc03\n/profe maestro')" ] || falla "racks mal armados"
 
