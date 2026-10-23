@@ -133,7 +133,7 @@ TEMPLATES: list[dict] = [
                     "segundo las ordena de más a menos frecuente.",
      "params": [_p("in", "Entrada", "hdfs-path", TEXTO, "Archivo o carpeta de texto en HDFS"),
                 _p("out", "Salida", "hdfs-path", "/user/root/resultados/grep", "Carpeta nueva en HDFS"),
-                _p("regex", "Expresión regular", "text", "[a-z]+", "Letras, números, espacios y . - [ ] \\ "
+                _p("regex", "Expresión regular", "text", "datos", "Letras, números, espacios y . - [ ] \\ "
                    "(hasta 64)", pattern=GREP_PATTERN), _OVERWRITE],
      "command": f"hadoop jar {EXAMPLES_JAR} grep {{in}} {{out}} {{regex}}", "needs": ["yarn"]},
     {"id": "mr-ventas", "label": "Ventas por producto (MapReduce)", "engine": "mr",

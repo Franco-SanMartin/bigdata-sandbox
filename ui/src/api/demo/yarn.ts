@@ -1,11 +1,29 @@
-/* YARN en el modo demo: NodeManager con memoria y vcores, detalle de cada trabajo con su DAG y los logs por contenedor. */
-import type { AppLogs, AppType, DagVertex, Engine, YarnApp, YarnAppDetail, YarnCluster } from '../types';
+/* YARN en el modo demo: NodeManager con memoria y vcores, detalle de cada trabajo con su DAG, los logs por
+   contenedor y las plantillas con parámetros (wordcount, pi, grep…), que escriben un resultado de verdad. */
+import type { AppLogs, AppType, DagVertex, Engine, ExampleJob, JobTemplate, SubmitJobRequest, YarnApp, YarnAppDetail, YarnCluster } from '../types';
 import { fail } from '../errors';
-import { TS, YARN_MB, type AppRec, type DemoEngine } from './engine';
-import { n, needProc, trace } from './common';
+import { TS, YARN_MB, type AppDef, type AppRec, type DemoEngine, type StageDef } from './engine';
+import { n, needHdfs, needProc, parentOf, trace } from './common';
+import { TEMPLATES, TEXTO, fillCommand, formErrors, inside, toParams } from '../../lib/jobs';
+import { sourceOf, store } from './contenido';
 
 const ENGINE: Record<AppType, Engine> = { MAPREDUCE: 'mr', TEZ: 'tez', SPARK: 'spark' };
 const VCORES = 4;
+const JOBS: Record<string, ExampleJob> = { 'mr-ventas': 'mr-ventas', 'hive-ventas': 'hive-ventas', 'spark-ventas': 'spark-ventas' };
+/** Palabras como las separa wordcount (StringTokenizer: espacios) */
+const words = (text: string) => text.split(/\s+/).filter(Boolean);
+/** La expresión de Java en JavaScript: \w también acepta letras con tilde, como en Java con UNICODE_CHARACTER_CLASS */
+function javaRegex(src: string): RegExp {
+  let out = '', cls = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === '\\' && src[i + 1] === 'w') { out += cls ? '\\p{L}\\p{N}_' : '[\\p{L}\\p{N}_]'; i++; continue; }
+    if (c === '\\') { out += c + (src[i + 1] ?? ''); i++; continue; }
+    if (c === '[') cls = true; else if (c === ']') cls = false;
+    out += c;
+  }
+  try { return new RegExp(out, 'gu'); } catch { return fail('invalid', `La expresión regular ${src} no es válida (¿falta cerrar un corchete?)`); }
+}
 const iso = (t: number) => new Date(t).toISOString().replace('T', ' ').replace('Z', '').replace('.', ',');
 
 export class DemoYarn {
@@ -98,5 +116,113 @@ export class DemoYarn {
         { name: 'syslog', lines: spark ? [] : lines },
       ],
     };
+  }
+
+  templates(): JobTemplate[] { return structuredClone(TEMPLATES); }
+
+  /** POST /api/yarn/apps { template, params }: valida igual que el servidor y lanza el trabajo simulado */
+  async submit(req: SubmitJobRequest): Promise<string> {
+    const tpl = TEMPLATES.find(t => t.id === req?.template);
+    if (!tpl) return fail('invalid', `No hay una plantilla ${String(req?.template)}`);
+    const params = req.params ?? {};
+    const extra = Object.keys(params).filter(k => !tpl.params.some(x => x.name === k));
+    if (extra.length) fail('invalid', `${tpl.id} no tiene el parámetro ${extra.join(', ')}`);
+    const errs = Object.values(formErrors(tpl, params));
+    if (errs.length) fail('invalid', errs[0]);
+    const v = toParams(tpl, params);
+    const e = this.e;
+    if (JOBS[tpl.id]) {
+      needProc(e, 'rm', 'El ResourceManager'); needProc(e, 'nm', 'El NodeManager');
+      if (tpl.id === 'hive-ventas') needProc(e, 'hiveserver2', 'HiveServer2');
+      const id = e.submitExample(JOBS[tpl.id]);
+      if (!id) fail('unsupported', 'Esta configuración no tiene YARN');
+      return id;
+    }
+    needHdfs(e);
+    if (e.applied?.services === 'hdfs') fail('unsupported', 'Esta configuración no tiene YARN: elegí una con YARN en Cluster');
+    needProc(e, 'rm', 'El ResourceManager'); needProc(e, 'nm', 'El NodeManager');
+    const shown = fillCommand(tpl, v);
+    const input = typeof v.in === 'string' ? v.in : undefined;
+    const out = typeof v.out === 'string' ? v.out : undefined;
+    // La entrada: texto.txt se sube sola si falta; otra cosa tiene que existir
+    let blocks: number[] = [];
+    let text = '';
+    if (input) {
+      if (input === TEXTO && !e.files.some(f => f.path === TEXTO)) e.putFile({ path: TEXTO, mb: 138 / 1048576, local: 'texto.txt', rows: '4 líneas' });
+      const files = e.files.filter(f => inside(f.path, input) && !f.path.endsWith('/_SUCCESS'));
+      if (!files.length) fail('not_found', `No existe ${input} (o está vacía): subí un archivo antes`);
+      blocks = files.flatMap(f => f.blocks.map(b => b.id));
+      for (const f of files) {
+        const src = sourceOf(e, f.path, f.sizeMb);
+        if (!src.binary) text += await src.read(0, Math.min(src.total, 1048576));
+      }
+    }
+    if (out) {
+      const exists = e.files.some(f => inside(f.path, out)) || [...e.dirs].some(d => inside(d, out));
+      if (exists && !v.overwrite) fail('invalid', `Ya existe ${out}: MapReduce no la pisa. Tildá «Pisar la salida» o elegí otra carpeta`);
+      e.files = e.files.filter(f => !inside(f.path, out));
+      [...e.dirs].forEach(d => { if (inside(d, out)) e.dirs.delete(d); });
+      [...store(e).keys()].forEach(k => { if (inside(k, out)) store(e).delete(k); });
+      e.dirs.add(parentOf(out)!);
+    }
+    const nb = Math.max(1, blocks.length);
+    const lines = text.split('\n').filter(Boolean);
+    let def: AppDef, result = '', counters: string[] = [];
+    if (tpl.id === 'mr-wordcount' || tpl.id === 'mr-grep') {
+      const counts = new Map<string, number>();
+      if (tpl.id === 'mr-wordcount') words(text).forEach(w => counts.set(w, (counts.get(w) || 0) + 1));
+      else {
+        const rx = javaRegex(String(v.regex));
+        for (const m of text.matchAll(rx)) if (m[0]) counts.set(m[0], (counts.get(m[0]) || 0) + 1);
+      }
+      const rows = [...counts.entries()].sort(tpl.id === 'mr-grep' ? (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]) : (a, b) => (a[0] < b[0] ? -1 : 1));
+      result = rows.map(([w, k]) => (tpl.id === 'mr-grep' ? `${k}\t${w}` : `${w}\t${k}`)).join('\n') + (rows.length ? '\n' : '');
+      const mapOut = [...counts.values()].reduce((a, b) => a + b, 0);
+      const stages: StageDef[] = tpl.id === 'mr-wordcount'
+        ? [{ id: 'map', name: 'Map', description: 'Cada mapper parte su bloque en palabras y emite (palabra, 1)', dependsOn: [], durSec: 4, n: nb, blocks, ops: ['TextInputFormat', 'TokenizerMapper', 'IntSumReducer (combiner)'] },
+          { id: 'reduce', name: 'Reduce', description: 'Recibe cada palabra con sus unos y los suma', dependsOn: ['map'], edge: 'shuffle + sort', durSec: 3, n: 1, ops: ['merge', 'IntSumReducer', 'TextOutputFormat'] }]
+        : [{ id: 'map', name: 'Map (búsqueda)', description: 'Busca la expresión en cada línea y emite (coincidencia, 1)', dependsOn: [], durSec: 4, n: nb, blocks, ops: ['TextInputFormat', 'RegexMapper', 'LongSumReducer (combiner)'] },
+          { id: 'reduce', name: 'Reduce (búsqueda)', description: 'Suma cuántas veces aparece cada coincidencia', dependsOn: ['map'], edge: 'shuffle + sort', durSec: 3, n: 1, ops: ['LongSumReducer', 'SequenceFileOutputFormat'] },
+          { id: 'sort', name: 'Orden', description: 'Segundo trabajo: ordena de más a menos frecuente', dependsOn: ['reduce'], edge: 'shuffle + sort', durSec: 3, n: 1, ops: ['InverseMapper', 'DecreasingComparator', 'TextOutputFormat'] }];
+      def = { type: 'MAPREDUCE', name: tpl.id === 'mr-wordcount' ? 'word count' : 'grep-search', am: 512, amStart: 5, taskMb: 512, executors: 0, stages, rowsIn: lines.length, rowsOut: rows.length, out };
+      counters = [`Map input records=${lines.length}`, `Map output records=${mapOut}`, `Reduce output records=${rows.length}`];
+    } else if (tpl.id === 'mr-pi') {
+      const maps = Number(v.maps), samples = Number(v.samples);
+      const pi = (4 * Math.round(Math.PI / 4 * maps * samples + (Math.random() - .5) * Math.sqrt(maps * samples))) / (maps * samples);
+      def = { type: 'MAPREDUCE', name: 'QuasiMonteCarlo', am: 512, amStart: 5, taskMb: 512, executors: 0, rowsIn: maps,
+        stages: [{ id: 'map', name: 'Map', description: `Cada map tira ${n(samples)} puntos al azar y cuenta cuántos caen en el círculo`, dependsOn: [], durSec: 2 + samples / 20000, n: maps, ops: ['SequenceFileInputFormat', 'QmcMapper'] },
+          { id: 'reduce', name: 'Reduce', description: 'Junta los conteos de todos los maps', dependsOn: ['map'], edge: 'shuffle + sort', durSec: 2, n: 1, ops: ['QmcReducer'] }] };
+      counters = [`Map input records=${maps}`, `Map output records=${maps * 2}`, `Reduce output records=0`];
+      result = `Estimated value of Pi is ${pi.toFixed(20)}`;
+    } else {
+      const parts = Number(v.partitions);
+      const pi = 4 * (Math.PI / 4 + (Math.random() - .5) * .002);
+      def = { type: 'SPARK', name: 'Spark Pi', am: 1024, amStart: 10, taskMb: 0, executors: 2,
+        stages: [{ id: 's0', name: 'Stage 0', description: `reduce at SparkPi.scala: ${parts} tarea${parts > 1 ? 's' : ''}, una por partición`, dependsOn: [], durSec: 1.5, n: parts, ops: ['parallelize', 'map', 'reduce'] }] };
+      result = `Pi is roughly ${pi.toFixed(5)}`;
+    }
+    let id = '';
+    id = e.submitApp(def, {
+      command: shown, input: input ? `${input} · ${nb} bloque${nb > 1 ? 's' : ''}` : 'sin entrada en HDFS (genera los datos)',
+      onDone: () => {
+        const a = e.jobs.find(x => x.id === id);
+        if (!a) return;
+        if (counters.length) { e.alog(a, 'Counters: ' + counters.length); counters.forEach(c => e.alog(a, `\t\t${c}`)); }
+        if (out) {
+          const part = `${out}/part-r-00000`;
+          e.files = e.files.filter(f => f.path !== `${out}/part-00000`);
+          e.putNow(part, result.length / 1048576, 128, 'MapReduce');
+          e.putNow(`${out}/_SUCCESS`, 0, 128, 'MapReduce');
+          store(e).set(part, result);
+          e.emit({ type: 'hdfs', path: out });
+          e.alog(a, `Job job_${TS}_${a.num} completed successfully · salida en ${out}`);
+        } else {
+          e.alog(a, result);
+          if (def.type === 'MAPREDUCE') e.alog(a, `Job job_${TS}_${a.num} completed successfully`);
+        }
+      },
+    });
+    e.alog(e.jobs.find(x => x.id === id)!, `Comando: ${shown}`);
+    return id;
   }
 }

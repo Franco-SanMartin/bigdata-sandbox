@@ -1,9 +1,11 @@
-/* HDFS en el modo demo: árbol de carpetas, detalle de un archivo, subir, borrar, fsck y re-replicación. */
-import type { ActionResult, FsckReport, HdfsEntry, HdfsExample, HdfsFile, HdfsFileDetail, HdfsListing, ReplicationState, UploadRequest } from '../types';
+/* HDFS en el modo demo: árbol de carpetas, detalle de un archivo, subir, ver, bajar, mover, borrar, fsck y re-replicación. */
+import type { ActionResult, FsckReport, HdfsCat, HdfsEntry, HdfsExample, HdfsFile, HdfsFileDetail, HdfsListing, ReplicationState, UploadRequest } from '../types';
 import { blockSizeMb } from '../../lib/cluster';
 import { fail } from '../errors';
 import { TS, type DemoEngine, type PutSpec } from './engine';
 import { mb, nameOf, needHdfs, parentOf, previewFor, trace } from './common';
+import { MAX_DOWNLOAD, sourceOf, store } from './contenido';
+import { PROTECTED } from '../../lib/jobs';
 
 const BP = `BP-1937455046-172.17.0.2-${TS}`;
 /* Las carpetas que crea el arranque (paso "Carpetas en HDFS") */
@@ -24,6 +26,14 @@ const clean = (p: string) => {
 };
 const inside = (path: string, dir: string) => dir === '/' || path === dir || path.startsWith(dir + '/');
 const bytes = (x: number) => Math.round(x * 1048576);
+const CAT_DEFAULT = 64 * 1024, CAT_MAX = 1024 * 1024;
+/** Como shlex.quote, para mostrar el comando */
+const q = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'"'"'`)}'`);
+function bounded(raw: number | undefined, name: string, lo: number, hi: number, def: number): number {
+  if (raw == null) return def;
+  if (!Number.isInteger(raw) || raw < lo || raw > hi) fail('invalid', `${name} tiene que ser un entero entre ${lo} y ${hi}`);
+  return raw;
+}
 
 export class DemoHdfs {
   constructor(private e: DemoEngine) {}
@@ -91,6 +101,7 @@ export class DemoHdfs {
     if (this.e.files.some(f => f.path === path && f.writing)) fail('busy', `${path} se está escribiendo`);
     this.e.dirs.add(dest);
     const f = this.e.putFile({ ...spec, path, rep: req.replication, bsMb: bsMb || undefined })!;
+    if (req.file) store(this.e).set(path, req.file); else store(this.e).delete(path);
     const live = Math.min(f.rep, this.e.dnsUp());
     const flags = (req.replication ? ` -D dfs.replication=${req.replication}` : '') + (bsMb ? ` -D dfs.blocksize=${req.blockSize}` : '');
     return {
@@ -126,6 +137,7 @@ export class DemoHdfs {
     const copies = gone.reduce((a, f) => a + f.blocks.reduce((x, b) => x + b.locations.length, 0), 0);
     const total = gone.reduce((a, f) => a + f.sizeMb, 0);
     this.e.files = this.e.files.filter(f => !inside(f.path, path));
+    [...store(this.e).keys()].forEach(k => { if (inside(k, path)) store(this.e).delete(k); });
     [...this.e.dirs].forEach(d => { if (inside(d, path)) this.e.dirs.delete(d); });
     const t = trace(`hdfs dfs -rm${isDir ? ' -r' : ''} -skipTrash ${path}`, isDir ? `${path} con ${gone.length} archivo${gone.length !== 1 ? 's' : ''}` : `${path} · ${mb(total)}`,
       'El NameNode borra la entrada de sus metadatos y en el próximo latido les dice a los DataNodes que borren los bloques',
@@ -134,6 +146,81 @@ export class DemoHdfs {
     this.e.act('Vos', 'warn', `Borrado ${path}`, { ...t });
     this.e.emit({ type: 'hdfs', path }); this.e.emit();
     return { id: path, state: 'done', trace: t };
+  }
+
+  private fileOrFail(path: string): HdfsFile {
+    const f = this.view(path);
+    if (f) return f;
+    if (this.allDirs().has(path)) fail('invalid', `${path} es una carpeta: elegí un archivo`);
+    return fail('not_found', `No existe el archivo ${path}`);
+  }
+
+  /** hdfs dfs -cat de un tramo: si queda contenido después, corta en el último salto de línea */
+  async cat(raw: string, offsetRaw?: number, lengthRaw?: number): Promise<HdfsCat> {
+    needHdfs(this.e);
+    const path = clean(raw);
+    const offset = bounded(offsetRaw, 'offset', 0, 2 ** 50, 0);
+    const length = bounded(lengthRaw, 'length', 1, CAT_MAX, CAT_DEFAULT);
+    const f = this.fileOrFail(path);
+    if (f.state === 'missing') fail('failed', `No se pudo leer ${path}: tiene bloques sin ninguna copia viva`);
+    const src = sourceOf(this.e, path, f.sizeMb);
+    if (offset > src.total) fail('invalid', `offset ${offset} pasa el final del archivo (${src.total} bytes)`);
+    let text = src.binary ? '' : await src.read(offset, length);
+    const binary = src.binary || text.includes('\0');
+    if (binary) text = '';
+    let used = binary ? Math.min(length, src.total - offset) : text.length;
+    if (!binary && offset + used < src.total) { const cut = text.lastIndexOf('\n'); if (cut >= 0) { text = text.slice(0, cut + 1); used = text.length; } }
+    const command = offset ? `hdfs dfs -cat ${q(path)} | tail -c +${offset + 1} | head -c ${used || length}` : `hdfs dfs -cat ${q(path)} | head -c ${used || length}`;
+    return { path, offset, length: used, totalBytes: src.total, text, truncated: offset + used < src.total, binary, command };
+  }
+
+  /** hdfs dfs -get: el archivo entero, como URL para bajarlo desde el navegador */
+  download(raw: string): { url: string; name: string } {
+    needHdfs(this.e);
+    const path = clean(raw);
+    const f = this.fileOrFail(path);
+    if (f.state === 'missing') fail('failed', `No se pudo leer ${path}: tiene bloques sin ninguna copia viva`);
+    if (f.state === 'writing') fail('busy', `${path} se está escribiendo: esperá a que termine la subida`);
+    const src = sourceOf(this.e, path, f.sizeMb);
+    if (src.total > MAX_DOWNLOAD) fail('invalid', `En el modo demo se bajan archivos de hasta ${MAX_DOWNLOAD / 1048576} MB (${path} tiene ${mb(f.sizeMb)})`);
+    const url = URL.createObjectURL(src.blob());
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    this.e.act('Vos', 'info', `Bajado ${nameOf(path)}`, { command: `hdfs dfs -get ${q(path)} .`, input: `${path} · ${mb(f.sizeMb)}`, action: 'El cliente le pide al NameNode dónde está cada bloque y los lee en orden de los DataNodes', output: `${nameOf(path)} en tu compu` });
+    return { url, name: nameOf(path) };
+  }
+
+  /** hdfs dfs -mv: solo cambia metadatos en el NameNode, los bloques no se mueven */
+  move(fromRaw: string, toRaw: string): ActionResult {
+    needHdfs(this.e);
+    const src = clean(fromRaw), dst = clean(toRaw);
+    if (PROTECTED.includes(src)) fail('invalid', `${src} la usa el cluster: no se puede mover`);
+    if (src === dst) fail('invalid', 'El origen y el destino son la misma ruta');
+    const dirs = this.allDirs();
+    const isDir = dirs.has(src);
+    if (!isDir && !this.view(src)) fail('not_found', `No existe ${src}`);
+    if (this.e.files.some(f => f.writing && inside(f.path, src))) fail('busy', `${src} se está escribiendo: esperá a que termine la subida`);
+    let final = dst;
+    if (dirs.has(dst)) final = (dst === '/' ? '' : dst) + '/' + nameOf(src);
+    else if (this.view(dst)) fail('invalid', `Ya existe ${dst}: elegí otro nombre o borralo antes`);
+    else if (!dirs.has(parentOf(dst)!)) fail('not_found', `No existe la carpeta ${parentOf(dst)}`);
+    if (final !== dst && (dirs.has(final) || this.view(final))) fail('invalid', `Ya existe ${final}: elegí otro nombre o borralo antes`);
+    if (isDir && inside(final, src)) fail('invalid', 'No se puede mover una carpeta adentro de sí misma');
+    if (PROTECTED.includes(final)) fail('invalid', `${final} la usa el cluster`);
+    const re = (p: string) => final + p.slice(src.length);
+    const moved = this.e.files.filter(f => inside(f.path, src));
+    moved.forEach(f => { f.path = re(f.path); });
+    [...this.e.dirs].forEach(d => { if (inside(d, src)) { this.e.dirs.delete(d); this.e.dirs.add(re(d)); } });
+    if (isDir) this.e.dirs.add(final);
+    const st = store(this.e);
+    moved.forEach(f => { const old = src + f.path.slice(final.length); if (!st.has(old)) st.set(old, { from: old }); });
+    [...st.entries()].forEach(([k, v]) => { if (inside(k, src)) { st.delete(k); st.set(re(k), v); } });
+    const rename = parentOf(src) === parentOf(final);
+    const t = trace(`hdfs dfs -mv ${q(src)} ${q(dst)}`, isDir ? `${src} con ${moved.length} archivo${moved.length !== 1 ? 's' : ''}` : src,
+      'El NameNode cambia la ruta en sus metadatos: los bloques se quedan en los mismos DataNodes, por eso es instantáneo',
+      `${rename ? 'Renombrado' : 'Movido'} a ${final}`, { engine: 'hdfs' });
+    this.e.act('Vos', 'info', `${rename ? 'Renombrado' : 'Movido'} ${src} → ${final}`, { ...t });
+    this.e.emit({ type: 'hdfs', path: parentOf(src)! }); this.e.emit({ type: 'hdfs', path: parentOf(final)! }); this.e.emit();
+    return { id: final, state: 'done', trace: t };
   }
 
   fsck(raw: string): FsckReport {

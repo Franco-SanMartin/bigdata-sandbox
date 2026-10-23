@@ -581,6 +581,11 @@ def test_inyeccion_y_rangos(tid, params):
     assert e.value.code == "invalid"
 
 
+def test_defaults_validos():
+    for t in Y.TEMPLATES:
+        Y.validate_params(t, {})
+
+
 def test_grep_regex_permitida():
     for ok in ("datos", "[a-z]+".replace("+", ""), r"\w\w\s", "a.b-c", "[A-Z][a-z]"):
         assert Y.validate_params(Y.TEMPLATE["mr-grep"], {"regex": ok})["regex"] == ok
