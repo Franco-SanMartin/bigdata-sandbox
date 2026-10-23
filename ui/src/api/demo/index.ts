@@ -22,8 +22,6 @@ export function createDemoApi(): SandboxApi {
   /** Los módulos nuevos tiran ApiFailure al validar: así llega como promesa rechazada, igual que del backend */
   const call = <T>(fn: () => T | Promise<T>) => Promise.resolve().then(fn);
   const copy = <T>(v: T): T => structuredClone(v);
-  /** Lo que todavía no tiene versión demo: contesta como el backend sin la función */
-  const pending = (que: string): Promise<never> => call(() => { throw new ApiFailure(`${que}: todavía no está en esta versión de la interfaz`, 'unsupported', 501); });
   return {
     mode: 'demo',
     now: () => e.now(),
