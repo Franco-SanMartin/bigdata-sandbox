@@ -4,6 +4,21 @@ import type { PageId } from '../state/ui';
 export interface Help { intro: string; terms: [string, string][] }
 
 export const HELP: Record<PageId, Help> = {
+  inicio: {
+    intro: 'El estado del cluster en una línea, con el único botón que tiene sentido ahora (iniciar, ver el arranque, ver qué falla o detener). Abajo, qué podés hacer: cada tarjeta dice si está lista, por qué no y el botón que lo arregla.',
+    terms: [
+      ['Listo', 'Los procesos que hacen falta están arriba: se puede usar ya.'],
+      ['Arrancando', 'Falta que termine de levantar algún proceso; se habilita solo.'],
+      ['No disponible', 'Hace falta prender un servicio o cambiar la configuración. El botón de la tarjeta lo hace por vos.'],
+      ['Degradado', 'Algo no responde pero no se perdió nada: por ejemplo, un DataNode caído con réplica 2. HDFS re-replica solo.'],
+      ['Con fallas', 'Algo importante no anda: el NameNode, el ResourceManager o bloques sin ninguna copia.'],
+      ['Lo que tenés', 'Archivos en HDFS, tablas de Hive, trabajos y modelos que ya hay en el volumen.'],
+    ],
+  },
+  practicas: {
+    intro: 'Recorridos paso a paso por lo que se ve en la materia: HDFS, MapReduce, Hive, Sqoop, Spark, alta disponibilidad. Cada paso se puede hacer desde la interfaz o copiando el comando.',
+    terms: [['Práctica', 'Una guía corta con un objetivo y pasos verificables.'], ['Progreso', 'Se guarda en este navegador.']],
+  },
   cluster: {
     intro: 'El estado de todos los procesos del contenedor. Cada NameNode, DataNode y servicio es un proceso aparte, con su puerto y su página web. Desde acá se arranca, se detiene y se prende o apaga cada uno.',
     terms: [
@@ -12,6 +27,8 @@ export const HELP: Record<PageId, Help> = {
       ['Alta disponibilidad', 'Con 2 o 3 NameNodes, uno está activo y el resto en espera. ZooKeeper elige al activo; los JournalNodes mantienen al día a los que esperan.'],
       ['ResourceManager', 'El de YARN: reparte los 4 GB de memoria entre los trabajos.'],
       ['Arranque', 'La primera vez formatea HDFS y carga las bases de ejemplo (unos 2 minutos). Después solo levanta los procesos.'],
+      ['Re-replicación', 'Cuando un DataNode muere, el NameNode copia sus bloques a los vivos hasta volver a la réplica pedida. Mientras tanto el cluster figura Degradado.'],
+      ['Sinóptico', 'El diagrama de arriba: cada lámpara es un proceso (verde arriba, ámbar en transición, rojo caído, gris apagado). Tocá uno para ver su detalle; queda en la dirección (#cluster/dn2) para compartirlo.'],
     ],
   },
   hdfs: {
@@ -60,7 +77,14 @@ export const HELP: Record<PageId, Help> = {
       ['Entrenar y probar', 'El modelo aprende con una parte de las filas y se mide con las que no vio.'],
     ],
   },
-  consola: { intro: 'Todo lo que pasó en el cluster, con el comando exacto, lo que entró, lo que hizo y lo que salió. También está abajo en cualquier pantalla con Ctrl+J.', terms: [['Mis acciones', 'Lo que hiciste vos desde la interfaz.'], ['Problemas', 'Avisos y errores: nodos caídos, bloques perdidos, procesos que no responden.']] },
+  consola: {
+    intro: 'Todo lo que pasó en el cluster. Elegí un evento a la izquierda y a la derecha ves el comando exacto (con botón para copiarlo), lo que entró, lo que hizo y lo que salió. También está abajo en cualquier pantalla con Ctrl+J.',
+    terms: [
+      ['Origen', 'Quién lo hizo o lo informó: Vos (tus acciones desde la interfaz), el Cluster, un NameNode, un DataNode, YARN…'],
+      ['Problemas', 'Avisos y errores: nodos caídos, bloques perdidos, procesos que no responden.'],
+      ['Flechas', 'Con la lista enfocada, ↑ y ↓ recorren los eventos. Cada uno tiene su dirección (#consola/<id>).'],
+    ],
+  },
   config: {
     intro: 'Los parámetros del contenedor (las variables de entorno del docker-compose.yml). Se guardan y se aplican reiniciando el cluster; los datos quedan en el volumen.',
     terms: [
@@ -69,6 +93,7 @@ export const HELP: Record<PageId, Help> = {
       ['BLOCK_SIZE', 'Tamaño de bloque. Con 1m un archivo chico ya se ve repartido en varios bloques; 128m es el de un cluster real.'],
       ['NAMENODES', 'Queda fijo en el volumen. Para cambiarlo hay que borrar el volumen.'],
       ['SERVICIOS', 'hdfs: solo HDFS. mapreduce: suma YARN, MapReduce, Pig, Sqoop y MySQL. todo: suma Hive y Spark.'],
+      ['Antes → Después', 'Cuando cambiás algo aparece abajo una barra con cada cambio, qué implica y los botones para guardarlo o descartarlo.'],
     ],
   },
 };

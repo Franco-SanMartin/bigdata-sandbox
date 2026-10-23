@@ -9,6 +9,58 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+## [1.1.0] - 2026-10-23
+
+La interfaz de `full`, rediseñada: tema claro, una pantalla de inicio que dice
+qué se puede hacer y qué no, y prácticas guiadas contra el cluster.
+
+### Agregado
+
+- **Inicio**: el estado del cluster y "Qué podés hacer ahora", con cada
+  capacidad lista o con el motivo por el que no está y cómo arreglarlo
+  (activar MongoDB, borrar el volumen para alta disponibilidad...), y la guía
+  que la explica.
+- **Prácticas** guiadas paso a paso, una por guía de la 03 a la 10 (HDFS,
+  MapReduce, Pig, Hive, MariaDB y Sqoop, Spark, alta disponibilidad,
+  MongoDB), que se hacen desde la interfaz y chequean cada paso contra el
+  cluster.
+- **HDFS**: árbol de carpetas, ver, bajar y mover archivos, réplica por fila
+  y, si la carpeta está vacía, dónde están los archivos.
+- **Trabajos**: plantillas con parámetros (wordcount, pi, grep, ventas con
+  MapReduce, Hive sobre Tez y Spark), detalle con avance, contenedores y logs
+  en vivo, y el comando equivalente.
+- **Consultas** sobre Hive, MariaDB, MongoDB y Pig: catálogo, ejemplos,
+  guardadas, historial, plan y exportar a CSV; "Crear tabla ventas desde
+  HDFS" cuando Hive no tiene tablas.
+- En Cluster, MongoDB y JupyterLab no incluidos se pueden elegir y activar
+  desde el detalle.
+- Server: ver, bajar y mover en HDFS, plantillas de trabajos con parámetros y
+  Pig desde la API.
+
+### Cambiado
+
+- Tema claro con tipografía IBM Plex; el color queda para estados y
+  motores, y el acento solo para lo que se toca o se elige.
+- Cada pantalla, con el cluster apagado o arrancando, dice qué vas a poder
+  hacer y cuánto falta; cada botón deshabilitado dice por qué y cómo
+  habilitarlo.
+- Cabeceras de una línea con estado y ayuda, tablas y vacíos con el mismo
+  componente, skeletons mientras carga una pantalla.
+- Pipeline y Machine Learning con los componentes nuevos; ML recomienda qué
+  modelo conviene y lo compara con la regla real.
+- Las capturas del README son de la interfaz nueva (demo).
+
+### Arreglado
+
+- El estilo de una pantalla ya no pisa el de otra (ML heredaba tarjetas de
+  HDFS y YARN); un test lo controla.
+- Con un DataNode caído, HDFS ya no dice "sano" mientras la barra dice
+  "Degradado".
+- Textos encimados en el sinóptico y en Configuración a 1100 px.
+- Humo de `full` más estable en arm64: el `-put` grande ya no falla por los
+  reintentos normales del cliente y el wordcount espera a los DataNodes y al
+  log del cliente.
+
 ## [1.0.0] - 2026-10-22
 
 Primera versión estable: tres versiones de la imagen, todas probadas en
@@ -72,7 +124,9 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 
 - Con el cluster apagado, la interfaz de `full` ya no pide
   `/api/yarn/apps` cada 2 segundos (la consola del navegador se llenaba de
-  409 y el estado quedaba en "Sin conexión con el cluster").
+  409 y el estado quedaba en "Sin conexión con el cluster"). El humo de la
+  interfaz lo prueba y después vuelve a iniciar el cluster con el botón
+  "Iniciar cluster".
 - MySQL de un volumen de la imagen anterior: se pone al día con
   `mariadb-upgrade` y, si se apagó de golpe, el arranque explica cómo
   arreglarlo.
@@ -80,5 +134,6 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/commits/main
-[1.0.0]: https://github.com/Franki-678/bigdata-sandbox/commits/main
+[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.1.0...main
+[1.1.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.1.0
+[1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0

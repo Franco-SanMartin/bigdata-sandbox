@@ -1,143 +1,142 @@
-/* Explorador de HDFS por ruta: migas, carpeta nueva, subir y borrar. */
-import { useRef, useState } from 'react';
-import { ChevronRight, File, Folder, FolderPlus, HardDrive, RotateCw, Trash2, Upload, X } from 'lucide-react';
-import type { ActionResult, HdfsEntry, HdfsExample, HdfsListing } from '../../api/types';
+/* Explorador de HDFS: migas, filtro, carpeta nueva y una fila por archivo con ver, bajar, mover,
+   réplica y borrar. Se puede soltar un archivo encima para subirlo a la carpeta que estás viendo. */
+import { useState, type ReactNode } from 'react';
+import { ChevronRight, Copy, Download, Eye, File, FileUp, Folder, FolderPlus, MoveRight, RotateCw, Search, Trash2, Upload } from 'lucide-react';
+import type { HdfsEntry, HdfsListing } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
-import { TraceView } from '../../components/Trace';
-import { Seg } from '../../components/ui';
+import { EmptyState, SkeletonLines, useBlock } from '../../components/base';
+import { Tip } from '../../components/ui';
 import { hdfsDelete, hdfsMkdir, hdfsUpload } from '../../state/actions';
+import { useSnapshot } from '../../state/store';
 import { clock, sizeLabel } from '../../lib/format';
-import { ErrorLine, Loading, type Res } from './common';
+import { ErrorLine, type Res } from './common';
+import { downloadFile } from './Dialogs';
 
 export const FILE_STATE: Record<NonNullable<HdfsEntry['state']>, [string, string]> = {
   ok: ['ok', 'sano'], writing: ['run', 'escribiendo'], under: ['run', 'faltan copias'], missing: ['bad', 'sin copias'],
 };
 
-const EXAMPLES: { value: HdfsExample; label: string }[] = [
-  { value: 'ventas', label: 'ventas_grandes.csv · 5,9 MB' },
-  { value: 'sucias', label: 'ventas_sucias.csv · 4,5 MB' },
-  { value: 'numeros', label: 'numeros.txt · 6,6 MB' },
-  { value: 'senal', label: 'clientes_senal.csv · 0,7 MB' },
-  { value: 'texto', label: 'texto.txt · 138 bytes' },
-];
-
 const join = (dir: string, name: string) => (name.startsWith('/') ? name : (dir === '/' ? '' : dir) + '/' + name);
 
-/** El último comando que corrió desde el explorador, con su traza desplegable */
-export function LastAction({ r, onClose, writing }: { r: ActionResult; onClose: () => void; writing?: boolean }) {
-  const [open, setOpen] = useState(false);
-  // Un put arranca "running": termina cuando en la carpeta ya no queda nada escribiéndose
-  const done = r.state === 'done' || (r.state === 'running' && writing === false);
+export interface RowActions {
+  view: (p: string) => void;
+  move: (p: string) => void;
+  replica: (e: HdfsEntry) => void;
+  upload: (f?: File | null) => void;
+}
+
+/** Botón de ícono con su nombre en el tooltip; si la escritura no está, dice por qué */
+function Act({ label, onClick, children, block, danger }: { label: string; onClick: () => void; children: ReactNode; block?: string | null; danger?: boolean }) {
   return (
-    <div className="ops-last">
-      <div className="ops-last-h">
-        <span className="badge" data-k={done ? 'ok' : 'run'}>{done ? 'hecho' : 'en curso'}</span>
-        <code className="mono">$ {r.trace.command}</code>
-        <span className="muted ops-ell">→ {r.trace.output}</span>
-        <button className="btn btn-sm btn-ghost" type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}>{open ? 'menos' : 'traza'}</button>
-        <button className="btn btn-sm btn-ghost btn-icon" type="button" onClick={onClose} aria-label="Cerrar"><X size={13} /></button>
-      </div>
-      {open && <div className="ops-last-b"><TraceView trace={r.trace} /></div>}
-    </div>
+    <Tip content={block ? `${label}: ${block}` : label}>
+      <button type="button" className="btn btn-sm btn-ghost btn-icon hd-act" data-danger={danger || undefined} aria-label={label} aria-disabled={block ? 'true' : undefined}
+        onClick={e => { e.stopPropagation(); if (!block) onClick(); }}>{children}</button>
+    </Tip>
   );
 }
 
-export function Explorer({ path, setPath, ls, sel, setSel, defRep, defBlock }: {
-  path: string; setPath: (p: string) => void; ls: Res<HdfsListing>; sel: string | null; setSel: (p: string | null) => void; defRep: number; defBlock: string;
+export function Explorer({ path, setPath, ls, sel, setSel, act, compact }: {
+  path: string; setPath: (p: string) => void; ls: Res<HdfsListing>; sel: string | null; setSel: (p: string | null) => void; act: RowActions;
+  /** Con el detalle abierto al costado: menos columnas */
+  compact?: boolean;
 }) {
-  const [form, setForm] = useState<'mkdir' | 'upload' | null>(null);
-  const [last, setLast] = useState<ActionResult | null>(null);
+  const [mk, setMk] = useState(false);
   const [dirName, setDirName] = useState('');
-  const [src, setSrc] = useState<'example' | 'local'>('example');
-  const [example, setExample] = useState<HdfsExample>('ventas');
-  const [rep, setRep] = useState<string>('');
-  const [bs, setBs] = useState('');
-  const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [q, setQ] = useState('');
+  const [over, setOver] = useState(false);
+  const write = useBlock('hdfs.write');
+  const wb = write?.reason ?? null;
   const crumbs = path.split('/').filter(Boolean);
 
-  const done = (r: ActionResult | undefined) => { if (r) { setLast(r); setForm(null); ls.reload(); } };
   const mkdir = async () => {
     if (!dirName.trim()) return;
-    setBusy(true); done(await hdfsMkdir(join(path, dirName.trim()))); setBusy(false); setDirName('');
-  };
-  const upload = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (src === 'local' && !file) return;
-    setBusy(true);
-    done(await hdfsUpload({ dest: path, ...(src === 'example' ? { example } : { file }), replication: rep ? +rep : undefined, blockSize: bs.trim() || undefined }));
-    setBusy(false);
+    if (await hdfsMkdir(join(path, dirName.trim()))) { setDirName(''); setMk(false); ls.reload(); }
   };
   const remove = async (e: HdfsEntry) => {
-    const r = await hdfsDelete(e.path, e.type === 'dir');
-    if (r) { if (sel && (sel === e.path || sel.startsWith(e.path + '/'))) setSel(null); done(r); }
+    if (await hdfsDelete(e.path, e.type === 'dir')) { if (sel && (sel === e.path || sel.startsWith(e.path + '/'))) setSel(null); ls.reload(); }
   };
+  const copyPath = async (p: string) => { try { await navigator.clipboard.writeText(p); } catch { /* sin portapapeles: no pasa nada */ } };
 
-  const cols: Column<HdfsEntry>[] = [
-    { id: 'name', header: 'Nombre', sort: r => (r.type === 'dir' ? '0' : '1') + r.name, cell: r => <span className="ops-name">{r.type === 'dir' ? <Folder size={14} /> : <File size={14} />}{r.name}</span> },
+  const all: Column<HdfsEntry>[] = [
+    { id: 'name', header: 'Nombre', sort: r => (r.type === 'dir' ? '0' : '1') + r.name, cell: r => (
+      <span className="hd-name">{r.type === 'dir' ? <Folder size={14} /> : <File size={14} />}<span className="mono">{r.name}</span></span>
+    ) },
     { id: 'size', header: 'Tamaño', align: 'right', sort: r => r.sizeMb ?? -1, cell: r => (r.type === 'dir' ? <span className="muted">{r.children} adentro</span> : sizeLabel(r.sizeMb ?? 0)) },
     { id: 'rep', header: 'Réplica', align: 'right', cell: r => r.replication ?? <span className="dim">—</span> },
     { id: 'blocks', header: 'Bloques', align: 'right', cell: r => (r.blocks != null ? <>{r.blocks} <span className="muted">× {r.blockSizeMb} MB</span></> : <span className="dim">—</span>) },
-    { id: 'state', header: 'Estado', cell: r => (r.state ? <span className="badge" data-k={FILE_STATE[r.state][0]}>{FILE_STATE[r.state][1]}</span> : null) },
-    { id: 'perm', header: 'Permisos', cell: r => <span className="mono muted">{r.type === 'dir' ? 'd' : '-'}{r.permission} {r.owner}</span> },
+    { id: 'state', header: 'Estado', cell: r => (r.state && r.state !== 'ok' ? <span className="badge" data-k={FILE_STATE[r.state][0]}>{FILE_STATE[r.state][1]}</span> : null) },
     { id: 'mod', header: 'Modificado', sort: r => r.modifiedAt, cell: r => <span className="muted">{clock(r.modifiedAt)}</span> },
-    { id: 'x', header: '', width: 40, cell: r => (
-      <button className="btn btn-sm btn-ghost btn-icon ops-del" type="button" aria-label={`Borrar ${r.name}`} onClick={ev => { ev.stopPropagation(); void remove(r); }}><Trash2 size={13} /></button>
+    { id: 'x', header: '', width: 176, align: 'right', cell: r => (
+      <span className="hd-acts">
+        {r.type === 'file' ? <>
+          <Act label="Ver contenido" onClick={() => act.view(r.path)}><Eye size={14} /></Act>
+          <Act label="Bajar a tu compu" onClick={() => downloadFile(r.path)} block={r.state === 'writing' ? 'se está escribiendo' : null}><Download size={14} /></Act>
+          <Act label="Cambiar réplica" onClick={() => act.replica(r)} block={wb ?? (r.state === 'writing' ? 'se está escribiendo' : null)}><Copy size={14} /></Act>
+        </> : <Act label="Copiar la ruta" onClick={() => copyPath(r.path)}><Copy size={14} /></Act>}
+        <Act label="Mover o renombrar" onClick={() => act.move(r.path)} block={wb}><MoveRight size={14} /></Act>
+        <Act label={r.type === 'dir' ? 'Borrar la carpeta y lo de adentro' : 'Borrar'} onClick={() => remove(r)} block={wb} danger><Trash2 size={14} /></Act>
+      </span>
     ) },
   ];
 
+  const cols = compact ? all.filter(c => !['blocks', 'mod', 'rep'].includes(c.id)) : all;
+  const rows = (ls.data?.entries ?? []).filter(e => !q.trim() || e.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const empty = ls.data && !ls.data.entries.length;
+  // Carpeta vacía pero HDFS cuenta archivos: dónde están (si no, parece que el resumen miente)
+  const { files } = useSnapshot();
+  const others = empty ? files.filter(f => !f.path.startsWith(path === '/' ? '/' : path + '/')) : [];
+  const otherDirs = [...new Set(others.map(f => f.path.slice(0, f.path.lastIndexOf('/')) || '/'))].sort().slice(0, 3);
+
   return (
-    <section className="panel span-8">
+    <section className="panel hd-main" aria-label="Explorador"
+      onDragOver={e => { if (!wb && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setOver(true); } }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+      onDrop={e => { if (wb) return; e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) act.upload(f); }}>
       <div className="panel-h">
-        <h2>Explorador</h2>
-        <nav aria-label="Ruta" className="ops-crumbs">
-          <button className="btn btn-sm btn-ghost mono" type="button" onClick={() => setPath('/')}>/</button>
+        <nav aria-label="Ruta" className="hd-crumbs">
+          <button className="btn btn-sm btn-ghost mono" type="button" onClick={() => setPath('/')} aria-current={!crumbs.length ? 'page' : undefined}>/</button>
           {crumbs.map((c, i) => (
-            <span key={i} className="ops-crumb">
+            <span key={i} className="hd-crumb">
               {i > 0 && <ChevronRight size={12} className="dim" />}
               <button className="btn btn-sm btn-ghost mono" type="button" aria-current={i === crumbs.length - 1 ? 'page' : undefined} onClick={() => setPath('/' + crumbs.slice(0, i + 1).join('/'))}>{c}</button>
             </span>
           ))}
         </nav>
         <span className="end">
-          <button className="btn btn-sm" type="button" aria-pressed={form === 'mkdir'} onClick={() => setForm(f => (f === 'mkdir' ? null : 'mkdir'))}><FolderPlus size={13} />Carpeta</button>
-          <button className="btn btn-sm" type="button" aria-pressed={form === 'upload'} onClick={() => setForm(f => (f === 'upload' ? null : 'upload'))}><Upload size={13} />Subir</button>
-          <button className="btn btn-sm btn-ghost btn-icon" type="button" onClick={ls.reload} aria-label="Recargar"><RotateCw size={13} /></button>
+          {!empty && <label className="input-search hd-q"><Search size={13} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filtrar por nombre" aria-label="Filtrar por nombre" /></label>}
+          <Tip content={wb ?? 'hdfs dfs -mkdir -p'}><button className="btn btn-sm" type="button" aria-pressed={mk} aria-disabled={wb ? 'true' : undefined} onClick={() => !wb && setMk(m => !m)}><FolderPlus size={13} />Carpeta</button></Tip>
+          <Tip content="Volver a listar"><button className="btn btn-sm btn-ghost btn-icon" type="button" onClick={ls.reload} aria-label="Recargar"><RotateCw size={13} /></button></Tip>
         </span>
       </div>
-      {form === 'mkdir' && (
+      {mk && (
         <form className="toolbar" onSubmit={e => { e.preventDefault(); void mkdir(); }}>
-          <span className="mono muted">hdfs dfs -mkdir -p</span>
-          <input className="input ops-in mono" autoFocus value={dirName} onChange={e => setDirName(e.target.value)} placeholder={`${path === '/' ? '' : path}/nueva`} aria-label="Nombre de la carpeta" />
-          <button className="btn btn-sm btn-primary" type="submit" disabled={busy || !dirName.trim()}>Crear</button>
+          <span className="mono muted">hdfs dfs -mkdir -p {path === '/' ? '' : path}/</span>
+          <input className="input hd-in mono" autoFocus value={dirName} onChange={e => setDirName(e.target.value)} placeholder="nueva" aria-label="Nombre de la carpeta" spellCheck={false} />
+          <button className="btn btn-sm btn-primary" type="submit" disabled={!dirName.trim()}>Crear</button>
+          <button className="btn btn-sm btn-ghost" type="button" onClick={() => setMk(false)}>Cancelar</button>
         </form>
       )}
-      {form === 'upload' && (
-        <form className="toolbar" onSubmit={e => { e.preventDefault(); void upload(); }}>
-          <Seg value={src} onChange={setSrc} label="Origen" options={[{ value: 'example', label: 'Ejemplo' }, { value: 'local', label: 'De tu compu' }]} />
-          {src === 'example'
-            ? <select className="input ops-sel" value={example} onChange={e => setExample(e.target.value as HdfsExample)} aria-label="Archivo de ejemplo">{EXAMPLES.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}</select>
-            : <input ref={fileRef} className="input ops-file" type="file" aria-label="Archivo" />}
-          <label className="ops-lbl">réplica
-            <select className="input ops-sel sm" value={rep} onChange={e => setRep(e.target.value)} aria-label="Réplica">
-              <option value="">{defRep} (conf)</option>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <label className="ops-lbl">bloque
-            <input className="input ops-in sm mono" value={bs} onChange={e => setBs(e.target.value)} placeholder={defBlock} aria-label="Tamaño de bloque" />
-          </label>
-          <span className="mono muted ops-ell">→ {path}</span>
-          <button className="btn btn-sm btn-primary" type="submit" disabled={busy}><Upload size={13} />Subir</button>
-        </form>
-      )}
-      {last && <LastAction r={last} onClose={() => setLast(null)} writing={ls.data ? ls.data.entries.some(e => e.state === 'writing') : undefined} />}
-      {ls.err && <div className="panel-b"><ErrorLine err={ls.err} onRetry={ls.err.code === 'not_found' ? () => setPath('/') : ls.reload} /></div>}
-      <div className="panel-b flush">
-        {!ls.data && !ls.err ? <div className="panel-b"><Loading /></div> : ls.data && (
-          <DataTable label="Contenido de la carpeta" columns={cols} rows={ls.data.entries} rowKey={r => r.path} selected={sel}
-            onRowClick={r => (r.type === 'dir' ? setPath(r.path) : setSel(r.path))}
-            empty={<span className="ops-empty-row"><HardDrive size={14} />Carpeta vacía: subí un archivo o creá una carpeta</span>} initialSort={{ id: 'name', dir: 1 }} />
-        )}
+      {ls.err && <div className="panel-b"><ErrorLine err={ls.err} onRetry={ls.err.code === 'not_found' ? () => setPath('/user/root') : ls.reload} /></div>}
+      <div className="panel-b flush hd-body">
+        {!ls.data && !ls.err ? <div className="hd-sk" aria-busy="true"><SkeletonLines n={6} /></div>
+          : empty ? (
+            <EmptyState icon={<Folder size={20} />} title={`${path} está vacía`} compact
+              actions={<>
+                <button type="button" className="btn btn-primary" aria-disabled={wb ? 'true' : undefined} title={wb ?? undefined} onClick={() => !wb && hdfsUpload({ dest: path, example: 'ventas' }).then(r => r && ls.reload())}><Upload size={14} />Subir ventas_grandes.csv de ejemplo</button>
+                <button type="button" className="btn" aria-disabled={wb ? 'true' : undefined} onClick={() => !wb && act.upload(null)}><FileUp size={14} />Subir desde tu compu</button>
+                <button type="button" className="btn" aria-disabled={wb ? 'true' : undefined} onClick={() => !wb && setMk(true)}><FolderPlus size={14} />Crear carpeta</button>
+              </>}
+              foot={wb ? `No se puede escribir: ${wb}` : 'También podés soltar un archivo acá encima.'}>
+              Subí un archivo para ver cómo HDFS lo parte en bloques y reparte las copias entre los DataNodes.
+              {others.length > 0 && <> {others.length === 1 ? 'El único archivo que cuenta HDFS está en' : `Los ${others.length} archivos que cuenta HDFS están en`}{' '}
+                {otherDirs.map((d, i) => <span key={d}>{i > 0 && ', '}<button type="button" className="link mono" onClick={() => setPath(d)}>{d}</button></span>)}.</>}
+            </EmptyState>
+          ) : ls.data && (
+            <DataTable label={`Contenido de ${path}`} columns={cols} rows={rows} rowKey={r => r.path} selected={sel}
+              onRowClick={r => (r.type === 'dir' ? setPath(r.path) : setSel(sel === r.path ? null : r.path))}
+              empty={<span className="muted">Nada coincide con «{q}»</span>} initialSort={{ id: 'name', dir: 1 }} />
+          )}
+        {over && <div className="hd-dropping" aria-hidden="true"><FileUp size={22} /><b>Soltá para subir a {path}</b></div>}
       </div>
     </section>
   );

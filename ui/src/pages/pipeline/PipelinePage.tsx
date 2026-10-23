@@ -6,7 +6,8 @@ import { ApiFailure } from '../../api/errors';
 import type { PipelineStage, StepRun } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { EngineTag } from '../../components/Trace';
-import { Dot, Empty } from '../../components/ui';
+import { Dot } from '../../components/ui';
+import { CapabilityNotice, EmptyState, GatedButton, PageHeader, Panel } from '../../components/base';
 import { HELP } from '../../help/content';
 import { duration, nf } from '../../lib/format';
 import { useStatus } from '../../state/store';
@@ -20,7 +21,6 @@ import './pipeline.css';
 
 export function PipelinePage() {
   const status = useStatus();
-  const up = status?.phase === 'running';
   const onStep = (e: { type: string }) => e.type === 'step' || e.type === 'hdfs';
   // Qué herramientas se pueden usar depende de los procesos que están arriba (HiveServer2, MySQL, YARN…)
   const procs = status?.processes.filter(p => p.state === 'up').map(p => p.id).join() ?? '';
@@ -49,8 +49,8 @@ export function PipelinePage() {
 
   const go = (s: PipelineStage) => { setPicked(s); setRunSel(null); if (error?.stage !== s) setError(null); };
 
+  // Cluster apagado o sin servicios lo resuelve la capacidad (GatedButton); acá lo propio de la pantalla
   const runBlock = !status ? 'Conectando…'
-    : !up ? 'El cluster está apagado'
     : st?.working ? `Esperá: está corriendo ${st.stages.find(s => s.stage === runs.find(r => r.id === st.working!.stepId)?.stage)?.label ?? 'otro paso'}`
     : chosen && !chosen.available ? chosen.unavailableReason || 'No disponible'
     : null;
@@ -109,30 +109,22 @@ export function PipelinePage() {
   ];
 
   return (
-    <div className="page-in">
-      <div className="page-head">
-        <div><h1>Pipeline</h1><p>{HELP.pipeline.intro}</p></div>
-        <div className="page-actions">
-          {st && <span className="muted" style={{ fontSize: 12 }}>{doneCount} de {st.stages.length} etapas hechas</span>}
-          <button className="btn" type="button" disabled={!st || !!st.working || (!runs.length && doneCount === 0)} onClick={reset}><RotateCcw size={14} />Empezar de nuevo</button>
-        </div>
-      </div>
+    <div className="page-in pl-page">
+      <PageHeader title="Pipeline" sub="De ventas_sucias.csv al resumen y al modelo en 6 etapas: elegís la herramienta de cada una y la corrés."
+        help={HELP.pipeline.intro}
+        status={st ? { k: doneCount === st.stages.length ? 'ok' : doneCount > 0 ? 'run' : 'off', label: `${doneCount} de ${st.stages.length} etapas` } : undefined}
+        actions={
+          <GatedButton blockedBy={!st ? 'Cargando…' : st.working ? 'Esperá a que termine la corrida' : !runs.length && doneCount === 0 ? 'Todavía no corriste nada' : null} onClick={reset}>
+            <RotateCcw size={14} aria-hidden="true" />Empezar de nuevo
+          </GatedButton>
+        } />
 
-      {status && !up && (
-        <div className="callout" data-k="run" style={{ marginBottom: 16, alignItems: 'center' }}>
-          <span style={{ flex: 1 }}>
-            {status.phase === 'starting' ? <><b>El cluster está arrancando.</b> Las herramientas se habilitan a medida que suben sus servicios.</>
-              : status.phase === 'stopping' ? <><b>El cluster se está apagando.</b> Los pasos que corrían se cortan.</>
-              : <><b>El cluster está apagado.</b> Podés recorrer etapas, herramientas y corridas anteriores; para correr un paso hay que prenderlo.</>}
-          </span>
-          {status.phase === 'stopped' && <button className="btn btn-sm" type="button" onClick={() => navigate('cluster')}>Ir a Cluster</button>}
-        </div>
-      )}
+      {status && <CapabilityNotice cap="pipeline" what="Correr etapas" />}
       {loadError && (
-        <div className="callout" data-k="bad" style={{ marginBottom: 16, alignItems: 'center' }} role="alert">
-          <span style={{ flex: 1 }}><b>No se pudo leer el pipeline.</b> {loadError}</span>
-          <button className="btn btn-sm" type="button" onClick={() => { catalog.reload(); state.reload(); steps.reload(); }}>Reintentar</button>
-        </div>
+        <EmptyState kind="error" compact title="No se pudo leer el pipeline"
+          actions={<button className="btn btn-sm" type="button" onClick={() => { catalog.reload(); state.reload(); steps.reload(); }}>Reintentar</button>}>
+          {loadError}
+        </EmptyState>
       )}
 
       <div className="pl-layout">
@@ -143,37 +135,35 @@ export function PipelinePage() {
               onValue={(id, v) => setOpts(o => ({ ...o, [key]: { ...o[key], [id]: v } }))}
               onRun={run} runBlock={runBlock} error={error?.stage === stage ? error : null} errorAction={errorAction || undefined} />
           ) : (
-            <section className="panel"><Empty icon={<Workflow size={20} />} title={loadError ? 'Sin etapas' : 'Cargando etapas'} /></section>
+            <Panel><EmptyState compact kind={loadError ? 'error' : 'loading'} icon={loadError ? <Workflow size={20} aria-hidden="true" /> : undefined} title={loadError ? 'Sin etapas' : 'Cargando etapas'} /></Panel>
           )}
 
           {selRun ? (
             <RunPanel run={selRun} info={info} now={status?.now ?? Date.now()}
               next={nextOf(stage) ? { label: nextOf(stage)!.label } : null} onNext={() => { const n = nextOf(stage); if (n) go(n.stage); }} />
           ) : info && (
-            <section className="panel">
-              <div className="panel-h"><h2>Corrida</h2><span className="sub">{info.label}</span></div>
-              <div className="panel-b"><span className="muted" style={{ fontSize: 13 }}>Sin corridas en esta etapa.</span></div>
-            </section>
+            <Panel title="Corrida" sub={info.label}><span className="muted">Sin corridas en esta etapa: elegí la herramienta y corréla.</span></Panel>
           )}
 
-          <section className="panel" aria-label="Historial de corridas">
-            <div className="panel-h"><h2>Historial</h2><span className="sub">todas las corridas, la última arriba</span>{runs.length > 0 && <span className="end"><span className="badge-count">{runs.length}</span></span>}</div>
-            <div className="panel-b flush" style={{ overflowX: 'auto' }}>
+          <Panel title="Historial" sub="todas las corridas, la última arriba" flush end={runs.length > 0 ? <span className="badge-count">{runs.length}</span> : undefined}>
+            <div style={{ overflowX: 'auto' }}>
               {runs.length ? (
                 <DataTable label="Corridas del pipeline" columns={cols} rows={runs} rowKey={r => r.id} selected={selRun?.id ?? null}
                   onRowClick={r => { setPicked(r.stage); setRunSel(r.id); }} />
               ) : (
-                <Empty icon={<History size={20} />} title={steps.loading ? 'Cargando corridas' : 'Todavía no corriste ningún paso'} />
+                <EmptyState compact kind={steps.loading ? 'loading' : 'empty'} icon={steps.loading ? undefined : <History size={20} aria-hidden="true" />}
+                  title={steps.loading ? 'Cargando corridas' : 'Todavía no corriste ningún paso'}>
+                  {!steps.loading && 'Cada corrida queda acá con su herramienta, el motor, cuánto tardó y qué dejó.'}
+                </EmptyState>
               )}
             </div>
-          </section>
+          </Panel>
         </div>
 
-        <aside className="panel pl-side" aria-label="Riel del pipeline">
-          <div className="panel-h"><h2>Riel</h2><span className="sub">de ventas_sucias.csv al resumen</span></div>
-          <div className="panel-b">
+        <aside className="pl-side" aria-label="Riel del pipeline">
+          <Panel title="Riel" sub="de ventas_sucias.csv al resumen">
             {st ? <Rail st={st} catalog={cat} runs={runs} stage={stage} onPick={go} /> : <span className="muted">{state.error ? 'Sin datos' : 'Cargando…'}</span>}
-          </div>
+          </Panel>
         </aside>
       </div>
     </div>

@@ -1,0 +1,6 @@
+2026-10-23 12:00:01,113 [main] INFO  org.apache.pig.Main - Apache Pig version 0.18.0 (r1891523) compiled Jul 07 2021, 05:45:18
+2026-10-23 12:00:09,456 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler - File concatenation threshold: 100 optimistic? false
+2026-10-23 12:00:12,201 [JobControl] INFO  org.apache.hadoop.yarn.client.api.impl.YarnClientImpl - Submitted application application_1761220000000_0007
+2026-10-23 12:00:12,260 [JobControl] INFO  org.apache.hadoop.mapreduce.Job - The url to track the job: http://localhost:8088/proxy/application_1761220000000_0007/
+2026-10-23 12:00:31,822 [JobControl] INFO  org.apache.hadoop.yarn.client.api.impl.YarnClientImpl - Submitted application application_1761220000000_0008
+2026-10-23 12:00:49,010 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!

@@ -265,7 +265,8 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 ### Fuera del contrato original
 
 - el evento SSE `action` y `GET /api/actions/{id}`: la salida en vivo de cada
-  comando. La interfaz no los usa todavía; están pedidos en el contrato;
+  comando. La interfaz escucha `action` para saber cuándo terminó cada uno;
+  `GET /api/actions/{id}` todavía no lo usa;
 - `POST /api/processes/{id}/start|stop` responde 202 con `{id}` de la acción
   (el contrato no dice qué trae el cuerpo).
 

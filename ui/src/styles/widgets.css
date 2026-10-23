@@ -17,7 +17,7 @@
 .boot-step[aria-current="step"] { background: var(--surface-3); }
 .boot-ico { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; color: var(--text-4); border: 1px solid var(--line); }
 .boot-step[data-s="done"] .boot-ico { background: var(--n-11); border-color: var(--n-11); color: var(--n-0); }
-.boot-step[data-s="running"] .boot-ico { border-color: var(--run); }
+.boot-step[data-s="running"] .boot-ico { border-color: var(--run); color: var(--run-text); }
 .boot-step[data-s="skipped"] .boot-ico { border-style: dashed; }
 .boot-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .boot-step[data-s="pending"] .boot-name, .boot-step[data-s="skipped"] .boot-name { color: var(--text-3); }
@@ -33,8 +33,8 @@
 .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: var(--fs-md); }
 .kv dt { color: var(--text-3); }
 .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.kv a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--n-8); }
-.kv a:hover { border-bottom-color: var(--text-2); }
+.kv a { color: var(--accent-text); text-decoration: none; border-bottom: 1px dotted var(--accent-line); }
+.kv a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .pdetail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .ram-big { font-size: var(--fs-3xl); font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -68,16 +68,19 @@
 .mimic-svg text { font-family: var(--f-sans); fill: var(--text); }
 .mimic-svg .m-sec { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; fill: var(--text-3); }
 .mimic-svg .m-secs { font-size: 11px; fill: var(--text-4); }
-.mimic-svg .m-rect { fill: var(--surface-2); stroke: var(--n-9); stroke-width: 1.5; transition: stroke .25s, fill .25s; }
+.mimic-svg .m-secbg { fill: var(--surface); }
+.mimic-svg .m-rect { fill: var(--surface); stroke: var(--n-8); stroke-width: 1.5; transition: stroke .25s, fill .25s; }
 .mimic-svg .m-box.na .m-rect { fill: none; stroke: var(--n-7); stroke-dasharray: 4 3; stroke-width: 1.2; }
 .mimic-svg .m-box.na text { fill: var(--text-4); }
+.mimic-svg .m-box.na.click .m-rect { pointer-events: all; }
+.mimic-svg .m-box.na.click:hover .m-rect, .mimic-svg .m-box.na.sel .m-rect { stroke: var(--accent); }
 .mimic-svg .m-t { font-size: 13px; font-weight: 600; }
 .mimic-svg .m-s { font-family: var(--f-mono); font-size: 10.5px; fill: var(--text-3); }
-.mimic-svg .m-s.warn { fill: var(--run); }
+.mimic-svg .m-s.warn { fill: var(--run-text); }
 .mimic-svg .m-s.bad { fill: var(--bad-text); }
 .mimic-svg .m-role { font-size: 10px; font-weight: 600; letter-spacing: .08em; fill: var(--text-3); }
-.mimic-svg .m-role.act { fill: var(--ok); }
-.mimic-svg .m-wire { stroke: var(--n-9); stroke-width: 1.5; fill: none; }
+.mimic-svg .m-role.act { fill: var(--ok-text); }
+.mimic-svg .m-wire { stroke: var(--n-8); stroke-width: 1.5; fill: none; }
 .mimic-svg .m-wire.na { stroke: var(--n-7); stroke-dasharray: 4 3; }
 .mimic-svg .m-node { fill: var(--n-10); }
 .mimic-svg .m-wl { font-family: var(--f-mono); font-size: 10px; fill: var(--text-4); }
@@ -89,10 +92,10 @@
 .mimic-svg [data-s="down"] > .m-rect, .mimic-svg [data-s="down"] > .m-unit-r { stroke: var(--bad); fill: var(--bad-bg); }
 .mimic-svg [data-s="start"] > .m-rect, .mimic-svg [data-s="start"] > .m-unit-r { stroke: var(--run); }
 .mimic-svg .click { cursor: pointer; outline: none; }
-.mimic-svg .click:hover > .m-rect, .mimic-svg .click:hover > .m-unit-r { stroke: var(--n-11); }
-.mimic-svg .click:focus-visible > .m-rect, .mimic-svg .click:focus-visible > .m-unit-r { stroke: var(--n-12); stroke-width: 2.2; }
-.mimic-svg .sel > .m-rect, .mimic-svg .sel > .m-unit-r { stroke: var(--n-12); stroke-width: 2.2; }
-.mimic-svg .m-tag rect { fill: var(--ok); }
+.mimic-svg .click:hover > .m-rect, .mimic-svg .click:hover > .m-unit-r { stroke: var(--n-10); }
+.mimic-svg .click:focus-visible > .m-rect, .mimic-svg .click:focus-visible > .m-unit-r { stroke: var(--accent); stroke-width: 2.2; }
+.mimic-svg .sel > .m-rect, .mimic-svg .sel > .m-unit-r { stroke: var(--accent); stroke-width: 2.2; fill: var(--accent-bg); }
+.mimic-svg .m-tag rect { fill: var(--ok-text); }
 .mimic-svg .m-tag text { font-size: 9px; font-weight: 700; letter-spacing: .06em; fill: var(--n-0); }
 .mimic-svg .tag-gone .m-tag rect { fill: var(--bad); }
 .mimic-svg .tag-gone .m-tag text { fill: #fff; }
@@ -101,8 +104,8 @@
 .mimic-svg .m-rack { fill: none; stroke: var(--n-10); stroke-width: 2; }
 .mimic-svg .m-rack-h { fill: var(--n-10); }
 .mimic-svg .m-rack-t { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; fill: var(--n-0); }
-.mimic-svg .m-unit-r { fill: var(--surface-2); stroke: var(--n-7); stroke-width: 1; transition: stroke .25s, fill .25s; }
-.mimic-svg .m-chip { fill: var(--n-12); stroke: transparent; stroke-width: 2; transition: stroke .15s; }
+.mimic-svg .m-unit-r { fill: var(--surface); stroke: var(--n-7); stroke-width: 1; transition: stroke .25s, fill .25s; }
+.mimic-svg .m-chip { fill: var(--n-11); stroke: transparent; stroke-width: 2; transition: stroke .15s; }
 .mimic-svg .m-chip.k-prev { fill: none; stroke: var(--n-9); stroke-dasharray: 3 2; stroke-width: 1; }
 .mimic-svg .m-chip.k-lib { fill: var(--n-6); stroke: var(--n-8); stroke-width: 1; }
 .mimic-svg .m-chip.k-num { fill: var(--n-10); }
@@ -116,10 +119,10 @@
 .mimic-svg .m-chip-t { font-family: var(--f-mono); font-size: 9.5px; font-weight: 500; fill: var(--n-0); pointer-events: none; }
 .mimic-svg .m-chip-t.k-prev, .mimic-svg .m-chip-t.k-lib { fill: var(--text-2); }
 .mimic-svg .m-chip-t.ghost { fill: var(--text-4); text-decoration: line-through; }
-.mimic-svg .m-chip-t.miss { fill: var(--run); }
-.mimic-svg .m-under { fill: var(--run); stroke: var(--surface-2); stroke-width: 1.5; }
+.mimic-svg .m-chip-t.miss { fill: var(--run-text); }
+.mimic-svg .m-under { fill: var(--run); stroke: var(--surface); stroke-width: 1.5; }
 .mimic-svg .m-chipg { cursor: default; }
-.mimic-svg .m-hl { fill: rgba(255, 255, 255, .035); stroke: rgba(255, 255, 255, .18); stroke-width: 1; }
+.mimic-svg .m-hl { fill: rgba(28, 27, 25, .03); stroke: rgba(28, 27, 25, .14); stroke-width: 1; }
 .mimic-svg .m-box, .mimic-svg .m-unit { animation: mIn .3s ease-out; }
 @keyframes mIn { from { opacity: 0; } }
 .mimic-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-3); }
@@ -141,6 +144,24 @@
   .split-main, .split-side { overflow: visible; }
   .split-side { border-left: 0; border-top: 1px solid var(--line-soft); }
 }
-.field.stack { grid-template-columns: minmax(0, 1fr); }
-.field.stack .field-c { justify-content: flex-start; flex-wrap: wrap; }
+.field.wide { grid-template-columns: minmax(0, 1fr); gap: 10px 24px; }
+.field.wide .field-c { justify-content: flex-start; flex-wrap: wrap; align-items: stretch; }
+.field.wide .field-c > .cards { flex: 1; }
+.field-l .helptip { margin-left: -2px; }
+.card-opt[data-locked] { cursor: not-allowed; background: var(--n-2, var(--surface)); box-shadow: none; }
+.card-opt[data-locked] b { color: var(--text-3); }
+.card-opt[data-locked] b small { display: inline-flex; align-items: center; gap: 4px; }
+/* Configuración: antes → después */
+.diffbar { flex-wrap: wrap; gap: 10px 16px; margin: 16px 0 0; padding: 12px 14px; }
+.diffbar-l { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.diffbar-t { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--fs-sm); }
+.diffbar-t svg { color: var(--bad-text); }
+.diff-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.diff-list li { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: var(--fs-sm); }
+.diff-list .diff-k { color: var(--text-3); }
+.diff-list s { color: var(--text-4); font-family: var(--f-mono); font-size: var(--fs-xs); }
+.diff-list b { font-family: var(--f-mono); font-size: var(--fs-xs); font-weight: 600; }
+.diff-list svg { color: var(--text-4); }
+.diffbar-n { color: var(--text-3); font-size: var(--fs-xs); }
+.diffbar-a { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .mimic-svg .m-t { font-size: 12.5px; }

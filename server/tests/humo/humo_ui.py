@@ -13,11 +13,17 @@ de Spark. Después reinicia el cluster con solo HDFS y vuelve a pasar por las
 pantallas: YARN, Datos y ML tienen que avisar que su servicio no está. Al final
 apaga el cluster y recorre todo una vez más con la página abierta: apagado, la
 interfaz no pide lo que contesta 409 (cluster_stopped), así que la consola queda
-sin errores y la red sin ningún 409.
+sin errores y la red sin ningún 409. Por último lo vuelve a iniciar con el botón
+«Iniciar cluster» de la pantalla Cluster y lo apaga.
 
 Deja las capturas en HUMO_SALIDAS/capturas/*.png y el resultado en
 HUMO_SALIDAS/resumen-ui.md. Termina con código 1 si falló algún chequeo.
+
+Cada pantalla nueva suma sus chequeos en un humo_ui_<algo>.py al lado de este: si
+define todo(page, h), solo_hdfs(page, h) o apagado(page, h), se llama al final de
+esa etapa. h es este módulo (Chequeo, ir, captura, pedir, errores_desde…).
 """
+import importlib.util
 import json
 import os
 import re
@@ -36,7 +42,7 @@ import humo_full as hf
 URL = os.environ.get("SANDBOX_URL", "http://localhost:8080").rstrip("/")
 SALIDAS = Path(os.environ.get("HUMO_SALIDAS", "humo-salidas"))
 CAPTURAS = SALIDAS / "capturas"
-PANTALLAS = ["cluster", "hdfs", "yarn", "pipeline", "datos", "ml", "consola", "config"]
+PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "yarn", "pipeline", "datos", "ml", "consola", "config"]
 SOLO_HDFS = hf.SOLO_HDFS
 
 RESULTADOS: list[dict] = []
@@ -115,6 +121,40 @@ def ir(page: Page, pantalla: str) -> None:
     page.wait_for_timeout(2500)         # que lleguen las primeras respuestas de la API
 
 
+def extensiones() -> list:
+    """Los humo_ui_*.py de esta carpeta, cargados como módulos (en orden alfabético)"""
+    mods = []
+    for f in sorted(Path(__file__).parent.glob("humo_ui_*.py")):
+        spec = importlib.util.spec_from_file_location(f.stem, f)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        mods.append(m)
+    return mods
+
+
+EXTENSIONES: list = []
+
+
+def extender(etapa: str, page: Page) -> None:
+    """Llama a etapa(page, h) en cada extensión que la tenga; si una se rompe, queda anotado y sigue"""
+    yo = sys.modules[__name__]
+    for m in EXTENSIONES:
+        f = getattr(m, etapa, None)
+        if f:
+            with Chequeo(f"{m.__name__}: etapa {etapa} completa"):
+                f(page, yo)
+
+
+def inicio_dice(page: Page, c: "Chequeo", *textos: str) -> None:
+    """Inicio muestra el estado del cluster y las tarjetas de qué se puede hacer"""
+    ir(page, "inicio")
+    hero = page.locator(".hero").inner_text()
+    c.detalle = hero[:160].replace("\n", " / ")
+    for t in textos:
+        assert t in hero, (t, hero)
+    expect(page.locator(".capcard")).not_to_have_count(0)
+
+
 def errores_desde(n: int) -> list[dict]:
     return CONSOLA[n:]
 
@@ -132,6 +172,9 @@ def recorrer(page: Page, sufijo: str) -> None:
 
 def todo(page: Page) -> None:
     recorrer(page, "todo")
+    with Chequeo("todo: Inicio dice que el cluster anda y tiene tarjetas listas") as c:
+        inicio_dice(page, c, "andando")
+        expect(page.locator('.capcard[data-k="ready"]')).not_to_have_count(0)
 
     with Chequeo("todo: pipeline, Ingesta con put desde la interfaz") as c:
         n = len(CONSOLA)
@@ -196,6 +239,7 @@ def todo(page: Page) -> None:
             captura(page, f"todo-yarn-{nombre}")
             c.detalle = f"{app['id']} {app['name']}"
             assert not errores_desde(n), errores_desde(n)
+    extender("todo", page)
 
 
 def solo_hdfs(page: Page) -> None:
@@ -216,6 +260,12 @@ def solo_hdfs(page: Page) -> None:
         c.detalle = texto[:200].replace("\n", " / ")
         codigo, r = pedir("GET", "/api/yarn/apps")
         assert codigo == 503 and r["code"] == "service_down", (codigo, r)
+    with Chequeo("solo HDFS: en Inicio, Hive figura no disponible con su arreglo") as c:
+        inicio_dice(page, c)
+        hive = page.locator(".capcard", has=page.get_by_role("heading", name="Consultas en Hive"))
+        expect(hive).to_have_attribute("data-k", "blocked")
+        expect(hive.get_by_role("button")).not_to_have_text("Abrir")
+    extender("solo_hdfs", page)
 
 
 def apagado(page: Page) -> None:
@@ -236,6 +286,39 @@ def apagado(page: Page) -> None:
         c.detalle = f"{len(nuevos)} respuestas 409, {len(errores_desde(n))} errores de consola" + (
             f": {sorted({r['url'] for r in nuevos})}" if nuevos else "")
         assert not nuevos and not errores_desde(n), (nuevos[:5], errores_desde(n)[:3])
+    with Chequeo("apagado: Inicio ofrece iniciar el cluster") as c:
+        inicio_dice(page, c, "apagado")
+        expect(page.locator(".hero").get_by_role("button", name="Iniciar cluster")).to_be_visible()
+    extender("apagado", page)
+
+    with Chequeo("apagado: Iniciar desde la interfaz, en Cluster") as c:
+        n = len(CONSOLA)
+        ir(page, "cluster")
+        # La barra de arriba tiene los mismos botones: los de la cabecera de Cluster
+        cabecera = page.locator(".page-head")
+        boton = cabecera.get_by_role("button", name="Iniciar cluster", exact=True)
+        expect(boton).to_be_enabled(timeout=10_000)
+        boton.click()
+        t0 = time.time()
+
+        def listo():
+            s = hf.estado()
+            if s["phase"] == "stopped" and s.get("boot") and any(p["state"] == "failed" for p in s["boot"]["steps"]):
+                raise SystemExit(f"el arranque falló: {[p['name'] for p in s['boot']['steps'] if p['state'] == 'failed']}")
+            return s if s["phase"] == "running" else None
+        try:   # SystemExit: hf.esperar no lo toma como "todavía no"
+            s = hf.esperar(listo, hf.ARRANQUE, "running", 3)
+        except SystemExit as e:
+            raise AssertionError(str(e)) from None
+        expect(cabecera.get_by_role("button", name="Detener", exact=True)).to_be_visible(timeout=20_000)
+        captura(page, "apagado-iniciado-desde-la-interfaz")
+        c.detalle = f"{round(time.time() - t0, 1)} s; servicios: {s['config']['services']}"
+        assert all(p["state"] in ("done", "skipped") for p in s["boot"]["steps"])
+        assert not errores_desde(n), errores_desde(n)
+    page.goto("about:blank")
+    hf.apagar("después de iniciar desde la interfaz")
+    RESULTADOS.extend(hf.RESULTADOS)
+    hf.RESULTADOS.clear()
 
 
 def resumen() -> int:
@@ -260,6 +343,7 @@ def resumen() -> int:
 
 def main() -> int:
     esperar(lambda: pedir("GET", "/api/status")[0] == 200, 60, "el servidor")
+    EXTENSIONES.extend(extensiones())
     try:
         with sync_playwright() as pw:
             nav = pw.chromium.launch()

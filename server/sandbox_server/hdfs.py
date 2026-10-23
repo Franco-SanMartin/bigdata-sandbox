@@ -41,7 +41,7 @@ from collections import deque
 from pathlib import Path
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import config as cfg
@@ -57,6 +57,11 @@ PREVIEW_BYTES = 64 * 1024
 PREVIEW_ROWS = 10
 MAX_UPLOAD_MB = int(os.environ.get("SANDBOX_MAX_UPLOAD_MB", "2048"))
 COPYING = "._COPYING_"   # lo que agrega hdfs dfs -put mientras escribe
+CAT_DEFAULT = 64 * 1024
+CAT_MAX = 1024 * 1024       # tope de un tramo de /api/hdfs/cat
+# Carpetas que arma el arranque y usan los servicios: no se mueven
+NO_MOVE = {"/", "/tmp", "/user", "/user/root", "/user/hive", "/user/hive/warehouse", "/apps", "/apps/tez",
+           "/apps/spark", "/spark-logs"}
 
 # Ejemplos de la imagen: archivo en /datos, cómo se genera si no está, filas y
 # dónde lo deja putExample. Los generadores son los de datos/ejemplos.
@@ -315,6 +320,49 @@ def local_preview(p: Path) -> dict | None:
         return None
 
 
+def bounded_int(raw: object, name: str, lo: int, hi: int, default: int) -> int:
+    """Entero de un parámetro (query o JSON) dentro de [lo, hi]."""
+    if raw in (None, ""):
+        return default
+    if isinstance(raw, bool):
+        raise ApiError(f"{name} tiene que ser un número entero", "invalid")
+    try:
+        v = int(str(raw).strip()) if not isinstance(raw, int) else raw
+    except ValueError:
+        raise ApiError(f"{name} tiene que ser un número entero", "invalid") from None
+    if not lo <= v <= hi:
+        raise ApiError(f"{name} va de {lo} a {hi}", "invalid")
+    return v
+
+
+def cat_chunk(data: bytes, offset: int, total: int) -> dict:
+    """Un tramo leído con OPEN&offset&length: si quedó contenido después, se corta
+    en el último salto de línea (así no queda una línea ni un carácter a medias) y
+    length dice cuántos bytes se usaron, para pedir el tramo siguiente."""
+    binary = b"\0" in data
+    used = data
+    if not binary and offset + len(data) < total:
+        cut = data.rfind(b"\n")
+        if cut >= 0:
+            used = data[: cut + 1]
+    return {"offset": offset, "length": len(used), "totalBytes": total,
+            "text": "" if binary else used.decode("utf-8", "replace"),
+            "truncated": offset + len(used) < total, "binary": binary}
+
+
+def cat_command(path: str, offset: int, length: int) -> str:
+    q = shlex.quote(path)
+    if offset:
+        return f"hdfs dfs -cat {q} | tail -c +{offset + 1} | head -c {length}"
+    return f"hdfs dfs -cat {q} | head -c {length}"
+
+
+def attachment(name: str) -> str:
+    """Content-Disposition para bajar un archivo con su nombre (también con tildes)."""
+    ascii_name = re.sub(r'[^A-Za-z0-9._-]+', "_", name) or "archivo"
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{urllib.parse.quote(name, safe='')}"
+
+
 # ---------------------------------------------------------------------------
 # HTTP sin JVM
 # ---------------------------------------------------------------------------
@@ -335,6 +383,17 @@ def http_get(url: str, timeout: float = 5.0, limit: int | None = None) -> tuple[
         return 0, b""
 
 
+def http_stream(url: str, chunk: int = 1 << 20):
+    """Generador con el cuerpo de url, de a chunk bytes (para bajar archivos
+    sin tenerlos enteros en memoria). Sigue el 307 del NameNode al DataNode."""
+    with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 (siempre localhost)
+        while True:
+            b = r.read(chunk)
+            if not b:
+                break
+            yield b
+
+
 # ---------------------------------------------------------------------------
 # El módulo
 # ---------------------------------------------------------------------------
@@ -347,6 +406,7 @@ class Hdfs:
         self.bus = bus
         # Se pueden reemplazar en los tests
         self.http = http_get
+        self.stream = http_stream
         # Subidas en curso: ruta final -> id de la acción
         self.uploads: dict[str, str] = {}
         # Última ubicación conocida de cada bloque (id -> DataNodes) y a qué archivo es
@@ -528,7 +588,14 @@ class Hdfs:
     async def files(self) -> list[dict]:
         if self.c.phase != "running" or not self.c.hdfs.get("available"):
             return []
-        files = [dict(f) for f in await self.fsck_all()]
+        try:
+            files = [dict(f) for f in await self.fsck_all()]
+        except ApiError:
+            # El cluster se apagó mientras corría el fsck (la interfaz sigue
+            # sondeando un instante): no es un error, ya no hay archivos que ver.
+            if self.c.phase != "running" or not self.c.hdfs.get("available"):
+                return []
+            raise
         # Fecha de modificación: un LISTSTATUS por carpeta (WebHDFS, sin JVM)
         mtimes: dict[str, int] = {}
         for d in sorted({parent_of(f["path"]) or "/" for f in files})[:100]:
@@ -890,6 +957,97 @@ class Hdfs:
             before=self.c.hdfs_snapshot, after=self.c.hdfs_snapshot, process_id=f"dn{n}"))
         return {"id": run.id, "dataNode": n}
 
+    # ------------------------------------------------- leer, bajar y mover
+
+    async def _file_status(self, path: str) -> dict:
+        st = await self.status_of(path)
+        if st is None:
+            raise ApiError(f"No existe el archivo {path}", "not_found")
+        if st.get("type") == "DIRECTORY":
+            raise ApiError(f"{path} es una carpeta: abrila en el árbol", "invalid")
+        return st
+
+    def _open_url(self, path: str, offset: int = 0, length: int | None = None) -> str:
+        q = {"op": "OPEN", "user.name": "root"}
+        if offset:
+            q["offset"] = str(offset)
+        if length is not None:
+            q["length"] = str(length)
+        return f"{self._base()}{urllib.parse.quote(path)}?{urllib.parse.urlencode(q)}"
+
+    async def cat(self, raw: object, offset_raw: object = None, length_raw: object = None) -> dict:
+        """Un tramo del archivo (hdfs dfs -cat, por WebHDFS OPEN con offset y length)."""
+        self.c.need_hdfs()
+        path = clean(raw)
+        offset = bounded_int(offset_raw, "offset", 0, 1 << 50, 0)
+        length = bounded_int(length_raw, "length", 1, CAT_MAX, CAT_DEFAULT)
+        st = await self._file_status(path)
+        total = int(st.get("length", 0))
+        if offset > total:
+            raise ApiError(f"offset {offset} pasa el final del archivo ({total} bytes)", "invalid")
+        data = b""
+        if total and offset < total:
+            status, data = await asyncio.to_thread(self.http, self._open_url(path, offset, length), 15.0, length)
+            if status != 200:
+                raise ApiError(f"No se pudo leer {path} (¿bloques perdidos?)", "failed")
+            data = data[:length]
+        out = cat_chunk(data, offset, total)
+        return {"path": path, **out, "command": cat_command(path, offset, out["length"] or length)}
+
+    async def download(self, raw: object) -> tuple[str, int, object]:
+        """(nombre, bytes, generador del contenido) para bajar el archivo entero."""
+        self.c.need_hdfs()
+        path = clean(raw)
+        st = await self._file_status(path)
+        size = int(st.get("length", 0))
+        self.bus.log("Vos", "info", f"Bajar {name_of(path)}", command=f"hdfs dfs -get {shlex.quote(path)} .",
+                     input=f"{path} · {fmt_mb(mb(size))}",
+                     action="El NameNode dice en qué DataNodes está cada bloque y se leen en orden (WebHDFS OPEN)",
+                     output="El archivo entero, a tu compu")
+        return name_of(path), size, self.stream(self._open_url(path))
+
+    async def move(self, src_raw: object, dst_raw: object) -> dict:
+        """hdfs dfs -mv: renombra o mueve (si el destino es una carpeta, va adentro)."""
+        self.c.need_hdfs()
+        src, dst = clean(src_raw), clean(dst_raw)
+        if src in NO_MOVE:
+            raise ApiError(f"{src} es una carpeta del sistema: no se mueve", "invalid")
+        if src == dst:
+            raise ApiError("El origen y el destino son la misma ruta", "invalid")
+        st = await self.status_of(src)
+        if st is None:
+            raise ApiError(f"No existe {src}", "not_found")
+        if any(inside(u, src) for u in self.uploads):
+            raise ApiError(f"Hay un archivo escribiéndose en {src}", "busy")
+        dst_st = await self.status_of(dst)
+        final = dst
+        if dst_st is not None:
+            if dst_st.get("type") != "DIRECTORY":
+                raise ApiError(f"Ya existe {dst}: elegí otro nombre", "invalid")
+            final = dst.rstrip("/") + "/" + name_of(src) if dst != "/" else "/" + name_of(src)
+            if await self.status_of(final) is not None:
+                raise ApiError(f"Ya existe {final}: elegí otro nombre", "invalid")
+        else:
+            up = parent_of(dst) or "/"
+            up_st = await self.status_of(up)
+            if up_st is None or up_st.get("type") != "DIRECTORY":
+                raise ApiError(f"No existe la carpeta {up}: creala primero", "invalid")
+        if final == src or inside(final, src):
+            raise ApiError(f"No se puede mover {src} adentro de sí misma", "invalid")
+        is_dir = st.get("type") == "DIRECTORY"
+        cmd = ["hdfs", "dfs", "-mv", src, dst]
+        same_dir = parent_of(final) == parent_of(src)
+        trace = {"command": shlex.join(cmd), "input": f"{src}" + ("" if is_dir else f" · {fmt_mb(mb(int(st.get('length', 0))))}"),
+                 "action": "Solo cambia los metadatos del NameNode: los bloques quedan en los mismos DataNodes, "
+                           "no se copia nada",
+                 "output": f"{'Renombrado' if same_dir else 'Movido'}: ahora es {final}", "engine": "hdfs"}
+        run = await self._run_now(Action(f"{'Renombrar' if same_dir else 'Mover'} {src}", cmd, input=trace["input"],
+                                         action=trace["action"], after=lambda: _const(trace["output"])))
+        self.bus.publish("hdfs", {"path": parent_of(src) or "/"})
+        self.bus.publish("hdfs", {"path": parent_of(final) or "/"})
+        # id es el de la acción (GET /api/actions/:id); path, dónde quedó (con destino carpeta, adentro)
+        return {"id": run.id, "state": "done", "trace": trace, "path": final}
+
     # ---------------------------------------------------------------- rutas
 
     def routes(self) -> list[Route]:
@@ -943,6 +1101,19 @@ class Hdfs:
         async def replication(_: Request) -> JSONResponse:
             return JSONResponse(await self.replication())
 
+        async def cat(request: Request) -> JSONResponse:
+            q = request.query_params
+            return JSONResponse(await self.cat(q.get("path"), q.get("offset"), q.get("length")))
+
+        async def download(request: Request) -> StreamingResponse:
+            name, size, body = await self.download(request.query_params.get("path"))
+            return StreamingResponse(body, media_type="application/octet-stream",
+                                     headers={"Content-Disposition": attachment(name), "Content-Length": str(size)})
+
+        async def move(request: Request) -> JSONResponse:
+            body = await _json(request)
+            return JSONResponse(await self.move(body.get("from"), body.get("to")))
+
         return [
             Route("/api/hdfs/datanodes", datanodes, methods=["GET"]),
             Route("/api/hdfs/datanodes", add_dn, methods=["POST"]),
@@ -956,6 +1127,9 @@ class Hdfs:
             Route("/api/hdfs/mkdir", mkdir, methods=["POST"]),
             Route("/api/hdfs/fsck", fsck, methods=["GET"]),
             Route("/api/hdfs/replication", replication, methods=["GET"]),
+            Route("/api/hdfs/cat", cat, methods=["GET"]),
+            Route("/api/hdfs/download", download, methods=["GET"]),
+            Route("/api/hdfs/move", move, methods=["POST"]),
         ]
 
     async def _upload_form(self, request: Request) -> dict:

@@ -34,8 +34,10 @@ export function PlanTree({ plan }: { plan: QueryPlan }) {
     <div>
       <div className="plan-sum">
         <EngineTag engine={plan.engine} />
-        <span>{plan.yarnStages ? `Lanza un trabajo en YARN con ${plan.yarnStages} etapas` : 'Sin trabajo en YARN: lo resuelve el motor en su proceso'}</span>
-        <span>{nf(plan.nodes.length)} operadores</span>
+        <span>{!plan.yarnStages ? 'Sin trabajo en YARN: lo resuelve el motor en su proceso'
+          : plan.source === 'pig' ? `Lanza ${plan.yarnStages === 1 ? 'un trabajo' : `${plan.yarnStages} trabajos`} MapReduce en YARN, uno detrás del otro`
+            : `Lanza un trabajo en YARN con ${plan.yarnStages} ${plan.yarnStages === 1 ? 'etapa' : 'etapas'}`}</span>
+        <span>{nf(plan.nodes.length)} {plan.nodes.length === 1 ? (plan.source === 'pig' ? 'trabajo' : 'operador') : (plan.source === 'pig' ? 'trabajos' : 'operadores')}</span>
       </div>
       <ul className="plan" aria-label="Plan de la consulta">
         {lines.map(({ node, prefix }) => (

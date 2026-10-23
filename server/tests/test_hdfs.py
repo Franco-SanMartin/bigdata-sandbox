@@ -205,6 +205,26 @@ def test_archivos_y_detalle(settings, tmp_path, fake_hdfs):
     asyncio.run(main())
 
 
+def test_archivos_con_el_cluster_apagandose(settings, tmp_path, fake_hdfs):
+    """Si el cluster se apaga mientras corre el fsck, la lista vuelve vacía (no 500)."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        apagar = [True]
+
+        async def apagando(*_a, **_k):
+            if apagar[0]:
+                cl.phase = "stopping"
+            return 1, "", "Connection refused"
+        h.exec = apagando
+        assert await h.files() == []
+        # Con el cluster en marcha, la misma falla sí es un error
+        cl.phase, apagar[0] = "running", False
+        with pytest.raises(ApiError) as e:
+            await h.files()
+        assert e.value.code == "failed"
+    asyncio.run(main())
+
+
 def test_transferencias_entre_dos_fsck(settings, tmp_path, fake_hdfs, monkeypatch):
     async def main():
         cl, h, bus = make(settings, tmp_path)
@@ -455,3 +475,167 @@ def test_fsck_que_todavia_lista_al_datanode_muerto(settings, tmp_path, fake_hdfs
         assert files["/user/root/humo/humo.csv"]["blocks"][0]["locations"] == [1]
         assert files["/user/root/humo/humo.csv"]["blocks"][0]["stale"] == [2]
     asyncio.run(main())
+
+
+# ------------------------------------------------------- ver, bajar y mover
+
+
+class Rango(WebHdfs):
+    """OPEN respetando offset y length, como el DataNode."""
+
+    def __init__(self, content: bytes):
+        super().__init__()
+        self.content = content
+        self.urls: list[str] = []
+
+    def __call__(self, url, timeout=5.0, limit=None):
+        u = urllib.parse.urlparse(url)
+        q = urllib.parse.parse_qs(u.query)
+        if q["op"][0] == "GETFILESTATUS" and u.path.endswith("humo.csv"):
+            doc = json.loads((FIX / "webhdfs_status_archivo.json").read_bytes())
+            doc["FileStatus"]["length"] = len(self.content)
+            return 200, json.dumps(doc).encode()
+        if q["op"][0] == "OPEN":
+            self.urls.append(url)
+            off = int(q.get("offset", ["0"])[0])
+            n = int(q.get("length", [str(len(self.content))])[0])
+            return 200, self.content[off:off + n]
+        return super().__call__(url, timeout, limit)
+
+
+def test_cat_por_tramos(settings, tmp_path):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        lineas = b"".join(f"{i},fila {i}\n".encode() for i in range(1000))
+        h.http = Rango(lineas)
+        r = await h.cat("/user/root/humo/humo.csv", None, "100")
+        # Corta en el último salto de línea: el tramo siguiente arranca en una línea entera
+        assert r["truncated"] and r["text"].endswith("\n") and r["length"] <= 100 and not r["binary"]
+        assert r["totalBytes"] == len(lineas) and r["offset"] == 0
+        assert r["command"] == "hdfs dfs -cat /user/root/humo/humo.csv | head -c " + str(r["length"])
+        r2 = await h.cat("/user/root/humo/humo.csv", r["length"], 1 << 20)
+        assert r["text"] + r2["text"] == lineas.decode() and not r2["truncated"]
+        assert "tail -c +" in r2["command"] and "offset=" in h.http.urls[-1]
+        # Binario: no se manda texto
+        h.http = Rango(b"PAR1\0\0\x01\x02")
+        r = await h.cat("/user/root/humo/humo.csv")
+        assert r["binary"] and r["text"] == ""
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("off,length", [("-1", None), (None, "0"), (None, str(2 << 20)), ("abc", None),
+                                        (None, "1;rm -rf /"), ("99999999", None)])
+def test_cat_valida_numeros(settings, tmp_path, off, length):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        with pytest.raises(ApiError) as e:
+            await h.cat("/user/root/humo/humo.csv", off, length)
+        assert e.value.code == "invalid"
+    asyncio.run(main())
+
+
+def test_cat_errores(settings, tmp_path):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        with pytest.raises(ApiError) as e:
+            await h.cat("/user/root/humo")
+        assert e.value.code == "invalid"
+        with pytest.raises(ApiError) as e:
+            await h.cat("/nada.txt")
+        assert e.value.code == "not_found"
+        for bad in ("/x\n", "/x\0", "hdfs://otro:9000/../../etc/passwd", "", None, 5):
+            with pytest.raises(ApiError):
+                await h.cat(bad)
+        cl.phase = "stopped"
+        with pytest.raises(ApiError) as e:
+            await h.cat("/user/root/humo/humo.csv")
+        assert e.value.code == "cluster_stopped"
+    asyncio.run(main())
+
+
+def test_mover(settings, tmp_path, fake_hdfs):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        # A una ruta nueva en la misma carpeta: renombrar
+        r = await h.move("/user/root/humo/humo.csv", "/user/root/humo/ventas.csv")
+        assert r["state"] == "done" and r["trace"]["command"] == \
+            "hdfs dfs -mv /user/root/humo/humo.csv /user/root/humo/ventas.csv"
+        assert "Renombrado" in r["trace"]["output"] and r["path"] == "/user/root/humo/ventas.csv"
+        assert comandos(fake_hdfs)[-1] == "dfs -mv /user/root/humo/humo.csv /user/root/humo/ventas.csv"
+        # A una carpeta que existe: va adentro (y el nombre final no puede existir)
+        r = await h.move("/user/root/humo/humo.csv", "/user/root")
+        assert "/user/root/humo.csv" in r["trace"]["output"]
+        assert r["path"] == "/user/root/humo.csv"
+        # Un nombre con ; o $( ) es un argumento más (sin shell): no se ejecuta nada
+        r = await h.move("/user/root/humo/humo.csv", "/user/root/humo/a;touch pwned$(id).csv")
+        assert comandos(fake_hdfs)[-1] == "dfs -mv /user/root/humo/humo.csv /user/root/humo/a;touch pwned$(id).csv"
+        assert not (tmp_path / "pwned").exists()
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("src,dst,code", [
+    ("/", "/x", "invalid"), ("/tmp", "/user/root/t", "invalid"), ("/user/hive/warehouse", "/user/root/w", "invalid"),
+    ("/user/root", "/user/r2", "invalid"), ("/user/root/humo", "/user/root/humo/adentro", "invalid"),
+    ("/user/root/humo", "/user/root/humo", "invalid"), ("/user/root/humo/humo.csv", "/user/root/humo/humo.csv", "invalid"),
+    ("/user/root/nada", "/user/root/x", "not_found"),
+    ("/user/root/humo/humo.csv", "/no/existe/x.csv", "invalid"),
+    ("/user/root/humo", "/user/root/humo/humo.csv", "invalid"),
+    ("/user/root/humo/../../../tmp", "/user/root/x", "invalid"),
+])
+def test_mover_rechaza(settings, tmp_path, fake_hdfs, src, dst, code):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        with pytest.raises(ApiError) as e:
+            await h.move(src, dst)
+        assert e.value.code == code
+        assert not any(c.startswith("dfs -mv") for c in comandos(fake_hdfs))
+    asyncio.run(main())
+
+
+def test_mover_con_subida_en_curso(settings, tmp_path, fake_hdfs):
+    async def main():
+        cl, h, bus = make(settings, tmp_path)
+        h.uploads["/user/root/humo/grande.bin"] = {}
+        with pytest.raises(ApiError) as e:
+            await h.move("/user/root/humo", "/user/root/otra")
+        assert e.value.code == "busy"
+    asyncio.run(main())
+
+
+def test_rutas_ver_bajar_mover(settings, tmp_path, fake_hdfs):
+    ui = tmp_path / "ui"
+    ui.mkdir()
+    (ui / "index.html").write_text("<!doctype html>")
+    datos = tmp_path / "datos"
+    (datos / "ejemplos").mkdir(parents=True)
+    settings.datos_dir = datos
+    with TestClient(build_app(settings, ui_dir=ui)) as c:
+        app = c.app
+        cl, h = app.state.cluster, app.state.hdfs
+        cl.phase, cl.hdfs, cl.nn_active_port = "running", dict(RUNNING), 9870
+        cl.config = {**cl.config, **BASE}
+        cl.nn_jmx = fixture_json("nn_jmx.json")
+        contenido = "fecha,producto\n2026-01-01,ñandú\n".encode() * 3
+        h.http = Rango(contenido)
+        h.stream = lambda url: iter([contenido[:10], contenido[10:]])
+        r = c.get("/api/hdfs/cat", params={"path": "/user/root/humo/humo.csv"})
+        assert r.status_code == 200 and r.json()["text"] == contenido.decode()
+        r = c.get("/api/hdfs/cat", params={"path": "/user/root/humo/humo.csv", "length": "9999999"})
+        assert r.status_code == 400 and r.json()["code"] == "invalid"
+        r = c.get("/api/hdfs/download", params={"path": "/user/root/humo/humo.csv"})
+        assert r.status_code == 200 and r.content == contenido
+        assert r.headers["content-length"] == str(len(contenido))
+        assert r.headers["content-disposition"].startswith('attachment; filename="humo.csv"')
+        r = c.get("/api/hdfs/download", params={"path": "/user/root/humo"})
+        assert r.status_code == 400
+        r = c.get("/api/hdfs/download", params={"path": "/nada"})
+        assert r.status_code == 404
+        r = c.post("/api/hdfs/move", json={"from": "/user/root/humo/humo.csv", "to": "/user/root/humo/b.csv"})
+        assert r.status_code == 200 and r.json()["state"] == "done"
+        r = c.post("/api/hdfs/move", json={"from": "/", "to": "/x"})
+        assert r.status_code == 400
+
+
+def test_nombre_para_bajar():
+    assert H.attachment("ñandú \"x\".csv") == \
+        "attachment; filename=\"_and_x_.csv\"; filename*=UTF-8''%C3%B1and%C3%BA%20%22x%22.csv"

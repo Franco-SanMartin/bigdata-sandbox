@@ -9,7 +9,11 @@ import { CodeBlock } from '../components/ui';
 
 export function ConfirmHost() {
   const r = confirmReq.use();
+  const [typed, setTyped] = useState('');
+  useEffect(() => { setTyped(''); }, [r]);
   const close = (ok: boolean) => { r?.resolve(ok); confirmReq.set(null); };
+  // Lo irreversible (borrar el volumen, una carpeta entera) pide escribir el nombre antes de confirmar
+  const locked = !!r?.typeToConfirm && typed.trim() !== r.typeToConfirm;
   return (
     <AlertDialog.Root open={!!r} onOpenChange={o => { if (!o) close(false); }}>
       <AlertDialog.Portal>
@@ -19,10 +23,15 @@ export function ConfirmHost() {
             <AlertDialog.Title asChild><h2>{r.title}</h2></AlertDialog.Title>
             <AlertDialog.Description asChild><p>{r.description}</p></AlertDialog.Description>
             {r.facts && <dl className="facts">{r.facts.map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
+            {r.typeToConfirm && <label className="confirm-type">
+              <span>Para confirmar, escribí <code>{r.typeToConfirm}</code></span>
+              <input className="input mono" value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" spellCheck={false}
+                onKeyDown={e => { if (e.key === 'Enter' && !locked) close(true); }} />
+            </label>}
           </div>
           <div className="dialog-f">
             <AlertDialog.Cancel asChild><button className="btn" type="button">Cancelar</button></AlertDialog.Cancel>
-            <AlertDialog.Action asChild><button className={`btn ${r.danger ? 'btn-danger-solid' : 'btn-primary'}`} type="button" onClick={() => close(true)}>{r.confirmLabel}</button></AlertDialog.Action>
+            <AlertDialog.Action asChild><button className={`btn ${r.danger ? 'btn-danger-solid' : 'btn-primary'}`} type="button" disabled={locked} onClick={e => { if (locked) { e.preventDefault(); return; } close(true); }}>{r.confirmLabel}</button></AlertDialog.Action>
           </div>
         </AlertDialog.Content>}
       </AlertDialog.Portal>
@@ -43,6 +52,7 @@ export function Toaster() {
             <Toast.Title className="toast-t">{t.title}</Toast.Title>
             <Toast.Close asChild><button className="btn btn-sm btn-icon btn-ghost" aria-label="Cerrar" type="button"><X size={14} /></button></Toast.Close>
             {t.description && <Toast.Description className="toast-d">{t.description}</Toast.Description>}
+            {t.action && <Toast.Action asChild altText={t.action.label}><button className="btn btn-sm toast-a" type="button" onClick={() => { t.action!.run(); dismissToast(t.id); }}>{t.action.label}</button></Toast.Action>}
           </Toast.Root>
         );
       })}

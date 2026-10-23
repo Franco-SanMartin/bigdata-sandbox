@@ -106,7 +106,7 @@ function Confusion({ c }: { c: NonNullable<ModelRun['confusion']> }) {
   return (
     <div>
       <h3 className="md-t">matriz de confusión <span className="muted">· {nf(total)} filas de prueba · {nf(ok / Math.max(1, total) * 100, 1)} % en la diagonal</span></h3>
-      <table className="cm" aria-label="Matriz de confusión">
+      <table className="ml-cm" aria-label="Matriz de confusión">
         <thead>
           <tr><th className="ax" colSpan={2} rowSpan={2} /><th className="ax" colSpan={c.labels.length}>predijo</th></tr>
           <tr>{c.labels.map(l => <th key={l}>{l}</th>)}</tr>

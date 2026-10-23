@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -16,6 +17,8 @@ export default defineConfig({
       },
     },
   },
+  // Las pruebas leen el CSS de las pantallas como texto para buscar clases repetidas
+  test: { css: { include: [/\/src\/(pages|styles)\/.+\.css/] } },
   server: {
     port: 5173,
     // Con el backend corriendo: npm run dev y las llamadas a /api van al contenedor

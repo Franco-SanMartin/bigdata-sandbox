@@ -90,14 +90,23 @@ it starts by itself, with the usual variables (`DATANODES`, `REPLICATION`,
 anything, there's the [demo](https://franki-678.github.io/bigdata-sandbox/demo/)
 (a cluster simulated in the browser).
 
+The interface opens on **Inicio** (home): the cluster's state and what you
+can do now, with what isn't available yet, why, and how to enable it. Every
+screen (HDFS, Trabajos/jobs, Consultas/queries, Pipeline, Machine Learning,
+Cluster) says, while the cluster is off or starting, what you'll be able to do
+and how long is left; disabled buttons say why. **Prácticas** (practice) has
+guides 03 to 10 step by step, checked against the cluster. The interface is in
+Spanish.
+
 | | |
 |---|---|
-| ![Pipeline: ingestion with hdfs dfs -put, the run and the rail of the six stages](docs/capturas/pipeline.png) | ![YARN: the NodeManager, the queue and the MapReduce, Tez and Spark jobs](docs/capturas/yarn.png) |
-| **Pipeline**: from a dirty CSV to a summary and a model, choosing the tool for each stage | **YARN**: memory, containers and each job with its engine |
-| ![Machine Learning: training runs with scikit-learn and Spark MLlib, and a model's detail](docs/capturas/ml.png) | |
-| **Machine Learning**: the same model with scikit-learn or with Spark MLlib, compared | |
+| ![Home: the cluster's state and what you can do now, with what's missing and how to enable it](docs/capturas/inicio.png) | ![Jobs: a finished wordcount and the MapReduce, Tez and Spark templates](docs/capturas/yarn.png) |
+| **Home**: what you can and can't do now, with the reason and the fix | **Jobs**: templates with parameters, progress, containers and logs |
+| ![Pipeline: ingestion done and the ETL stage with its tools](docs/capturas/pipeline.png) | ![Machine Learning: a decision tree trained with scikit-learn and its detail](docs/capturas/ml.png) |
+| **Pipeline**: from a dirty CSV to a summary and a model, choosing the tool for each stage | **Machine Learning**: the same model with scikit-learn or with Spark MLlib, compared |
 
-The screenshots come from the CI smoke test (`server/tests/humo/humo_ui.py`),
+The screenshots come from the [demo](https://franki-678.github.io/bigdata-sandbox/demo/);
+the CI smoke test (`server/tests/humo/humo_ui.py`) takes the same screens
 against the real image.
 
 ### What's in `base`

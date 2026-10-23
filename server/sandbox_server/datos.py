@@ -1,4 +1,4 @@
-"""Datos: catálogo, esquema, consultas y planes de Hive, MySQL y MongoDB
+"""Datos: catálogo, esquema, consultas y planes de Hive, MySQL, MongoDB y Pig
 (rutas /api/data/... de ui/API.md).
 
 De dónde sale cada cosa (siempre el cliente de línea de comandos de la imagen,
@@ -14,6 +14,11 @@ el mismo que usarías en la terminal):
   contadores Handler_read_* de la sesión.
 - MongoDB: mongosh --quiet; el cursor se recorre hasta MAX_ROWS documentos y se
   imprime en EJSON. Plan con explain("executionStats").
+- Pig: el script va a un archivo temporal y corre con pig -x mapreduce -f (sus
+  trabajos MapReduce van a YARN). Antes de cada DUMP se agrega un DESCRIBE del
+  mismo alias: así la salida trae el esquema (los nombres de las columnas) justo
+  antes de las filas. Se rechazan sh, exec, run, los comandos entre comillas
+  invertidas (STREAM, DEFINE `…`, %declare `…`) y los borrados fuera de /user.
 
 Varias consultas en un solo llamado se separan con SELECT '@@x@@' AS marca:
 cada cliente arranca una JVM (beeline) o un proceso, así que se junta todo lo
@@ -23,8 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import posixpath
 import re
 import shlex
+import shutil
+import signal
+import tempfile
 import time
 
 from starlette.requests import Request
@@ -40,7 +50,9 @@ HIVE_URL = "jdbc:hive2://localhost:10000"
 MAX_ROWS = 1000
 SAMPLE_ROWS = 5
 CACHE_S = 20.0
-PROC = {"hive": ("hiveserver2", "HiveServer2"), "mysql": ("mysql", "MySQL"), "mongodb": ("mongodb", "MongoDB")}
+PROC = {"hive": ("hiveserver2", "HiveServer2"), "mysql": ("mysql", "MySQL"), "mongodb": ("mongodb", "MongoDB"),
+        "pig": ("rm", "YARN")}
+PIG_TIMEOUT = 600
 SYSTEM_DBS = ("information_schema", "mysql", "performance_schema", "sys")
 MONGO_SYSTEM = ("admin", "config", "local")
 MARK = re.compile(r"^@@(.+)@@$")
@@ -467,10 +479,335 @@ def parse_mongo_explain(doc: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Pig: control del script, DUMP y EXPLAIN
+# ---------------------------------------------------------------------------
+
+
+def pig_scan(text: str) -> tuple[str, str]:
+    """(código, máscara): el código sin comentarios (cambiados por espacios, así
+    los números de línea de los errores de Pig siguen siendo los del editor) y la
+    misma cosa con el contenido de los textos entre comillas también en blanco,
+    para buscar palabras clave sin que cuente lo que está adentro de un '…'."""
+    code, mask = [], []
+    i, n_ = 0, len(text)
+    while i < n_:
+        ch = text[i]
+        if ch == "-" and text.startswith("--", i):
+            j = text.find("\n", i)
+            j = n_ if j < 0 else j
+            code.append(" " * (j - i))
+            mask.append(" " * (j - i))
+            i = j
+        elif ch == "/" and text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            j = n_ if j < 0 else j + 2
+            blank = re.sub(r"[^\n]", " ", text[i:j])
+            code.append(blank)
+            mask.append(blank)
+            i = j
+        elif ch in "'\"":
+            j = i + 1
+            while j < n_ and text[j] != ch and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            j = min(j + 1, n_)
+            code.append(text[i:j])
+            mask.append(ch + " " * max(0, j - i - 2) + (ch if j - i >= 2 else ""))
+            i = j
+        else:
+            code.append(ch)
+            mask.append(ch)
+            i += 1
+    return "".join(code), "".join(mask)
+
+
+def pig_statements(code: str, mask: str) -> list[tuple[int, str]]:
+    """Las sentencias del script (separadas por ; fuera de comillas), con su
+    posición. Las directivas %default / %declare van solas: no llevan ;."""
+    out: list[tuple[int, str]] = []
+    start = 0
+    for m in re.finditer(r";|^[ \t]*%[^\n]*$", mask, re.M):
+        if m.group(0) == ";":
+            out.append((start, code[start:m.end()]))
+            start = m.end()
+        else:
+            if code[start:m.start()].strip():
+                out.append((start, code[start:m.start()]))
+            out.append((m.start(), code[m.start():m.end()]))
+            start = m.end()
+    if code[start:].strip():
+        out.append((start, code[start:]))
+    return [(p, s) for p, s in out if s.strip()]
+
+
+def pig_params(code: str) -> dict[str, str]:
+    """%default y %declare: nombre -> valor, para ver a dónde apunta un fs -rm $salida."""
+    out: dict[str, str] = {}
+    for m in re.finditer(r"^[ \t]*%(?:default|declare)[ \t]+(\w+)[ \t]+(.+?)[ \t]*$", code, re.M | re.I):
+        v = m.group(2).strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+            v = v[1:-1]
+        out[m.group(1)] = v
+    return out
+
+
+def pig_path_ok(raw: str) -> bool:
+    """Un borrado solo puede ir adentro de /user/<alguien>/…: ni /user entero, ni
+    /tmp, ni el warehouse de Hive. Las rutas relativas son de /user/root."""
+    p = raw.strip().strip("'\"")
+    m = re.match(r"^hdfs://[^/]*(/.*)?$", p)
+    if m:
+        p = m.group(1) or "/"
+    if not p or "$" in p:
+        return False
+    if not p.startswith("/"):
+        p = "/user/root/" + p
+    p = posixpath.normpath(p)
+    parts = p.strip("/").split("/")
+    if len(parts) < 3 or parts[0] != "user" or any(c in "".join(parts[:2]) for c in "*?[{"):
+        return False
+    return parts[1] != "hive"
+
+
+def pig_check(text: str) -> None:
+    """Lo que no se deja correr desde la interfaz (sí se puede en la terminal del contenedor)."""
+    code, mask = pig_scan(text)
+    hint = " Si lo necesitás, corrélo con pig en la terminal del contenedor."
+    if "`" in mask:
+        raise ApiError("Pig desde la interfaz no corre comandos entre comillas invertidas (`…`): "
+                       "ni STREAM, ni DEFINE ni %declare con un comando." + hint, "invalid")
+    m = re.search(r"(?:^|;)[ \t]*(sh|exec|run)\b", mask, re.M | re.I)
+    if m:
+        raise ApiError(f"Pig desde la interfaz no permite {m.group(1).lower()}: "
+                       f"{'corre comandos del sistema' if m.group(1).lower() == 'sh' else 'corre otro script'}." + hint,
+                       "invalid")
+    if re.search(r"\bstream\b[^;]*\bthrough\b", mask, re.I):
+        raise ApiError("Pig desde la interfaz no permite STREAM … THROUGH (pasa los datos por un programa del sistema)."
+                       + hint, "invalid")
+    params = pig_params(code)
+
+    def subst(s: str) -> str:
+        return re.sub(r"\$\{?(\w+)\}?", lambda x: params.get(x.group(1), x.group(0)), s)
+
+    for _, st in pig_statements(code, mask):
+        s = st.strip().rstrip(";").strip()
+        low = s.lower()
+        if low.startswith("register") and not re.match(r"^register\s+['\"]?[^\s'\"]+\.jar['\"]?$", s, re.I):
+            raise ApiError("Desde la interfaz, REGISTER solo acepta .jar (los UDF en Python o JavaScript corren código "
+                           "del sistema)." + hint, "invalid")
+        m = re.match(r"^(fs\s+(-\w+)|rmf|rm|copytolocal)\b(?!\s*=)(.*)$", s, re.I | re.S)
+        if not m:
+            continue
+        sub = (m.group(2) or m.group(1)).lower()
+        if sub in ("-get", "-copytolocal", "-movetolocal", "-getmerge", "copytolocal"):
+            raise ApiError("Desde la interfaz Pig no escribe en el disco del contenedor (fs -get, copyToLocal)." + hint,
+                           "invalid")
+        if sub not in ("-rm", "-rmr", "-rmdir", "rmf", "rm"):
+            continue
+        try:
+            args = shlex.split(subst(m.group(3)))
+        except ValueError:
+            args = subst(m.group(3)).split()
+        paths = [a for a in args if not a.startswith("-")]
+        bad = [a for a in paths if not pig_path_ok(a)] or ([] if paths else ["(sin ruta)"])
+        if bad:
+            raise ApiError(f"Pig desde la interfaz solo borra adentro de /user/<usuario>/…: {bad[0]} no se puede "
+                           "borrar desde acá." + hint, "invalid")
+
+
+_DUMP = re.compile(r"^\s*dump\s+([\w$]+)\s*;?\s*$", re.I | re.S)
+_STORE = re.compile(r"^\s*store\s+([\w$]+)\s+into\b", re.I | re.S)
+_ASSIGN = re.compile(r"^\s*([A-Za-z][\w]*)\s*=", re.S)
+
+
+def pig_prepare(text: str) -> tuple[str, list[str]]:
+    """(script a correr, aliases de los DUMP): sin comentarios y con un
+    DESCRIBE <alias>; pegado antes de cada DUMP, en la misma línea."""
+    code, mask = pig_scan(text)
+    out, last, dumps = [], 0, []
+    for pos, st in pig_statements(code, mask):
+        m = _DUMP.match(st)
+        if m:
+            lead = len(st) - len(st.lstrip())
+            out.append(code[last:pos + lead])
+            out.append(f"DESCRIBE {m.group(1)}; ")
+            last = pos + lead
+            dumps.append(m.group(1))
+    out.append(code[last:])
+    return "".join(out).rstrip() + "\n", dumps
+
+
+def pig_split_fields(s: str) -> list[str]:
+    """Separa por comas de primer nivel: (a,{(b),(c)},[k#v]) -> a | {(b),(c)} | [k#v]."""
+    out, depth, cur = [], 0, []
+    for ch in s:
+        if ch in "({[":
+            depth += 1
+        elif ch in ")}]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    out.append("".join(cur))
+    return out
+
+
+def pig_cell(v: str) -> object:
+    """Pig imprime los nulos como vacío; los números, como números."""
+    if v == "":
+        return None
+    if re.fullmatch(r"-?\d+", v):
+        try:
+            return int(v)
+        except ValueError:
+            return v
+    if re.fullmatch(r"-?\d+\.\d*(E-?\d+)?", v):
+        try:
+            return float(v)
+        except ValueError:
+            return v
+    return v
+
+
+_DESCRIBE = re.compile(r"^([\w$]+): \{(.*)\}\s*$")
+_UNKNOWN = re.compile(r"^Schema for ([\w$]+) unknown\.?\s*$")
+
+
+def parse_pig_dump(out: str) -> list[dict]:
+    """La salida de un script con DESCRIBE + DUMP -> un bloque por DUMP:
+    {alias, columns, rows}. Las columnas salen del DESCRIBE; si el alias no tiene
+    esquema, $0, $1…"""
+    blocks: list[dict] = []
+    cur: dict | None = None
+    for raw in out.splitlines():
+        line = raw.rstrip("\r")
+        m = _DESCRIBE.match(line)
+        if m and not line.startswith("("):
+            cols = [f.split(":", 1)[0].strip() for f in pig_split_fields(m.group(2)) if f.strip()]
+            cur = {"alias": m.group(1), "schema": cols, "rows": []}
+            blocks.append(cur)
+            continue
+        m = _UNKNOWN.match(line)
+        if m:
+            cur = {"alias": m.group(1), "schema": [], "rows": []}
+            blocks.append(cur)
+            continue
+        if line.startswith("(") and line.endswith(")"):
+            if cur is None:
+                cur = {"alias": "", "schema": [], "rows": []}
+                blocks.append(cur)
+            cur["rows"].append([pig_cell(f) for f in pig_split_fields(line[1:-1])])
+    for b in blocks:
+        width = max((len(r) for r in b["rows"]), default=len(b["schema"]))
+        b["columns"] = b["schema"] if b["schema"] and len(b["schema"]) == width else [f"${i}" for i in range(width)]
+        b["rows"] = [r + [None] * (width - len(r)) for r in b["rows"]]
+        del b["schema"]
+    return blocks
+
+
+def pig_error(out: str, err: str, rc: int) -> ApiError:
+    """El error que importa de Pig: el último ERROR nnnn que no sea el genérico de
+    'no se pudo abrir el iterador' (1066) o 'el trabajo falló' (2244)."""
+    lines = [l.strip() for l in (out + "\n" + err).splitlines() if l.strip()]
+    found = []
+    for i, l in enumerate(lines):
+        m = re.search(r"ERROR (\d+):\s*(.*)$", l)
+        if m:
+            # a veces el detalle viene en la línea de abajo ("ERROR 1025: " y después "<file …> …")
+            msg = m.group(2) or (lines[i + 1] if i + 1 < len(lines) and not re.search(r"\b(INFO|WARN|ERROR)\b", lines[i + 1]) else "")
+            found.append((m.group(1), msg.strip()))
+    pick = [f for f in found if f[0] not in ("1066", "2244")] or found
+    if pick:
+        code, msg = pick[-1]
+        return ApiError(f"ERROR {code}: {msg}".strip(), "failed")
+    errs = [l for l in lines if " ERROR " in l or l.startswith(("ERROR", "Exception", "Caused by"))]
+    return ApiError((errs or lines or [f"pig terminó con código {rc}"])[-1], "failed")
+
+
+def pig_explain_script(text: str) -> tuple[str, str]:
+    """(script, alias): el mismo script sin lo que ejecuta (DUMP, STORE, fs, rmf…)
+    y con EXPLAIN del último alias que se mostraba o guardaba."""
+    code, mask = pig_scan(text)
+    keep, target = [], None
+    for _, st in pig_statements(code, mask):
+        s = st.strip()
+        m = _DUMP.match(s) or _STORE.match(s)
+        if m:
+            target = m.group(1)
+            continue
+        if re.match(r"^(fs|rmf|rm|cp|mv|mkdir|copy\w+|describe|illustrate|explain|cat|ls|cd|set)\b", s, re.I):
+            continue
+        keep.append(s if s.startswith("%") else s if s.endswith(";") else s + ";")
+    if target is None:
+        assigned = [m.group(1) for m in (_ASSIGN.match(s) for s in keep) if m]
+        if not assigned:
+            raise ApiError("Para ver el plan, el script tiene que definir al menos un alias (x = LOAD …)", "invalid")
+        target = assigned[-1]
+    return "\n".join(keep) + f"\nEXPLAIN {target};\n", target
+
+
+# Los operadores llevan el alias adelante ("filas: Filter[bag] - scope-11"); las
+# expresiones de adentro (Project, Constant, Cast…) no
+_PIG_OP = re.compile(r"(?:^|\|---)\s*[\w$]+: ([A-Z][A-Za-z]*(?: [A-Z][a-z]+)*)(?:\[|\(| -)")
+
+
+def parse_pig_explain(raw: list[str]) -> dict:
+    """EXPLAIN de Pig -> un nodo por trabajo MapReduce (del 'Map Reduce Plan'),
+    con los operadores de su map, combine y reduce."""
+    jobs: list[dict] = []
+    in_mr = False
+    cur = None
+    part = None
+    for l in raw:
+        if "Map Reduce Plan" in l:
+            in_mr = True
+            continue
+        if not in_mr:
+            continue
+        m = re.match(r"^MapReduce node (scope-\d+)", l.strip())
+        if m:
+            cur = {"scope": m.group(1), "map": [], "combine": [], "reduce": []}
+            jobs.append(cur)
+            part = None
+            continue
+        if cur is None:
+            continue
+        s = l.strip()
+        if s in ("Map Plan", "Combine Plan", "Reduce Plan"):
+            part = s.split()[0].lower()
+            continue
+        if part:
+            o = _PIG_OP.search(l)
+            if o and o.group(1) not in cur[part]:
+                cur[part].append(o.group(1))
+    if not jobs:
+        return {"engine": "mr", "nodes": [{"id": 0, "label": "Sin trabajos MapReduce", "children": []}]}
+    nodes = []
+    for i, j in enumerate(reversed(jobs)):
+        # Pig dibuja cada parte desde la salida hacia la entrada: se da vuelta
+        detail = " · ".join(f"{k}: {' → '.join(reversed(v))}" for k, v in (("map", j["map"]), ("combine", j["combine"]),
+                                                                  ("reduce", j["reduce"])) if v)
+        node = {"id": i, "label": f"Trabajo MapReduce {len(jobs) - i} ({j['scope']})", "children": []}
+        if i + 1 < len(jobs):
+            node["children"] = [i + 1]
+        if detail:
+            node["detail"] = detail
+        nodes.append(node)
+    return {"engine": "mr", "nodes": nodes, "yarnStages": len(jobs)}
+
+
+# ---------------------------------------------------------------------------
 # Ejemplos (los de la imagen: ventas.hql, tienda.hql, tienda.sql, consultas_mongo.js)
 # ---------------------------------------------------------------------------
 
 _JS = "ejemplos/consultas_mongo.js"
+_PIG = "ejemplos/ventas.pig"
+_PIG_LOAD = ("ventas = LOAD '/user/root/ventas' USING PigStorage(',')\n"
+             "         AS (fecha:chararray, sucursal:chararray, producto:chararray,\n"
+             "             cantidad:int, precio:int);\n"
+             "-- la primera línea del CSV es el encabezado\n"
+             "filas = FILTER ventas BY fecha != 'fecha';\n")
 EXAMPLES: list[dict] = [
     {"source": "hive", "label": "Ventas por producto", "script": "ejemplos/ventas.hql",
      "text": "SELECT producto, SUM(cantidad) AS unidades,\n       SUM(CAST(cantidad AS BIGINT) * precio) AS facturado\n"
@@ -483,6 +820,10 @@ EXAMPLES: list[dict] = [
      "text": "SELECT p.categoria,\n       SUM(v.cantidad) AS unidades,\n       SUM(CAST(v.cantidad AS BIGINT) * v.precio) AS facturado\n"
              "FROM tienda_ventas v\nJOIN tienda_productos p ON v.producto = p.producto\nGROUP BY p.categoria\n"
              "ORDER BY facturado DESC;"},
+    {"source": "hive", "label": "Crear tabla ventas desde HDFS", "script": "ejemplos/ventas.hql",
+     "text": "CREATE EXTERNAL TABLE IF NOT EXISTS ventas (\n  fecha STRING, sucursal STRING, producto STRING,\n"
+             "  cantidad INT, precio INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\n"
+             "LOCATION '/user/root/ventas'\nTBLPROPERTIES ('skip.header.line.count' = '1');"},
     {"source": "mysql", "label": "Productos", "script": "ejemplos/tienda.sql", "text": "SELECT * FROM productos;"},
     {"source": "mysql", "label": "Sucursales", "script": "ejemplos/tienda.sql", "text": "SELECT * FROM sucursales;"},
     {"source": "mysql", "label": "Facturación por categoría (JOIN)", "script": "ejemplos/tienda.sql",
@@ -510,6 +851,28 @@ EXAMPLES: list[dict] = [
              '  { $project: { gastado: 1, pedidos: 1, nombre: { $first: "$cliente.nombre" } } }\n])'},
     {"source": "mongodb", "label": "Índice: IXSCAN en vez de COLLSCAN", "script": _JS,
      "text": 'db.pedidos.find({ cliente_id: 42 }).explain("executionStats")'},
+    {"source": "pig", "label": "Ventas por sucursal", "script": _PIG, "text": _PIG_LOAD +
+     "lineas = FOREACH filas GENERATE sucursal, (long) cantidad * precio AS importe;\n"
+     "por_sucursal = GROUP lineas BY sucursal;\n"
+     "resumen = FOREACH por_sucursal GENERATE group AS sucursal,\n"
+     "          COUNT(lineas) AS tickets,\n          SUM(lineas.importe) AS facturado;\n"
+     "DUMP resumen;"},
+    {"source": "pig", "label": "Ventas por producto, ordenado", "script": _PIG, "text": _PIG_LOAD +
+     "lineas = FOREACH filas GENERATE producto, cantidad,\n"
+     "         (long) cantidad * precio AS importe;\n"
+     "por_producto = GROUP lineas BY producto;\n"
+     "totales = FOREACH por_producto GENERATE group AS producto,\n"
+     "          SUM(lineas.cantidad) AS unidades,\n          SUM(lineas.importe) AS facturado;\n"
+     "ordenado = ORDER totales BY facturado DESC;\nDUMP ordenado;"},
+    {"source": "pig", "label": "Primeras 10 filas", "script": _PIG, "text": _PIG_LOAD +
+     "primeras = LIMIT filas 10;\nDUMP primeras;"},
+    {"source": "pig", "label": "Guardar el resultado en HDFS (STORE)", "script": _PIG, "text": _PIG_LOAD +
+     "lineas = FOREACH filas GENERATE producto, cantidad,\n"
+     "         (long) cantidad * precio AS importe;\n"
+     "por_producto = GROUP lineas BY producto;\n"
+     "totales = FOREACH por_producto GENERATE group AS producto, SUM(lineas.importe) AS facturado;\n"
+     "fs -rm -r -f /user/root/resultados/pig_por_producto;\n"
+     "STORE totales INTO '/user/root/resultados/pig_por_producto' USING PigStorage(',');"},
 ]
 
 
@@ -537,25 +900,32 @@ class Datos:
 
     def need(self, source: object) -> str:
         if source not in PROC:
-            raise ApiError("La fuente es hive, mysql o mongodb", "invalid")
+            raise ApiError("La fuente es hive, mysql, mongodb o pig", "invalid")
         self.c.need_proc(*PROC[str(source)])
+        if source == "pig":
+            self.c.need_proc("nm", "El NodeManager")
+            self.c.need_hdfs()
         return str(source)
 
     def up(self, source: str) -> bool:
         pid = PROC[source][0]
         return any(p["id"] == pid and p["state"] == "up" for p in self.c.processes)
 
-    async def exec(self, argv: list[str], timeout: float = 120) -> tuple[int, str, str]:
+    async def exec(self, argv: list[str], timeout: float = 120, cwd: str | None = None) -> tuple[int, str, str]:
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL, start_new_session=True)
+                stdin=asyncio.subprocess.DEVNULL, start_new_session=True, cwd=cwd)
         except OSError as e:
             raise ApiError(f"No se pudo correr {argv[0]}: {e}", "failed") from e
         try:
             out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
-            proc.kill()
+            # Pig y beeline lanzan una JVM con hijos: se mata el grupo entero
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
             await proc.wait()
             raise ApiError(f"{argv[0]} tardó más de {timeout:g} s", "failed") from None
         return proc.returncode or 0, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
@@ -755,6 +1125,8 @@ class Datos:
     # ------------------------------------------------------------ esquema
 
     async def schema(self, source: object, name: object) -> dict:
+        if source == "pig":
+            raise ApiError("Pig no tiene catálogo propio: lee y escribe archivos de HDFS", "invalid")
         src = self.need(source)
         if not isinstance(name, str) or not re.fullmatch(r"[\w$-]+\.[\w$.-]+", name or ""):
             raise ApiError("Falta el nombre: base.tabla (por ejemplo default.ventas)", "invalid")
@@ -880,7 +1252,71 @@ class Datos:
             return shlex.join(self.beeline(one))
         if src == "mysql":
             return shlex.join(self.mysql(one))
+        if src == "pig":
+            return "pig -x mapreduce -f consulta.pig"
         return f"mongosh --quiet tienda --eval {shlex.quote(one)}"
+
+    async def pig(self, script: str, timeout: float = PIG_TIMEOUT) -> tuple[int, str, str]:
+        """Corre un script de Pig desde un archivo temporal y lo borra después."""
+        tmp = tempfile.mkdtemp(prefix="pig-consulta-")
+        try:
+            path = os.path.join(tmp, "consulta.pig")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(script)
+            return await self.exec(["pig", "-x", "mapreduce", "-l", tmp, "-f", path], timeout=timeout, cwd=tmp)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    async def pig_query(self, text: str, command: str, t0: float) -> dict:
+        title = "Script de Pig"
+        app_ids: list[str] = []
+        try:
+            pig_check(text)
+            script, dumps = pig_prepare(text)
+            rc, out, err = await self.pig(script)
+            app_ids = list(dict.fromkeys(m.group(0) for m in APP_ID.finditer(err + "\n" + out)))
+            if rc != 0:
+                raise pig_error(out, err, rc)
+        except ApiError as e:
+            self.bus.log("Vos", "error", f"{title}: falló", command=command, tech=str(e),
+                         appId=app_ids[-1] if app_ids else None)
+            raise
+        ms = round((time.monotonic() - t0) * 1000)
+        res: dict = {}
+        blocks = parse_pig_dump(out)
+        if dumps and blocks:
+            b = blocks[-1]
+            cols, rows = b["columns"], b["rows"]
+            total = len(rows)
+            if len(dumps) > 1:
+                res["note"] = f"El script tiene {len(dumps)} DUMP: se muestra el último ({b['alias'] or dumps[-1]})"
+        elif dumps:
+            cols, rows, total = [], [], 0
+            res["note"] = "El DUMP no devolvió filas"
+        else:
+            cols, rows, total = [], [], 0
+            res["note"] = "El script no tiene DUMP: lo que guardó con STORE quedó en HDFS"
+        if total > MAX_ROWS:
+            rows = rows[:MAX_ROWS]
+            res["note"] = f"Se muestran las primeras {n(MAX_ROWS)} filas de {n(total)}"
+        if re.search(r"\b(store|fs|rmf|rm|mkdir|mv|cp)\b", pig_scan(text)[1], re.I):
+            self.bus.publish("hdfs", {"path": "/user/root"})
+        jobs = len(app_ids)
+        action = (f"Pig compila el script a {jobs} trabajo{'s' if jobs != 1 else ''} MapReduce y los manda a YARN"
+                  if jobs else "Pig lo resolvió sin lanzar trabajos en YARN")
+        output = f"{n(total)} fila{'s' if total != 1 else ''} · {secs(ms)}" if cols else f"Listo · {secs(ms)}"
+        trace = {"command": command, "input": "el script", "action": action, "output": output, "engine": "mr",
+                 "after": {"columns": cols, "rows": rows[:20], "total": total,
+                           **({"note": res["note"]} if "note" in res else {})}}
+        if app_ids:
+            trace["appIds"] = app_ids
+            for a in app_ids:
+                self.bus.publish("yarn", {"appId": a})
+            res["appId"] = app_ids[-1]
+        res.update({"columns": cols, "rows": rows, "ms": ms, "engine": "mr", "trace": trace})
+        self.bus.log("Vos", "ok", title, command=command, input=trace["input"], action=action, output=output,
+                     appId=app_ids[-1] if app_ids else None)
+        return res
 
     async def query(self, source: object, text: object) -> dict:
         src = self.need(source)
@@ -889,6 +1325,8 @@ class Datos:
         one = text.strip()
         command = self.shown(src, one)
         t0 = time.monotonic()
+        if src == "pig":
+            return await self.pig_query(text, command, t0)
         res: dict = {}
         app_id = None
         scanned = None
@@ -966,6 +1404,16 @@ class Datos:
         src = self.need(source)
         if not isinstance(text, str) or not text.strip():
             raise ApiError("La consulta está vacía", "invalid")
+        if src == "pig":
+            pig_check(text)
+            script, _ = pig_explain_script(text)
+            rc, out, err = await self.pig(script, timeout=300)
+            if rc != 0:
+                raise pig_error(out, err, rc)
+            raw = out.splitlines()
+            while raw and not raw[-1].strip():
+                raw.pop()
+            return {"source": "pig", **parse_pig_explain(raw), "raw": raw}
         one = text.strip().rstrip(";")
         if src == "hive":
             rc, out, err = await self.exec(self.beeline(f"SET hive.explain.user=false; EXPLAIN {one}"))

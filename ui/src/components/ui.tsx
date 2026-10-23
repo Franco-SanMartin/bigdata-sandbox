@@ -95,9 +95,9 @@ export function Sparkline({ data, width = 96, height = 28, max }: { data: { t: n
   if (!paths) return null;
   return (
     <svg className="spark" width={width} height={height} aria-hidden="true">
-      <path d={paths.a} fill="var(--n-5)" />
-      <path d={paths.l} fill="none" stroke="var(--n-10)" strokeWidth={1.25} />
-      <circle cx={paths.end[0]} cy={paths.end[1]} r={2.2} fill="var(--n-12)" />
+      <path d={paths.a} fill="var(--accent-bg)" />
+      <path d={paths.l} fill="none" stroke="var(--accent)" strokeWidth={1.25} />
+      <circle cx={paths.end[0]} cy={paths.end[1]} r={2.2} fill="var(--accent)" />
     </svg>
   );
 }

@@ -25,8 +25,10 @@ De dónde sale cada cosa (todo REST, sin JVM, salvo los logs ya agregados):
 from __future__ import annotations
 
 import asyncio
+import glob
 import html
 import json
+import os
 import re
 import shlex
 import time
@@ -91,6 +93,160 @@ JOBS: dict[str, dict] = {
     },
 }
 VENTAS = "/user/root/ventas"
+
+# ---------------------------------------------------------------------------
+# Plantillas: trabajos con parámetros (GET /api/yarn/templates). El comando se
+# arma como lista de argumentos (sin shell): cada valor es un argumento suelto.
+# ---------------------------------------------------------------------------
+
+TEXTO = "/user/root/texto.txt"          # entrada por defecto: se sube sola si falta
+CLIENT = "cliente"                      # el "contenedor" de logs con la salida del comando que mandó el trabajo
+CLIENT_WAIT = 20.0                      # segundos que se espera al cliente cuando YARN ya cerró la app
+GREP_PATTERN = r"^[\w\s.\-\[\]\\]{1,64}$"
+EXAMPLES_JAR = "hadoop-mapreduce-examples-3.3.6.jar"
+SPARK_JAR = "spark-examples_2.12-3.5.9.jar"
+OUT_ROOTS = ("/user/", "/tmp/")
+
+
+def _p(name: str, label: str, typ: str, default: object, help: str, **kw: object) -> dict:
+    return {"name": name, "label": label, "type": typ, "default": default, "help": help, "required": True, **kw}
+
+
+_OVERWRITE = {"name": "overwrite", "label": "Pisar la salida si ya existe", "type": "bool", "default": True,
+              "help": "MapReduce no escribe sobre una carpeta que ya existe: si está tildado, se borra antes"}
+
+TEMPLATES: list[dict] = [
+    {"id": "mr-wordcount", "label": "Contar palabras (wordcount)", "engine": "mr",
+     "description": "El clásico de MapReduce: cada mapper parte su bloque en palabras y emite (palabra, 1); "
+                    "los reducers suman. La salida es una línea por palabra con su cantidad.",
+     "params": [_p("in", "Entrada", "hdfs-path", TEXTO, "Archivo o carpeta de texto en HDFS"),
+                _p("out", "Salida", "hdfs-path", "/user/root/resultados/wordcount",
+                   "Carpeta nueva en HDFS donde quedan los part-r-*"), _OVERWRITE],
+     "command": f"hadoop jar {EXAMPLES_JAR} wordcount {{in}} {{out}}", "needs": ["yarn"]},
+    {"id": "mr-pi", "label": "Estimar π (pi)", "engine": "mr",
+     "description": "Monte Carlo: cada map tira puntos al azar en un cuadrado y cuenta cuántos caen en el "
+                    "círculo; el reducer junta todo. No lee nada de HDFS: sirve para ver contenedores y memoria.",
+     "params": [_p("maps", "Mappers", "int", 4, "Cuántos maps (contenedores) en paralelo", min=1, max=16),
+                _p("samples", "Muestras por map", "int", 1000, "Más muestras, más precisión y más tiempo",
+                   min=10, max=100000)],
+     "command": f"hadoop jar {EXAMPLES_JAR} pi {{maps}} {{samples}}", "needs": ["yarn"]},
+    {"id": "mr-grep", "label": "Buscar un patrón (grep)", "engine": "mr",
+     "description": "Dos trabajos encadenados: el primero cuenta las coincidencias de la expresión regular, el "
+                    "segundo las ordena de más a menos frecuente.",
+     "params": [_p("in", "Entrada", "hdfs-path", TEXTO, "Archivo o carpeta de texto en HDFS"),
+                _p("out", "Salida", "hdfs-path", "/user/root/resultados/grep", "Carpeta nueva en HDFS"),
+                _p("regex", "Expresión regular", "text", "datos", "Letras, números, espacios y . - [ ] \\ "
+                   "(hasta 64)", pattern=GREP_PATTERN), _OVERWRITE],
+     "command": f"hadoop jar {EXAMPLES_JAR} grep {{in}} {{out}} {{regex}}", "needs": ["yarn"]},
+    {"id": "mr-ventas", "label": "Ventas por producto (MapReduce)", "engine": "mr",
+     "description": "Hadoop Streaming con mapper.py y reducer.py sobre /user/root/ventas (lo sube si falta).",
+     "params": [], "command": JOBS["mr-ventas"]["shown"], "needs": ["yarn"]},
+    {"id": "hive-ventas", "label": "Ventas por producto (Hive sobre Tez)", "engine": "tez",
+     "description": "ventas.hql en beeline: HiveServer2 compila el SQL a un DAG de Tez.",
+     "params": [], "command": JOBS["hive-ventas"]["shown"], "needs": ["yarn", "hiveserver2"]},
+    {"id": "spark-pi", "label": "Estimar π (SparkPi)", "engine": "spark",
+     "description": "El ejemplo de Spark: reparte las muestras en particiones (una tarea por partición) entre "
+                    "los executors.",
+     "params": [_p("partitions", "Particiones", "int", 2, "Tareas en paralelo", min=1, max=16)],
+     "command": f"spark-submit --class org.apache.spark.examples.SparkPi {SPARK_JAR} {{partitions}}",
+     "needs": ["yarn"]},
+    {"id": "spark-ventas", "label": "Ventas por producto (Spark)", "engine": "spark",
+     "description": "ventas.py con spark-submit: lee /user/root/ventas y agrupa con DataFrames.",
+     "params": [], "command": JOBS["spark-ventas"]["shown"], "needs": ["yarn"]},
+]
+TEMPLATE = {t["id"]: t for t in TEMPLATES}
+
+
+def _bool(raw: object, name: str) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, str)) and str(raw).strip().lower() in ("1", "0", "true", "false"):
+        return str(raw).strip().lower() in ("1", "true")
+    raise ApiError(f"{name} es sí o no (true/false)", "invalid")
+
+
+def validate_params(tpl: dict, params: object) -> dict:
+    """Los parámetros de una plantilla, validados: nada que no esté declarado,
+    enteros dentro del rango, rutas normalizadas con hdfs.clean, texto que cumple
+    su patrón. Lo que falta toma el valor por defecto."""
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        raise ApiError("params tiene que ser un objeto {nombre: valor}", "invalid")
+    decl = {p["name"]: p for p in tpl["params"]}
+    extra = sorted(set(params) - set(decl))
+    if extra:
+        raise ApiError(f"{tpl['id']} no tiene el parámetro {', '.join(map(str, extra))}", "invalid")
+    out: dict = {}
+    for name, p in decl.items():
+        raw = params.get(name)
+        if raw is None or raw == "":
+            raw = p["default"]
+        label = p["label"]
+        if p["type"] == "int":
+            out[name] = hdfs_mod.bounded_int(raw, label, p["min"], p["max"], int(p["default"]))
+        elif p["type"] == "bool":
+            out[name] = _bool(raw, label)
+        elif p["type"] == "select":
+            if str(raw) not in {o["value"] for o in p.get("options", [])}:
+                raise ApiError(f"{label}: opción desconocida", "invalid")
+            out[name] = str(raw)
+        elif p["type"] == "hdfs-path":
+            if not isinstance(raw, str):
+                raise ApiError(f"{label} tiene que ser una ruta de HDFS", "invalid")
+            out[name] = hdfs_mod.clean(raw)
+        else:
+            if not isinstance(raw, str):
+                raise ApiError(f"{label} tiene que ser texto", "invalid")
+            if p.get("pattern") and not re.search(p["pattern"], raw):
+                raise ApiError(f"{label} solo admite {p['help'][:1].lower() + p['help'][1:]}", "invalid")
+            if raw.startswith("-") or any(c in raw for c in "\0\n\r"):
+                raise ApiError(f"{label} no puede empezar con - ni tener saltos de línea", "invalid")
+            out[name] = raw
+    if "out" in out:
+        dst = out["out"]
+        if not dst.startswith(OUT_ROOTS) or dst in hdfs_mod.NO_MOVE:
+            raise ApiError(f"La salida va en una carpeta nueva adentro de /user o /tmp (no {dst})", "invalid")
+        src = out.get("in")
+        if src and (src == dst or hdfs_mod.inside(src, dst) or hdfs_mod.inside(dst, src)):
+            raise ApiError("La salida no puede ser la entrada ni estar adentro de ella", "invalid")
+    return out
+
+
+def examples_jar() -> str:
+    home = os.environ.get("HADOOP_HOME", "/opt/hadoop")
+    found = sorted(glob.glob(f"{home}/share/hadoop/mapreduce/hadoop-mapreduce-examples-*.jar"))
+    return found[-1] if found else f"{home}/share/hadoop/mapreduce/{EXAMPLES_JAR}"
+
+
+def spark_jar() -> str:
+    home = os.environ.get("SPARK_HOME", "/opt/spark")
+    found = sorted(glob.glob(f"{home}/examples/jars/spark-examples_*.jar"))
+    return found[-1] if found else f"{home}/examples/jars/{SPARK_JAR}"
+
+
+def template_argv(tid: str, v: dict) -> tuple[list[str], str]:
+    """(argv, cómo se muestra) de una plantilla con sus valores ya validados."""
+    if tid == "mr-wordcount":
+        rest = ["wordcount", v["in"], v["out"]]
+    elif tid == "mr-pi":
+        rest = ["pi", str(v["maps"]), str(v["samples"])]
+    elif tid == "mr-grep":
+        rest = ["grep", v["in"], v["out"], v["regex"]]
+    elif tid == "spark-pi":
+        argv = ["spark-submit", "--class", "org.apache.spark.examples.SparkPi", spark_jar(), str(v["partitions"])]
+        return argv, f"spark-submit --class org.apache.spark.examples.SparkPi {SPARK_JAR} {v['partitions']}"
+    else:
+        raise ApiError(f"No hay una plantilla {tid}", "invalid")
+    return ["hadoop", "jar", examples_jar(), *rest], f"hadoop jar {EXAMPLES_JAR} {shlex.join(rest)}"
+
+
+TEMPLATE_ACTION = {
+    "mr-wordcount": "YARN arranca el ApplicationMaster (512 MB), un mapper por bloque de la entrada y un reducer",
+    "mr-pi": "YARN arranca el ApplicationMaster y un contenedor por map; el reducer junta los conteos",
+    "mr-grep": "Dos trabajos de MapReduce seguidos (buscar y ordenar): vas a ver dos aplicaciones",
+    "spark-pi": "El driver corre acá (client mode); YARN le da un ApplicationMaster y los executors",
+}
 
 # beeline imprime el avance de Tez así: "Map 1: 1/2	Reducer 2: 0(+1)/1"
 _TEZ_VERTEX = re.compile(r"((?:Map|Reducer) \d+): (-|\d+)(?:\(\+(\d+)\))?(?:\(-(\d+)\))?(?:\(-\d+\))?/(-|\d+)")
@@ -232,6 +388,7 @@ class Yarn:
         self.runner = runner
         self.bus = bus
         self.http = hdfs_mod.http_get     # se reemplaza en los tests
+        self.hdfs: hdfs_mod.Hdfs | None = None   # lo engancha app.py (para ver si existen entrada y salida)
         # Lo que mandó esta interfaz: appId -> {example, run, ...}
         self.submitted: dict[str, dict] = {}
         self._sig: dict[str, str] = {}
@@ -622,6 +779,12 @@ class Yarn:
 
     async def logs(self, app_id: str, container: str | None) -> dict:
         self._need_rm()
+        # Lo que imprimió el comando que lo mandó (hadoop jar, spark-submit, beeline): ahí están los
+        # contadores del final ("Map input records=…"). Solo existe para lo que se mandó desde acá.
+        sub = self.submitted.get(app_id)
+        run: Run | None = sub.get("run") if sub else None
+        client = [{"id": CLIENT, "kind": "am", "label": "Salida del comando"}] \
+            if run is not None and run.lines else []
         a, nm = await asyncio.gather(self.rm_app(app_id), self.nm_containers())
         typ = a.get("applicationType", "MAPREDUCE").upper()
         state = app_state(a)
@@ -638,7 +801,16 @@ class Yarn:
         cur = container if container in ids else am
         containers = [{"id": c, "kind": container_kind(c, typ), "label": container_label(c, typ)} for c in ids]
         files: dict[str, list[str]] = {}
-        if cur and cur in live:
+        if client and container == CLIENT:
+            cur = CLIENT
+            # YARN da la app por terminada unos segundos antes de que el cliente imprima los
+            # contadores y salga: con la app cerrada se espera (acotado) a que el comando termine.
+            deadline = time.monotonic() + CLIENT_WAIT
+            while state in ("FINISHED", "FAILED", "KILLED") and run.state == "running" \
+                    and time.monotonic() < deadline:
+                await asyncio.sleep(0.25)
+            files = {"stdout": [l["text"] for l in run.lines]}
+        elif cur and cur in live:
             texts = await asyncio.gather(*(self.text(f"{NM}/ws/v1/node/containerlogs/{cur}/{f}") for f in
                                            ("stdout", "stderr", "syslog")))
             files = {f: (t or "").splitlines()[-500:] for f, t in zip(("stdout", "stderr", "syslog"), texts)}
@@ -651,7 +823,7 @@ class Yarn:
                 while len(self._logs_cache) > 20:
                     self._logs_cache.pop(next(iter(self._logs_cache)))
             files = self._logs_cache[key]
-        return {"appId": app_id, "containers": containers, "container": cur or "",
+        return {"appId": app_id, "containers": client + containers, "container": cur or "",
                 "files": [{"name": f, "lines": files.get(f, [])[-500:]} for f in ("stdout", "stderr", "syslog")]}
 
     async def _exec(self, argv: list[str]) -> tuple[int, str, str]:
@@ -686,25 +858,32 @@ class Yarn:
                 f"hdfs dfs -mkdir -p {VENTAS} && hdfs dfs -put -f {ventas['local']} {VENTAS}/; }}")
         clean_out = f"hdfs dfs -rm -r -f -skipTrash {job['out']} > /dev/null 2>&1 || true"
         script = f"set -e\ncd {shlex.quote(str(datos))}\n{prep}\n{clean_out}\n{job['run']}"
+        info = {"example": example, "shown": job["shown"], "out": job["out"],
+                "input": f"{VENTAS} · {hdfs_mod.EXAMPLES['ventas']['rows']}"}
+        return await self._launch(Action(f"{job['type']}: {example}", script, display=job["shown"],
+                                         input=info["input"], action=job["action"], timeout=3600),
+                                  job["type"], job["out"], info)
+
+    async def _launch(self, action: Action, typ: str, out: str | None, info: dict) -> str:
+        """Lanza el trabajo en segundo plano y espera a que YARN le dé un id."""
         try:
             st = await asyncio.to_thread(self.http, f"{RM}/ws/v1/cluster/apps?states=NEW,NEW_SAVING,SUBMITTED,ACCEPTED,RUNNING", 3.0)
             before = {a["id"] for a in ((json.loads(st[1]).get("apps") or {}).get("app") or [])} if st[0] == 200 else set()
         except ValueError:
             before = set()
         t0 = now_ms()
-        info = {"example": example, "shown": job["shown"], "out": job["out"],
-                "input": f"{VENTAS} · {hdfs_mod.EXAMPLES['ventas']['rows']}"}
         box: dict[str, str] = {}
 
         async def after() -> object:
             app = box.get("app")
             if app:
                 self.bus.publish("yarn", {"appId": app})
-                self.bus.publish("hdfs", {"path": job["out"].rsplit("/", 1)[0]})
+                if out:
+                    self.bus.publish("hdfs", {"path": out.rsplit("/", 1)[0]})
             return app
 
-        run = self.runner.start(Action(f"{job['type']}: {example}", script, display=job["shown"], input=info["input"],
-                                       action=job["action"], after=after, timeout=3600))
+        action.after = after
+        run = self.runner.start(action)
         info["run"] = run
         # El id de la aplicación: lo imprime el cliente al mandarla (o aparece en el RM)
         deadline = time.monotonic() + 120
@@ -716,7 +895,7 @@ class Yarn:
                     app_id = m.group(0)
                     break
             if app_id is None and run.state == "running":
-                app_id = await self._new_app(before, t0, job["type"])
+                app_id = await self._new_app(before, t0, typ)
             if app_id or run.state != "running":
                 break
             await asyncio.sleep(0.5)
@@ -732,6 +911,57 @@ class Yarn:
             self.submitted.pop(next(iter(self.submitted)))
         self.bus.publish("yarn", {"appId": app_id})
         return app_id
+
+    async def submit_template(self, template: object, params: object) -> str:
+        """POST /api/yarn/apps {template, params}: una plantilla con sus valores."""
+        tpl = TEMPLATE.get(str(template)) if isinstance(template, str) else None
+        if tpl is None:
+            raise ApiError(f"La plantilla es una de: {', '.join(TEMPLATE)}", "invalid")
+        if template in JOBS:
+            validate_params(tpl, params)
+            return await self.submit(template)
+        v = validate_params(tpl, params)
+        self.c.need_hdfs()
+        self._need_rm()
+        self.c.need_proc("nm", "El NodeManager")
+        h = self.hdfs
+        assert h is not None
+        src, dst = v.get("in"), v.get("out")
+        if src:
+            st = await h.status_of(src)
+            if st is None and src == TEXTO:
+                # La entrada de ejemplo: se sube el texto de datos/ejemplos
+                local = str(self.c.s.datos_dir / hdfs_mod.EXAMPLES["texto"]["local"])
+                await self._step(f"Subir {TEXTO}", ["hdfs", "dfs", "-put", "-f", local, TEXTO],
+                                 "El texto de ejemplo, para que el trabajo tenga qué leer")
+            elif st is None:
+                raise ApiError(f"No existe la entrada {src}: subila primero", "not_found")
+        if dst and (dst in hdfs_mod.NO_MOVE or (src and hdfs_mod.inside(src, dst))):
+            # Con «pisar» se borra la salida: nunca una carpeta del sistema ni la que tiene la entrada
+            raise ApiError(f"La salida no puede ser {dst}: elegí una carpeta nueva, como /user/root/resultados/x",
+                           "invalid")
+        if dst:
+            dst_st = await h.status_of(dst)
+            if dst_st is not None:
+                if not v.get("overwrite"):
+                    raise ApiError(f"Ya existe {dst}: tildá «pisar la salida» o elegí otra carpeta", "invalid")
+                await self._step(f"Borrar la salida anterior {dst}", ["hdfs", "dfs", "-rm", "-r", "-f", "-skipTrash", dst],
+                                 "MapReduce no escribe en una carpeta que ya existe")
+            else:
+                up = dst.rsplit("/", 1)[0] or "/"
+                await self._step(f"Crear {up}", ["hdfs", "dfs", "-mkdir", "-p", up], "La carpeta donde va la salida")
+        argv, shown = template_argv(tpl["id"], v)
+        typ = {"mr": "MAPREDUCE", "spark": "SPARK"}[tpl["engine"]]
+        info = {"template": tpl["id"], "shown": shown, "out": dst, "params": v,
+                "input": src or ", ".join(f"{p['label']}: {v[p['name']]}" for p in tpl["params"])}
+        return await self._launch(Action(f"{typ}: {tpl['id']}", argv, display=shown, input=info["input"],
+                                         action=TEMPLATE_ACTION[tpl["id"]], timeout=3600), typ, dst, info)
+
+    async def _step(self, title: str, argv: list[str], why: str) -> None:
+        run = await self.runner.run(Action(title, argv, action=why, timeout=120))
+        if run.state != "done":
+            raise ApiError(run.error or next((l["text"] for l in reversed(run.lines) if l["text"].strip()),
+                                             f"{shlex.join(argv)} falló"), "failed")
 
     async def _new_app(self, before: set[str], t0: int, typ: str) -> str | None:
         status, body = await asyncio.to_thread(self.http, f"{RM}/ws/v1/cluster/apps?startedTimeBegin={t0 - 2000}", 3.0)
@@ -804,7 +1034,14 @@ class Yarn:
 
         async def submit(request: Request) -> JSONResponse:
             body = await hdfs_mod._json(request)
-            return JSONResponse({"id": await self.submit(body.get("example"))}, status_code=202)
+            if "template" in body:
+                app_id = await self.submit_template(body.get("template"), body.get("params"))
+            else:
+                app_id = await self.submit(body.get("example"))
+            return JSONResponse({"id": app_id}, status_code=202)
+
+        async def templates(_: Request) -> JSONResponse:
+            return JSONResponse(TEMPLATES)
 
         async def kill(request: Request) -> Response:
             await self.kill(request.path_params["id"])
@@ -823,6 +1060,7 @@ class Yarn:
             Route("/api/yarn/apps", apps, methods=["GET"]),
             Route("/api/yarn/apps", submit, methods=["POST"]),
             Route("/api/yarn/cluster", cluster, methods=["GET"]),
+            Route("/api/yarn/templates", templates, methods=["GET"]),
             Route("/api/yarn/apps/{id}", app, methods=["GET"]),
             Route("/api/yarn/apps/{id}/kill", kill, methods=["POST"]),
             Route("/api/yarn/apps/{id}/logs", logs, methods=["GET"]),

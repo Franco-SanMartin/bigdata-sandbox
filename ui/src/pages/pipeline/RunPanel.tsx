@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import type { PipelineStageInfo, StepRun } from '../../api/types';
 import { EngineTag, TraceView } from '../../components/Trace';
 import { Meter } from '../../components/ui';
+import { Panel } from '../../components/base';
 import { clock, duration, nf, sizeLabel } from '../../lib/format';
 import { navigate } from '../../state/ui';
 import { RUN_K, RUN_LABEL, toolLabel } from './util';
@@ -14,13 +15,9 @@ export function RunPanel({ run, info, now, next, onNext }: {
   const secs = ((run.finishedAt ?? now) - run.startedAt) / 1000;
   const o = run.output;
   return (
-    <section className="panel" aria-label={`Corrida ${run.id}`}>
-      <div className="panel-h">
-        <h2>Corrida <span className="mono">{run.id}</span></h2>
-        <span className="sub">{info?.label ?? run.stage} · {toolLabel(info, run.tool)}</span>
-        <span className="end"><span className="badge" data-k={k}>{RUN_LABEL[run.state]}</span></span>
-      </div>
-      <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <Panel title={<>Corrida <span className="mono">{run.id}</span></>} sub={`${info?.label ?? run.stage} · ${toolLabel(info, run.tool)}`}
+      end={<span className="badge" data-k={k}>{RUN_LABEL[run.state]}</span>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="pl-prog">
           <Meter value={run.progress} max={1} kind={k} label="Progreso del paso" />
           <span className="pct">{nf(run.progress * 100)} %</span>
@@ -44,6 +41,6 @@ export function RunPanel({ run, info, now, next, onNext }: {
           <div><button className="btn" type="button" onClick={onNext}>Seguir con {next.label}<ArrowRight size={14} /></button></div>
         )}
       </div>
-    </section>
+    </Panel>
   );
 }
