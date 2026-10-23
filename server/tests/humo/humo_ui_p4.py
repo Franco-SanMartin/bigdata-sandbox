@@ -85,6 +85,8 @@ def _practica(page, h, c, practica: str, pasos: list[str], segundos: int = 900) 
         f" · en la terminal: {', '.join(terminal)}" if terminal else "") + (
         f" · el servidor no tiene {', '.join(sorted(_faltan(h)))}" if _faltan(h) else "")
     assert not malos, malos
+    # con un servidor al día, todo se corre desde la interfaz
+    assert not terminal or _faltan(h), f"fueron a la terminal: {terminal}"
     for pid in pasos:
         expect(page.locator(f"#paso-{pid}")).to_have_attribute("data-done", "true")
     expect(page.locator(".pr-finished")).to_be_visible()
@@ -110,8 +112,8 @@ def todo(page, h) -> None:
         k, texto = _paso(page, "texto", 300)
         assert k == "ok", texto
         k, texto = _paso(page, "lanzar", 300)
-        if k == "info":
-            # lanzar trabajos desde la interfaz llega con la pantalla de Trabajos: sin eso,
+        if k == "info" and _faltan(h):
+            # un servidor sin plantillas de trabajos no lanza desde la interfaz: sin eso,
             # seguir y logs no tienen id. Queda anotado y se revisa lo que sí se puede.
             c.detalle = "lanzar todavía no se corre desde la interfaz: seguir, logs y resultado quedan para la terminal"
             h.captura(page, "p4-todo-mapreduce")

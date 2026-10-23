@@ -62,9 +62,9 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'se
 afterEach(() => { vi.useRealTimers(); });
 
 describe('prácticas en el demo', () => {
-  it('hdfs-basico: todo menos bajar el archivo (llega con el paquete de HDFS)', async () => {
+  it('hdfs-basico: de la carpeta a bajar el archivo', async () => {
     await boot(TODO);
-    const r = await play('hdfs-basico', ['get']);
+    const r = await play('hdfs-basico');
     for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
   }, 60000);
 
@@ -96,10 +96,15 @@ describe('prácticas en el demo', () => {
     for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
   }, 60000);
 
-  it('spark: las ventas y el DAG (SparkPi llega con el paquete de trabajos)', async () => {
+  it('mapreduce: el wordcount de la entrada al part-r-00000', async () => {
+    await boot(TODO);
+    const r = await play('mapreduce');
+    for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
+  }, 60000);
+
+  it('spark: SparkPi, las ventas y el DAG', async () => {
     await boot(TODO);
     const r = await play('spark');
-    expect(r.ventas.ok, r.ventas.why).toBe(true);
-    expect(r.dag.ok, r.dag.why).toBe(true);
+    for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
   }, 60000);
 });
