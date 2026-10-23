@@ -42,6 +42,15 @@ function repeated(head: string, cycle: string, total: number): Source {
 
 export const MAX_DOWNLOAD = 32 * 1048576;
 
+/** Los ejemplos se pueden subir a cualquier carpeta: el contenido sale de donde los deja el arranque */
+const BY_NAME: Record<string, string> = {
+  'ventas_grandes.csv': '/user/root/ventas/ventas_grandes.csv',
+  'ventas_sucias.csv': '/user/root/ml/ventas_sucias.csv',
+  'clientes_senal.csv': '/user/root/ml/clientes_senal.csv',
+  'numeros.txt': '/user/root/numeros.txt',
+  'texto.txt': '/user/root/texto.txt',
+};
+
 export function sourceOf(e: DemoEngine, path: string, sizeMb: number): Source {
   const total = Math.round(sizeMb * 1048576);
   const kept = store(e).get(path);
@@ -55,6 +64,7 @@ export function sourceOf(e: DemoEngine, path: string, sizeMb: number): Source {
       blob: () => b,
     };
   }
+  if (!previewFor(path).rows.length && BY_NAME[path.slice(path.lastIndexOf('/') + 1)]) path = BY_NAME[path.slice(path.lastIndexOf('/') + 1)];
   if (path === '/user/root/texto.txt') return fromText(TEXTO.join('\n') + '\n');
   if (path.startsWith('/apps/') || path.endsWith('.parquet') || path.endsWith('.jar') || path.endsWith('.gz')) {
     return { total, binary: true, read: () => Promise.resolve(''), blob: () => new Blob([new Uint8Array(Math.min(total, MAX_DOWNLOAD))]) };
