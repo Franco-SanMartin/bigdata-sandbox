@@ -88,15 +88,23 @@ su API en [server/README.md](server/README.md). Para mirarla sin instalar nada,
 está la [demo](https://franki-678.github.io/bigdata-sandbox/demo/) (un cluster
 simulado en el navegador).
 
+La interfaz arranca en **Inicio**: el estado del cluster y qué podés hacer
+ahora, con lo que todavía no está disponible, por qué y cómo habilitarlo. Cada
+pantalla (HDFS, Trabajos, Consultas, Pipeline, Machine Learning, Cluster)
+dice, con el cluster apagado o arrancando, qué vas a poder hacer y cuánto
+falta; los botones deshabilitados dicen por qué. En **Prácticas** están las
+guías 03 a 10 paso a paso, chequeadas contra el cluster.
+
 | | |
 |---|---|
-| ![Pipeline: la ingesta con hdfs dfs -put, la corrida y el riel de las seis etapas](docs/capturas/pipeline.png) | ![YARN: el NodeManager, la cola y los trabajos de MapReduce, Tez y Spark](docs/capturas/yarn.png) |
-| **Pipeline**: de un CSV sucio a un resumen y un modelo, eligiendo la herramienta de cada etapa | **YARN**: memoria, contenedores y cada trabajo con su motor |
-| ![Machine Learning: entrenamientos con scikit-learn y Spark MLlib, y el detalle de un modelo](docs/capturas/ml.png) | |
-| **Machine Learning**: el mismo modelo con scikit-learn o con Spark MLlib, comparados | |
+| ![Inicio: el estado del cluster y qué podés hacer ahora, con lo que falta y cómo activarlo](docs/capturas/inicio.png) | ![Trabajos: un wordcount terminado y las plantillas de MapReduce, Tez y Spark](docs/capturas/yarn.png) |
+| **Inicio**: qué podés hacer ahora y qué no, con el motivo y el arreglo | **Trabajos**: plantillas con parámetros, avance, contenedores y logs |
+| ![Pipeline: la ingesta hecha y la etapa de ETL con sus herramientas](docs/capturas/pipeline.png) | ![Machine Learning: un árbol de decisión entrenado con scikit-learn y su detalle](docs/capturas/ml.png) |
+| **Pipeline**: de un CSV sucio a un resumen y un modelo, eligiendo la herramienta de cada etapa | **Machine Learning**: el mismo modelo con scikit-learn o con Spark MLlib, comparados |
 
-Las capturas son del humo del CI (`server/tests/humo/humo_ui.py`), contra la
-imagen de verdad.
+Las capturas son de la [demo](https://franki-678.github.io/bigdata-sandbox/demo/);
+el humo del CI (`server/tests/humo/humo_ui.py`) saca las mismas pantallas contra
+la imagen de verdad.
 
 ### Qué hay en `base`
 

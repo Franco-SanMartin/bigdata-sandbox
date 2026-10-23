@@ -21,6 +21,11 @@ que quedó armado en las anteriores.
 | 10 | [MongoDB](10-mongodb.md) | Documentos, consultas, agregación, índices y la comparación con SQL |
 | 11 | [Problemas](11-problemas.md) | Qué hacer cuando algo no anda, venir de la imagen anterior y empezar de cero |
 
+Con la versión `full`, las guías 3 a 10 también están en la interfaz web, en
+**Prácticas**: los mismos pasos hechos desde las pantallas, con un chequeo
+contra el cluster en cada uno y el comando equivalente al lado. Las de acá
+son las de la terminal.
+
 ## Cómo leer los comandos
 
 Hay dos lugares donde se escriben comandos, y cada bloque dice cuál:
