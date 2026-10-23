@@ -16,6 +16,15 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   `docker-compose.yml` usan ese mismo con el tag escrito, para que todo ande
   sin internet después del `docker load`.
 
+### Agregado
+
+- El humo de `full` entrena desde la API todos los modelos de ML en los dos
+  motores (regresión, árbol, logística, red, tonto y KMeans) y revisa que la
+  métrica quede en un rango razonable y que la regresión aprenda la regla real.
+- Desde la interfaz: el pipeline entero desde el riel (con PySpark, Spark SQL,
+  Spark MLlib y Sqoop), la práctica de Spark, y regresión, árbol con MLlib y
+  KMeans desde la pantalla de ML.
+
 ## [1.1.0] - 2026-10-23
 
 La interfaz de `full`, rediseñada: tema claro, una pantalla de inicio que dice

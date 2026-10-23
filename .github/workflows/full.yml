@@ -2,10 +2,13 @@
 # server/ + la interfaz de ui/ en :8080) y le corre el humo de verdad contra
 # Hadoop, YARN, Hive, MySQL y MongoDB reales:
 #
-#   server/tests/humo/humo_full.py   la API, chequeo por chequeo
+#   server/tests/humo/humo_full.py   la API, chequeo por chequeo (los modelos de
+#                                    ML de los dos motores, con la métrica en
+#                                    rango y no solo "terminó")
 #   server/tests/humo/humo_ui.py     la interfaz en un Chromium (Playwright):
 #                                    cada pantalla sin errores de consola, y
-#                                    pipeline, consulta y entrenamiento desde ahí
+#                                    pipeline entero, prácticas, consulta y
+#                                    entrenamiento desde ahí
 #
 # Lo que sale es un artifact por arquitectura (humo-full-<arq>) con los
 # resúmenes, las respuestas del servidor, las salidas crudas de cada servicio

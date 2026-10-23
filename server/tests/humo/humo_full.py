@@ -731,6 +731,8 @@ def pipeline() -> None:
     paso("analisis", "pandas", {"por": "mes"})
     paso("resultados", "getmerge", {"por": "sucursal"})
     paso("ml", "mllib", {"task": "clasificacion"}, 1800)
+    paso("ml", "sklearn", {"task": "regresion"})
+    paso("ml", "sklearn", {"task": "clustering"})
 
 
 def datos() -> None:
@@ -805,11 +807,68 @@ def datos() -> None:
             assert "Closing:" not in r["error"] and not r["error"].startswith("at "), r["error"]
 
 
+# Rangos razonables de la métrica principal de cada modelo (no valores exactos). Los datos
+# de clientes_senal.csv salen de reglas conocidas: la regresión tiene que dar R² cerca de 1,
+# el árbol llega al techo del 10 % de etiquetas dadas vuelta (~0,91), la logística queda
+# abajo (la regla tiene un "o"), el tonto dice siempre lo más común (~0,57) y KMeans
+# encuentra los tres segmentos (Rand ajustado ~0,83).
+RANGOS = {
+    "regresion:lineal": ("r2", 0.95, 1.0),
+    "clasificacion:tonto": ("aciertos", 0.5, 0.65),
+    "clasificacion:arbol": ("aciertos", 0.87, 0.93),
+    "clasificacion:logistica": ("aciertos", 0.75, 0.88),
+    "clasificacion:mlp": ("aciertos", 0.86, 0.93),
+    "clustering:kmeans": ("rand_ajustado", 0.75, 1.0),
+}
+# La regla con la que se generó el gasto y cuánto puede errarle lo aprendido (como probar_ml.sh)
+REGLA_GASTO = {"antiguedad_meses": (50, 5), "visitas_mes": (1500, 60), "ticket_promedio": (0.8, 0.03),
+               "reclamos": (-1500, 100), "edad": (0, 5)}
+# Diferencia máxima entre lo medido y lo que la recomendación dice esperar
+DESVIO_ESPERADO = 0.04
+
+
+def numero(texto: str) -> float:
+    """'−1.499,87' (como lo muestra la interfaz) → -1499.87"""
+    return float(str(texto).replace("−", "-").replace(".", "").replace(",", "."))
+
+
+def coeficientes(m: dict) -> dict[str, float]:
+    tabla = next((t for t in m.get("learned") or [] if t.get("title", "").startswith("Coeficientes")), None)
+    assert tabla, f"sin coeficientes aprendidos: {[t.get('title') for t in m.get('learned') or []]}"
+    return {f[0]: numero(f[1]) for f in tabla["rows"]}
+
+
+def revisar_modelo(m: dict) -> str:
+    """Que un entrenamiento terminado tenga la métrica en su rango y, si es regresión, los
+    coeficientes cerca de la regla real. Devuelve un resumen para el detalle del chequeo."""
+    assert m["state"] == "done", m.get("error")
+    clave, lo, hi = RANGOS[f"{m['task']}:{m['model']}"]
+    v = m["metrics"].get(clave)
+    assert isinstance(v, (int, float)), (clave, m["metrics"])
+    assert lo <= v <= hi, f"{m['engine']} {m['model']}: {clave} = {v} fuera de [{lo}, {hi}]"
+    det = f"{clave} {v}"
+    if m["task"] == "regresion":
+        co = coeficientes(m)
+        lejos = {c: co.get(c) for c, (real, tol) in REGLA_GASTO.items()
+                 if co.get(c) is None or abs(co[c] - real) > tol}
+        assert not lejos, f"coeficientes lejos de la regla: {lejos} (aprendidos {co})"
+        assert abs(co["(constante)"] - 5000) < 500, co
+        det += f"; visitas {co['visitas_mes']}, ticket {co['ticket_promedio']}, reclamos {co['reclamos']}"
+    if m["task"] == "clasificacion":
+        mat = (m.get("confusion") or {}).get("matrix")
+        assert mat and sum(map(sum, mat)) == m["testRows"], (mat, m["testRows"])
+        det += f"; matriz {mat}"
+    if m["task"] == "clustering":
+        assert m["trainRows"] == 20000 and m["testRows"] == 0, (m["trainRows"], m["testRows"])
+    if m["engine"] == "mllib":
+        assert (m.get("appId") or "").startswith("application_"), m.get("appId")
+    return det
+
+
 def ml() -> None:
-    def entrenar(engine: str) -> dict:
+    def entrenar(task: str, model: str, engine: str, **extra) -> dict:
         t0 = time.time()
-        codigo, r = pedir("POST", "/api/ml/train", {"task": "clasificacion", "model": "arbol", "engine": engine,
-                                                     "target": "vuelve", "params": {"max_depth": 3}})
+        codigo, r = pedir("POST", "/api/ml/train", {"task": task, "model": model, "engine": engine, **extra})
         assert codigo == 202, (codigo, r)
         mid = r["id"]
 
@@ -817,12 +876,36 @@ def ml() -> None:
             evs = [e["run"] for e in eventos("model", t0) if e.get("run", {}).get("id") == mid]
             return evs[-1] if evs and evs[-1]["state"] != "running" else None
         m = esperar(fin, 1800, f"modelo {mid}", 2)
-        TIEMPOS[f"ML {engine}"] = round(time.time() - t0, 1)
-        guardar(f"ml_{engine}", m)
+        TIEMPOS[f"ML {engine} {task} {model}"] = round(time.time() - t0, 1)
+        guardar(f"ml_{engine}_{task}_{model}", m)
         assert m["state"] == "done", m.get("error")
         return m
 
-    referencia = None
+    esperados = {}
+    with Chequeo("ML: datasets y recomendación de los tres problemas") as c:
+        codigo, ds = pedir("GET", "/api/ml/datasets")
+        guardar("ml_datasets", ds)
+        assert codigo == 200 and ds and ds[0]["id"] == "senal", ds
+        for task in ("regresion", "clasificacion", "clustering"):
+            codigo, rec = pedir("POST", "/api/ml/recommend", {"dataset": "senal", "task": task})
+            guardar(f"ml_recommend_{task}", rec)
+            assert codigo == 200 and rec["choices"], rec
+            assert any(x["fit"] == "recomendado" for x in rec["choices"]), rec["choices"]
+            for x in rec["choices"]:
+                if x.get("expected"):
+                    esperados[f"{x['engine']}:{task}:{x['model']}"] = x["expected"]["value"]
+        c.detalle = f"{ds[0]['rows']} filas; esperados {esperados}"
+
+    def contra_esperado(m: dict) -> str:
+        """Lo medido cerca de lo que la recomendación dice que va a dar"""
+        e = esperados.get(f"{m['engine']}:{m['task']}:{m['model']}")
+        v = m["metrics"][RANGOS[f"{m['task']}:{m['model']}"][0]]
+        if e is None:
+            return ""
+        assert abs(v - e) <= DESVIO_ESPERADO, f"medido {v}, la recomendación espera {e}"
+        return f"; esperado {e}"
+
+    referencia, m = None, None
     with Chequeo("ML: matriz de confusión de modelos_sklearn.py (referencia)") as c:
         rc, out, err = en_contenedor(
             "cd /datos && [ -s clientes_senal.csv ] || python3 ejemplos/ml/generar_senal.py > /dev/null; "
@@ -836,26 +919,68 @@ def ml() -> None:
         c.detalle = f"{referencia}"
 
     with Chequeo("ML: scikit-learn igual que modelos_sklearn.py") as c:
-        m = entrenar("sklearn")
+        m = entrenar("clasificacion", "arbol", "sklearn", target="vuelve", params={"max_depth": 3})
         mat = m.get("confusion", {}).get("matrix")
-        c.detalle = f"{TIEMPOS['ML sklearn']} s; matriz {mat}; métricas {m.get('metrics')}"
+        c.detalle = f"{TIEMPOS['ML sklearn clasificacion arbol']} s; {revisar_modelo(m)}{contra_esperado(m)}"
         assert mat == referencia, (mat, referencia)
+    arbol_sk = m["metrics"].get("aciertos") if m else None
 
     with Chequeo("ML: MLlib con appId de YARN") as c:
-        m = entrenar("mllib")
+        m = entrenar("clasificacion", "arbol", "mllib", target="vuelve", params={"max_depth": 3})
         app = m.get("appId")
-        c.detalle = f"{TIEMPOS['ML mllib']} s; appId {app}; matriz {m.get('confusion', {}).get('matrix')}; " \
-                    f"métricas {m.get('metrics')}"
-        assert app and app.startswith("application_"), m
-        codigo, d = pedir("GET", f"/api/yarn/apps/{app}", timeout=60)
+        c.detalle = f"{TIEMPOS['ML mllib clasificacion arbol']} s; appId {app}; {revisar_modelo(m)}{contra_esperado(m)}"
+        d = esperar_app(app, 120)
         guardar("yarn_app_mllib", d)
-        assert codigo == 200, d
+        assert d["state"] == "FINISHED", d.get("state")
+
+    # El resto de los modelos, en los dos motores: cada uno con su métrica en rango
+    otros = [
+        ("regresion", "lineal", "sklearn", {"trainPct": 70}),
+        ("regresion", "lineal", "mllib", {}),
+        ("clasificacion", "tonto", "sklearn", {}),
+        ("clasificacion", "logistica", "sklearn", {}),
+        ("clasificacion", "logistica", "mllib", {}),
+        ("clasificacion", "mlp", "sklearn", {}),
+        ("clasificacion", "mlp", "mllib", {}),
+        ("clustering", "kmeans", "sklearn", {}),
+        ("clustering", "kmeans", "mllib", {}),
+    ]
+    medidos = {}
+    for task, model, engine, extra in otros:
+        with Chequeo(f"ML: {engine} {task} {model} con la métrica en rango") as c:
+            m = entrenar(task, model, engine, **extra)
+            det = revisar_modelo(m)
+            medidos[f"{engine}:{model}"] = m["metrics"]
+            c.detalle = f"{TIEMPOS[f'ML {engine} {task} {model}']} s; {det}{contra_esperado(m)}" \
+                        f"; {m['trainRows']}/{m['testRows']} filas"
+            if extra.get("trainPct") == 70:
+                assert (m["trainRows"], m["testRows"]) == (14000, 6000), (m["trainRows"], m["testRows"])
+            if engine == "mllib" and task != "clustering":
+                assert m["trainRows"] + m["testRows"] == 20000 and 0.75 <= m["trainRows"] / 20000 <= 0.85, \
+                    (m["trainRows"], m["testRows"])
+            if task == "clustering" and engine == "sklearn":
+                assert m["metrics"]["rand_sin_escalar"] < m["metrics"]["rand_ajustado"], m["metrics"]
+
+    with Chequeo("ML: la logística no le gana al árbol y nadie pierde contra el tonto") as c:
+        tonto = medidos["sklearn:tonto"]["aciertos"]
+        log_sk, log_ml = medidos["sklearn:logistica"]["aciertos"], medidos["mllib:logistica"]["aciertos"]
+        c.detalle = f"árbol {arbol_sk}, logística {log_sk} / {log_ml} (MLlib), tonto {tonto}"
+        assert log_sk < arbol_sk and log_ml < arbol_sk, c.detalle
+        assert all(v["aciertos"] > tonto + 0.1 for k, v in medidos.items() if "aciertos" in v and k != "sklearn:tonto")
 
     with Chequeo("ML: lista de modelos") as c:
         codigo, ms = pedir("GET", "/api/ml/models")
         guardar("ml_models", ms)
         c.detalle = f"{[(x['engine'], x['model'], x['state']) for x in ms]}"
-        assert codigo == 200 and len(ms) >= 2
+        assert codigo == 200 and len(ms) >= 2 + len(otros)
+        # también los que entrenó el pipeline (etapa ML): todos con la métrica en rango
+        malos = []
+        for x in ms:
+            try:
+                revisar_modelo(x)
+            except AssertionError as e:
+                malos.append(f"{x['id']}: {e}")
+        assert not malos, malos
 
 
 # ---------------------------------------------------------------- resumen
