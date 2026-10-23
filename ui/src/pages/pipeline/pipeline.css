@@ -80,3 +80,6 @@
 .pl-sum dt { color: var(--text-3); }
 .pl-out { display: inline-block; max-width: 150px; vertical-align: bottom; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pl-sum dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* la banda de capacidad: que el punto no se estire */
+.pl-page .capnote > .dot { flex: none; }

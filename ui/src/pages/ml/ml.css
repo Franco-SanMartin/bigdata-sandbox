@@ -1,9 +1,22 @@
 /* Machine Learning: rol de columnas, recomendación, formulario, entrenamiento en vivo y detalle del modelo. Solo tokens del sistema. */
 
-/* Columnas y su rol */
-.ml-cols tr[data-role="ignorar"] td.mono:first-child { color: var(--text-4); text-decoration: line-through; text-decoration-color: var(--n-7); }
-.ml-cols tr[data-role="objetivo"] td.mono:first-child { color: var(--text); font-weight: 600; }
-.ml-cols td { vertical-align: middle; }
+/* Columnas: lista compacta, un checkbox por variable; el objetivo lo marca el tipo de problema */
+.ml-page .capnote > .dot { flex: none; }
+.ml-pad { padding: 14px; }
+.ml-cols { list-style: none; margin: 0; padding: 0; }
+.ml-cols li { display: grid; grid-template-columns: 16px minmax(120px, auto) 64px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-height: 36px; padding: 4px 14px; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-md); }
+.ml-cols li:last-child { border-bottom: 0; }
+.ml-cols li:hover { background: var(--n-1); }
+.ml-ck { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+span.ml-ck { cursor: default; }
+.ml-cn { color: var(--text); cursor: pointer; }
+.ml-ct { font-size: var(--fs-xs); }
+.ml-cnote { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.ml-cols li[data-role="ignorar"] .ml-cn { color: var(--text-4); text-decoration: line-through; text-decoration-color: var(--n-7); }
+.ml-cols li[data-role="objetivo"] { background: var(--ok-bg); }
+.ml-cols li[data-role="objetivo"] .ml-cn { font-weight: 600; cursor: default; }
+.ml-cols li[data-role="otro-objetivo"] .ml-cn, .ml-cols li[data-role="respuesta"] .ml-cn { color: var(--text-3); cursor: default; }
+@media (max-width: 720px) { .ml-cols li { grid-template-columns: 16px minmax(0, 1fr) auto; } .ml-cols .ml-ct, .ml-cols .ml-cnote { display: none; } }
 .ml-sum { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 10px 14px; border-top: 1px solid var(--line-soft); font-size: var(--fs-sm); color: var(--text-3); margin: 0; }
 .ml-sum b { color: var(--text); font-weight: 500; }
 
@@ -67,4 +80,4 @@
 .cm td[data-d] { border-color: var(--n-9); }
 .cm td[data-hi] { color: var(--n-0); }
 .cm td[data-hi] span { color: var(--n-3); }
-.ml-cols td:last-child { white-space: normal; min-width: 200px; font-size: var(--fs-sm); }
+.ml-page > .grid { align-items: start; }

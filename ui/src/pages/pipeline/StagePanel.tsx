@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ArrowRight, Lock, Play } from 'lucide-react';
 import type { ApiErrorCode, PipelineStageInfo, PipelineState, PipelineTool, ToolOption } from '../../api/types';
 import { EngineTag } from '../../components/Trace';
+import { GatedButton } from '../../components/base';
 import { CodeBlock, Dot, Seg, Stepper, Switch } from '../../components/ui';
 import { STATE_LABEL, feeder, type OptVal } from './util';
 
@@ -69,8 +70,7 @@ export function StagePanel({ info, index, st, tool, values, onTool, onValue, onR
           )}
           <CodeBlock lines={[...(tool.options.length ? ['# con las opciones por defecto; el comando exacto queda en la corrida'] : []), ...tool.command.split('\n')]} label="Comando" />
           <div className="pl-run">
-            <button className="btn btn-primary" type="button" disabled={!!runBlock} onClick={onRun}><Play size={14} />Correr {tool.label}</button>
-            {runBlock && <span className="why">{runBlock}</span>}
+            <GatedButton cap="pipeline" blockedBy={runBlock} className="btn btn-primary" onClick={onRun} inline><Play size={14} aria-hidden="true" />Correr {tool.label}</GatedButton>
           </div>
         </>}
 

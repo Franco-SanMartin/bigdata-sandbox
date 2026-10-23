@@ -1,13 +1,15 @@
 /* Machine Learning: dataset con el rol de cada columna, qué modelo conviene, entrenamiento en vivo y el detalle de cada modelo. */
 import { useEffect, useMemo, useState } from 'react';
-import { Brain, Play, Power } from 'lucide-react';
+import { Brain, Play } from 'lucide-react';
 import type { MlDataset, MlTask, ModelChoice, ModelRun } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { SampleTable } from '../../components/Trace';
-import { Empty, Meter, Seg, Stepper } from '../../components/ui';
+import { Meter, Seg, Stepper } from '../../components/ui';
+import { EmptyState, GatedButton, PageHeader, Panel, SkeletonLines } from '../../components/base';
+import type { Capability } from '../../lib/capabilities';
+import { runFix, useCapabilities } from '../../state/capabilities';
 import { HELP } from '../../help/content';
 import { trainModel } from '../../state/actions';
-import { navigate } from '../../state/ui';
 import { useStatus } from '../../state/store';
 import { useApi } from '../../state/useApi';
 import { mbLabel, nf } from '../../lib/format';
@@ -30,12 +32,10 @@ const PARAMS: Record<string, Param[]> = {
 const defaults = (model: string) => ({ ...DEFAULT_PARAMS[model] });
 const def = (model: string, key: string) => DEFAULT_PARAMS[model]?.[key] ?? '';
 
-type Role = 'objetivo' | 'entrada' | 'ignorar';
-
 export function MlPage() {
   const status = useStatus();
   const running = status?.phase === 'running';
-  const up = running && status.config.services === 'todo';
+  const caps = useCapabilities();
   const [task, setTask] = useState<MlTask>('clasificacion');
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const [model, setModel] = useState('arbol');
@@ -76,11 +76,20 @@ export function MlPage() {
   function applyChoice(c: ModelChoice) { setModel(c.model); setEngine(c.engine); setParams(defaults(c.model)); }
   function pickModel(m: string) { setModel(m); setParams(defaults(m)); if (!choices.some(c => c.model === m && c.engine === engine)) setEngine('sklearn'); }
 
-  function setRole(col: string, role: Role, ds: MlDataset) {
-    if (role === 'objetivo') { const t = ds.targets.find(x => x.column === col); if (t) setTask(t.task); return; }
-    if (ds.targets.some(x => x.column === col)) { if (target === col) setTask('clustering'); return; }
-    setIgnored(s => { const n = new Set(s); if (role === 'ignorar') n.add(col); else n.delete(col); return n; });
+  function toggle(col: string) {
+    setIgnored(s => { const n = new Set(s); if (n.has(col)) n.delete(col); else n.add(col); return n; });
   }
+  function useAsTarget(col: string, ds: MlDataset) {
+    const t = ds.targets.find(x => x.column === col);
+    if (t) setTask(t.task);
+  }
+
+  // Entrenar, con cualquiera de los dos motores, necesita SERVICIOS=todo (Spark y Python en el contenedor):
+  // si scikit-learn está listo pero falta eso, el motivo y el arreglo son los de MLlib
+  const trainCap: Capability = engine === 'mllib' ? caps['ml.mllib']
+    : caps['ml.sklearn'].state !== 'ready' ? caps['ml.sklearn']
+    : status && status.config.services !== 'todo' ? caps['ml.mllib']
+    : caps['ml.sklearn'];
 
   async function train() {
     if (!ds) return;
@@ -101,68 +110,72 @@ export function MlPage() {
   const trainRows = ds ? Math.round(ds.rows * trainPct / 100) : 0;
 
   return (
-    <div className="page-in">
-      <div className="page-head">
-        <div><h1>Machine Learning</h1><p>{HELP.ml.intro}</p></div>
-        <div className="page-actions">
-          <Seg value={task} onChange={setTask} label="Tipo de problema" options={TASKS.map(t => ({ value: t, label: TASK[t] }))} />
-        </div>
-      </div>
-      {!up && (
-        <div className="callout" data-k={status?.phase === 'starting' ? 'run' : undefined} style={{ marginBottom: 16, alignItems: 'center' }}>
-          <span style={{ flex: 1 }}>{status?.phase === 'starting' ? <><b>El cluster está arrancando.</b> Se puede entrenar cuando terminen Spark y Python.</>
-            : running ? <><b>Para entrenar hace falta SERVICIOS=todo</b> (Spark y Python). Igual se ven los datos y qué modelo conviene.</>
-            : <><b>El cluster está apagado.</b> Se ven los datos y qué modelo conviene; para entrenar, prendelo.</>}</span>
-          {!running && status?.phase !== 'starting' && <button className="btn btn-sm" type="button" onClick={() => navigate('cluster')}><Power size={12} />Ir a Cluster</button>}
+    <div className="page-in ml-page">
+      <PageHeader title="Machine Learning" sub="Elegís qué predecir, con qué columnas y con qué motor; entrenás y comparás métricas, tiempo y memoria."
+        help={HELP.ml.intro}
+        actions={<Seg value={task} onChange={setTask} label="Tipo de problema" options={TASKS.map(t => ({ value: t, label: TASK[t] }))} />} />
+      {status && trainCap.state !== 'ready' && (
+        <div className="capnote" data-k={trainCap.state} role="status">
+          <span className="dot" data-s={trainCap.state === 'starting' ? 'starting' : 'off'} aria-hidden="true" />
+          <span><b>Entrenar:</b> {trainCap.reason}. Los datos y qué modelo conviene se ven igual.</span>
+          {trainCap.fix && trainCap.fix.kind !== 'wait' && <button type="button" className="btn btn-sm" onClick={() => runFix(trainCap.fix)}>{trainCap.fixLabel}</button>}
         </div>
       )}
       <div className="grid cols-12">
-        <section className="panel span-7">
-          <div className="panel-h">
-            <h2>{ds?.label ?? 'Datos'}</h2>
-            <span className="end"><Seg value={view} onChange={setView} label="Vista del dataset" options={[{ value: 'cols', label: 'columnas' }, { value: 'sample', label: 'muestra' }]} /></span>
-          </div>
-          {datasets.error ? <div className="panel-b"><div className="callout" data-k="bad"><span>{datasets.error}</span></div></div>
-            : !ds ? <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{datasets.loading ? [0, 1, 2, 3].map(i => <div key={i} className="skel" style={{ height: 24 }} />) : <Empty icon={<Brain size={20} />} title="Sin datasets" />}</div>
+        <Panel className="span-7" title={ds?.label ?? 'Datos'} sub={ds ? `${nf(ds.rows)} filas` : undefined}
+          end={<Seg value={view} onChange={setView} label="Vista del dataset" options={[{ value: 'cols', label: 'columnas' }, { value: 'sample', label: 'muestra' }]} />}
+          flush>
+          {datasets.error ? <div className="ml-pad"><EmptyState compact kind="error" title="No se pudo leer el dataset">{datasets.error}</EmptyState></div>
+            : !ds ? <div className="ml-pad">{datasets.loading ? <SkeletonLines n={5} /> : <EmptyState compact icon={<Brain size={20} aria-hidden="true" />} title="Sin datasets">El dataset de clientes se genera al arrancar el cluster.</EmptyState>}</div>
             : view === 'sample' ? <SampleTable sample={ds.sample} label="Muestra del dataset" />
             : (
-              <div className="tbl-wrap">
-                <table className="tbl ml-cols" aria-label="Rol de cada columna">
-                  <thead><tr><th>columna</th><th>tipo</th><th>rol</th><th>qué es</th></tr></thead>
-                  <tbody>
-                    {ds.columns.map(c => {
-                      const isTarget = ds.targets.some(t => t.column === c.name);
-                      const role: Role = isTarget ? (target === c.name ? 'objetivo' : 'ignorar') : c.role === 'entrada' && !ignored.has(c.name) ? 'entrada' : 'ignorar';
+              <div>
+                <ul className="ml-cols" aria-label="Columnas del dataset">
+                  {ds.columns.map(c => {
+                    const tgt = ds.targets.find(t => t.column === c.name);
+                    if (c.role === 'respuesta') return (
+                      <li key={c.name} data-role="respuesta">
+                        <span className="ml-ck" aria-hidden="true" />
+                        <span className="mono ml-cn">{c.name}</span><span className="mono muted ml-ct">{c.type}</span>
+                        <span className="ml-cnote muted">{c.note}</span>
+                        <span className="tag">solo para comparar</span>
+                      </li>
+                    );
+                    if (tgt) {
+                      const on = target === c.name;
                       return (
-                        <tr key={c.name} data-role={c.role === 'respuesta' ? 'respuesta' : role}>
-                          <td className="mono">{c.name}</td>
-                          <td className="mono muted">{c.type}</td>
-                          <td>{c.role === 'respuesta' ? <span className="tag">solo para comparar</span> : (
-                            <Seg value={role} onChange={v => setRole(c.name, v, ds)} label={`Rol de ${c.name}`}
-                              options={isTarget ? [{ value: 'objetivo', label: 'objetivo' }, { value: 'ignorar', label: 'ignorada' }] : [{ value: 'entrada', label: 'variable' }, { value: 'ignorar', label: 'ignorada' }]} />
-                          )}</td>
-                          <td className="muted">{c.note}</td>
-                        </tr>
+                        <li key={c.name} data-role={on ? 'objetivo' : 'otro-objetivo'}>
+                          <span className="ml-ck" aria-hidden="true" />
+                          <span className="mono ml-cn">{c.name}</span><span className="mono muted ml-ct">{c.type}</span>
+                          <span className="ml-cnote muted">{c.note}</span>
+                          {on ? <span className="badge" data-k="ok">objetivo</span>
+                            : <button type="button" className="btn btn-sm btn-ghost" onClick={() => useAsTarget(c.name, ds)}>Predecir esta ({TASK[tgt.task].toLowerCase()})</button>}
+                        </li>
                       );
-                    })}
-                  </tbody>
-                </table>
+                    }
+                    const used = !ignored.has(c.name);
+                    return (
+                      <li key={c.name} data-role={used ? 'entrada' : 'ignorar'}>
+                        <input type="checkbox" className="ml-ck" id={`col-${c.name}`} checked={used} onChange={() => toggle(c.name)} />
+                        <label htmlFor={`col-${c.name}`} className="mono ml-cn">{c.name}</label><span className="mono muted ml-ct">{c.type}</span>
+                        <span className="ml-cnote muted">{c.note}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
                 <p className="ml-sum">
                   <span className="mono">{ds.path}{ds.inHdfs ? ' (hdfs)' : ''}</span>
-                  <span><b>{nf(ds.rows)}</b> filas</span>
                   <span>objetivo <b className="mono">{target ?? 'ninguno'}</b></span>
-                  <span>{TASK[task]}</span>
                   <span><b>{features.length}</b> de {inputs.length} variables</span>
                   {ds.targets.find(t => t.task === task) && <span className="muted">{ds.targets.find(t => t.task === task)!.label.toLowerCase()}</span>}
                 </p>
               </div>
             )}
-        </section>
+        </Panel>
 
-        <section className="panel span-5">
-          <div className="panel-h"><h2>Qué modelo conviene</h2><span className="sub">{TASK[task]}</span></div>
-          {rec.error ? <div className="panel-b"><div className="callout" data-k="bad"><span>{rec.error}</span></div></div>
-            : !rec.data ? <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[0, 1, 2].map(i => <div key={i} className="skel" style={{ height: 40 }} />)}</div>
+        <Panel className="span-5" title="Qué modelo conviene" sub={TASK[task]} flush>
+          {rec.error ? <div className="ml-pad"><EmptyState compact kind="error" title="No se pudo pedir la recomendación">{rec.error}</EmptyState></div>
+            : !rec.data ? <div className="ml-pad"><SkeletonLines n={4} /></div>
             : <>
               <div className="ml-why"><p>{rec.data.why}.</p><p className="muted">{rec.data.engineAdvice}</p></div>
               <ul className="ml-rec">
@@ -178,11 +191,10 @@ export function MlPage() {
                 ))}
               </ul>
             </>}
-        </section>
+        </Panel>
 
-        <section className="panel span-4">
-          <div className="panel-h"><h2>Entrenar</h2></div>
-          <div className="panel-b ml-form">
+        <Panel className="span-4" title="Entrenar">
+          <div className="ml-form">
             <label className="ml-f"><span className="ml-fl">modelo</span>
               <select className="input" value={model} onChange={e => pickModel(e.target.value)} disabled={!models4task.length}>
                 {models4task.map(m => <option key={m} value={m}>{MODEL[m] ?? m}</option>)}
@@ -208,8 +220,11 @@ export function MlPage() {
             ))}
             {!PARAMS[model] && <p className="muted" style={{ fontSize: 12 }}>Sin hiperparámetros para tocar.</p>}
             <div className="ml-go">
-              <button className="btn btn-primary" type="button" disabled={!up || !!live || !features.length || !choice} onClick={train}><Play size={13} />Entrenar</button>
-              <span className="muted">{!features.length ? 'Falta al menos una variable' : choice?.expected ? `esperado ${runTime(choice.expected.seconds)}` : ''}</span>
+              <GatedButton cap={trainCap} className="btn btn-primary" onClick={train}
+                blockedBy={live ? 'Esperá a que termine el entrenamiento que está corriendo' : !features.length ? 'Marcá al menos una columna como variable' : !choice ? 'Elegí un modelo de la lista' : null}>
+                <Play size={13} aria-hidden="true" />Entrenar
+              </GatedButton>
+              {choice?.expected && features.length > 0 && <span className="muted">esperado {runTime(choice.expected.seconds)}</span>}
             </div>
             {live && (
               <div className="ml-live" aria-live="polite">
@@ -219,23 +234,17 @@ export function MlPage() {
               </div>
             )}
           </div>
-        </section>
+        </Panel>
 
-        <section className="panel span-8">
-          <div className="panel-h"><h2>Entrenamientos</h2><span className="sub">{runs.length}</span></div>
-          <div className="panel-b flush">
-            <DataTable label="Entrenamientos" columns={cols} rows={runs} rowKey={r => r.id} selected={shown?.id ?? null} onRowClick={r => setSel(r.id)} initialSort={{ id: 'at', dir: -1 }}
-              empty={models.error ?? 'Todavía no se entrenó ningún modelo.'} />
-          </div>
-        </section>
+        <Panel className="span-8" title="Entrenamientos" end={runs.length > 0 ? <span className="badge-count">{runs.length}</span> : undefined} flush>
+          <DataTable label="Entrenamientos" columns={cols} rows={runs} rowKey={r => r.id} selected={shown?.id ?? null} onRowClick={r => setSel(r.id)} initialSort={{ id: 'at', dir: -1 }}
+            empty={models.error ?? 'Todavía no se entrenó ningún modelo.'} />
+        </Panel>
 
-        <section className="panel span-12">
-          <div className="panel-h"><h2>Detalle</h2></div>
-          <div className="panel-b">
-            {shown ? <ModelDetail run={shown} label={MODEL[shown.model] ?? shown.model} />
-              : <Empty icon={<Brain size={20} />} title="Sin modelos">Elegí un modelo y entrenalo: acá aparecen sus métricas, la matriz de confusión, las predicciones y lo que aprendió.</Empty>}
-          </div>
-        </section>
+        <Panel className="span-12" title="Detalle">
+          {shown ? <ModelDetail run={shown} label={MODEL[shown.model] ?? shown.model} />
+            : <EmptyState compact icon={<Brain size={20} aria-hidden="true" />} title="Sin modelos">Elegí un modelo y entrenalo: acá aparecen sus métricas, la matriz de confusión, las predicciones y lo que aprendió.</EmptyState>}
+        </Panel>
       </div>
     </div>
   );
