@@ -85,7 +85,7 @@
 .mv-legend li { display: flex; align-items: center; gap: 5px; }
 .mv-sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--n-6); flex: none; }
 .mv-sw[data-t="pos"] { background: var(--accent); }
-.mv-sw[data-t="neg"] { background: var(--n-11); }
+.mv-sw[data-t="neg"] { background: var(--n-9); }
 .mv-sw[data-t="muted"] { background: var(--n-8); }
 .mv-sw[data-t="text"] { background: var(--n-12); }
 .mv-sw[data-l] { opacity: .55; }

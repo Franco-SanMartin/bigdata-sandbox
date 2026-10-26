@@ -125,7 +125,7 @@
 /* ---------- Hero de Inicio ---------- */
 .hero { display: flex; align-items: center; gap: var(--s-5); padding: var(--s-6) var(--s-8); border-radius: var(--r-4); background: linear-gradient(180deg, var(--n-0), var(--n-1)); border: 1px solid var(--line); box-shadow: var(--shadow-2); flex-wrap: wrap; }
 .hero-lamp { width: 14px; height: 14px; border-radius: 50%; background: var(--n-7); flex: none; box-shadow: 0 0 0 5px var(--n-3); }
-.hero-lamp[data-k="ok"] { background: var(--ok); box-shadow: 0 0 0 5px var(--ok-bg), 0 0 14px rgba(34, 160, 90, .45); }
+.hero-lamp[data-k="ok"] { background: var(--ok); box-shadow: 0 0 0 5px var(--ok-bg), 0 0 14px rgba(76, 183, 130, .45); }
 .hero-lamp[data-k="run"] { background: var(--run); box-shadow: 0 0 0 5px var(--run-bg); animation: pulse 1.4s ease-in-out infinite; }
 .hero-lamp[data-k="bad"] { background: var(--bad); box-shadow: 0 0 0 5px var(--bad-bg); }
 @keyframes pulse { 50% { opacity: .45; } }

@@ -122,7 +122,7 @@
 .mimic-svg .m-chip-t.miss { fill: var(--run-text); }
 .mimic-svg .m-under { fill: var(--run); stroke: var(--surface); stroke-width: 1.5; }
 .mimic-svg .m-chipg { cursor: default; }
-.mimic-svg .m-hl { fill: rgba(28, 27, 25, .03); stroke: rgba(28, 27, 25, .14); stroke-width: 1; }
+.mimic-svg .m-hl { fill: rgba(255, 255, 255, .03); stroke: rgba(255, 255, 255, .14); stroke-width: 1; }
 .mimic-svg .m-box, .mimic-svg .m-unit { animation: mIn .3s ease-out; }
 @keyframes mIn { from { opacity: 0; } }
 .mimic-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-3); }

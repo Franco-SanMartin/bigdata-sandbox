@@ -1,72 +1,72 @@
-/* Tokens del sistema. Tema claro: fondo piedra cálido, superficies blancas con elevación sutil,
-   bordes suaves y texto en tinta. El color queda para estados (listo, en curso, caído) y,
-   apagado, para distinguir motores. El acento (petróleo) marca solo la interacción: foco,
-   pestaña y sección activas, enlaces y selección; nunca un estado ni un fondo grande.
+/* Tokens del sistema. Tema oscuro siempre, sin interruptor y sin seguir al del sistema operativo:
+   escala de negro a blanco en grises, sin azul. El color queda para estados (listo, en curso,
+   caído) y, apagado, para distinguir motores. El acento es un gris claro que marca solo la
+   interacción: foco, pestaña y sección activas, enlaces (subrayados) y selección.
    Tipografía: IBM Plex, hecha para software de ingeniería, con números tabulares claros
    y una mono de la misma familia para comandos, puertos e ids. */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Neutros piedra, de fondo (0) a tinta (12). Lo que suba de número contrasta más */
-  --n-0: #FFFFFF;
-  --n-1: #FBFAF8;
-  --n-2: #F7F6F3;
-  --n-3: #F1F0EC;
-  --n-4: #EAE8E4;
-  --n-5: #E2E0DB;
-  --n-6: #D6D3CD;
-  --n-7: #C4C0B9;
-  --n-8: #A6A29B;
-  --n-9: #75726C;
-  --n-10: #66635D;
-  --n-11: #45433F;
-  --n-12: #1C1B19;
+  /* Neutros, de fondo (0) a texto (12). Lo que suba de número contrasta más */
+  --n-0: #090909;
+  --n-1: #0E0E0E;
+  --n-2: #131313;
+  --n-3: #181818;
+  --n-4: #1E1E1E;
+  --n-5: #262626;
+  --n-6: #2F2F2F;
+  --n-7: #3B3B3B;
+  --n-8: #4F4F4F;
+  --n-9: #7A7A7A;
+  --n-10: #969696;
+  --n-11: #B8B8B8;
+  --n-12: #EDEDED;
 
-  --bg: #FAF9F7;
-  --bg-side: #F3F2EE;
-  --surface: var(--n-0);
-  --surface-2: var(--n-2);
+  --bg: var(--n-0);
+  --bg-side: var(--n-1);
+  --surface: var(--n-2);
+  --surface-2: var(--n-3);
   --surface-3: var(--n-4);
-  --popover: var(--n-0);
-  --line: #E3E1DC;
-  --line-soft: #ECEAE6;
-  --line-strong: #CCC8C1;
+  --popover: #161616;
+  --line: var(--n-5);
+  --line-soft: #1C1C1C;
+  --line-strong: var(--n-7);
   --text: var(--n-12);
   --text-2: var(--n-11);
   --text-3: var(--n-10);
   --text-4: var(--n-9);
 
-  /* Acento de interacción: verde petróleo (no azul, no se confunde con «listo») */
-  --accent: #0E7C73;
-  --accent-text: #0B6B63;
-  --accent-bg: rgba(14, 124, 115, .09);
-  --accent-line: rgba(14, 124, 115, .35);
+  /* Acento de interacción: gris claro (no compite con los colores de estado) */
+  --accent: #CFCFCF;
+  --accent-text: #E4E4E4;
+  --accent-bg: rgba(237, 237, 237, .08);
+  --accent-line: rgba(237, 237, 237, .34);
 
-  /* Estados: el relleno (lámparas, puntos, barras) y el texto (AA sobre blanco y sobre su tinte) */
-  --ok: #22A05A;
-  --ok-text: #13753D;
-  --ok-bg: rgba(34, 160, 90, .12);
-  --ok-line: rgba(34, 160, 90, .35);
-  --run: #D48C06;
-  --run-text: #8A5A00;
-  --run-bg: rgba(224, 154, 18, .13);
-  --run-line: rgba(212, 140, 6, .4);
-  --bad: #D93A31;
-  --bad-text: #B42318;
-  --bad-bg: rgba(220, 59, 50, .10);
-  --bad-line: rgba(217, 58, 49, .38);
+  /* Estados: el relleno (lámparas, puntos, barras) y el texto (que se lea sobre fondo oscuro y sobre su tinte) */
+  --ok: #4CB782;
+  --ok-text: #74CFA1;
+  --ok-bg: rgba(76, 183, 130, .13);
+  --ok-line: rgba(76, 183, 130, .38);
+  --run: #D9A43F;
+  --run-text: #E8BC66;
+  --run-bg: rgba(217, 164, 63, .13);
+  --run-line: rgba(217, 164, 63, .42);
+  --bad: #E5534B;
+  --bad-text: #F2867F;
+  --bad-bg: rgba(229, 83, 75, .13);
+  --bad-line: rgba(229, 83, 75, .4);
   --bad-solid: #C9302C;
 
   /* Motores, apagados (MR arena, Tez violeta, Spark naranja, una sola máquina rosa) */
-  --eng-mr: #A8946A;
-  --eng-tez: #7F72C2;
-  --eng-spark: #D07A3E;
-  --eng-uno: #C0789E;
+  --eng-mr: #A69E8A;
+  --eng-tez: #9389C4;
+  --eng-spark: #C38C64;
+  --eng-uno: #B48AA2;
 
-  --focus: var(--accent);
-  --shadow-1: 0 1px 2px rgba(28, 27, 25, .05);
-  --shadow-2: 0 1px 2px rgba(28, 27, 25, .05), 0 2px 8px -2px rgba(28, 27, 25, .07);
-  --shadow-pop: 0 0 0 1px rgba(28, 27, 25, .06), 0 4px 10px -4px rgba(28, 27, 25, .10), 0 16px 36px -10px rgba(28, 27, 25, .20);
+  --focus: rgba(237, 237, 237, .6);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px -2px rgba(0, 0, 0, .5);
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, .07), 0 12px 32px -8px rgba(0, 0, 0, .8);
 
   --r-1: 5px;
   --r-2: 7px;
