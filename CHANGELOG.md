@@ -9,6 +9,48 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+Las Prácticas de `full` ahora te hacen pensar el comando antes de correrlo y
+te dicen, en cada paso, dónde quedó cada cosa.
+
+### Agregado
+
+- **Pregunta antes de ejecutar** en cada paso que corre un comando (guías 03 a
+  10): tres o cuatro opciones, y al elegir te dice por qué esa sí o por qué no
+  y cuál era. *Ejecutar* se habilita después de responder; la barra lateral
+  cuenta cuántas acertaste al primer intento y, si ya hiciste la práctica,
+  podés ver la respuesta directo.
+- **Dónde queda**: después de cada paso, qué hay en el contenedor, en HDFS, en
+  la base y en tu compu, y cómo llegar a mirarlo en la interfaz.
+- **Salida de la terminal**: lo que imprimiría el comando, tal cual, con el
+  código de salida y lo que va a stderr marcado aparte.
+- **Qué hiciste**: al terminar una práctica, cada paso con su comando y dónde
+  quedó el resultado.
+- **Volver al paso**: si saltás a otra pantalla desde un paso ("Ver en HDFS",
+  "Ver el trabajo"), arriba queda un botón que te devuelve al mismo paso.
+- **Antes de empezar**: cada práctica lista lo que necesita andando (y en qué
+  paso), con el motivo y el botón que lo arregla, y las prácticas previas.
+
+### Cambiado
+
+- La interfaz es **oscura siempre**: no sigue al tema de Windows/macOS ni
+  tiene interruptor.
+- El comando que muestra cada paso es el que corre de verdad (el DataNode o
+  NameNode que se apaga, el `setrep -w`, la carpeta exacta).
+- *Bajarlo a tu compu* dice la verdad: el botón descarga por el navegador
+  (WebHDFS); `hdfs dfs -get` baja al contenedor, y se explica la diferencia.
+- La verificación automática espera espaciado (de 3 s a 10 s) y sin apilar
+  pedidos, en vez de un fsck por segundo que llenaba la Consola.
+- La versión `full` también monta tu carpeta `datos/` en `/datos` en el
+  `docker run` del README.
+
+### Arreglado
+
+- **Salud** de HDFS ya no se contradice: si hay bloques sub-replicados que no
+  tienen adónde copiarse (piden más copias que DataNodes vivos), el resumen y
+  la cola lo dicen igual, en vez de "re-replicando" con la cola vacía.
+- En la demo, al volver un DataNode se podían borrar copias de más dos veces y
+  quedaban bloques sub-replicados para siempre.
+
 ## [1.2.0] - 2026-10-23
 
 Cada modelo de Machine Learning por dentro: el modelo entrenado dibujado en 3D
