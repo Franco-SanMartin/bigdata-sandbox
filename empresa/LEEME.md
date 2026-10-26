@@ -1,5 +1,7 @@
 # Versión empresa: el cluster del aula
 
+> Para probarla en el laboratorio con el profe: [GUIA-AULA.md](GUIA-AULA.md).
+
 La imagen `franki678/bigdata-sandbox:empresa` es la `full` más un modo de
 cluster de verdad: cada compu del aula corre un contenedor y entre todas arman
 **un solo cluster** de Hadoop.
