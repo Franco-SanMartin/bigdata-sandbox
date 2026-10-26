@@ -269,10 +269,11 @@ export class DemoHdfs {
     const files = this.e.filesView().filter(f => f.state !== 'writing');
     const live = this.e.dnsUp();
     const tasks: ReplicationState['tasks'] = [];
-    let under = 0, missing = 0, over = 0;
+    let under = 0, missing = 0, over = 0, noRoom = 0;
     files.forEach(f => f.blocks.forEach(b => {
       const k = b.locations.length;
       if (!k) { missing++; return; }
+      if (k < f.replication && k >= live) noRoom++;
       if (k < f.replication) { under++; for (let i = k; i < Math.min(f.replication, live); i++) tasks.push({ block: b.name, file: f.path, kind: 'copy', from: b.locations[0], state: 'pending' }); }
       if (k > f.replication) { over++; tasks.push({ block: b.name, file: f.path, kind: 'delete', from: b.locations[b.locations.length - 1], state: 'pending' }); }
     }));
@@ -280,7 +281,7 @@ export class DemoHdfs {
     if (this.e.replicating()) tasks.filter(t => t.kind === 'copy').slice(0, 2).forEach(t => { t.state = 'running'; });
     const now = this.e.now();
     return {
-      underReplicated: under, missing, overReplicated: over, pending: tasks.length,
+      underReplicated: under, missing, overReplicated: over, pending: tasks.length, noRoom, liveDataNodes: live,
       stale: this.e.dataNodes().filter(d => d.state === 'stale' && d.deadAt).map(d => ({ dataNode: d.id, deadInSec: Math.max(0, Math.round((d.deadAt! - now) / 1000)) })),
       tasks, recent: this.e.transfers.slice(),
     };

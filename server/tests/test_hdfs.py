@@ -268,6 +268,32 @@ def test_replicacion(settings, tmp_path, fake_hdfs):
         assert {"block": "blk_1073741825_1001", "file": "/user/root/humo/humo.csv", "kind": "copy",
                 "from": 2, "state": "pending"} in r["tasks"]
         assert all(t["file"] != "/user/root/humo/grande.bin" for t in r["tasks"])
+        assert r["liveDataNodes"] == 2 and r["noRoom"] == 0
+    asyncio.run(main())
+
+
+def test_replicacion_sin_lugar_y_dn_recien_muerto(settings, tmp_path, fake_hdfs):
+    """JMX dice sub-replicados y la cola tiene que ser coherente: o hay tareas, o noRoom explica por qué no."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        cl.hdfs = {**cl.hdfs, "underReplicated": 2}
+        fake_hdfs["fsck"].write_text(fixture_text("fsck_dn_muerto.txt"))
+        # Un solo DataNode vivo y la replicación pide 2: no hay adónde copiar. El fsck real todavía lista a dn1
+        # (muerto) en los 300 bloques de grande.bin; sin descontarlo darían "sano" y la cola quedaría muda
+        h.datanodes = lambda: [{"id": 1, "state": "dead"}, {"id": 2, "state": "live"}]
+        h._live_count = lambda: 1
+        r = await h.replication()
+        assert r["tasks"] == [] and r["noRoom"] == 302 and r["liveDataNodes"] == 1
+        assert r["underReplicated"] == 2
+        # El fsck sigue listando a dn1 (recién muerto) como ubicación de grande.bin: esas copias no cuentan,
+        # así que con 2 vivos aparecen las copias pendientes y no una "cola vacía" al lado de los sub-replicados
+        h.datanodes = lambda: [{"id": 1, "state": "dead"}, {"id": 2, "state": "live"}, {"id": 3, "state": "live"}]
+        h._live_count = lambda: 2
+        r = await h.replication()
+        assert r["noRoom"] == 0
+        assert any(t["file"] == "/user/root/humo/humo.csv" and t["from"] == 2 for t in r["tasks"])
+        assert sum(1 for t in r["tasks"] if t["file"] == "/user/root/humo/grande.bin") == 300
+        assert all(t["from"] != 1 for t in r["tasks"])
     asyncio.run(main())
 
 
@@ -420,7 +446,8 @@ def test_rutas_hdfs(settings, tmp_path, fake_hdfs):
         r = c.post("/api/hdfs/upload", data={"dest": "/user/root"}, files={"otro": ("x", b"1")})
         assert r.status_code == 400 and r.json()["error"] == "Falta el archivo: example o file"
         r = c.patch("/api/hdfs/files", json={"path": "/user/root/humo/humo.csv", "replication": 2})
-        assert r.status_code == 204
+        # 202 con el id de la acción: la interfaz sigue el setrep -w hasta que estén las copias
+        assert r.status_code == 202 and r.json()["id"].startswith("x")
         r = c.request("DELETE", "/api/hdfs/files", params={"path": "/user/root/humo", "recursive": "0"})
         assert r.status_code == 400 and r.json()["code"] == "invalid"
         r = c.post("/api/hdfs/put", json={"example": "texto"})
@@ -428,7 +455,7 @@ def test_rutas_hdfs(settings, tmp_path, fake_hdfs):
         r = c.get("/api/hdfs/datanodes")
         assert r.status_code == 200 and {d["id"] for d in r.json()} >= {1, 2}
         r = c.get("/api/hdfs/replication")
-        assert r.status_code == 200 and set(r.json()) == {"underReplicated", "pending", "missing", "overReplicated",
+        assert r.status_code == 200 and set(r.json()) == {"underReplicated", "pending", "missing", "overReplicated", "noRoom", "liveDataNodes",
                                                           "stale", "tasks", "recent"}
         # La copia temporal de la subida se borra cuando termina el -put
         fin = __import__("time").time() + 5
@@ -625,6 +652,10 @@ def test_rutas_ver_bajar_mover(settings, tmp_path, fake_hdfs):
         r = c.get("/api/hdfs/download", params={"path": "/user/root/humo/humo.csv"})
         assert r.status_code == 200 and r.content == contenido
         assert r.headers["content-length"] == str(len(contenido))
+        # La Consola dice lo que pasó de verdad: WebHDFS al navegador, no un -get al contenedor
+        bajada = next(e for e in reversed(app.state.bus.activity) if e.get("title") == "Bajar humo.csv")
+        assert bajada["command"].startswith("curl -L 'http://localhost:9870/webhdfs/v1/user/root/humo/humo.csv?op=OPEN")
+        assert "-get" not in bajada["command"] and "hdfs dfs -get" in bajada["action"]
         assert r.headers["content-disposition"].startswith('attachment; filename="humo.csv"')
         r = c.get("/api/hdfs/download", params={"path": "/user/root/humo"})
         assert r.status_code == 400

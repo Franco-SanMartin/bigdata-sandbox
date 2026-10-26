@@ -282,7 +282,9 @@ export class DemoEngine {
   setReplication(path: string, n: number) {
     const f = this.files.find(x => x.path === path); if (!f || this.phase !== 'running') return;
     const prev = f.rep; f.rep = n;
-    this.act('Vos', 'info', `Replicación de ${path.split('/').pop()}: ${prev} → ${n}`, { command: `hdfs dfs -setrep -w ${n} ${path}`, input: `${f.blocks.length} bloques con ${prev} copia${prev > 1 ? 's' : ''}`, action: n > prev ? 'El NameNode agrega copias en otros DataNodes' : 'El NameNode borra las copias que sobran', output: `${f.blocks.length * n} copias` });
+    // Como el servidor: -w solo si hay DataNodes vivos para esa replicación (si no, no terminaría nunca)
+    const w = n <= this.dns.filter(d => d.s === 'up').length ? '-w ' : '';
+    this.act('Vos', 'info', `Replicación de ${path.split('/').pop()}: ${prev} → ${n}`, { command: `hdfs dfs -setrep ${w}${n} ${path}`, input: `${f.blocks.length} bloques con ${prev} copia${prev > 1 ? 's' : ''}`, action: n > prev ? 'El NameNode agrega copias en otros DataNodes' : 'El NameNode borra las copias que sobran', output: `${f.blocks.length * n} copias` });
     this.at(1, () => { if (n > prev) this.replicate(); else this.checkOver(); });
     this.emit();
   }

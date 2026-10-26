@@ -493,6 +493,11 @@ export interface ReplicationState {
   pending: number;
   missing: number;
   overReplicated: number;
+  /** Sub-replicados que no tienen adónde copiarse: piden más copias que DataNodes vivos hay.
+      Cuentan en underReplicated pero no entran en la cola (servidores viejos no lo mandan) */
+  noRoom?: number;
+  /** DataNodes vivos cuando se armó la cola */
+  liveDataNodes?: number;
   /** DataNodes sin latidos y segundos que faltan para darlos por muertos */
   stale: { dataNode: number; deadInSec: number }[];
   tasks: ReplicationTask[];
@@ -714,6 +719,8 @@ export interface QueryResult {
   /** Filas que leyó el motor (no las que devolvió) */
   scanned?: number;
   trace?: ActionTrace;
+  /** La salida del comando como en la terminal (Hive, MySQL y Pig; el demo no la tiene) */
+  raw?: { stream: 'out' | 'err'; text: string }[];
 }
 
 export interface QueryPlan {
@@ -947,7 +954,7 @@ export interface SandboxApi {
   /** POST /api/hdfs/put { example: 'ventas' | 'numeros' | 'sucias' } → 202 */
   putExample(example: 'ventas' | 'numeros' | 'sucias'): Promise<void>;
   /** PATCH /api/hdfs/files { path, replication } (hdfs dfs -setrep; con -w solo si hay DataNodes vivos para esa replicación) */
-  setReplication(path: string, replication: number): Promise<void>;
+  setReplication(path: string, replication: number): Promise<{ id: string } | void>;
   /** POST /api/hdfs/datanodes { id } → 202 (datanode start N en caliente) */
   addDataNode(): Promise<void>;
 

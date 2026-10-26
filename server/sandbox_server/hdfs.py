@@ -714,16 +714,25 @@ class Hdfs:
         return r
 
     async def replication(self) -> dict:
+        """La cola de re-replicación, armada con el fsck (bloque por bloque) y los contadores de JMX.
+
+        underReplicated es el contador de JMX (todo el cluster, lo que el NameNode ya sabe). El fsck puede
+        ir unos segundos atrás: sigue listando como ubicación a un DataNode recién muerto. Por eso las copias
+        se cuentan solo en DataNodes vivos, y noRoom dice cuántos bloques no tienen adónde copiarse (piden más
+        copias que DataNodes vivos hay): esos no entran en la cola aunque cuenten como sub-replicados."""
         self.c.need_hdfs()
         h = self.c.hdfs
         fsn = self._fsn()
         pending = int(fsn.get("PendingReplicationBlocks", 0) or 0)
         now = now_ms()
+        dns = self.datanodes()
         stale = [{"dataNode": d["id"], "deadInSec": max(0, round((d["deadAt"] - now) / 1000))}
-                 for d in self.datanodes() if d["state"] == "stale" and d.get("deadAt")]
+                 for d in dns if d["state"] == "stale" and d.get("deadAt")]
+        live_ids = {d["id"] for d in dns if d["state"] in ("live", "stale")}
+        live = self._live_count()
         tasks: list[dict] = []
+        no_room = 0
         if h.get("underReplicated") or h.get("overReplicated") or pending:
-            live = self._live_count()
             try:
                 files = await self.fsck_all(max_age=3)
             except ApiError:
@@ -732,16 +741,20 @@ class Hdfs:
                 if f["state"] == "writing":
                     continue
                 for b in f["blocks"]:
-                    k = len(b["locations"])
+                    locs = [l for l in b["locations"] if not live_ids or l in live_ids]
+                    k = len(locs)
                     if 0 < k < f["replication"]:
+                        if k >= live:
+                            no_room += 1
                         for _ in range(k, max(k, min(f["replication"], live))):
                             tasks.append({"block": b["name"], "file": f["path"], "kind": "copy",
-                                          "from": b["locations"][0], "state": "running" if pending else "pending"})
+                                          "from": locs[0], "state": "running" if pending else "pending"})
                     elif k > f["replication"]:
                         tasks.append({"block": b["name"], "file": f["path"], "kind": "delete",
-                                      "from": b["locations"][-1], "state": "pending"})
+                                      "from": locs[-1], "state": "pending"})
         return {"underReplicated": int(h.get("underReplicated", 0)), "pending": pending,
                 "missing": int(h.get("missing", 0)), "overReplicated": int(h.get("overReplicated", 0)),
+                "noRoom": no_room, "liveDataNodes": live,
                 "stale": stale, "tasks": tasks, "recent": list(self.recent)}
 
     # ------------------------------------------------------------- acciones
@@ -1000,10 +1013,14 @@ class Hdfs:
         path = clean(raw)
         st = await self._file_status(path)
         size = int(st.get("length", 0))
-        self.bus.log("Vos", "info", f"Bajar {name_of(path)}", command=f"hdfs dfs -get {shlex.quote(path)} .",
+        # No es un -get: el archivo no pasa por el contenedor, va directo al navegador por WebHDFS
+        url = f"http://localhost:9870/webhdfs/v1{urllib.parse.quote(path)}?op=OPEN&user.name=root"
+        self.bus.log("Vos", "info", f"Bajar {name_of(path)}",
+                     command=f"curl -L {shlex.quote(url)} -o {shlex.quote(name_of(path))}",
                      input=f"{path} · {fmt_mb(mb(size))}",
-                     action="El NameNode dice en qué DataNodes está cada bloque y se leen en orden (WebHDFS OPEN)",
-                     output="El archivo entero, a tu compu")
+                     action="El NameNode dice en qué DataNodes está cada bloque y se leen en orden (WebHDFS OPEN). "
+                            "No queda copia en el contenedor: eso sería hdfs dfs -get",
+                     output="El archivo entero, a tu compu (a la carpeta de descargas del navegador)")
         return name_of(path), size, self.stream(self._open_url(path))
 
     async def move(self, src_raw: object, dst_raw: object) -> dict:
@@ -1062,8 +1079,9 @@ class Hdfs:
 
         async def files_patch(request: Request) -> Response:
             body = await _json(request)
-            await self.set_replication(body.get("path"), body.get("replication"))
-            return Response(status_code=204)
+            run_id = await self.set_replication(body.get("path"), body.get("replication"))
+            # id: la acción (GET /api/actions/:id), para seguir el setrep hasta que estén las copias
+            return JSONResponse({"id": run_id}, status_code=202)
 
         async def files_delete(request: Request) -> JSONResponse:
             q = request.query_params

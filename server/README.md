@@ -137,7 +137,7 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `GET /api/hdfs/datanodes` | `DataNode[]` | JMX del NameNode activo (`NameNodeInfo`: `LiveNodes`, `DeadNodes`) |
 | `POST /api/hdfs/datanodes` | Agrega el DataNode N+1 en caliente → 202 `{id}` | `/opt/sandbox/bin/datanode start N` (hasta 9) |
 | `GET /api/hdfs/files` | `HdfsFile[]`: todo el árbol con bloques y réplicas | `hdfs fsck / -files -blocks -locations -openforwrite` (cacheado) + WebHDFS `LISTSTATUS` para las fechas |
-| `PATCH /api/hdfs/files` | `{path, replication}` → 204 | `hdfs dfs -setrep [-w] N <ruta>` |
+| `PATCH /api/hdfs/files` | `{path, replication}` → 202 `{id}` (la acción, en `GET /api/actions/:id`) | `hdfs dfs -setrep [-w] N <ruta>` |
 | `DELETE /api/hdfs/files?path=&recursive=1` | Borra → `ActionResult` | WebHDFS `GETCONTENTSUMMARY` (foto de antes) + `hdfs dfs -rm [-r] -skipTrash` |
 | `POST /api/hdfs/put` | `{example}` → 202 `ActionResult` | `hdfs dfs -put` del ejemplo a su carpeta de siempre |
 | `GET /api/hdfs/ls?path=` | `HdfsListing` | WebHDFS `LISTSTATUS` del NameNode activo |
@@ -145,7 +145,7 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `POST /api/hdfs/upload` | JSON `{dest, example, replication?, blockSize?}` o multipart con `file` → 202 `ActionResult` | `hdfs dfs -D dfs.replication=N -D dfs.blocksize=… -put -f <archivo> <dest>/` |
 | `POST /api/hdfs/mkdir` | `{path}` → `ActionResult` | `hdfs dfs -mkdir -p <ruta>` |
 | `GET /api/hdfs/fsck?path=` | `FsckReport` (con `raw` y `trace`) | `hdfs fsck <ruta> -files -blocks -locations` |
-| `GET /api/hdfs/replication` | `ReplicationState` | JMX (`UnderReplicatedBlocks`, `PendingReplicationBlocks`, `MissingBlocks`, DataNodes stale) + el fsck cacheado para las tareas |
+| `GET /api/hdfs/replication` | `ReplicationState` | JMX (`UnderReplicatedBlocks`, `PendingReplicationBlocks`, `MissingBlocks`, DataNodes stale) + el fsck cacheado para las tareas (solo cuenta copias en DataNodes vivos). `noRoom`: bloques sub-replicados que no tienen adónde copiarse (piden más copias que `liveDataNodes`) |
 
 ### YARN
 
@@ -202,7 +202,7 @@ clave.
 |---|---|---|
 | `GET /api/data/catalog` | `DataTable[]` de Hive, MySQL y MongoDB (las fuentes apagadas no aparecen). Se cachea 20 s y el pipeline lo invalida | `beeline` (`SHOW DATABASES`/`TABLES`, `DESCRIBE FORMATTED`), `mysql` (`information_schema`) y `mongosh` (muestra de documentos) |
 | `GET /api/data/schema?source=&name=` | `TableSchema`: columnas, DDL, índices, formato, tamaño y una muestra | Lo mismo, más `SHOW CREATE TABLE`, `SHOW INDEX` y el tamaño (`totalSize` de Hive o WebHDFS `GETCONTENTSUMMARY`) |
-| `POST /api/data/query` | `{source, text}` → `QueryResult` (hasta 1000 filas). En Hive, si lanzó un trabajo Tez, trae `appId` | `beeline --outputformat=tsv2`, `mysql --batch`, `mongosh --quiet --eval` |
+| `POST /api/data/query` | `{source, text}` → `QueryResult` (hasta 1000 filas). En Hive, si lanzó un trabajo Tez, trae `appId`. En Hive, MySQL y Pig trae `raw`: la salida del comando como en la terminal (`{stream, text}`, las últimas 60 de stderr y hasta 200 de stdout) | `beeline --outputformat=tsv2`, `mysql --batch`, `mongosh --quiet --eval` |
 | `POST /api/data/explain` | `{source, text}` → `QueryPlan` con nodos y `raw` | `EXPLAIN` en Hive y en MySQL, `.explain("executionStats")` en MongoDB |
 | `GET /api/data/examples` | Consultas de ejemplo de cada fuente | `ejemplos/` de la imagen |
 

@@ -79,6 +79,21 @@ def cell(v: str) -> object:
     return hdfs_mod._cell(v)
 
 
+
+RAW_OUT = 200   # líneas de stdout que se devuelven como salida cruda
+RAW_ERR = 60    # las últimas de stderr (beeline y Pig loguean mucho ahí)
+
+
+def raw_lines(out: str, err: str = "") -> list[dict]:
+    """La salida del comando como en la terminal (stderr primero: los logs salen antes que el resultado)."""
+    e = [l for l in err.splitlines() if l.strip()][-RAW_ERR:]
+    o = out.splitlines()
+    lines = [{"stream": "err", "text": l} for l in e] + [{"stream": "out", "text": l} for l in o[:RAW_OUT]]
+    if len(o) > RAW_OUT:
+        lines.append({"stream": "out", "text": f"… ({n(len(o) - RAW_OUT)} líneas más)"})
+    return lines
+
+
 def split_marked(lines: list[str]) -> dict[str, list[str]]:
     """Separa la salida de varias consultas por sus marcas (SELECT '@@x@@' AS marca).
     Lo que está antes de la primera marca queda en ''."""
@@ -1313,7 +1328,8 @@ class Datos:
             for a in app_ids:
                 self.bus.publish("yarn", {"appId": a})
             res["appId"] = app_ids[-1]
-        res.update({"columns": cols, "rows": rows, "ms": ms, "engine": "mr", "trace": trace})
+        res.update({"columns": cols, "rows": rows, "ms": ms, "engine": "mr", "trace": trace,
+                    "raw": raw_lines(out, err)})
         self.bus.log("Vos", "ok", title, command=command, input=trace["input"], action=action, output=output,
                      appId=app_ids[-1] if app_ids else None)
         return res
@@ -1330,6 +1346,7 @@ class Datos:
         res: dict = {}
         app_id = None
         scanned = None
+        raw: list[dict] | None = None
         title = f"Consulta en {PROC[src][1]}"
         try:
             if src == "hive":
@@ -1341,6 +1358,7 @@ class Datos:
                 if rc != 0:
                     raise self.error_of("hive", rc, out, err)
                 cols, rows, total = table_from(out.splitlines())
+                raw = raw_lines(out, err)
                 if re.match(r"\s*(create|drop|alter|insert|msck|load)\b", one, re.I):
                     self.invalidate("hive")
             elif src == "mysql":
@@ -1350,6 +1368,8 @@ class Datos:
                     raise self.error_of("mysql", rc, out, err)
                 parts = split_marked(out.splitlines())
                 cols, rows, total = table_from(parts[""])
+                # Sin los contadores que agrega el sandbox: lo que imprime tu consulta
+                raw = raw_lines("\n".join(parts[""]), err)
                 _, hrows, _ = table_from(parts.get("contadores", []), None)
                 h = {str(r[0]): r[1] for r in hrows if len(r) > 1 and isinstance(r[1], int)}
                 if h:
@@ -1397,6 +1417,8 @@ class Datos:
             res["appId"] = app_id
         if scanned is not None:
             res["scanned"] = scanned
+        if raw is not None:
+            res["raw"] = raw
         self.bus.log("Vos", "ok", title, command=command, input=trace["input"], action=action, output=output, appId=app_id)
         return res
 

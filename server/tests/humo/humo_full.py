@@ -340,11 +340,11 @@ def solo_hdfs() -> None:
 
     with Chequeo("replicación: setrep 1 y de vuelta a 2") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": archivo, "replication": 1}, timeout=120)
-        assert codigo == 204, (codigo, r)
+        assert codigo == 202 and r.get("id"), (codigo, r)
         codigo, rep = pedir("GET", "/api/hdfs/replication")
         guardar("hdfs_replication", rep)
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": archivo, "replication": 2}, timeout=120)
-        assert codigo == 204, (codigo, r)
+        assert codigo == 202 and r.get("id"), (codigo, r)
         esperar(lambda: all(sorted(b["locations"]) == [1, 2]
                             for b in pedir("GET", "/api/hdfs/file?path=" + q(archivo))[1]["blocks"]), 120, "2 copias")
 
@@ -585,7 +585,7 @@ def p2() -> None:
 
     with Chequeo("HDFS: cambiar la réplica") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": movido, "replication": 1})
-        assert codigo == 204, (codigo, r)
+        assert codigo == 202 and r.get("id"), (codigo, r)
         codigo, d = pedir("GET", "/api/hdfs/file?path=" + q(movido))
         c.detalle = f"réplica {d.get('replication')}"
         assert d.get("replication") == 1, d

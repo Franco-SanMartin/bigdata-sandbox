@@ -82,11 +82,15 @@ def test_consultas(mundo):
     async def main():
         r = await mundo.datos.query("hive", "SELECT * FROM default.ventas_limpias LIMIT 3")
         assert r["engine"] == "uno" and "appId" not in r and r["columns"][0] == "ticket" and len(r["rows"]) == 3
+        assert any("ticket" in l["text"] for l in r["raw"] if l["stream"] == "out")
         r = await mundo.datos.query("hive", "SELECT sucursal, COUNT(*) AS filas FROM default.ventas_limpias "
                                             "GROUP BY sucursal")
         assert r["engine"] == "tez" and r["appId"].startswith("application_") and r["trace"]["appIds"] == [r["appId"]]
         r = await mundo.datos.query("mysql", "SELECT * FROM ventas ORDER BY precio DESC LIMIT 2")
         assert r["rows"][0][:3] == [3, "2026-01-03", "sur"] and r["scanned"] == 9
+        # La salida cruda es la de la consulta, sin los contadores que agrega el sandbox
+        texto = [l["text"] for l in r["raw"] if l["stream"] == "out"]
+        assert texto and texto[0].startswith("id") and not any("@@contadores@@" in t or "Handler_read" in t for t in texto)
         r = await mundo.datos.query("mongodb", "db.productos.find()")
         assert r["columns"] == ["documento"] and len(r["rows"]) == 2
     asyncio.run(main())
@@ -297,6 +301,9 @@ def test_pig_consulta(mundo, monkeypatch):
         assert r["trace"]["appIds"] == ["application_1761220000000_0007", "application_1761220000000_0008"]
         assert r["trace"]["command"] == "pig -x mapreduce -f consulta.pig"
         assert "2 trabajos MapReduce" in r["trace"]["action"] and "último" in r["note"]
+        # Salida cruda: los logs de Pig (stderr, recortados) y después lo que imprimió el DUMP
+        assert r["raw"][0]["stream"] == "err" and r["raw"][-1]["stream"] == "out"
+        assert sum(1 for l in r["raw"] if l["stream"] == "err") <= D.RAW_ERR
         v = vistos[0]
         assert "DESCRIBE a; DUMP a;" in v["script"] and v["timeout"] == D.PIG_TIMEOUT
         # El archivo temporal se borra al terminar

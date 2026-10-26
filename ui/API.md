@@ -119,7 +119,7 @@ DataNode `n` web `9900+n`; JournalNode `k` RPC `8484+k` y web `8479+k`; ZKFC `80
 | `dataNodes()` | `GET /api/hdfs/datanodes` | `DataNode[]` | JMX del NameNode, `LiveNodes` / `DeadNodes` de `NameNodeInfo`, y `hdfs dfsadmin -report`. |
 | `files()` | `GET /api/hdfs/files?recursive=1` | `HdfsFile[]` | `hdfs fsck / -files -blocks -locations` (siempre el árbol entero: `recursive` se ignora). |
 | `putExample(x)` | `POST /api/hdfs/put` | `{ example: "ventas" \| "numeros" \| "sucias" }` → 202 | `hdfs dfs -put /datos/ejemplos/… /user/root/…` (sucias: `ml/ventas_sucias.csv`, generado con `ejemplos/ml/generar_sucios.py`). |
-| `setReplication(p, n)` | `PATCH /api/hdfs/files` | `{ path, replication }` → 204 | `hdfs dfs -setrep -w N <ruta>`; sin `-w` si no hay N DataNodes vivos (con `-w` no terminaría nunca). |
+| `setReplication(p, n)` | `PATCH /api/hdfs/files` | `{ path, replication }` → 202 `{ id }` | `hdfs dfs -setrep -w N <ruta>`; sin `-w` si no hay N DataNodes vivos (con `-w` no terminaría nunca). |
 | `addDataNode()` | `POST /api/hdfs/datanodes` | → 202 | Arranca el DataNode N+1 en caliente con su propio `dfs.datanode.data.dir` y sus puertos. |
 | `hdfsList(path)` | `GET /api/hdfs/ls?path=/user/root` | `HdfsListing` | WebHDFS `GET :9870/webhdfs/v1<path>?op=LISTSTATUS` (o `hdfs dfs -ls`). |
 | `hdfsFile(path)` | `GET /api/hdfs/file?path=…` | `HdfsFileDetail` | `hdfs fsck <ruta> -files -blocks -locations` + `hdfs dfs -cat <ruta> \| head` (Parquet: la imagen no trae `pyarrow`, así que `preview` viene sin filas y con `note`). |
@@ -127,7 +127,7 @@ DataNode `n` web `9900+n`; JournalNode `k` RPC `8484+k` y web `8479+k`; ZKFC `80
 | `hdfsMkdir(path)` | `POST /api/hdfs/mkdir` | `{ path }` → `ActionResult` | `hdfs dfs -mkdir -p <ruta>`. |
 | `hdfsDelete(p, r)` | `DELETE /api/hdfs/files?path=…&recursive=1` | → `ActionResult` | `hdfs dfs -rm -r -skipTrash <ruta>`. |
 | `fsck(path)` | `GET /api/hdfs/fsck?path=/` | `FsckReport` | `hdfs fsck <ruta>`; `raw` trae la salida tal cual. |
-| `replication()` | `GET /api/hdfs/replication` | `ReplicationState` | JMX del NameNode (`UnderReplicatedBlocks`, `PendingReplicationBlocks`, `MissingBlocks`, `StaleDataNodes`); `recent` sale de comparar las ubicaciones entre dos `fsck` (no ve una copia que empieza y termina entre dos sondeos). |
+| `replication()` | `GET /api/hdfs/replication` | `ReplicationState` | JMX del NameNode (`UnderReplicatedBlocks`, `PendingReplicationBlocks`, `MissingBlocks`, `StaleDataNodes`); `recent` sale de comparar las ubicaciones entre dos `fsck` (no ve una copia que empieza y termina entre dos sondeos). Las copias se cuentan solo en DataNodes vivos (el fsck tarda en olvidar a uno recién muerto); `noRoom` son los sub-replicados sin adónde copiarse (piden más copias que `liveDataNodes`): cuentan en `underReplicated` pero no entran en la cola. |
 
 Ejemplo de `hdfsUpload`:
 
@@ -198,7 +198,7 @@ con coma, y descarta los faltantes.
 |---|---|---|---|
 | `catalog()` | `GET /api/data/catalog` | `CatalogEntry[]` | `beeline -e "SHOW TABLES; DESCRIBE …"`, `mysql -e "SELECT … FROM information_schema.tables"`, `mongosh --quiet --eval` con `estimatedDocumentCount()` y una muestra de 200 documentos por colección para los campos. Sin estadísticas (tabla externa de Hive recién creada) `rows` no viene. |
 | `schema(src, name)` | `GET /api/data/schema?source=hive&name=default.ventas` | `TableSchema` | `SHOW CREATE TABLE` + `DESCRIBE FORMATTED` + `SELECT … LIMIT 5`; en MySQL `SHOW CREATE TABLE` + `SHOW INDEX`; en MongoDB `getIndexes()` y la presencia de cada campo en una muestra. |
-| `query(src, text)` | `POST /api/data/query` | `{ source, text }` → `QueryResult` | `beeline --outputformat=tsv2 -e "<sql>"`, `mysql --batch -e "<sql>"`, `mongosh --quiet --eval "<consulta>"`. Con error: code `failed` y la última línea del motor (`FAILED: ParseException…`, `ERROR 1146 (42S02)…`, `SyntaxError…`). |
+| `query(src, text)` | `POST /api/data/query` | `{ source, text }` → `QueryResult` | `beeline --outputformat=tsv2 -e "<sql>"`, `mysql --batch -e "<sql>"`, `mongosh --quiet --eval "<consulta>"`. Con error: code `failed` y la última línea del motor (`FAILED: ParseException…`, `ERROR 1146 (42S02)…`, `SyntaxError…`). En Hive, MySQL y Pig trae `raw`: la salida como en la terminal. |
 | `explain(src, text)` | `POST /api/data/explain` | `{ source, text }` → `QueryPlan` | `EXPLAIN <sql>` en Hive y MySQL; `explain("executionStats")` en MongoDB. |
 | `queryExamples()` | `GET /api/data/examples` | `QueryExample[]` | Las consultas de `ejemplos/ventas.hql`, `tienda.hql`, `tienda.sql`, `consultas_mongo.js`. |
 
