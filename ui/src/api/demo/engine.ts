@@ -313,14 +313,22 @@ export class DemoEngine {
     }));
   }
   private checkOver() {
-    const dels: { b: BlockRec; dn: number }[] = [];
+    const upReps = (b: BlockRec) => b.reps.filter(id => this.dns.find(d => d.id === id)?.s === 'up');
+    const dels: { f: FileRec; b: BlockRec; dn: number }[] = [];
     this.files.forEach(f => f.blocks.forEach(b => {
-      const live = b.reps.filter(id => this.dns.find(d => d.id === id)?.s === 'up');
-      if (live.length > f.rep) live.slice().sort((x, y) => this.count(y) - this.count(x)).slice(0, live.length - f.rep).forEach(dn => dels.push({ b, dn }));
+      const live = upReps(b);
+      if (live.length > f.rep) live.slice().sort((x, y) => this.count(y) - this.count(x)).slice(0, live.length - f.rep).forEach(dn => dels.push({ f, b, dn }));
     }));
     if (!dels.length) return;
     this.act('NameNode', 'warn', `${dels.length} copia${dels.length > 1 ? 's' : ''} de más: se borran de los DataNodes más llenos`, { tech: `OverReplicatedBlocks=${dels.length}` });
-    dels.forEach((x, i) => this.at(1 + i * .8, () => { x.b.reps = x.b.reps.filter(id => id !== x.dn); this.emit(); }));
+    // Se decide de nuevo al borrar: si checkOver corrió dos veces seguidas (o cambió algo en el medio),
+    // no se borra de más y un bloque no queda sub-replicado sin que nadie lo vuelva a copiar
+    dels.forEach((x, i) => this.at(1 + i * .8, () => {
+      if (upReps(x.b).length <= x.f.rep || !x.b.reps.includes(x.dn)) return;
+      x.b.reps = x.b.reps.filter(id => id !== x.dn);
+      this.emit();
+      if (i === dels.length - 1) this.replicate();
+    }));
   }
   private dnStop(id: number) {
     const d = this.dns.find(x => x.id === id); if (!d || d.s !== 'up') return;

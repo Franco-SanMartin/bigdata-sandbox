@@ -419,8 +419,10 @@ export const hdfsFalla: Practice = {
         // Se espera mirando el listado (no un fsck por vuelta, que llena la Consola y carga al NameNode); al final, un solo fsck
         await waitFor(c, () => entry(c, VENTAS_DIR, NAME), e => !!e && e.state !== 'under' && e.state !== 'missing',
           { seconds: 120, what: 'Esperando a que el DataNode vuelva y avise sus bloques…' });
-        const f = await c.api.fsck(VENTAS_DIR);
-        const ok = f.underReplicated === 0 && f.missing === 0;
+        // El listado puede dar sano un poco antes que fsck (que cuenta toda la carpeta): si fsck todavía
+        // no da, se vuelve a pedir pocas veces y espaciado, no uno por segundo
+        const { value: f, ok } = await waitFor(c, () => c.api.fsck(VENTAS_DIR), x => x.underReplicated === 0 && x.missing === 0,
+          { seconds: 60, every: 5000, what: 'El DataNode volvió: esperando que fsck dé sano…' });
         return {
           summary: ok ? `DataNode ${c.vars.dnNum} prendido: de nuevo sano, cada bloque con sus copias` : `DataNode ${c.vars.dnNum} prendido, pero todavía hay ${plural(f.underReplicated, 'bloque')} sub-replicado(s): probá Verificar en un rato`,
           raw: await actionRaw(c, r && typeof r === 'object' ? r.id : undefined),
