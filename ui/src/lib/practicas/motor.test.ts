@@ -3,7 +3,7 @@ import { ApiFailure } from '../../api/errors';
 import type { ClusterStatus, SandboxApi } from '../../api/types';
 import {
   STORAGE_KEY, answer, canRun, currentStep, doneCount, executeStep, fill, loadProgress, markDone, optionOrder, practiceState,
-  resetPractice, saveProgress, score, shownCommand, notThere, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
+  requirements, resetPractice, saveProgress, score, shownCommand, notThere, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
@@ -193,5 +193,23 @@ describe('notThere', () => {
     expect(notThere(new ApiFailure('Pig no está', 'unsupported'))).toBe(true);
     expect(notThere(new ApiFailure('No existe /user/root/x', 'not_found'))).toBe(false);
     expect(notThere(new Error('No hay GET /api/hdfs/cat'))).toBe(false);
+  });
+});
+
+describe('requirements', () => {
+  it('junta lo de la práctica y lo de cada paso, sin repetir, y dice en qué paso se usa', () => {
+    const pr = practiceById('mysql-sqoop')!;
+    const r = requirements(null, pr);
+    expect(r.every(n => !n.ready && !!n.cap.reason)).toBe(true);
+    const ids = r.map(n => n.cap.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(r[0].cap.id).toBe(pr.cap);
+    expect(r[0].steps).toEqual([]);
+    const sq = r.find(n => n.cap.id === 'sqoop')!;
+    const n = pr.steps.findIndex(s => s.cap === 'sqoop') + 1;
+    expect(sq.steps).toContain(String(n));
+  });
+  it('cada práctica tiene al menos lo suyo en la lista', () => {
+    for (const pr of PRACTICES) expect(requirements(null, pr)[0].cap.id, pr.id).toBe(pr.cap);
   });
 });

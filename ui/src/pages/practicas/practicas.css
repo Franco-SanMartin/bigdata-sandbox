@@ -151,3 +151,10 @@
 .pr-term-key[data-s="err"] { font: var(--t-code); color: var(--run-text); }
 .pr-q-common { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--text-3); }
 .pr-q-common pre { margin: 0; padding: 6px 10px; border-radius: var(--r-1); border: 1px dashed var(--line); background: var(--surface); font: var(--t-code); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Antes de empezar: lo que necesita la práctica y si está */
+.pr-before { margin-bottom: var(--s-2); }
+.pr-needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: var(--fs-sm); }
+.pr-needs li { display: flex; gap: 8px; align-items: baseline; line-height: 1.4; }
+.pr-needs li .dot { transform: translateY(-1px); }
+.pr-needs b { font-weight: 500; color: var(--text); }

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
 import {
-  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, practiceById, practiceState, score, stepVars, suggested,
+  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, practiceById, practiceState, requirements, score, stepVars, suggested,
   type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
 } from '../../lib/practicas';
 import type { ClusterStatus } from '../../api/types';
@@ -147,6 +147,9 @@ function Detail({ pr }: { pr: Practice }) {
   const st = practiceState(pr, pp);
   const sc = score(pr, pp);
   const missing = (pr.after ?? []).map(id => practiceById(id)).filter((p): p is Practice => !!p && practiceState(p, state.progress[p.id]) !== 'completa');
+  const needs = requirements(status, pr);
+  // lo que piden pasos puntuales y no está (lo de la práctica entera ya lo dice el aviso de arriba)
+  const stepNeeds = cap ? [] : needs.filter(n => !n.ready && n.steps.length);
 
   const reset = async () => {
     if (await confirm({ title: `¿Empezar de nuevo "${pr.title}"?`, description: 'Se borra lo que marcaste como hecho y lo que respondiste en esta práctica. Lo que creaste en el cluster queda.', confirmLabel: 'Empezar de nuevo' })) restartPractice(pr);
@@ -168,13 +171,32 @@ function Detail({ pr }: { pr: Practice }) {
             <h2>Te llevás</h2>
             <ul className="pr-learn">{pr.learn.map(l => <li key={l}>{l}</li>)}</ul>
           </section>
-          {(pr.before || pr.after?.length) && (
-            <section>
-              <h2>Antes</h2>
-              {pr.before && <p className="muted">{pr.before}</p>}
-              {pr.after?.map(id => { const p = practiceById(id); return p && <p key={id} className="muted">Conviene haber hecho <button type="button" className="pr-link" onClick={() => navigate('practicas', p.id)}>{p.title}</button></p>; })}
-            </section>
-          )}
+          <section>
+            <h2>Antes de empezar</h2>
+            {pr.before && <p className="muted pr-before">{pr.before}</p>}
+            <ul className="pr-needs" aria-label="Lo que necesita">
+              {needs.map(n => (
+                <li key={n.key} data-ok={n.ready}>
+                  <span className="dot" data-s={n.ready ? 'ok' : n.cap.state === 'starting' ? 'starting' : 'off'} aria-hidden="true" />
+                  <span>
+                    <b>{n.label}</b>{n.steps.length > 0 && <span className="muted"> · paso{n.steps.length > 1 ? 's' : ''} {n.steps.join(', ')}</span>}
+                    <span className="muted">{n.ready ? ' · andando' : ` · ${n.cap.reason ?? 'no está lista'}`}</span>
+                  </span>
+                </li>
+              ))}
+              {pr.after?.map(id => {
+                const p = practiceById(id);
+                if (!p) return null;
+                const done = practiceState(p, state.progress[p.id]) === 'completa';
+                return (
+                  <li key={id} data-ok={done}>
+                    <span className="dot" data-s={done ? 'ok' : 'off'} aria-hidden="true" />
+                    <span>Práctica <button type="button" className="pr-link" onClick={() => navigate('practicas', p.id)}>{p.title}</button><span className="muted">{done ? ' · hecha' : ' · conviene hacerla antes'}</span></span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
           <section>
             <h2>Avance</h2>
             <Progress pr={pr} pp={pp} />
@@ -200,6 +222,13 @@ function Detail({ pr }: { pr: Practice }) {
               {cap.fix && cap.fix.kind !== 'wait' && <button type="button" className="btn btn-sm" onClick={() => runFix(cap.fix)}>{cap.fixLabel}</button>}
             </div>
           )}
+          {stepNeeds.map(n => (
+            <div key={n.key} className="capnote" data-k={n.cap.state} role="status">
+              <span className="dot" data-s={n.cap.state === 'starting' ? 'starting' : 'off'} aria-hidden="true" />
+              <span><b>Para el paso{n.steps.length > 1 ? 's' : ''} {n.steps.join(', ')}:</b> {n.cap.reason}. Lo de antes lo podés ir haciendo.</span>
+              {n.cap.fix && n.cap.fix.kind !== 'wait' && <button type="button" className="btn btn-sm" onClick={() => runFix(n.cap.fix)}>{n.cap.fixLabel}</button>}
+            </div>
+          ))}
           {missing.length > 0 && st === 'nueva' && (
             <div className="capnote" data-k="info" role="note">
               <span className="dot" data-s="off" aria-hidden="true" />

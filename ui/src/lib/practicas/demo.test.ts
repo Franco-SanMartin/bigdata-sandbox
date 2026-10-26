@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDemoApi } from '../../api/demo';
 import type { ClusterConfig, SandboxApi } from '../../api/types';
-import { executeStep, fill, shownCommand, stepVars } from './motor';
-import { practiceById } from './index';
+import { executeStep, fill, requirements, shownCommand, stepVars } from './motor';
+import { PRACTICES, practiceById } from './index';
 import type { StepCtx } from './tipos';
 
 const TODO: Partial<ClusterConfig> = { datanodes: 2, replication: 2, namenodes: 1, services: 'todo', mongodb: true };
@@ -74,6 +74,18 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'se
 afterEach(() => { vi.useRealTimers(); });
 
 describe('prácticas en el demo', () => {
+  it('antes de empezar: con todo prendido no falta nada, salvo los 2 NameNodes de HA', async () => {
+    await boot(TODO);
+    const st = await api.status();
+    for (const pr of PRACTICES) {
+      const faltan = requirements(st, pr).filter(n => !n.ready);
+      if (pr.id === 'ha') {
+        expect(faltan.length, 'ha').toBeGreaterThan(0);
+        for (const n of faltan) expect(n.cap.reason, 'ha').toBeTruthy();
+      } else expect(faltan.map(n => `${n.label}: ${n.cap.reason}`), pr.id).toEqual([]);
+    }
+  }, 60000);
+
   it('hdfs-basico: de la carpeta a bajar el archivo', async () => {
     await boot(TODO);
     const r = await play('hdfs-basico');

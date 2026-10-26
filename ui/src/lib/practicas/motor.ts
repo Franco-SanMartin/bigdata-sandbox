@@ -172,6 +172,40 @@ export function blocker(status: ClusterStatus | null, pr: Practice, step?: Step)
   return step?.needs?.(status) ?? pr.needs?.(status) ?? null;
 }
 
+/** Nombre corto de cada capacidad, para la lista de lo que necesita una práctica */
+export const CAP_LABEL: Partial<Record<Capability['id'], string>> = {
+  'hdfs.read': 'HDFS (leer)', 'hdfs.write': 'HDFS', 'yarn.submit': 'YARN', mapreduce: 'MapReduce en YARN', tez: 'Tez',
+  spark: 'Spark', pig: 'Pig', sqoop: 'Sqoop', hive: 'Hive', mysql: 'MariaDB (base tienda)', mongodb: 'MongoDB', ha: 'Alta disponibilidad (2 NameNodes)',
+  pipeline: 'Pipeline', 'ml.sklearn': 'Machine Learning', 'ml.mllib': 'Spark MLlib', jupyter: 'JupyterLab',
+};
+
+/** Una cosa que necesita la práctica; steps dice en qué pasos (vacío si la pide la práctica entera) */
+export interface Need { key: string; label: string; cap: Capability; ready: boolean; steps: string[] }
+
+/** Todo lo que necesita una práctica para correr sus pasos desde la interfaz (la capacidad de la
+    práctica y la de cada paso, más sus condiciones), sin repetir y en orden de aparición.
+    Así se ve antes de empezar qué falta y con qué botón se arregla, en vez de enterarse en el paso 4. */
+export function requirements(status: ClusterStatus | null, pr: Practice): Need[] {
+  const caps = capabilities(status);
+  const out = new Map<string, Need>();
+  const whole = new Set<string>();
+  const add = (c: Capability, label: string, step?: string) => {
+    const key = c.state === 'ready' ? c.id : `${c.id}:${c.reason ?? ''}`;
+    if (!step) whole.add(key);
+    const r = out.get(key) ?? { key, label, cap: c, ready: c.state === 'ready', steps: [] };
+    if (step && !whole.has(key) && !r.steps.includes(step)) r.steps.push(step);
+    out.set(key, r);
+  };
+  const one = (id: Capability['id'], needs: Step['needs'], step?: string) => {
+    const c = caps[id];
+    add(c, CAP_LABEL[id] ?? id, step);
+    if (c.state === 'ready' && status && needs) { const n = needs(status); if (n) add(n, CAP_LABEL[n.id] ?? n.id, step); }
+  };
+  one(pr.cap, pr.needs);
+  pr.steps.forEach((s, i) => { if (s.run && (s.cap || s.needs)) one(s.cap ?? pr.cap, s.needs ?? pr.needs, `${i + 1}`); });
+  return [...out.values()];
+}
+
 /** Las que conviene seguir: primero las empezadas, después las que se pueden hacer ya, en orden de guía */
 export function suggested(list: Practice[], p: Progress, status: ClusterStatus | null, n = 3): Practice[] {
   const rank = (pr: Practice) => {
