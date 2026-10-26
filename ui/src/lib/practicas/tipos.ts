@@ -21,6 +21,46 @@ export interface StepResult {
   vars?: Record<string, string>;
   /** Dónde mirarlo en la interfaz */
   link?: { label: string; page: PageId; arg?: string };
+  /** La salida del comando como se ve en la terminal */
+  raw?: RawOut;
+}
+
+/** Salida de un comando, como en la terminal: lo que imprimió por stdout y stderr */
+export interface RawOut {
+  /** El comando que corrió */
+  command: string;
+  lines: { stream: 'out' | 'err'; text: string }[];
+  exitCode?: number;
+  /** proceso: lo que imprimió el comando de verdad · armada: armada con lo que respondió el servicio
+      (WebHDFS, JMX, el modo demo), con el mismo formato que en la terminal */
+  origen: 'proceso' | 'armada';
+}
+
+/** Una respuesta posible del multiple choice */
+export interface Opcion {
+  /** El comando (puede tener {variables}, igual que Step.command) */
+  cmd: string;
+  correcta?: boolean;
+  /** Por qué es la correcta, o qué haría / qué error daría si no lo es */
+  porque: string;
+}
+
+/** La pregunta antes de ejecutar: "ahora queremos X, ¿cuál es el comando?" */
+export interface Pregunta {
+  enunciado: string;
+  opciones: Opcion[];
+}
+
+/** Dónde queda cada cosa después del paso */
+export interface Donde {
+  /** En el contenedor (rutas locales, procesos, bases) */
+  contenedor?: string;
+  /** En HDFS (rutas de HDFS, bloques) */
+  hdfs?: string;
+  /** En YARN (trabajos, contenedores, logs) */
+  yarn?: string;
+  /** En tu compu (el navegador, Descargas) */
+  compu?: string;
 }
 
 export interface Check {
@@ -48,8 +88,17 @@ export type Requirement = (s: ClusterStatus) => Capability | null;
 export interface Step {
   id: string;
   title: string;
-  /** El comando equivalente en la terminal del contenedor */
+  /** El comando en la terminal del contenedor. Puede tener {variables}: salen de plan() o de lo que
+      dejaron los pasos anteriores, y son las mismas que usa run (una sola fuente para lo que se muestra
+      y lo que corre) */
   command: string;
+  /** Calcula, con el estado del cluster, las variables que el paso usa antes de correr (qué DataNode
+      apagar, por ejemplo). Lo que ya dejó un paso anterior gana */
+  plan?: (s: ClusterStatus, vars: Record<string, string>) => Record<string, string>;
+  /** Multiple choice antes de ejecutar */
+  pregunta?: Pregunta;
+  /** Dónde queda cada cosa después del paso (puede tener {variables}) */
+  donde?: Donde;
   /** Qué entra */
   input: string;
   /** Qué hace, en una o dos líneas */
@@ -82,6 +131,8 @@ export interface Practice {
   needs?: Requirement;
   /** Lo que tiene que estar hecho antes, en una línea */
   before?: string;
+  /** Prácticas que conviene tener hechas antes (ids) */
+  after?: string[];
   /** Qué te llevás, 2-3 viñetas */
   learn: string[];
   steps: Step[];

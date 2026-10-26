@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ApiFailure } from '../../api/errors';
 import type { ClusterStatus, SandboxApi } from '../../api/types';
 import {
-  STORAGE_KEY, currentStep, doneCount, executeStep, loadProgress, markDone, practiceState, resetPractice, saveProgress,
-  notThere, setVars, suggested, verifyStep, waitFor, type Storage,
+  STORAGE_KEY, answer, canRun, currentStep, doneCount, executeStep, fill, loadProgress, markDone, optionOrder, practiceState,
+  resetPractice, saveProgress, score, shownCommand, notThere, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
@@ -46,7 +46,14 @@ describe('progreso', () => {
     expect(doneCount(P, p.p)).toBe(2);
     expect(currentStep(P, p.p)).toBeNull();
     expect(p.p.vars).toEqual({ app: 'x', nn: 'nn1' });
-    expect(resetPractice(p, 'p')).toEqual({});
+    expect(p.p.completedBefore).toBe(20);
+    expect(resetPractice(p, 'p', 30)).toEqual({ p: { done: {}, vars: {}, startedAt: 30, completedBefore: 20 } });
+    expect(resetPractice(markDone({}, P, 'a', 'run'), 'p')).toEqual({});
+  });
+
+  it('guarda los campos nuevos al releer', () => {
+    const st = mem({ [STORAGE_KEY]: JSON.stringify({ p: { done: {}, vars: {}, startedAt: 1, answers: { a: { pick: 1, ok: false, at: 2 } }, completedBefore: 9 } }) });
+    expect(loadProgress(st).p).toEqual({ done: {}, vars: {}, startedAt: 1, answers: { a: { pick: 1, ok: false, at: 2 } }, completedBefore: 9 });
   });
 
   it('persiste y vuelve a leer lo mismo', () => {
@@ -54,6 +61,59 @@ describe('progreso', () => {
     const p = markDone({}, P, 'a', 'verify', {}, 7);
     saveProgress(p, st);
     expect(loadProgress(st)).toEqual(p);
+  });
+});
+
+const Q: Practice = {
+  ...P,
+  steps: [
+    { ...P.steps[0], pregunta: { enunciado: '¿?', opciones: [{ cmd: 'x', porque: 'no' }, { cmd: 'a', correcta: true, porque: 'sí' }, { cmd: 'y', porque: 'no' }] } },
+    { ...P.steps[1], pregunta: { enunciado: '¿?', opciones: [{ cmd: 'b', correcta: true, porque: 'sí' }, { cmd: 'z', porque: 'no' }] } },
+  ],
+};
+
+describe('multiple choice', () => {
+  it('cuenta solo la primera respuesta y deja ejecutar después de responder', () => {
+    expect(canRun(Q.steps[0], undefined)).toBe(false);
+    expect(canRun(P.steps[0], undefined)).toBe(true);
+    let p = answer({}, Q, 'a', 0, 5);
+    expect(p.p.answers?.a).toEqual({ pick: 0, ok: false, at: 5 });
+    p = answer(p, Q, 'a', 1, 6);
+    expect(p.p.answers?.a.ok).toBe(false);
+    expect(canRun(Q.steps[0], p.p)).toBe(true);
+    p = answer(p, Q, 'b', 0);
+    expect(score(Q, p.p)).toEqual({ total: 2, answered: 2, firstTry: 1 });
+    expect(answer(p, Q, 'b', 9)).toBe(p);
+  });
+
+  it('si ya la completó antes puede ver las respuestas sin responder', () => {
+    expect(canRun(Q.steps[0], { done: {}, vars: {}, startedAt: 0, completedBefore: 1 })).toBe(true);
+  });
+
+  it('mezcla las opciones siempre igual para el mismo paso', () => {
+    const o = optionOrder('put', 4);
+    expect([...o].sort()).toEqual([0, 1, 2, 3]);
+    expect(optionOrder('put', 4)).toEqual(o);
+    const firsts = new Set(['mkdir', 'put', 'ls', 'cat', 'setrep', 'fsck', 'get', 'stop'].map(id => optionOrder(id, 4)[0]));
+    expect(firsts.size).toBeGreaterThan(1);
+  });
+});
+
+describe('comandos con variables', () => {
+  const S = { ...P.steps[0], command: 'datanode stop {dn}', plan: () => ({ dn: '3' }) };
+  it('fill deja marcado lo que todavía no se sabe', () => {
+    expect(fill('yarn logs -applicationId {app}', {})).toBe('yarn logs -applicationId <app>');
+    expect(fill('{a}-{b}', { a: '1', b: '2' })).toBe('1-2');
+  });
+
+  it('lo que se muestra y lo que corre salen de lo mismo; lo guardado gana', async () => {
+    const st = {} as ClusterStatus;
+    expect(shownCommand(S, st, {})).toBe('datanode stop 3');
+    expect(shownCommand(S, null, {})).toBe('datanode stop <dn>');
+    expect(stepVars(S, st, { dn: '2' })).toEqual({ dn: '2' });
+    const o = await executeStep({ ...S, run: async c => ({ summary: fill(S.command, c.vars) }) }, ctx());
+    expect(o.result?.summary).toBe('datanode stop 3');
+    expect(o.result?.vars).toEqual({ dn: '3' });
   });
 });
 
@@ -89,6 +149,17 @@ describe('ejecutar y verificar', () => {
     expect(w).toEqual({ value: 3, ok: true });
     const z = await waitFor(ctx(), async () => 0, v => v > 0, { seconds: 2, every: 1000 });
     expect(z.ok).toBe(false);
+  });
+
+  it('waitFor espera cada vez más (3 s → 10 s) y no se pasa del tiempo', async () => {
+    const slept: number[] = [];
+    let calls = 0;
+    const w = await waitFor(ctx({ sleep: async ms => { slept.push(ms); } }), async () => ++calls, () => false, { seconds: 40 });
+    expect(w.ok).toBe(false);
+    expect(slept.slice(0, 4)).toEqual([3000, 4500, 6750, 10000]);
+    expect(Math.max(...slept)).toBeLessThanOrEqual(10000);
+    expect(slept.reduce((a, b) => a + b, 0)).toBe(40000);
+    expect(calls).toBe(slept.length + 1);
   });
 });
 

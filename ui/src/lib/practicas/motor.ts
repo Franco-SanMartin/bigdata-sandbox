@@ -3,7 +3,7 @@
 import { ApiFailure } from '../../api/errors';
 import { capabilities, type Capability } from '../capabilities';
 import type { ClusterStatus } from '../../api/types';
-import type { Check, Practice, Step, StepCtx, StepResult } from './tipos';
+import type { Check, Practice, Pregunta, Step, StepCtx, StepResult } from './tipos';
 
 export const STORAGE_KEY = 'bds.practicas.v1';
 
@@ -11,11 +11,18 @@ export type DoneHow = 'run' | 'verify' | 'manual';
 
 export interface StepDone { at: number; how: DoneHow }
 
+/** La primera respuesta al multiple choice de un paso (las siguientes no cuentan) */
+export interface Answer { pick: number; ok: boolean; at: number }
+
 export interface PracticeProgress {
   done: Record<string, StepDone>;
   vars: Record<string, string>;
   startedAt: number;
   finishedAt?: number;
+  /** Paso → primera respuesta del multiple choice */
+  answers?: Record<string, Answer>;
+  /** Cuándo se completó por primera vez (sobrevive a "Empezar de nuevo": deja ver las respuestas) */
+  completedBefore?: number;
 }
 
 export type Progress = Record<string, PracticeProgress>;
@@ -43,6 +50,8 @@ export function loadProgress(st: Storage | null = defaultStorage()): Progress {
         vars: p.vars && typeof p.vars === 'object' ? p.vars : {},
         startedAt: typeof p.startedAt === 'number' ? p.startedAt : Date.now(),
         ...(typeof p.finishedAt === 'number' ? { finishedAt: p.finishedAt } : {}),
+        ...(p.answers && typeof p.answers === 'object' && !Array.isArray(p.answers) ? { answers: p.answers } : {}),
+        ...(typeof p.completedBefore === 'number' ? { completedBefore: p.completedBefore } : {}),
       };
     }
     return out;
@@ -61,7 +70,7 @@ export function markDone(p: Progress, pr: Practice, stepId: string, how: DoneHow
   const cur = p[pr.id] ?? { ...empty(), startedAt: now };
   const done = { ...cur.done, [stepId]: { at: now, how } };
   const all = pr.steps.every(s => done[s.id]);
-  return { ...p, [pr.id]: { ...cur, done, vars: { ...cur.vars, ...vars }, ...(all ? { finishedAt: cur.finishedAt ?? now } : {}) } };
+  return { ...p, [pr.id]: { ...cur, done, vars: { ...cur.vars, ...vars }, ...(all ? { finishedAt: cur.finishedAt ?? now, completedBefore: cur.completedBefore ?? now } : {}) } };
 }
 
 /** Guarda variables sin marcar el paso (por ejemplo, el id de un trabajo que todavía corre) */
@@ -70,10 +79,73 @@ export function setVars(p: Progress, pr: Practice, vars: Record<string, string>)
   return { ...p, [pr.id]: { ...cur, vars: { ...cur.vars, ...vars } } };
 }
 
-export function resetPractice(p: Progress, id: string): Progress {
-  const { [id]: _, ...rest } = p;
-  return rest;
+/** Empieza de nuevo: borra pasos, variables y respuestas. Si ya la había completado alguna vez, lo recuerda */
+export function resetPractice(p: Progress, id: string, now = Date.now()): Progress {
+  const { [id]: old, ...rest } = p;
+  const before = old?.completedBefore ?? old?.finishedAt;
+  return before ? { ...rest, [id]: { done: {}, vars: {}, startedAt: now, completedBefore: before } } : rest;
 }
+
+/* ---------- Multiple choice ---------- */
+
+/** Anota la respuesta a la pregunta de un paso. Solo cuenta la primera: después ya sabés cuál era */
+export function answer(p: Progress, pr: Practice, stepId: string, pick: number, now = Date.now()): Progress {
+  const step = pr.steps.find(s => s.id === stepId);
+  const op = step?.pregunta?.opciones[pick];
+  if (!op) return p;
+  const cur = p[pr.id] ?? { ...empty(), startedAt: now };
+  if (cur.answers?.[stepId]) return p;
+  return { ...p, [pr.id]: { ...cur, answers: { ...cur.answers, [stepId]: { pick, ok: !!op.correcta, at: now } } } };
+}
+
+/** La opción correcta de una pregunta (su índice) */
+export const correctIndex = (q: Pregunta) => q.opciones.findIndex(o => o.correcta);
+
+/** Ya se puede ejecutar el paso: no tiene pregunta, ya la respondió o ya completó la práctica antes */
+export function canRun(step: Step, pp?: PracticeProgress): boolean {
+  return !step.pregunta || !!pp?.answers?.[step.id] || !!pp?.completedBefore;
+}
+
+/** Cuántas preguntas tiene, cuántas respondió y cuántas acertó al primer intento */
+export function score(pr: Practice, pp?: PracticeProgress) {
+  const asked = pr.steps.filter(s => s.pregunta);
+  const ans = asked.map(s => pp?.answers?.[s.id]).filter((a): a is Answer => !!a);
+  return { total: asked.length, answered: ans.length, firstTry: ans.filter(a => a.ok).length };
+}
+
+/** El orden en que se muestran las opciones: mezclado, pero siempre igual para el mismo paso
+    (así la correcta no queda siempre arriba y al recargar no se mueve) */
+export function optionOrder(stepId: string, n: number): number[] {
+  let h = 2166136261;
+  for (const ch of stepId) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+    const j = h % (i + 1);
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return idx;
+}
+
+/* ---------- Comandos con variables ---------- */
+
+/** Reemplaza {variable} por su valor; lo que todavía no se sabe queda como <variable> */
+export function fill(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? `<${k}>`);
+}
+
+/** Las variables de un paso: las que calcula plan() con el estado de ahora y, por encima, las que
+    dejaron los pasos anteriores. Es lo mismo que usa la pantalla para mostrar el comando y run para correrlo */
+export function stepVars(step: Step, status: ClusterStatus | null, vars: Record<string, string>): Record<string, string> {
+  let planned: Record<string, string> = {};
+  if (step.plan && status) {
+    try { planned = step.plan(status, vars); } catch { planned = {}; }
+  }
+  return { ...planned, ...vars };
+}
+
+/** El comando del paso tal cual va a correr */
+export const shownCommand = (step: Step, status: ClusterStatus | null, vars: Record<string, string>) => fill(step.command, stepVars(step, status, vars));
 
 /** El primer paso sin hacer (o null si está completa) */
 export function currentStep(pr: Practice, pp?: PracticeProgress): Step | null {
@@ -143,7 +215,12 @@ export function explain(e: unknown): { error: string; unsupported: boolean } {
 export async function executeStep(step: Step, ctx: StepCtx): Promise<StepOutcome> {
   let result: StepResult | undefined;
   try {
+    if (step.plan) {
+      const planned = stepVars(step, await ctx.status(), ctx.vars);
+      ctx = { ...ctx, vars: planned };
+    }
     if (step.run) result = await step.run(ctx);
+    if (result && step.plan) result = { ...result, vars: { ...ctx.vars, ...(result.vars ?? {}) } };
   } catch (e) {
     return { ok: false, ...explain(e) };
   }
@@ -169,17 +246,25 @@ export async function verifyStep(step: Step, ctx: StepCtx): Promise<StepOutcome>
   }
 }
 
-/** Pregunta cada tanto hasta que se cumple o se acaba el tiempo. Devuelve el último valor */
+/** Pregunta cada tanto hasta que se cumple o se acaba el tiempo. Devuelve el último valor.
+    Espera cada vez un poco más (por defecto 3 s, 4,5 s… hasta 10 s) y nunca pide dos cosas a la vez:
+    así no satura al NameNode ni llena la Consola mientras espera */
 export async function waitFor<T>(
   ctx: Pick<StepCtx, 'sleep' | 'progress'>, get: () => Promise<T>, ok: (v: T) => boolean,
-  opts: { seconds?: number; every?: number; what?: string } = {},
+  opts: { seconds?: number; every?: number; max?: number; factor?: number; what?: string } = {},
 ): Promise<{ value: T; ok: boolean }> {
-  const every = opts.every ?? 1500;
-  const tries = Math.max(1, Math.ceil(((opts.seconds ?? 60) * 1000) / every));
+  const limit = (opts.seconds ?? 60) * 1000;
+  const max = Math.max(opts.max ?? 10000, opts.every ?? 0);
+  const factor = opts.factor ?? 1.5;
+  let wait = opts.every ?? 3000;
+  let waited = 0;
   let value = await get();
-  for (let i = 0; i < tries && !ok(value); i++) {
+  while (!ok(value) && waited < limit) {
     if (opts.what) ctx.progress?.(opts.what);
-    await ctx.sleep(every);
+    const ms = Math.min(wait, max, Math.max(250, limit - waited));
+    await ctx.sleep(ms);
+    waited += ms;
+    wait = Math.min(max, Math.round(wait * factor));
     value = await get();
   }
   return { value, ok: ok(value) };
