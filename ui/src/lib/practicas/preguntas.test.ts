@@ -2,11 +2,9 @@
    correcta que es justo el comando que corre, y cada opción explica por qué sí o por qué no. */
 import { describe, expect, it } from 'vitest';
 import { PRACTICES } from './index';
-import { correctIndex } from './motor';
+import { correctIndex, splitCommon } from './motor';
 
-// TODO: sumar las guías 05-10 a medida que tengan sus preguntas
-const LISTAS = ['03', '04'];
-const conRun = PRACTICES.filter(p => LISTAS.includes(p.guide)).flatMap(p => p.steps.filter(s => s.run).map(s => ({ p, s, k: `${p.id}/${s.id}` })));
+const conRun = PRACTICES.flatMap(p => p.steps.filter(s => s.run).map(s => ({ p, s, k: `${p.id}/${s.id}` })));
 
 describe('preguntas de las prácticas', () => {
   it('todo paso que corre un comando tiene su pregunta', () => {
@@ -23,5 +21,24 @@ describe('preguntas de las prácticas', () => {
     for (const o of q.opciones) expect(o.porque.trim().length, o.cmd).toBeGreaterThan(20);
     expect(new Set(q.opciones.map(o => o.cmd.trim())).size).toBe(q.opciones.length);
     expect(q.enunciado).toMatch(/\?$/);
+  });
+
+  it('todo paso con pregunta dice dónde queda cada cosa', () => {
+    const sin = conRun.filter(x => x.s.pregunta && !x.s.donde).map(x => x.k);
+    expect(sin).toEqual([]);
+  });
+});
+
+describe('splitCommon', () => {
+  it('saca aparte las líneas que comparten todas las opciones', () => {
+    const r = splitCommon(['a\nb\nX\ny\nz', 'a\nb\nY\ny\nz', 'a\nb\nZ1\nZ2\ny\nz']);
+    expect(r).toEqual({ pre: ['a', 'b'], mid: ['X', 'Y', 'Z1\nZ2'], post: ['y', 'z'] });
+  });
+  it('con una sola línea en común no agrupa nada', () => {
+    expect(splitCommon(['a\nX', 'a\nY'])).toEqual({ pre: [], mid: ['a\nX', 'a\nY'], post: [] });
+  });
+  it('siempre deja algo propio en cada opción', () => {
+    const r = splitCommon(['a\nb\nc', 'a\nb\nc\nd']);
+    expect(r.mid.every((m, i) => i === 0 || m.length > 0)).toBe(true);
   });
 });

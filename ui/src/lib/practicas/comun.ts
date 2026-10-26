@@ -4,13 +4,42 @@ import { errorCode, fail } from '../../api/errors';
 import { mbLabel as mbFmt } from '../format';
 import type { Capability } from '../capabilities';
 import { notThere, waitFor } from './motor';
-import type { Check, RawOut, Requirement, StepCtx, StepOut, StepResult } from './tipos';
+import type { Check, RawOut, Requirement, Step, StepCtx, StepOut, StepResult } from './tipos';
 
 /** Tamaño legible: los archivos chicos (texto.txt) en KB en vez de "0,0 MB" */
 export const mbLabel = (mb: number) => (mb > 0 && mb < 0.1 ? `${Math.max(1, Math.round(mb * 1024)).toLocaleString('es-AR')} KB` : mbFmt(mb));
 
 export const VENTAS_DIR = '/user/root/ventas';
 export const VENTAS_FILE = `${VENTAS_DIR}/ventas_grandes.csv`;
+/** El CSV de ventas en el disco del contenedor (la carpeta /datos) */
+export const VENTAS_LOCAL = '/datos/ventas_grandes.csv';
+export const PUT_VENTAS = `hdfs dfs -put -f ${VENTAS_LOCAL} ${VENTAS_DIR}/`;
+
+/** El primer paso de las prácticas que leen las ventas (Pig, Hive): subirlas a HDFS si no están */
+export function ventasEnHdfs(does: string): Step {
+  return {
+    id: 'datos', title: 'Tener las ventas en HDFS',
+    command: PUT_VENTAS, input: `${VENTAS_LOCAL} (en el contenedor)`, cap: 'hdfs.write',
+    does, expect: `${VENTAS_FILE} completo`,
+    pregunta: {
+      enunciado: `Primero hacen falta las ventas en HDFS: hay que subir ${VENTAS_LOCAL}, que está en el contenedor, a ${VENTAS_DIR}. ¿Cuál es el comando correcto?`,
+      opciones: [
+        { cmd: PUT_VENTAS, correcta: true, porque: '-put copia del disco del contenedor a HDFS: primero el origen (local) y después la carpeta de destino en HDFS. -f pisa el archivo si ya estaba.' },
+        { cmd: `hdfs dfs -put -f ${VENTAS_DIR}/ ${VENTAS_LOCAL}`, porque: `Está al revés: el origen va primero. Así busca ${VENTAS_DIR} en el disco del contenedor y no lo encuentra (No such file or directory).` },
+        { cmd: `hdfs dfs -cp ${VENTAS_LOCAL} ${VENTAS_DIR}/`, porque: `-cp copia de HDFS a HDFS: buscaría ${VENTAS_LOCAL} adentro de HDFS, y ese archivo está en el disco del contenedor.` },
+        { cmd: `cp ${VENTAS_LOCAL} ${VENTAS_DIR}/`, porque: 'Es el cp de Linux: copia dentro del disco del contenedor. HDFS no se entera y la consulta no encuentra nada.' },
+      ],
+    },
+    donde: {
+      contenedor: `${VENTAS_LOCAL} sigue ahí: -put copia, no mueve`,
+      hdfs: `${VENTAS_FILE}, partido en bloques repartidos en los DataNodes`,
+      compu: `HDFS → Archivos → ${VENTAS_DIR}`,
+    },
+    run: c => ensureExample(c, VENTAS_DIR, 'ventas_grandes.csv', 'ventas'),
+    verify: c => fileCheck(c, VENTAS_DIR, 'ventas_grandes.csv'),
+    tip: `Si ya hiciste la práctica de HDFS, el archivo ya está y no se sube de nuevo. Si ${VENTAS_DIR} no existe, se crea antes con hdfs dfs -mkdir -p ${VENTAS_DIR}.`,
+  };
+}
 
 /* ---------- Salida cruda (lo que se vería en la terminal) ---------- */
 

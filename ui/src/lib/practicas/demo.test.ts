@@ -56,12 +56,15 @@ async function play(id: string, skip: string[] = []) {
     const shown = shownCommand(s, st, vars);
     // ninguna {variable} queda sin llenar en lo que se muestra (fill deja <nombre> si no la conoce)
     const v = stepVars(s, st, vars);
-    for (const t of [shown, s.pregunta?.enunciado ?? '', ...(s.pregunta?.opciones.map(o => o.cmd) ?? [])])
+    // ni queda una {variable} que fill no sabe llenar (con punto, por ejemplo)
+    for (const t of [shown, s.pregunta?.enunciado ?? '', ...(s.pregunta?.opciones.map(o => o.cmd) ?? [])]) {
       expect(fill(t, v), `${id}/${s.id}`).not.toMatch(/<[\w.]+>/);
+      expect(fill(t, v), `${id}/${s.id}`).not.toMatch(/\{[\w.]+\}/);
+    }
     const o = await executeStep(s, c);
     Object.assign(vars, o.result?.vars ?? {});
     // "Dónde queda" se muestra después de correr: ya con lo que dejó el paso
-    for (const t of Object.values(s.donde ?? {})) expect(fill(t, { ...v, ...vars }), `${id}/${s.id} donde`).not.toMatch(/<[\w.]+>/);
+    for (const t of Object.values(s.donde ?? {})) expect(fill(t, { ...v, ...vars }), `${id}/${s.id} donde`).not.toMatch(/<[\w.]+>|\{[\w.]+\}/);
     out[s.id] = { ok: o.ok, why: o.error ?? o.check?.detail ?? o.result?.summary ?? '', shown, ran: o.result?.raw?.command };
   }
   return out;
@@ -115,7 +118,7 @@ describe('prácticas en el demo', () => {
 
   it('lo que se muestra es lo que corre, en todas las prácticas', async () => {
     await boot(TODO);
-    for (const id of ['hdfs-basico', 'mapreduce']) {
+    for (const id of ['hdfs-basico', 'mapreduce', 'pig', 'hive', 'mysql-sqoop', 'spark', 'mongodb']) {
       const r = await play(id);
       for (const [k, v] of Object.entries(r)) if (v.ran) expect(v.ran, `${id}/${k}`).toBe(v.shown);
     }
@@ -123,8 +126,13 @@ describe('prácticas en el demo', () => {
 
   it('ha: failover con 2 NameNodes', async () => {
     await boot({ ...TODO, namenodes: 2 });
+    const nn = (await api.status()).processes.find(p => p.kind === 'namenode' && p.role === 'active')!.id.replace(/\D/g, '');
     const r = await play('ha');
     for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
+    // apaga y prende el que estaba activo, y lo que dice el comando es lo que corre
+    expect(r.apagar.shown).toBe(`namenode stop ${nn}`);
+    expect(r.volver.shown).toBe(`namenode start ${nn}`);
+    for (const [k, v] of Object.entries(r)) if (v.ran) expect(v.ran, `ha/${k}`).toBe(v.shown);
   }, 60000);
 
   it('mapreduce: el wordcount de la entrada al part-r-00000', async () => {

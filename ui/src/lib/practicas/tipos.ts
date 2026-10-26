@@ -94,6 +94,8 @@ export interface Step {
       dejaron los pasos anteriores, y son las mismas que usa run (una sola fuente para lo que se muestra
       y lo que corre) */
   command: string;
+  /** Dónde se escribe el comando si no es la terminal del contenedor (la consola de Hive, el navegador…) */
+  en?: string;
   /** Calcula, con el estado del cluster, las variables que el paso usa antes de correr (qué DataNode
       apagar, por ejemplo). Lo que ya dejó un paso anterior gana */
   plan?: (s: ClusterStatus, vars: Record<string, string>) => Record<string, string>;

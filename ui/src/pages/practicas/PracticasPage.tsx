@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
 import {
-  PRACTICES, blocker, canRun, correctIndex, currentStep, doneCount, fill, optionOrder, practiceById, practiceState, score, stepVars, suggested,
+  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, practiceById, practiceState, score, stepVars, suggested,
   type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
 } from '../../lib/practicas';
 import type { ClusterStatus } from '../../api/types';
@@ -246,7 +246,7 @@ function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
       {open && (
         <div className="pr-step-b">
           {step.pregunta && <Question pr={pr} step={step} vars={vars} pp={pp} peek={peek} onPeek={() => setPeek(true)} />}
-          {showCmd && <CodeBlock lines={lines} prompt={SHELL.test(lines[0]) ? '$' : null} label="En la terminal del contenedor" />}
+          {showCmd && <CodeBlock lines={lines} prompt={!step.en && SHELL.test(lines[0]) ? '$' : null} label={step.en ?? 'En la terminal del contenedor'} />}
           <KeyValue items={[['Entra', step.input], ['Hace', step.does], ['Tiene que dar', step.expect]]} />
           {unlocked ? (
             <div className="pr-actions">
@@ -283,28 +283,30 @@ function Question({ pr, step, vars, pp, peek, onPeek }: { pr: Practice; step: St
   const right = correctIndex(q);
   const order = optionOrder(step.id, q.opciones.length);
   const shown = ans != null || peek;
+  const { pre, mid, post } = splitCommon(q.opciones.map(o => fill(o.cmd, vars)));
   return (
     <section className="pr-q" aria-label="Pregunta del paso">
       <p className="pr-q-h"><CircleHelp size={15} aria-hidden="true" /> <span>{fill(q.enunciado, vars)}</span></p>
+      {pre.length > 0 && <div className="pr-q-common"><span>Todas las opciones empiezan igual:</span><pre>{pre.join('\n')}</pre></div>}
       <div className="pr-q-ops" role="group" aria-label="Opciones">
         {order.map(i => {
-          const op = q.opciones[i];
           const k = !shown ? undefined : i === right ? 'ok' : ans?.pick === i ? 'bad' : 'off';
           return (
             <button key={i} type="button" className="pr-q-op" data-k={k} disabled={shown} aria-pressed={ans?.pick === i}
               onClick={() => answerStep(pr, step, i)}>
               <span className="pr-q-mark" aria-hidden="true">{k === 'ok' ? <CircleCheck size={14} /> : k === 'bad' ? <CircleX size={14} /> : null}</span>
-              <code>{fill(op.cmd, vars)}</code>
+              <code>{mid[i] || '(nada más)'}</code>
             </button>
           );
         })}
       </div>
+      {post.length > 0 && <div className="pr-q-common"><span>Y todas terminan igual:</span><pre>{post.join('\n')}</pre></div>}
       {ans && (ans.ok
         ? <div className="pr-q-fb" data-k="ok" role="status"><b>¡Bien! Es ese.</b> {q.opciones[right].porque}</div>
         : (
           <div className="pr-q-fb" data-k="bad" role="status">
             <p><b>Ese no.</b> {q.opciones[ans.pick]?.porque}</p>
-            <p><b>El correcto es <code>{fill(q.opciones[right].cmd, vars)}</code>:</b> {q.opciones[right].porque}</p>
+            <p><b>El correcto es {mid[right].includes('\n') ? 'el que quedó en verde' : <code>{mid[right]}</code>}:</b> {q.opciones[right].porque}</p>
           </div>
         ))}
       {!ans && peek && <div className="pr-q-fb" data-k="info" role="status"><b>La respuesta:</b> {q.opciones[right].porque}</div>}

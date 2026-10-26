@@ -271,3 +271,17 @@ export async function waitFor<T>(
   }
   return { value, ok: ok(value) };
 }
+
+/** Las líneas que comparten todas las opciones (al principio y al final) se muestran una vez, aparte:
+    así se ve a simple vista en qué se diferencian. Solo si son 2 líneas o más */
+export function splitCommon(cmds: string[]): { pre: string[]; mid: string[]; post: string[] } {
+  const ls = cmds.map(c => c.split('\n'));
+  const min = Math.min(...ls.map(l => l.length));
+  let a = 0;
+  while (a < min - 1 && ls.every(l => l[a] === ls[0][a])) a++;
+  let b = 0;
+  while (b < min - 1 - a && ls.every(l => l[l.length - 1 - b] === ls[0][ls[0].length - 1 - b])) b++;
+  if (a < 2) a = 0;
+  if (b < 2) b = 0;
+  return { pre: ls[0].slice(0, a), mid: ls.map(l => l.slice(a, l.length - b).join('\n')), post: ls[0].slice(ls[0].length - b) };
+}

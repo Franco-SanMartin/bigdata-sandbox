@@ -149,3 +149,5 @@
 .pr-term-none { color: var(--text-4); font-style: italic; }
 .pr-term-f { display: flex; flex-wrap: wrap; gap: 4px var(--s-4); margin-top: 6px; font-size: var(--fs-sm); color: var(--text-3); }
 .pr-term-key[data-s="err"] { font: var(--t-code); color: var(--run-text); }
+.pr-q-common { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--text-3); }
+.pr-q-common pre { margin: 0; padding: 6px 10px; border-radius: var(--r-1); border: 1px dashed var(--line); background: var(--surface); font: var(--t-code); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
