@@ -77,11 +77,16 @@ You choose the version with the *tag*, what goes after the colon:
 
 ```bash
 docker run -d --name bigdata-full --stop-timeout 20 \
-  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop \
+  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
   franki678/bigdata-sandbox:full
 ```
 
-Open http://localhost:8080. The container starts only the interface: the
+Open http://localhost:8080. As with `base`, the `datos/` folder on your
+computer shows up inside as `/datos` (PowerShell: `"${PWD}/datos:/datos"`;
+CMD: `"%cd%\datos:/datos"`): the examples are copied there when the cluster
+starts (`/datos/ejemplos`), the Practices upload to HDFS from there, and what
+you download with `hdfs dfs -get` lands in your folder. Without that `-v`
+everything works the same, but the files stay inside the container. The container starts only the interface: the
 cluster is chosen and started from there (*Iniciar*). With `-e AUTOSTART=1`
 it starts by itself, with the usual variables (`DATANODES`, `REPLICATION`,
 `SERVICIOS`...). To reach each service's web pages, add their ports as in the
