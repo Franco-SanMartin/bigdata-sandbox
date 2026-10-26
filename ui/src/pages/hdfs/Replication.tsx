@@ -1,10 +1,11 @@
 /* Cola de re-replicación en vivo: lo que el NameNode copia (o borra de más) cuando cambia un DataNode o la réplica. */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Copy, HeartPulse, Trash2 } from 'lucide-react';
+import { ArrowRight, Copy, HeartPulse, ServerOff, Trash2 } from 'lucide-react';
 import type { HdfsFile, ReplicationState, ReplicationTask } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { Dot, Sparkline } from '../../components/ui';
-import { ago, plural } from '../../lib/format';
+import { ago } from '../../lib/format';
+import { replicationView } from '../../lib/replicacion';
 import { ErrorLine, Loading, type Res } from './common';
 
 const TASK: Record<ReplicationTask['state'], string> = { pending: 'en cola', running: 'copiando', done: 'hecha' };
@@ -29,9 +30,7 @@ export function Replication({ res, files, now }: { res: Res<ReplicationState>; f
   const hist = useHistory(r, now);
   const peak = Math.max(1, ...hist.map(x => x.v));
   const blockName = (id: number) => files.flatMap(f => f.blocks).find(b => b.id === id)?.name ?? `blk_${id}`;
-  const busy = !!r && (r.tasks.length > 0 || r.stale.length > 0);
-  const k = !r ? undefined : r.missing ? 'bad' : busy || r.underReplicated ? 'run' : 'ok';
-  const label = !r ? '' : r.missing && !r.tasks.length ? 'bloques perdidos' : r.tasks.some(t => t.state === 'running') ? 're-replicando' : r.tasks.length ? 'en cola' : r.stale.length ? 'esperando latidos' : r.underReplicated ? 'faltan nodos' : 'sano';
+  const v = r ? replicationView(r) : undefined;
 
   const cols: Column<ReplicationTask>[] = [
     { id: 's', header: '', width: 28, cell: t => <Dot s={t.state === 'running' ? 'running' : t.state === 'done' ? 'done' : 'pending'} label={TASK[t.state]} /> },
@@ -47,7 +46,7 @@ export function Replication({ res, files, now }: { res: Res<ReplicationState>; f
       <div className="panel-h">
         <h2>Re-replicación</h2>
         <span className="sub">cola del NameNode · en vivo</span>
-        {r && <span className="badge" data-k={k}>{label}</span>}
+        {v && <span className="badge" data-k={v.k}>{v.label}</span>}
         <span className="end">{hist.length > 1 && <Sparkline data={hist} max={peak} width={140} height={24} />}</span>
       </div>
       {res.err ? <div className="panel-b"><ErrorLine err={res.err} onRetry={res.reload} /></div> : !r ? <div className="panel-b"><Loading /></div> : (
@@ -59,13 +58,16 @@ export function Replication({ res, files, now }: { res: Res<ReplicationState>; f
               <div data-k={r.missing ? 'bad' : undefined}><span>perdidos</span><b>{r.missing}</b></div>
               <div><span>copias de más</span><b>{r.overReplicated}</b></div>
             </div>
+            {v?.note && (
+              <div className="callout" data-k="run"><ServerOff size={14} aria-hidden="true" /><span>{v.note}</span></div>
+            )}
             {r.stale.map(s => (
               <div key={s.dataNode} className="callout" data-k="run"><HeartPulse size={14} />
                 <span><b>DataNode {s.dataNode} sin latidos.</b> El NameNode lo da por muerto en <span className="num">{s.deadInSec} s</span> y recién ahí encola sus bloques.</span>
               </div>
             ))}
             <DataTable label="Cola de re-replicación" columns={cols} rows={r.tasks} rowKey={t => `${t.block}-${t.kind}-${t.from}-${t.to}-${r.tasks.indexOf(t)}`}
-              empty={r.missing ? `${plural(r.missing, 'bloque')} sin ninguna copia: no hay de dónde copiar hasta que vuelva el DataNode` : 'Cola vacía: todos los bloques tienen las copias que piden'} />
+              empty={v?.empty ?? ''} />
           </div>
           <div className="ops-repl-side">
             <div className="ops-sub-h"><h3>Copias recientes</h3><span className="muted">{r.recent.length}</span></div>

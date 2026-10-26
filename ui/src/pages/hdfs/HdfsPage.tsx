@@ -7,8 +7,9 @@ import { GatedButton, PageGate, PageHeader, Stat, StatRow, type Tone } from '../
 import { useCapability } from '../../state/capabilities';
 import { useSnapshot } from '../../state/store';
 import { navigate, useRouteArg } from '../../state/ui';
-import { mbLabel, nf } from '../../lib/format';
+import { mbLabel, nf, plural } from '../../lib/format';
 import { cleanPath } from '../../lib/jobs';
+import { replicationView } from '../../lib/replicacion';
 import { useRes } from './common';
 import { DataNodes } from './DataNodes';
 import { MoveDialog, ReplicaDialog, UploadDialog, Viewer } from './Dialogs';
@@ -69,11 +70,13 @@ function Hdfs() {
   const c = status?.config;
   const live = dataNodes.filter(d => d.state === 'live').length;
   const issues = (h?.underReplicated ?? 0) + (h?.missing ?? 0);
+  const rv = repl.data ? replicationView(repl.data) : undefined;
   const chip: { k: Tone; label: string } = !h ? { k: 'off', label: 'sin datos' }
     : !h.available ? { k: 'bad', label: 'NameNode no responde' }
     : h.safeMode ? { k: 'run', label: 'safe mode' }
     : h.missing ? { k: 'bad', label: `${nf(h.missing)} bloques perdidos` }
-    : h.underReplicated ? { k: 'run', label: 're-replicando' }
+    // sub-replicado no quiere decir que se esté copiando: puede no tener adónde (ver Salud)
+    : h.underReplicated ? { k: 'run', label: plural(h.underReplicated, 'bloque sub-replicado', 'bloques sub-replicados') }
     : live < dataNodes.length ? { k: 'run', label: `${dataNodes.length - live} DataNode${dataNodes.length - live > 1 ? 's' : ''} caído${dataNodes.length - live > 1 ? 's' : ''}` }
     : { k: 'ok', label: 'sano' };
 
@@ -94,7 +97,7 @@ function Hdfs() {
           <Stat label="DataNodes vivos" value={live} unit={`/ ${dataNodes.length}`} k={h.deadDataNodes ? 'bad' : h.staleDataNodes ? 'run' : undefined} sub={h.deadDataNodes ? `${h.deadDataNodes} muerto${h.deadDataNodes > 1 ? 's' : ''}` : h.staleDataNodes ? `${h.staleDataNodes} sin latidos` : 'todos con latido'} />
           <Stat label="Archivos" value={nf(h.files)} sub={`${nf(h.blocks)} bloques`} />
           <Stat label="Ocupado" value={mbLabel(h.usedMb)} sub={`${nf(h.replicas)} copias`} />
-          <Stat label="Sub-replicados" value={nf(h.underReplicated)} k={h.underReplicated ? 'run' : undefined} sub={h.underReplicated ? 'el NameNode los copia' : 'ninguno'} />
+          <Stat label="Sub-replicados" value={nf(h.underReplicated)} k={h.underReplicated ? 'run' : undefined} sub={rv ? rv.sub : h.underReplicated ? 'mirá la cola' : 'ninguno'} />
           <Stat label="Perdidos" value={nf(h.missing)} k={h.missing ? 'bad' : undefined} sub={h.missing ? 'sin ninguna copia viva' : 'ninguno'} />
         </StatRow>
       )}
