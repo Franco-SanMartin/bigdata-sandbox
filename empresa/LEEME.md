@@ -35,8 +35,11 @@ cluster de verdad: cada compu del aula corre un contenedor y entre todas arman
 
 ## Probarlo en una sola compu
 
+Alcanza con bajar [`aula-simulada.yml`](aula-simulada.yml), sin clonar el repo:
+
 ```bash
-docker compose -f empresa/aula-simulada.yml up -d
+curl -fsSLO https://raw.githubusercontent.com/Franki-678/bigdata-sandbox/empresa/empresa/aula-simulada.yml
+docker compose -f aula-simulada.yml up -d
 docker exec maestro estado
 docker exec -it pc01 bash
 hdfs dfsadmin -printTopology
