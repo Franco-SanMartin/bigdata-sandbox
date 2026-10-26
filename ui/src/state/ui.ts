@@ -28,6 +28,9 @@ addEventListener('hashchange', () => {
   if (p !== route.get()) route.set(p);
   if (a !== routeArgStore.get()) routeArgStore.set(a);
 });
+/** De qué paso de una práctica se salió con un enlace ("Ver en HDFS"): para volver al mismo paso */
+export interface PracticeReturn { practice: string; title: string; step: string; n: number }
+export const practiceReturn = store<PracticeReturn | null>(null);
 /** Va a una pantalla (y a lo que sigue: carpeta, proceso, evento…). Con replace no suma un paso al
     historial: sirve para elegir una fila sin que "atrás" tenga que recorrer cada clic */
 export function navigate(p: PageId, arg = '', opts: { replace?: boolean } = {}) {

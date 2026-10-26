@@ -10,6 +10,7 @@ import { CommandPalette } from './shell/CommandPalette';
 import { ComposeSheet, ConfirmHost, Toaster } from './shell/Overlays';
 import type { PageId } from './state/ui';
 import { ConnectionBand, PageFrame } from './shell/PageFrame';
+import { ReturnBand } from './shell/ReturnBand';
 
 // Cada pantalla en su propio archivo: al abrir la interfaz solo baja la que se ve
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -39,6 +40,7 @@ export function App() {
         <Topbar />
         <div className="main">
           <ConnectionBand />
+          <ReturnBand />
           <main className="page" id="contenido" key={page}>
             <PageFrame page={page}><Page /></PageFrame>
           </main>

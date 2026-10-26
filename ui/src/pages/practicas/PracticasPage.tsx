@@ -1,13 +1,18 @@
 /* Prácticas guiadas: la lista (qué se puede hacer ya y qué no, con el arreglo) y cada práctica paso a
-   paso, con el comando de la terminal, qué entra, qué hace y qué tiene que dar. */
+   paso: la pregunta (¿cuál es el comando?), el comando de la terminal, qué entra, qué hace, qué tiene
+   que dar, la salida como en la terminal y dónde queda cada cosa. Al terminar, el resumen. */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, ExternalLink, Lightbulb, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
-import { PRACTICES, blocker, currentStep, doneCount, practiceById, practiceState, suggested, type Practice, type PracticeProgress, type Step, type StepOut } from '../../lib/practicas';
+import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
+import {
+  PRACTICES, blocker, canRun, correctIndex, currentStep, doneCount, fill, optionOrder, practiceById, practiceState, score, stepVars, suggested,
+  type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
+} from '../../lib/practicas';
+import type { ClusterStatus } from '../../api/types';
 import type { Capability } from '../../lib/capabilities';
 import { useStatus } from '../../state/store';
 import { runFix } from '../../state/capabilities';
-import { checkStep, liveOf, markManual, restartPractice, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
-import { confirm, navigate, useRouteArg } from '../../state/ui';
+import { answerStep, checkStep, liveOf, markManual, restartPractice, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
+import { confirm, navigate, practiceReturn, useRouteArg, type PracticeReturn } from '../../state/ui';
 import { Chip, EmptyState, GatedButton, KeyValue, PageHeader, ResultTable, Why } from '../../components/base';
 import { CodeBlock, Meter } from '../../components/ui';
 import { TraceView } from '../../components/Trace';
@@ -121,6 +126,7 @@ function NextCard({ pr, pp, cap }: { pr: Practice; pp?: PracticeProgress; cap: C
 function Detail({ pr }: { pr: Practice }) {
   const status = useStatus();
   const state = usePractices();
+  const arg = useRouteArg();
   const pp = state.progress[pr.id];
   const cur = currentStep(pr, pp);
   // Abiertos: el paso que toca y los que se abrieron a mano. Al completar uno se abre el siguiente
@@ -128,12 +134,22 @@ function Detail({ pr }: { pr: Practice }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(cur ? [cur.id] : []));
   const curId = cur?.id ?? null;
   useEffect(() => { if (curId) setOpen(o => (o.has(curId) ? o : new Set(o).add(curId))); }, [curId]);
+  // #practicas/<práctica>/<paso>: se vuelve a un paso (desde "Volver al paso N")
+  const target = arg.split('/')[1] ?? '';
+  useEffect(() => {
+    if (!target || !pr.steps.some(s => s.id === target)) return;
+    setOpen(o => new Set(o).add(target));
+    const t = setTimeout(() => document.getElementById(`paso-${target}`)?.scrollIntoView({ block: 'start' }), 50);
+    return () => clearTimeout(t);
+  }, [target, pr]);
   const toggle = (id: string) => setOpen(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const cap = blocker(status, pr);
   const st = practiceState(pr, pp);
+  const sc = score(pr, pp);
+  const missing = (pr.after ?? []).map(id => practiceById(id)).filter((p): p is Practice => !!p && practiceState(p, state.progress[p.id]) !== 'completa');
 
   const reset = async () => {
-    if (await confirm({ title: `¿Empezar de nuevo "${pr.title}"?`, description: 'Se borra lo que marcaste como hecho en esta práctica. Lo que creaste en el cluster queda.', confirmLabel: 'Empezar de nuevo' })) restartPractice(pr);
+    if (await confirm({ title: `¿Empezar de nuevo "${pr.title}"?`, description: 'Se borra lo que marcaste como hecho y lo que respondiste en esta práctica. Lo que creaste en el cluster queda.', confirmLabel: 'Empezar de nuevo' })) restartPractice(pr);
   };
 
   return (
@@ -152,10 +168,17 @@ function Detail({ pr }: { pr: Practice }) {
             <h2>Te llevás</h2>
             <ul className="pr-learn">{pr.learn.map(l => <li key={l}>{l}</li>)}</ul>
           </section>
-          {pr.before && <section><h2>Antes</h2><p className="muted">{pr.before}</p></section>}
+          {(pr.before || pr.after?.length) && (
+            <section>
+              <h2>Antes</h2>
+              {pr.before && <p className="muted">{pr.before}</p>}
+              {pr.after?.map(id => { const p = practiceById(id); return p && <p key={id} className="muted">Conviene haber hecho <button type="button" className="pr-link" onClick={() => navigate('practicas', p.id)}>{p.title}</button></p>; })}
+            </section>
+          )}
           <section>
             <h2>Avance</h2>
             <Progress pr={pr} pp={pp} />
+            {sc.answered > 0 && <p className="pr-score muted">Preguntas: acertaste {sc.firstTry} de {sc.answered} al primer intento{sc.answered < sc.total ? ` (faltan ${sc.total - sc.answered})` : ''}</p>}
             <ol className="pr-index">
               {pr.steps.map((s, i) => (
                 <li key={s.id} data-done={!!pp?.done[s.id]} data-cur={s.id === cur?.id}>
@@ -177,10 +200,16 @@ function Detail({ pr }: { pr: Practice }) {
               {cap.fix && cap.fix.kind !== 'wait' && <button type="button" className="btn btn-sm" onClick={() => runFix(cap.fix)}>{cap.fixLabel}</button>}
             </div>
           )}
-          {st === 'completa' && <Finished pr={pr} />}
+          {missing.length > 0 && st === 'nueva' && (
+            <div className="capnote" data-k="info" role="note">
+              <span className="dot" data-s="off" aria-hidden="true" />
+              <span><b>Antes de esta:</b> conviene hacer {missing.map((p, i) => <span key={p.id}>{i ? ' y ' : ''}<button type="button" className="pr-link" onClick={() => navigate('practicas', p.id)}>{p.title}</button></span>)}. Usa lo que deja esa práctica; si ya lo tenés, seguí igual.</span>
+            </div>
+          )}
+          {st === 'completa' && <Finished pr={pr} pp={pp} status={status} />}
           <ol className="pr-steps">
             {pr.steps.map((s, i) => (
-              <StepCard key={s.id} pr={pr} step={s} n={i + 1} done={pp?.done[s.id]} live={liveOf(state, pr, s)}
+              <StepCard key={s.id} pr={pr} step={s} n={i + 1} pp={pp} status={status} live={liveOf(state, pr, s)}
                 open={open.has(s.id)} onToggle={() => toggle(s.id)} cap={blocker(status, pr, s)} />
             ))}
           </ol>
@@ -190,44 +219,56 @@ function Detail({ pr }: { pr: Practice }) {
   );
 }
 
-const SHELL = /^(hdfs|hadoop|yarn|mongosh|mysql|beeline|hive|pig|spark-submit|sqoop|cat|ls|echo|docker|curl|jps)\b/;
+const SHELL = /^(hdfs|hadoop|yarn|mongosh|mysql|beeline|hive|pig|spark-submit|sqoop|cat|ls|echo|docker|curl|jps|datanode|namenode)\b/;
 
-function StepCard({ pr, step, n, done, live, open, onToggle, cap }: {
-  pr: Practice; step: Step; n: number; done?: { at: number; how: string }; live?: StepLive; open: boolean; onToggle: () => void; cap: Capability | null;
+function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
+  pr: Practice; step: Step; n: number; pp?: PracticeProgress; status: ClusterStatus | null; live?: StepLive; open: boolean; onToggle: () => void; cap: Capability | null;
 }) {
   const busy = live?.busy;
   const o = live?.outcome;
-  const lines = step.command.split('\n');
+  const done = pp?.done[step.id];
+  const vars = stepVars(step, status, pp?.vars ?? {});
+  const lines = fill(step.command, vars).split('\n');
+  const ans = pp?.answers?.[step.id];
+  const [peek, setPeek] = useState(false);
+  const unlocked = canRun(step, pp);
+  // Antes de responder no se muestra el comando: sería la respuesta
+  const showCmd = !step.pregunta || !!ans || peek || (!!pp?.completedBefore && !!done);
   return (
     <li className="pr-step" id={`paso-${step.id}`} data-done={!!done} data-open={open}>
       <button type="button" className="pr-step-h" onClick={onToggle} aria-expanded={open}>
         <span className="pr-num" data-done={!!done}>{done ? <Check size={13} aria-hidden="true" /> : n}</span>
         <span className="pr-step-t">{step.title}</span>
+        {ans && <span className="pr-ans-chip" data-ok={ans.ok} title={ans.ok ? 'Acertaste al primer intento' : 'No acertaste al primer intento'}>{ans.ok ? <CircleCheck size={13} aria-hidden="true" /> : <CircleX size={13} aria-hidden="true" />}</span>}
         {done && <span className="pr-how">{done.how === 'manual' ? 'Hecho en la terminal' : done.how === 'verify' ? 'Verificado' : 'Hecho'}</span>}
         {busy && <Chip k="run">{busy === 'run' ? 'Corriendo' : 'Verificando'}</Chip>}
       </button>
       {open && (
         <div className="pr-step-b">
-          <CodeBlock lines={lines} prompt={SHELL.test(lines[0]) ? '$' : null} label="En la terminal del contenedor" />
+          {step.pregunta && <Question pr={pr} step={step} vars={vars} pp={pp} peek={peek} onPeek={() => setPeek(true)} />}
+          {showCmd && <CodeBlock lines={lines} prompt={SHELL.test(lines[0]) ? '$' : null} label="En la terminal del contenedor" />}
           <KeyValue items={[['Entra', step.input], ['Hace', step.does], ['Tiene que dar', step.expect]]} />
-          <div className="pr-actions">
-            {step.run && (
-              <GatedButton cap={cap ?? undefined} className="btn btn-primary" busy={busy === 'run'} onClick={() => runStep(pr, step)}>
-                <Play size={14} aria-hidden="true" /> {busy === 'run' ? 'Corriendo…' : done ? 'Ejecutar de nuevo' : 'Ejecutar'}
-              </GatedButton>
-            )}
-            {step.verify && (
-              <GatedButton cap={cap ?? undefined} className="btn" busy={busy === 'verify'} onClick={() => checkStep(pr, step)}
-                title="Mira el cluster y confirma que dio lo esperado (sirve si lo hiciste en la terminal)">
-                <SearchCheck size={14} aria-hidden="true" /> Verificar
-              </GatedButton>
-            )}
-            {!done
-              ? <button type="button" className="btn btn-ghost" onClick={() => markManual(pr, step)}><SquareTerminal size={14} aria-hidden="true" /> Lo hice en la terminal</button>
-              : <button type="button" className="btn btn-ghost btn-sm" onClick={() => undoStep(pr, step)}>Desmarcar</button>}
-          </div>
+          {unlocked ? (
+            <div className="pr-actions">
+              {step.run && (
+                <GatedButton cap={cap ?? undefined} className="btn btn-primary" busy={busy === 'run'} onClick={() => runStep(pr, step)}>
+                  <Play size={14} aria-hidden="true" /> {busy === 'run' ? 'Corriendo…' : done ? 'Ejecutar de nuevo' : 'Ejecutar'}
+                </GatedButton>
+              )}
+              {step.verify && (
+                <GatedButton cap={cap ?? undefined} className="btn" busy={busy === 'verify'} onClick={() => checkStep(pr, step)}
+                  title="Mira el cluster y confirma que dio lo esperado (sirve si lo hiciste en la terminal)">
+                  <SearchCheck size={14} aria-hidden="true" /> Verificar
+                </GatedButton>
+              )}
+              {!done
+                ? <button type="button" className="btn btn-ghost" onClick={() => markManual(pr, step, vars)}><SquareTerminal size={14} aria-hidden="true" /> Lo hice en la terminal</button>
+                : <button type="button" className="btn btn-ghost btn-sm" onClick={() => undoStep(pr, step)}>Desmarcar</button>}
+            </div>
+          ) : <p className="pr-locked muted"><CircleHelp size={14} aria-hidden="true" /> Elegí una opción de la pregunta para habilitar Ejecutar.</p>}
           {busy && live?.note && <p className="pr-note" role="status"><span className="dot" data-s="run" aria-hidden="true" /> {live.note}</p>}
-          {o && !busy && <Outcome live={live!} />}
+          {o && !busy && <Outcome live={live!} back={{ practice: pr.id, title: pr.title, step: step.id, n }} />}
+          {step.donde && <Donde donde={step.donde} vars={vars} done={!!done} />}
           {step.tip && <p className="pr-tip"><Lightbulb size={14} aria-hidden="true" /> {step.tip}</p>}
         </div>
       )}
@@ -235,7 +276,70 @@ function StepCard({ pr, step, n, done, live, open, onToggle, cap }: {
   );
 }
 
-function Outcome({ live }: { live: StepLive }) {
+/** El multiple choice: elegís, te dice si es o no y por qué, y recién ahí se puede ejecutar */
+function Question({ pr, step, vars, pp, peek, onPeek }: { pr: Practice; step: Step; vars: Record<string, string>; pp?: PracticeProgress; peek: boolean; onPeek: () => void }) {
+  const q = step.pregunta!;
+  const ans = pp?.answers?.[step.id];
+  const right = correctIndex(q);
+  const order = optionOrder(step.id, q.opciones.length);
+  const shown = ans != null || peek;
+  return (
+    <section className="pr-q" aria-label="Pregunta del paso">
+      <p className="pr-q-h"><CircleHelp size={15} aria-hidden="true" /> <span>{fill(q.enunciado, vars)}</span></p>
+      <div className="pr-q-ops" role="group" aria-label="Opciones">
+        {order.map(i => {
+          const op = q.opciones[i];
+          const k = !shown ? undefined : i === right ? 'ok' : ans?.pick === i ? 'bad' : 'off';
+          return (
+            <button key={i} type="button" className="pr-q-op" data-k={k} disabled={shown} aria-pressed={ans?.pick === i}
+              onClick={() => answerStep(pr, step, i)}>
+              <span className="pr-q-mark" aria-hidden="true">{k === 'ok' ? <CircleCheck size={14} /> : k === 'bad' ? <CircleX size={14} /> : null}</span>
+              <code>{fill(op.cmd, vars)}</code>
+            </button>
+          );
+        })}
+      </div>
+      {ans && (ans.ok
+        ? <div className="pr-q-fb" data-k="ok" role="status"><b>¡Bien! Es ese.</b> {q.opciones[right].porque}</div>
+        : (
+          <div className="pr-q-fb" data-k="bad" role="status">
+            <p><b>Ese no.</b> {q.opciones[ans.pick]?.porque}</p>
+            <p><b>El correcto es <code>{fill(q.opciones[right].cmd, vars)}</code>:</b> {q.opciones[right].porque}</p>
+          </div>
+        ))}
+      {!ans && peek && <div className="pr-q-fb" data-k="info" role="status"><b>La respuesta:</b> {q.opciones[right].porque}</div>}
+      {!ans && !peek && pp?.completedBefore && (
+        <p className="pr-q-peek muted">Ya completaste esta práctica: podés contestar de nuevo o <button type="button" className="pr-link" onClick={onPeek}><Eye size={13} aria-hidden="true" /> ver la respuesta</button>.</p>
+      )}
+    </section>
+  );
+}
+
+const DONDE: { k: keyof NonNullable<Step['donde']>; label: string; icon: typeof Container }[] = [
+  { k: 'contenedor', label: 'En el contenedor', icon: Container },
+  { k: 'hdfs', label: 'En HDFS', icon: HardDrive },
+  { k: 'yarn', label: 'En YARN', icon: Layers },
+  { k: 'compu', label: 'En tu compu', icon: Laptop },
+];
+
+/** Dónde queda cada cosa después del paso: contenedor, HDFS, YARN o tu compu */
+function Donde({ donde, vars, done }: { donde: NonNullable<Step['donde']>; vars: Record<string, string>; done: boolean }) {
+  return (
+    <section className="pr-donde" aria-label="Dónde queda cada cosa">
+      <h3><MapPin size={14} aria-hidden="true" /> {done ? 'Dónde quedó' : 'Dónde va a quedar'}</h3>
+      <dl>
+        {DONDE.filter(d => donde[d.k]).map(d => (
+          <div key={d.k} data-k={d.k}>
+            <dt><d.icon size={13} aria-hidden="true" /> {d.label}</dt>
+            <dd>{fill(donde[d.k]!, vars)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function Outcome({ live, back }: { live: StepLive; back: PracticeReturn }) {
   const o = live.outcome!;
   const r = o.result;
   const k = o.ok ? 'ok' : o.unsupported ? 'info' : 'bad';
@@ -248,6 +352,7 @@ function Outcome({ live }: { live: StepLive }) {
       </p>
       {r && (o.ok ? r.summary !== head : true) && <p className="muted">{r.summary}</p>}
       {!o.ok && o.check && o.error && o.check.detail !== o.error && <p className="muted">{o.check.detail}</p>}
+      {r?.raw && <Terminal raw={r.raw} />}
       {r?.out && <Out out={r.out} />}
       {(r?.trace || r?.link) && (
         <div className="pr-out-f">
@@ -257,10 +362,30 @@ function Outcome({ live }: { live: StepLive }) {
               <TraceView trace={r.trace} />
             </details>
           )}
-          {r.link && <button type="button" className="btn btn-sm" onClick={() => navigate(r.link!.page, r.link!.arg)}>{r.link.label} <ArrowRight size={13} aria-hidden="true" /></button>}
+          {r.link && <button type="button" className="btn btn-sm" onClick={() => { practiceReturn.set(back); navigate(r.link!.page, r.link!.arg); }}>{r.link.label} <ArrowRight size={13} aria-hidden="true" /></button>}
         </div>
       )}
     </div>
+  );
+}
+
+/** La salida como en la terminal: el comando, stdout y stderr, el código de salida y de dónde salió */
+function Terminal({ raw }: { raw: RawOut }) {
+  const hasErr = raw.lines.some(l => l.stream === 'err');
+  return (
+    <details className="pr-term" open>
+      <summary>Salida en la terminal <span className="pr-term-src">{raw.origen === 'proceso' ? 'lo que imprimió el comando' : 'armada con lo que respondió el servicio'}</span></summary>
+      <pre className="pr-term-b" aria-label="Salida del comando">
+        <div className="pr-term-cmd"><span aria-hidden="true">$ </span>{raw.command}</div>
+        {raw.lines.map((l, i) => <div key={i} data-s={l.stream}>{l.text || ' '}</div>)}
+        {!raw.lines.length && <div className="pr-term-none">(no imprime nada)</div>}
+      </pre>
+      <p className="pr-term-f">
+        {raw.exitCode != null && <span>Código de salida {raw.exitCode}{raw.exitCode === 0 ? ' (terminó bien)' : ''}</span>}
+        {hasErr && <span><span className="pr-term-key" data-s="err">stderr</span> en ámbar: Hadoop escribe ahí sus avisos (INFO, WARN), no siempre son errores</span>}
+        {raw.nota && <span>{raw.nota}</span>}
+      </p>
+    </details>
   );
 }
 
@@ -270,18 +395,42 @@ function Out({ out }: { out: StepOut }) {
   return <pre className="pr-text">{out.text}</pre>;
 }
 
-function Finished({ pr }: { pr: Practice }) {
-  const status = useStatus();
+/** Al terminar: qué hiciste, con qué comando, dónde quedó cada cosa y cuántas acertaste */
+function Finished({ pr, pp, status }: { pr: Practice; pp?: PracticeProgress; status: ClusterStatus | null }) {
   const { progress } = usePractices();
   const next = suggested(PRACTICES, progress, status, 1)[0];
+  const sc = score(pr, pp);
   return (
-    <div className="pr-finished">
-      <span className="pr-finished-ico"><Check size={18} aria-hidden="true" /></span>
-      <div>
-        <strong>Terminaste {pr.title}</strong>
-        <span className="muted">{pr.learn[0]}.</span>
+    <section className="pr-finished" aria-label="Qué hiciste">
+      <div className="pr-finished-top">
+        <span className="pr-finished-ico"><Check size={18} aria-hidden="true" /></span>
+        <div>
+          <strong>Terminaste {pr.title}</strong>
+          <span className="muted">{sc.total ? (sc.answered ? `Acertaste ${sc.firstTry} de ${sc.answered} preguntas al primer intento.` : 'No respondiste preguntas en esta vuelta.') : pr.learn[0] + '.'}</span>
+        </div>
+        {next && <button type="button" className="btn btn-primary" onClick={() => navigate('practicas', next.id)}>Seguir con {next.title} <ArrowRight size={14} aria-hidden="true" /></button>}
       </div>
-      {next && <button type="button" className="btn btn-primary" onClick={() => navigate('practicas', next.id)}>Seguir con {next.title} <ArrowRight size={14} aria-hidden="true" /></button>}
-    </div>
+      <details className="pr-sum" open>
+        <summary>Qué hiciste, paso por paso</summary>
+        <ol>
+          {pr.steps.map(s => {
+            const v = stepVars(s, status, pp?.vars ?? {});
+            const a = pp?.answers?.[s.id];
+            const where = DONDE.filter(d => s.donde?.[d.k]);
+            return (
+              <li key={s.id}>
+                <div className="pr-sum-h">
+                  <b>{s.title}</b>
+                  {pp?.done[s.id]?.how === 'manual' && <span className="muted">en la terminal</span>}
+                  {a && <span className="pr-ans-chip" data-ok={a.ok}>{a.ok ? 'acertaste' : 'no acertaste'}</span>}
+                </div>
+                <code className="pr-sum-cmd">{fill(s.command, v)}</code>
+                {where.length > 0 && <ul>{where.map(d => <li key={d.k}><span className="muted">{d.label}:</span> {fill(s.donde![d.k]!, v)}</li>)}</ul>}
+              </li>
+            );
+          })}
+        </ol>
+      </details>
+    </section>
   );
 }

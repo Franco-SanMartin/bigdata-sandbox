@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../api';
 import {
-  executeStep, loadProgress, markDone, resetPractice, saveProgress, setVars, verifyStep,
+  answer, executeStep, loadProgress, markDone, resetPractice, saveProgress, setVars, verifyStep,
   type Practice, type Progress, type Step, type StepCtx, type StepOutcome,
 } from '../lib/practicas';
 
@@ -66,10 +66,16 @@ async function go(pr: Practice, s: Step, mode: 'run' | 'verify') {
 export const runStep = (pr: Practice, s: Step) => go(pr, s, 'run');
 export const checkStep = (pr: Practice, s: Step) => go(pr, s, 'verify');
 
-/** "Lo hice en la terminal": lo marca hecho sin verificar */
-export function markManual(pr: Practice, s: Step) {
-  setProgress(markDone(st.progress, pr, s.id, 'manual'));
+/** "Lo hice en la terminal": lo marca hecho sin verificar. Guarda las variables con las que se mostró
+    el comando (qué DataNode, por ejemplo), así el paso siguiente muestra el mismo */
+export function markManual(pr: Practice, s: Step, vars: Record<string, string> = {}) {
+  setProgress(markDone(st.progress, pr, s.id, 'manual', vars));
   setLive(key(pr, s), undefined);
+}
+
+/** Responde el multiple choice de un paso (cuenta solo la primera vez) */
+export function answerStep(pr: Practice, s: Step, pick: number) {
+  setProgress(answer(st.progress, pr, s.id, pick));
 }
 
 export function undoStep(pr: Practice, s: Step) {

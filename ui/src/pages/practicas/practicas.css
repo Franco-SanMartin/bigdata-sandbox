@@ -79,7 +79,73 @@
 .pr-trace summary:hover { color: var(--text); }
 .pr-trace[open] summary { margin-bottom: var(--s-3); }
 
-.pr-finished { display: flex; align-items: center; gap: var(--s-4); padding: 16px 18px; border-radius: var(--r-3); border: 1px solid var(--ok-line); background: var(--ok-bg); flex-wrap: wrap; }
-.pr-finished > div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
+.pr-finished { display: flex; flex-direction: column; gap: var(--s-3); padding: 16px 18px; border-radius: var(--r-3); border: 1px solid var(--ok-line); background: var(--ok-bg); }
+.pr-finished-top { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
+.pr-finished-top > div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
 .pr-finished strong { font: var(--t-section); }
 .pr-finished-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface); color: var(--ok-text); flex: none; }
+
+/* Resumen "Qué hiciste" */
+.pr-sum { border-top: 1px solid var(--ok-line); padding-top: var(--s-3); }
+.pr-sum > summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-md); font-weight: 500; }
+.pr-sum > summary:hover { color: var(--text); }
+.pr-sum > ol { margin: var(--s-3) 0 0; padding: 0 0 0 20px; display: grid; gap: var(--s-3); }
+.pr-sum > ol > li { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-md); color: var(--text-2); }
+.pr-sum-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.pr-sum-h b { color: var(--text); font-weight: 500; }
+.pr-sum-cmd { display: block; padding: 6px 10px; border-radius: var(--r-1); background: var(--surface); border: 1px solid var(--line-soft); font: var(--t-code); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.pr-sum ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: var(--fs-sm); }
+
+/* Avance y marcas de respuesta */
+.pr-score { font-size: var(--fs-sm); margin-top: var(--s-2); }
+.pr-ans-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--ok-text); }
+.pr-ans-chip[data-ok="false"] { color: var(--bad-text); }
+.pr-locked { display: flex; gap: 8px; align-items: center; font-size: var(--fs-md); }
+.pr-link { all: unset; cursor: pointer; color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; display: inline-flex; gap: 4px; align-items: center; }
+.pr-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-1); }
+
+/* La pregunta del paso */
+.pr-q { display: flex; flex-direction: column; gap: var(--s-3); padding: 12px 14px; border-radius: var(--r-2); border: 1px solid var(--accent-line); background: var(--accent-bg); }
+.pr-q-h { display: flex; gap: 8px; align-items: baseline; font-weight: 500; color: var(--text); }
+.pr-q-h svg { flex: none; transform: translateY(2px); color: var(--accent-text); }
+.pr-q-ops { display: grid; gap: 6px; }
+.pr-q-op { all: unset; box-sizing: border-box; display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.pr-q-op:hover:not(:disabled) { border-color: var(--line-strong); background: var(--n-2); }
+.pr-q-op:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pr-q-op:disabled { cursor: default; }
+.pr-q-op code { font: var(--t-code); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.pr-q-op[data-k="ok"] { border-color: var(--ok-line); background: var(--ok-bg); }
+.pr-q-op[data-k="bad"] { border-color: var(--bad-line); background: var(--bad-bg); }
+.pr-q-op[data-k="off"] code { color: var(--text-3); }
+.pr-q-mark { display: inline-grid; place-items: center; width: 14px; height: 18px; flex: none; }
+.pr-q-op[data-k="ok"] .pr-q-mark { color: var(--ok-text); }
+.pr-q-op[data-k="bad"] .pr-q-mark { color: var(--bad-text); }
+.pr-q-fb { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-md); color: var(--text-2); padding: 10px 12px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--surface); }
+.pr-q-fb[data-k="ok"] { border-color: var(--ok-line); }
+.pr-q-fb[data-k="bad"] { border-color: var(--bad-line); }
+.pr-q-fb b { color: var(--text); font-weight: 500; }
+.pr-q-fb[data-k="bad"] > p:first-child b { color: var(--bad-text); }
+.pr-q-fb[data-k="ok"] > b { color: var(--ok-text); }
+.pr-q-fb code { font: var(--t-code); overflow-wrap: anywhere; }
+.pr-q-peek { font-size: var(--fs-sm); }
+
+/* Dónde queda cada cosa */
+.pr-donde { padding: 10px 12px; border-radius: var(--r-2); border: 1px solid var(--line); background: var(--n-1); }
+.pr-donde h3 { display: flex; gap: 6px; align-items: center; font: var(--t-label); color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.pr-donde dl { margin: 0; display: grid; gap: 6px; }
+.pr-donde dl > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--s-3); align-items: baseline; }
+@media (max-width: 640px) { .pr-donde dl > div { grid-template-columns: 1fr; gap: 2px; } }
+.pr-donde dt { display: flex; gap: 6px; align-items: center; color: var(--text-2); font-size: var(--fs-sm); font-weight: 500; }
+.pr-donde dd { margin: 0; color: var(--text); font-size: var(--fs-md); overflow-wrap: anywhere; }
+
+/* La salida como en la terminal */
+.pr-term > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; color: var(--text-2); font-size: var(--fs-md); }
+.pr-term > summary:hover { color: var(--text); }
+.pr-term-src { font-size: var(--fs-xs); color: var(--text-4); }
+.pr-term-b { margin: var(--s-2) 0 0; padding: 10px 12px; max-height: 340px; overflow: auto; border-radius: var(--r-2); border: 1px solid var(--line-soft); background: var(--n-0); font: var(--t-code); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pr-term-b > div[data-s="err"] { color: var(--run-text); }
+.pr-term-cmd { color: var(--text); font-weight: 500; }
+.pr-term-cmd > span { color: var(--text-4); }
+.pr-term-none { color: var(--text-4); font-style: italic; }
+.pr-term-f { display: flex; flex-wrap: wrap; gap: 4px var(--s-4); margin-top: 6px; font-size: var(--fs-sm); color: var(--text-3); }
+.pr-term-key[data-s="err"] { font: var(--t-code); color: var(--run-text); }
