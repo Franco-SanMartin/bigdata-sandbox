@@ -221,6 +221,8 @@ export async function executeStep(step: Step, ctx: StepCtx): Promise<StepOutcome
     }
     if (step.run) result = await step.run(ctx);
     if (result && step.plan) result = { ...result, vars: { ...ctx.vars, ...(result.vars ?? {}) } };
+    // La salida cruda sin comando lleva el del paso, con las mismas variables con las que corrió
+    if (result?.raw && !result.raw.command) result = { ...result, raw: { ...result.raw, command: fill(step.command, { ...ctx.vars, ...(result.vars ?? {}) }) } };
   } catch (e) {
     return { ok: false, ...explain(e) };
   }

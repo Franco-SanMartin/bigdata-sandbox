@@ -34,6 +34,8 @@ export interface RawOut {
   /** proceso: lo que imprimió el comando de verdad · armada: armada con lo que respondió el servicio
       (WebHDFS, JMX, el modo demo), con el mismo formato que en la terminal */
   origen: 'proceso' | 'armada';
+  /** Una aclaración corta (por qué no hay salida, de dónde salió) */
+  nota?: string;
 }
 
 /** Una respuesta posible del multiple choice */

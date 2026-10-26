@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDemoApi } from '../../api/demo';
 import type { ClusterConfig, SandboxApi } from '../../api/types';
-import { executeStep } from './motor';
+import { executeStep, fill, shownCommand, stepVars } from './motor';
 import { practiceById } from './index';
 import type { StepCtx } from './tipos';
 
@@ -47,13 +47,22 @@ async function boot(cfg: Partial<ClusterConfig>) {
 async function play(id: string, skip: string[] = []) {
   const pr = practiceById(id)!;
   const vars: Record<string, string> = {};
-  const out: Record<string, { ok: boolean; why: string }> = {};
+  const out: Record<string, { ok: boolean; why: string; shown: string; ran?: string }> = {};
   for (const s of pr.steps) {
     if (skip.includes(s.id)) continue;
     const c: StepCtx = { api, status: () => api.status(), vars, sleep };
+    // lo que la página muestra antes de Ejecutar
+    const st = await api.status();
+    const shown = shownCommand(s, st, vars);
+    // ninguna {variable} queda sin llenar en lo que se muestra (fill deja <nombre> si no la conoce)
+    const v = stepVars(s, st, vars);
+    for (const t of [shown, s.pregunta?.enunciado ?? '', ...(s.pregunta?.opciones.map(o => o.cmd) ?? [])])
+      expect(fill(t, v), `${id}/${s.id}`).not.toMatch(/<[\w.]+>/);
     const o = await executeStep(s, c);
     Object.assign(vars, o.result?.vars ?? {});
-    out[s.id] = { ok: o.ok, why: o.error ?? o.check?.detail ?? o.result?.summary ?? '' };
+    // "Dónde queda" se muestra después de correr: ya con lo que dejó el paso
+    for (const t of Object.values(s.donde ?? {})) expect(fill(t, { ...v, ...vars }), `${id}/${s.id} donde`).not.toMatch(/<[\w.]+>/);
+    out[s.id] = { ok: o.ok, why: o.error ?? o.check?.detail ?? o.result?.summary ?? '', shown, ran: o.result?.raw?.command };
   }
   return out;
 }
@@ -85,9 +94,31 @@ describe('prácticas en el demo', () => {
   }, 60000);
 
   it('hdfs-falla: se cae un DataNode, quedan sub-replicados y vuelve sano', async () => {
-    await boot(TODO);
-    const r = await play('hdfs-falla');
+    await boot({ ...TODO, datanodes: 3 });
+    const r = await play('hdfs-falla', ['start']);
     for (const [k, v] of Object.entries(r)) expect(v.ok, `${k}: ${v.why}`).toBe(true);
+    // el DataNode que dice el comando es el que se apagó (antes mostraba "stop 2" y apagaba el 3)
+    const down = (await api.status()).processes.filter(p => p.kind === 'datanode' && p.state !== 'up');
+    expect(down).toHaveLength(1);
+    const n = down[0].id.replace(/\D/g, '');
+    expect(r.stop.shown).toBe(`datanode stop ${n}`);
+    expect(r.stop.ran).toBe(r.stop.shown);
+    const pr = practiceById('hdfs-falla')!;
+    const start = pr.steps.find(s => s.id === 'start')!;
+    const c: StepCtx = { api, status: () => api.status(), vars: { dn: down[0].id, dnNum: n }, sleep };
+    expect(shownCommand(start, await api.status(), c.vars)).toBe(`datanode start ${n}`);
+    const o = await executeStep(start, c);
+    expect(o.ok, o.error ?? o.check?.detail).toBe(true);
+    expect(o.result?.raw?.command).toBe(`datanode start ${n}`);
+    expect((await api.status()).processes.find(p => p.id === down[0].id)?.state).toBe('up');
+  }, 90000);
+
+  it('lo que se muestra es lo que corre, en todas las prácticas', async () => {
+    await boot(TODO);
+    for (const id of ['hdfs-basico', 'mapreduce']) {
+      const r = await play(id);
+      for (const [k, v] of Object.entries(r)) if (v.ran) expect(v.ran, `${id}/${k}`).toBe(v.shown);
+    }
   }, 60000);
 
   it('ha: failover con 2 NameNodes', async () => {

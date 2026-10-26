@@ -85,6 +85,8 @@ def test_ciclo_completo(client):
     while client.get(f"/api/actions/{run_id}").json()["state"] == "running" and time.time() < fin:
         time.sleep(0.05)
     assert client.get(f"/api/actions/{run_id}").json()["state"] == "failed"
+    # se muestra como lo tipea el alumno (y como lo muestra la práctica), sin la ruta de bin
+    assert client.get(f"/api/actions/{run_id}").json()["command"] == "datanode stop 1"
     assert client.get("/api/actions/x999").status_code == 404
     assert client.post("/api/processes/rm/stop").status_code == 400
     assert client.post("/api/cluster/apply", json={"config": {**BASE, "datanodes": 3}}).status_code == 202

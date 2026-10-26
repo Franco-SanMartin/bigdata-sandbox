@@ -433,7 +433,8 @@ class Cluster:
         verbo = "Prender" if action == "start" else "Apagar"
         if m:
             n = int(m.group(1))
-            return Action(f"{verbo} DataNode {n}", [f"{b}/datanode", action, str(n)],
+            # display: lo que el alumno tipea en la terminal (bin está en el PATH), igual al de la práctica
+            return Action(f"{verbo} DataNode {n}", [f"{b}/datanode", action, str(n)], display=f"datanode {action} {n}",
                           input=f"DataNode {n} (http://localhost:{dn_http(n)})",
                           action="el NameNode lo da por muerto a los ~40 s y re-replica sus bloques"
                           if action == "stop" else "arranca y se anota en el NameNode con los bloques que tenga",
@@ -441,7 +442,7 @@ class Cluster:
         m = re.fullmatch(r"nn([1-3])", pid)
         if m:
             n = int(m.group(1))
-            return Action(f"{verbo} NameNode {n}", [f"{b}/namenode", action, str(n)],
+            return Action(f"{verbo} NameNode {n}", [f"{b}/namenode", action, str(n)], display=f"namenode {action} {n}",
                           input=f"NameNode {n} (http://localhost:{nn_http(n)})",
                           action=("con alta disponibilidad, ZooKeeper le da el 'active' a otro NameNode"
                                   if self.config["namenodes"] > 1 else "sin alta disponibilidad, HDFS queda sin servicio")
