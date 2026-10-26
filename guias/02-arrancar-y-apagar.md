@@ -47,21 +47,21 @@ docker run -d --name bigdata --stop-timeout 20 \
   -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 \
   -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 \
   -v bigdata_hadoop:/hadoop -v "$(pwd)/datos:/datos" \
-  franki678/bigdata-sandbox
+  franki678/bigdata-sandbox:base
 ```
 
 Windows, PowerShell (una sola línea):
 
 <!-- prueba: no (PowerShell; es el mismo comando que el de Mac/Linux) -->
 ```powershell
-docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox
+docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -v bigdata_hadoop:/hadoop -v "${PWD}/datos:/datos" franki678/bigdata-sandbox:base
 ```
 
 Windows, CMD (la que muestra `C:\...>`, una sola línea):
 
 <!-- prueba: no (CMD de Windows; es el mismo comando que el de Mac/Linux) -->
 ```bat
-docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox
+docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -v bigdata_hadoop:/hadoop -v "%cd%\datos:/datos" franki678/bigdata-sandbox:base
 ```
 
 La única diferencia es cómo se escribe "la carpeta actual": `$(pwd)`,
@@ -79,7 +79,7 @@ Qué es cada parte:
 | `-p 127.0.0.1:9870:9870` ... | Cada página web (y MySQL y MongoDB) en tu compu: `localhost:9870`, etc. El `127.0.0.1` hace que solo se vean desde **tu** compu y no desde la red del aula |
 | `-v bigdata_hadoop:/hadoop` | El **volumen**: el disco del cluster. HDFS, Hive, MySQL y MongoDB viven ahí y sobreviven a apagar y a borrar el contenedor |
 | `-v "$(pwd)/datos:/datos"` | Tu carpeta `datos/` aparece adentro como `/datos`: así se pasan archivos |
-| `franki678/bigdata-sandbox` | La imagen |
+| `franki678/bigdata-sandbox:base` | La imagen |
 
 Los parámetros (`-e`), todos opcionales:
 
@@ -199,7 +199,7 @@ docker run -d --name bigdata --stop-timeout 20 \
   -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 \
   -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 \
   -v bigdata_hadoop:/hadoop -v "$(pwd)/datos:/datos" \
-  franki678/bigdata-sandbox
+  franki678/bigdata-sandbox:base
 ```
 
 <!-- prueba: esperar listo -->

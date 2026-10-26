@@ -346,7 +346,9 @@ def main() -> int:
     EXTENSIONES.extend(extensiones())
     try:
         with sync_playwright() as pw:
-            nav = pw.chromium.launch()
+            # WebGL por software (SwiftShader): el runner no tiene GPU y la pantalla de ML dibuja en 3D
+            nav = pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+                                           "--ignore-gpu-blocklist"])
             page = nav.new_page(viewport={"width": 1440, "height": 900}, locale="es-AR")
 
             def anotar(tipo, texto, donde="", recurso=""):

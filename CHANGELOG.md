@@ -9,6 +9,53 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+## [1.2.0] - 2026-10-23
+
+Cada modelo de Machine Learning por dentro: el modelo entrenado dibujado en 3D
+con lo que de verdad aprendió y la cuenta de una fila hecha en el navegador,
+igual a la del servidor. Además, el humo de `full` entrena todos los modelos
+en los dos motores y prueba las prácticas de Spark desde la interfaz.
+
+### Cambiado
+
+- El archivo del aula (release `imagen`) carga un solo nombre,
+  `franki678/bigdata-sandbox:base`, y las guías, el README y el
+  `docker-compose.yml` usan ese mismo con el tag escrito, para que todo ande
+  sin internet después del `docker load`.
+
+### Agregado
+
+- **Por dentro de cada modelo** en la pantalla de Machine Learning: el modelo
+  entrenado dibujado en 3D con lo que de verdad aprendió, y la cuenta de una
+  fila hecha delante tuyo, con reproducir, pausa, paso a paso, velocidad y
+  cámara que se gira. La red neuronal (scikit-learn y MLlib) muestra capas,
+  conexiones según su peso, el dato pasando capa por capa, las neuronas que se
+  activan y las probabilidades de salida, y época por época con la curva de
+  pérdida; el árbol, el camino de la fila hasta la hoja; KMeans, los puntos en
+  3D y los centros moviéndose por iteración; la regresión lineal y la
+  logística, su superficie con los residuos. Sin WebGL dice por qué y deja la
+  cuenta en texto; con «reducir movimiento», paso a paso.
+- `GET /api/ml/models/{id}/viz`: lo de adentro de cada modelo (pesos, nodos,
+  centros, coeficientes) y una muestra con lo que predijo, para los últimos 30.
+- La red neuronal también se ofrece con Spark MLlib en la recomendación.
+- El humo rehace la cuenta de cada modelo con lo que devuelve `/viz` y la
+  compara con lo que predijo el servidor (1e-6), y en la interfaz revisa que
+  el dibujo 3D se vea y que la cuenta del navegador dé lo mismo.
+- El humo de `full` entrena desde la API todos los modelos de ML en los dos
+  motores (regresión, árbol, logística, red, tonto y KMeans) y revisa que la
+  métrica quede en un rango razonable y que la regresión aprenda la regla real.
+- Desde la interfaz: el pipeline entero desde el riel (con PySpark, Spark SQL,
+  Spark MLlib y Sqoop), la práctica de Spark, y regresión, árbol con MLlib y
+  KMeans desde la pantalla de ML.
+
+### Arreglado
+
+- La práctica de Spark ya no dice «No existe el trabajo» al lanzar SparkPi o las
+  ventas: el servidor devuelve el id recién cuando el ResourceManager conoce la
+  aplicación (spark-submit lo imprime antes de que YARN la acepte).
+- El paso «Mirar el DAG» de la práctica de Spark espera a que Spark History
+  cargue el trabajo recién terminado en vez de mostrar 0 etapas.
+
 ## [1.1.0] - 2026-10-23
 
 La interfaz de `full`, rediseñada: tema claro, una pantalla de inicio que dice
@@ -134,6 +181,7 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.1.0...main
+[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.2.0...main
+[1.2.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0

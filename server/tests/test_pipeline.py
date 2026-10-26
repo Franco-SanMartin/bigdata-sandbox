@@ -331,3 +331,8 @@ def test_las_14_rutas(mundo, settings, tmp_path):
             time.sleep(0.05)
         m = c.get("/api/ml/models").json()[0]
         assert m["state"] == "done" and m["reference"] is False and m["metrics"] == {"aciertos": 0.9093}
+        assert m["hasViz"] is True
+        r = c.get("/api/ml/models/m1/viz")
+        assert r.status_code == 200 and r.json()["kind"] == "tree" and r.json()["v"] == 1
+        r = c.get("/api/ml/models/m9/viz")
+        assert r.status_code == 404 and r.json()["code"] == "not_found"

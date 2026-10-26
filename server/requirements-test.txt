@@ -1,3 +1,8 @@
 -r requirements.txt
 pytest==9.1.1
 httpx==0.28.1
+# Las mismas versiones que la imagen: los tests de jobs/viz.py corren el entrenamiento de verdad
+numpy==1.26.4
+pandas==2.3.3
+scipy==1.17.1
+scikit-learn==1.9.1

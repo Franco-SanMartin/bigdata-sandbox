@@ -29,11 +29,12 @@ services:
   bigdata:
 
     # --- La imagen ------------------------------------------------------------
-    # La publicada en Docker Hub (o la cargada con "docker load"). Sin tag es
-    # "latest", la de la clase (= ":base", con MongoDB). Las otras versiones
-    # (README, "Versiones de la imagen"): ":ml" (+ Python para datos y
-    # JupyterLab).
-    image: franki678/bigdata-sandbox
+    # La publicada en Docker Hub (o la cargada con "docker load" del archivo
+    # del aula, que trae solo este nombre). ":base" es la de la clase, con
+    # MongoDB (en Docker Hub, "latest" es la misma). Con el tag escrito anda sin
+    # internet si la imagen ya esta cargada. Las otras versiones (README,
+    # "Versiones de la imagen"): ":ml" (+ Python para datos y JupyterLab).
+    image: franki678/bigdata-sandbox:base
     # image: franki678/bigdata-sandbox:ml
 
     # En lugar de usar la publicada, armarla desde el Dockerfile de esta

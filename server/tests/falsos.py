@@ -793,9 +793,40 @@ def entrenar(tarea: str, modelo: str, pct: int, params: dict, entradas: list[str
         res["metrics"] = {"rand_ajustado": 0.8269}
         res["predictions"] = {"columns": entradas + ["segmento_real", "grupo"],
                               "rows": [[1] * len(entradas) + ["frecuente", 0]], "total": total}
+    ruta = os.environ.get("SANDBOX_VIZ")
+    if ruta and falla("viz"):
+        res["vizError"] = "ValueError: sin dibujo"
+    elif ruta:
+        Path(ruta).write_text(json.dumps(viz_falso(tarea, modelo, entradas, spark)))
+        res["viz"] = True
     print("== Listo|1", flush=True)
     print("@@resultado@@ " + json.dumps(res, ensure_ascii=False), flush=True)
     return 0
+
+
+def viz_falso(tarea: str, modelo: str, entradas: list[str], spark: bool) -> dict:
+    """Un viz chico con la forma del de jobs/viz.py (los números no salen de ningún modelo)."""
+    base = {"v": 1, "engine": "mllib" if spark else "sklearn", "features": entradas}
+    fila = {"rows": [[1.0] * len(entradas)], "real": [1], "pred": [1]}
+    if modelo == "mlp":
+        return {**base, "kind": "mlp", "layers": [len(entradas), 2, 1], "hidden": "relu", "out": "logistic",
+                "classes": ["no vuelve", "vuelve"],
+                "scaler": {"mean": [0.0] * len(entradas), "scale": [1.0] * len(entradas)},
+                "weights": [[[0.5, -0.5]] * len(entradas), [[1.0], [-1.0]]], "biases": [[0.0, 0.0], [0.0]],
+                "sample": {**fila, "proba": [[0.5, 0.5]]}, "epochs": None}
+    if modelo == "arbol":
+        return {**base, "kind": "tree", "classes": ["no vuelve", "vuelve"], "impurity": "gini", "float32": not spark,
+                "nodes": [{"f": 0, "t": 36.5, "imp": 0.5, "n": 10, "p": [0.5, 0.5], "d": 0, "l": 1, "r": 2, "cut": False},
+                          {"f": -1, "t": None, "imp": 0.0, "n": 5, "p": [1.0, 0.0], "d": 1, "l": -1, "r": -1, "cut": False},
+                          {"f": -1, "t": None, "imp": 0.0, "n": 5, "p": [0.0, 1.0], "d": 1, "l": -1, "r": -1, "cut": False}],
+                "sample": {**fila, "real": [0], "pred": [0], "proba": [[1.0, 0.0]]}}
+    if tarea == "clustering":
+        return {**base, "kind": "kmeans", "k": 1, "frames": [{"it": 0, "centers": [[0.0] * len(entradas)]}],
+                "transform": {"log": [False] * len(entradas), "mean": [0.0] * len(entradas),
+                              "scale": [1.0] * len(entradas)}, "replaySame": True, "pca": None,
+                "sample": {**fila, "real": ["frecuente"], "pred": [0]}}
+    return {**base, "kind": "linear", "target": "gasto_mes_siguiente", "coef": [1.0] * len(entradas),
+            "intercept": 0.0, "sample": {**fila, "pred": [float(len(entradas))]}}
 
 
 # ------------------------------------------------------------------ jobs y ejemplos de pandas

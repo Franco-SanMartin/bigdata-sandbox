@@ -1,6 +1,6 @@
 /* Machine Learning en el modo demo: clientes_senal.csv, recomendación de modelos y entrenamiento con
    scikit-learn (valores medidos con modelos_sklearn.py) o Spark MLlib (valores de referencia, en YARN). */
-import type { MlDataset, MlRecommendation, MlTask, ModelChoice, ModelRun, TrainRequest } from '../types';
+import type { MlDataset, MlRecommendation, MlTask, ModelChoice, ModelRun, ModelViz, TrainRequest } from '../types';
 import { fail } from '../errors';
 import type { DemoEngine, StageDef } from './engine';
 import { CLIENTES_COLS, CLIENTES_HEAD, MLLIB, SKLEARN } from './datasets';
@@ -24,6 +24,15 @@ const CONFUSION: Record<string, number[][]> = {
   'sklearn:tonto': [[0, 1708], [0, 2292]], 'sklearn:arbol': [[1528, 180], [184, 2108]], 'sklearn:logistica': [[1310, 398], [334, 1958]], 'sklearn:mlp': [[1522, 186], [190, 2102]],
   'mllib:arbol': [[1526, 182], [186, 2106]], 'mllib:logistica': [[1308, 400], [336, 1956]], 'mllib:mlp': [[1518, 190], [198, 2094]],
 };
+/* Lo de adentro de cada modelo: lo que dejaron los jobs de verdad con los parámetros por defecto
+   (ui/scripts/viz_demo.py). La red de MLlib se entrenó con la forma de la de Spark (sigmoide y softmax);
+   el resto de MLlib usa el dibujo de scikit-learn. Cada uno se carga aparte, cuando se abre. */
+const VIZ: Record<string, () => Promise<{ default: unknown }>> = {
+  lineal: () => import('./viz/lineal.json'), arbol: () => import('./viz/arbol.json'), logistica: () => import('./viz/logistica.json'),
+  tonto: () => import('./viz/tonto.json'), mlp: () => import('./viz/mlp.json'), 'mlp-mllib': () => import('./viz/mlp-mllib.json'),
+  kmeans: () => import('./viz/kmeans.json'),
+};
+
 const col = (r: (string | number | null)[], name: string) => Number(r[CLIENTES_COLS.indexOf(name)]);
 /** Lo que predice cada modelo sobre las primeras filas, con lo que aprendió (coeficientes, reglas del árbol, grupos) */
 function predictions(model: string): ModelRun['predictions'] {
@@ -91,6 +100,7 @@ export class DemoMl {
       c('logistica', 'sklearn', 'sirve', 'Separa con una sola recta: la regla real tiene un "o", por eso acierta menos'),
       c('tonto', 'sklearn', 'línea base', 'Contesta siempre la clase más común: cualquier modelo que no le gane no sirve'),
       c('arbol', 'mllib', 'sirve', mllib),
+      c('mlp', 'mllib', 'sirve', 'La misma forma de red con MultilayerPerceptronClassifier (sigmoide en las ocultas); arranca una sesión de Spark en YARN y pide 3 GB'),
     ] : [
       c('kmeans', 'sklearn', 'recomendado', 'Busca grupos de puntos cercanos. Hay que escalar las columnas antes: sin escalar, el ticket (miles) tapa todo lo demás'),
       c('kmeans', 'mllib', 'sirve', mllib),
@@ -102,6 +112,14 @@ export class DemoMl {
         : 'No hay una columna para predecir: querés encontrar grupos parecidos, es agrupamiento (aprendizaje no supervisado)',
       engineAdvice: 'Con 20.000 filas (menos de 1 MB) todo entra en la memoria de una máquina: scikit-learn tarda milisegundos. Spark MLlib conviene cuando los datos no entran en una sola máquina.',
     };
+  }
+
+  async viz(id: string): Promise<ModelViz> {
+    const r = this.runs.find(x => x.id === id);
+    if (!r || !r.hasViz) fail('not_found', `El modelo ${id} no tiene nada para dibujar`);
+    const load = VIZ[r.engine === 'mllib' && r.model === 'mlp' ? 'mlp-mllib' : r.model];
+    const v = structuredClone((await load()).default) as ModelViz;
+    return { ...v, engine: r.engine };
   }
 
   private emit(r: ModelRun) { this.e.emit({ type: 'model', run: { ...r } }); this.e.emit(); }
@@ -147,6 +165,7 @@ export class DemoMl {
       const cm = CONFUSION[`${req.engine}:${req.model}`];
       if (cm) { const k = r.testRows / 4000; r.confusion = { labels: ['no vuelve', 'vuelve'], matrix: cm.map(row => row.map(v => Math.round(v * k))) }; }
       r.predictions = predictions(req.model);
+      r.hasViz = req.model in VIZ;
       const m = METRIC[req.task];
       r.message = `${m} = ${String(res.metrics[m]).replace('.', ',')}${sameAsMeasured ? '' : ' (medido con 80/20, todas las columnas y los parámetros por defecto)'}`;
       r.trace = { ...r.trace!, output: `${r.message} · ${res.seconds} s · ${n(res.memoryMb!)} MB${r.reference ? ' · valores de referencia' : ''}`,

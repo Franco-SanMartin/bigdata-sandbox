@@ -15,10 +15,17 @@ pantalla): max_depth (árbol, 3), hidden_layer_sizes ("16,8") y max_iter (500)
 en la red neuronal, n_clusters (3) en KMeans. C de la logística se pasa como
 regParam = 1/C (con C = 1, sin regularización, como modelos_spark.py). El último argumento (opcional) son las columnas de entrada
 separadas por coma.
+
+Si está la variable SANDBOX_VIZ, además deja ahí lo de adentro del modelo para
+dibujarlo (lo arma viz.py en el driver, que en modo client corre en esta máquina).
 """
 import json
+import os
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import viz  # noqa: E402
 
 ENTRADAS = ["antiguedad_meses", "visitas_mes", "ticket_promedio", "reclamos", "edad"]
 REGLA_GASTO = {"antiguedad_meses": "50", "visitas_mes": "1.500", "ticket_promedio": "0,8",
@@ -56,6 +63,7 @@ def main(argv):
     datos = VectorAssembler(inputCols=entradas, outputCol="features").transform(clientes)
     nota = "Algunas filas de prueba (no las vio al entrenar): lo real y lo que predijo"
     res = {"metrics": {}, "learned": []}
+    adentro = None   # qué dibujar: una función que arma el JSON de viz.py (se llama al final)
 
     if tarea == "clustering":
         if modelo_id != "kmeans":
@@ -89,6 +97,16 @@ def main(argv):
                                        for _, r in tabla.head(8).iterrows()],
                               "total": total,
                               "note": "Primeras filas del archivo con el grupo que les tocó (KMeans no ve segmento_real)"}
+
+        def adentro():
+            import numpy as np
+            esc, km = modelo.stages[1], modelo.stages[2]
+            Z = np.array([r[0].toArray() for r in modelo.transform(para_grupos).select("escaladas").collect()])
+            idx = viz.indices_muestra(total, viz.TOPE_MUESTRA)
+            return viz.kmeans("mllib", entradas, [c == "ticket_promedio" for c in entradas], esc.mean.toArray(),
+                              esc.std.toArray(), Z, [c.tolist() for c in km.clusterCenters()], k,
+                              tabla[entradas].iloc[idx].values, tabla["segmento_real"].iloc[idx].values,
+                              tabla["prediction"].iloc[idx].values)
     else:
         ent, prueba = datos.randomSplit([pct / 100, 1 - pct / 100], seed=SEMILLA)
         ent.cache()
@@ -118,6 +136,12 @@ def main(argv):
                                             round(r["prediction"]) - int(r["gasto_mes_siguiente"])]
                                            for r in filas],
                                   "total": n_prueba, "note": nota}
+
+            def adentro():
+                t = pred.select(*entradas, "gasto_mes_siguiente", "prediction").limit(viz.TOPE_MUESTRA).toPandas()
+                return viz.lineal("mllib", entradas, m.coefficients.toArray(), m.intercept, "gasto_mes_siguiente",
+                                  ent.select(*entradas).toPandas().values, t[entradas].values,
+                                  t["gasto_mes_siguiente"].values, t["prediction"].values)
         elif tarea == "clasificacion":
             escalar = StandardScaler(inputCol="features", outputCol="escaladas", withMean=True)
             if modelo_id == "arbol":
@@ -154,10 +178,33 @@ def main(argv):
                                   "rows": [[int(r[c]) for c in entradas] + [int(r["vuelve"]), int(r["prediction"])]
                                            for r in filas],
                                   "total": n_prueba, "note": nota + " (1 = vuelve, 0 = no vuelve)"}
+
+            def adentro():
+                tope = viz.TOPE_MUESTRA_RED if modelo_id == "mlp" else viz.TOPE_MUESTRA
+                filas = pred.select(*entradas, "vuelve", "prediction", "probability").limit(tope).collect()
+                X = [[float(r[c]) for c in entradas] for r in filas]
+                real = [int(r["vuelve"]) for r in filas]
+                predicho = [int(r["prediction"]) for r in filas]
+                proba = [r["probability"].toArray().tolist() for r in filas]
+                if modelo_id == "arbol":
+                    return viz.arbol_spark(m._java_obj.rootNode(), entradas, X, real, predicho, proba, m.getImpurity())
+                esc, ult = m.stages[0], m.stages[-1]
+                if modelo_id == "mlp":
+                    return viz.red_spark(ult.getLayers(), ult.weights.toArray(), esc.mean.toArray(), esc.std.toArray(),
+                                         entradas, X, real, predicho, proba)
+                return viz.logistica("mllib", entradas, ult.coefficients.toArray(), ult.intercept, esc.mean.toArray(),
+                                     esc.std.toArray(), ent.select(*entradas).toPandas().values, X, real, predicho, proba)
         else:
             raise SystemExit(f"No existe el problema {tarea}")
 
     res["seconds"] = round(seg, 3)
+    if adentro and os.environ.get("SANDBOX_VIZ"):
+        paso("Guardando lo que aprendió para dibujarlo", 0.95)
+        try:
+            viz.escribir(adentro())
+            res["viz"] = True
+        except Exception as e:  # noqa: BLE001 (sin dibujo, el entrenamiento vale igual)
+            res["vizError"] = f"{type(e).__name__}: {e}"
     paso("Listo", 1)
     print("@@resultado@@ " + json.dumps(res, ensure_ascii=False), flush=True)
     spark.stop()

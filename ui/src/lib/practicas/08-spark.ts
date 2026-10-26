@@ -1,6 +1,6 @@
 /* Guía 08: Spark. SparkPi, las ventas con DataFrames y el DAG de etapas. */
 import { appCheck, appResult, submitTemplate, waitApp } from './comun';
-import { notThere } from './motor';
+import { notThere, waitFor } from './motor';
 import type { Practice } from './tipos';
 import { plural } from '../format';
 
@@ -43,8 +43,12 @@ export const spark: Practice = {
       does: 'Muestra las etapas: leer y agrupar parcial, shuffle, y sumar por producto.', expect: 'Dos etapas o más unidas por un shuffle',
       run: async c => {
         if (!c.vars.ventas) throw new Error('Primero corré las ventas (paso anterior)');
-        const a = await c.api.app(c.vars.ventas);
+        // Spark History levanta el log de un trabajo recién terminado cada unos segundos
+        const w = await waitFor(c, () => c.api.app(c.vars.ventas!), x => x.dag.vertices.length > 0,
+          { seconds: 60, every: 2500, what: 'Esperando a que Spark History cargue el trabajo…' });
+        const a = w.value;
         const v = a.dag.vertices;
+        if (!v.length) throw new Error(`Spark History todavía no tiene ${a.id}: probá de nuevo en unos segundos`);
         return {
           summary: `${plural(v.length, 'etapa')}, ${plural(a.dag.edges.length, 'shuffle')}`,
           out: { kind: 'table', columns: ['etapa', 'qué hace', 'tareas', 'entran', 'salen'], rows: v.map(x => [x.name, x.operators.join(' → '), `${x.tasksDone}/${x.tasks}`, x.recordsIn ?? '', x.recordsOut ?? '']) },

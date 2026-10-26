@@ -1,4 +1,5 @@
-/* Detalle de un entrenamiento: métricas, matriz de confusión, predicciones contra lo real, lo aprendido, costo y trace. */
+/* Detalle de un entrenamiento: métricas, matriz de confusión, predicciones contra lo real, lo aprendido, el modelo por dentro (3D), costo y trace. */
+import { Suspense, lazy } from 'react';
 import type { MlTask, ModelRun } from '../../api/types';
 import { SampleTable, TraceView } from '../../components/Trace';
 import { Meter } from '../../components/ui';
@@ -22,6 +23,9 @@ export const runTime = (s?: number) => (s == null ? '—' : s < 1 ? `${nf(s * 10
 export const ENGINE_LABEL = { sklearn: 'scikit-learn', mllib: 'Spark MLlib' } as const;
 export const EngineChip = ({ engine }: { engine: 'sklearn' | 'mllib' }) => <span className={engine === 'sklearn' ? 'eng eng-uno' : 'eng eng-spark'}>{ENGINE_LABEL[engine]}</span>;
 export const RefTag = () => <span className="tag ref" title="Valores de referencia: no se midieron en esta corrida">referencia</span>;
+
+// three.js pesa: el dibujo 3D se baja recién cuando se abre un modelo que tiene algo para dibujar
+const ModelViz = lazy(() => import('./viz/ModelViz'));
 
 export function ModelDetail({ run, label }: { run: ModelRun; label: string }) {
   const main = MAIN[run.task];
@@ -88,6 +92,15 @@ export function ModelDetail({ run, label }: { run: ModelRun; label: string }) {
           ))}
         </div>
       ) : null}
+
+      {run.state === 'done' && run.hasViz && (
+        <Suspense fallback={<div className="callout" aria-busy="true"><span>Cargando el dibujo del modelo…</span></div>}>
+          <ModelViz key={run.id} run={run} />
+        </Suspense>
+      )}
+      {run.state === 'done' && !run.hasViz && run.vizError && (
+        <div className="callout"><span><b>No se pudo armar el dibujo del modelo</b> (el modelo vale igual). <span className="mono">{run.vizError}</span></span></div>
+      )}
 
       {run.trace && (
         <details className="md-trace">

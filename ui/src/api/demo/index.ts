@@ -80,5 +80,6 @@ export function createDemoApi(): SandboxApi {
     recommend: (d, t) => call(() => ml.recommend(d, t)),
     train: r => call(() => ml.train(r)),
     models: () => call(() => copy(ml.runs)),
+    modelViz: id => call(() => ml.viz(id)),
   };
 }

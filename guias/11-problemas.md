@@ -61,13 +61,13 @@ Adentro, `estado` muestra cada proceso. Los logs de cada servicio están en
 | `AVISO: este procesador no tiene AVX` | MongoDB necesita AVX: en esa compu no hay MongoDB. Lo demás anda |
 | `MySQL NO ARRANCO: este volumen es de la imagen anterior` | Ver [Venís de la imagen anterior](#venís-de-la-imagen-anterior) |
 | `docker pull` dice `toomanyrequests` | Límite de descargas de Docker Hub sin cuenta: esperá, hacé `docker login` con una cuenta gratis o usá el archivo del aula ([guía 1](01-instalacion.md#b-en-el-aula-el-archivo-del-profesor)) |
-| `docker pull` dice `denied` o `not found` | Revisá el nombre: `franki678/bigdata-sandbox` |
+| `docker pull` dice `denied` o `not found` | Revisá el nombre: `franki678/bigdata-sandbox:base` |
 | Abrí un segundo `pyspark` y http://localhost:4040 no muestra el nuevo | La segunda sesión usa el 4041, que no está expuesto: entrá por http://localhost:8088 → *ApplicationMaster* |
 | `ModuleNotFoundError: No module named 'pandas'` | pandas y scikit-learn vienen en otra versión de la imagen, `:ml` ([README](../README.md#versiones-de-la-imagen)) |
 
 ## Venís de la imagen anterior
 
-Hasta octubre de 2026, `franki678/bigdata-sandbox` (la `latest`) era otra
+Hasta octubre de 2026, `franki678/bigdata-sandbox:latest` era otra
 imagen: Ubuntu 20.04, sin MongoDB. Ahora es la versión `base`: Ubuntu 24.04,
 MongoDB y los programas al día. Los comandos son los mismos.
 

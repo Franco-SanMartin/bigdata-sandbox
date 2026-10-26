@@ -1,4 +1,4 @@
-La imagen `base` para Intel/AMD (amd64) en un solo archivo: Ubuntu 24.04 + Hadoop (HDFS y YARN), Pig, Hive, Spark, Sqoop con MySQL, ZooKeeper y MongoDB. Es la misma que `latest`, la de la materia.
+La imagen `base` para Intel/AMD (amd64) en un solo archivo: Ubuntu 24.04 + Hadoop (HDFS y YARN), Pig, Hive, Spark, Sqoop con MySQL, ZooKeeper y MongoDB. Es la de la materia (en Docker Hub, `latest` es la misma).
 
 Sirve para bajarla una vez y repartirla en el aula, o para usarla en una compu sin internet.
 
@@ -9,7 +9,9 @@ Sirve para bajarla una vez y repartirla en el aula, o para usarla en una compu s
    ```
    docker load -i bigdata-sandbox.tar.gz
    ```
-   Quedan cargados los dos tags: `franki678/bigdata-sandbox:base` y `franki678/bigdata-sandbox:latest`.
+   Termina con `Loaded image: franki678/bigdata-sandbox:base` y en `docker images` queda una sola fila: `franki678/bigdata-sandbox`, tag `base`. Ese es el nombre que usan las guías: escribilo siempre con el `:base` (sin tag, Docker busca `:latest` y sale a internet).
+
+   ¿Cargaste un archivo de antes y te aparece también `latest` con el mismo IMAGE ID? `docker rmi franki678/bigdata-sandbox:latest` saca solo ese nombre; la imagen queda.
 3. Levantá el cluster desde esa carpeta:
    ```
    docker compose up -d

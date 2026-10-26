@@ -32,7 +32,7 @@ docker run -d --name bigdata-ha --stop-timeout 20 \
   -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e SERVICIOS=hdfs \
   -p 127.0.0.1:9870-9872:9870-9872 -p 127.0.0.1:8480-8482:8480-8482 \
   -v bigdata_ha:/hadoop \
-  franki678/bigdata-sandbox
+  franki678/bigdata-sandbox:base
 ```
 
 En PowerShell o CMD, en una sola línea (sin las `\`). Esperá el cartel

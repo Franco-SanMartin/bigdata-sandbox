@@ -3,7 +3,7 @@
 Lo carga humo_ui.py (no se corre solo). Cada función recibe la página de Playwright y el
 módulo humo_ui como `h`, con sus ayudas (Chequeo, ir, captura, esperar, pedir...).
 
-- todo: hdfs-basico, hive, mongodb, pig y mapreduce se hacen desde la interfaz con el botón
+- todo: hdfs-basico, hive, mongodb, pig, mapreduce y spark se hacen desde la interfaz con el botón
   Ejecutar de cada paso, contra el cluster de verdad, y quedan completas. Un paso que la
   interfaz todavía no sabe correr contesta "unsupported": se marca con "Lo hice en la
   terminal" y queda anotado en el detalle del chequeo (no es una falla).
@@ -127,6 +127,9 @@ def todo(page, h) -> None:
             expect(page.locator(".pr-finished")).to_be_visible()
             c.detalle = "5/5 pasos desde la interfaz"
             assert not _errores(h, n), _errores(h, n)
+
+    with h.Chequeo("p4 todo: spark completa desde la interfaz (SparkPi, DataFrames y DAG)") as c:
+        _practica(page, h, c, "spark", ["pi", "ventas", "dag"])
 
     with h.Chequeo("p4 todo: la lista cuenta las completas") as c:
         h.ir(page, "practicas")

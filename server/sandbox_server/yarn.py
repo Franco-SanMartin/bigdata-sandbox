@@ -904,6 +904,17 @@ class Yarn:
                 last = run.error or next((l["text"] for l in reversed(run.lines) if l["text"].strip()), "falló")
                 raise ApiError(last, "failed")
             raise ApiError("El trabajo no llegó a YARN: mirá la actividad para ver qué pasó", "failed")
+        # spark-submit imprime el id antes de que el RM la acepte: se espera a que el RM la
+        # conozca, así el que pide el detalle enseguida no recibe un «no existe»
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            try:
+                await self.rm_app(app_id)
+                break
+            except ApiError as e:
+                if e.code != "not_found" or run.state != "running":
+                    break
+            await asyncio.sleep(0.5)
         box["app"] = app_id
         run.action.app_id = app_id
         self.submitted[app_id] = info

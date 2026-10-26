@@ -27,7 +27,7 @@ With Docker installed and 7 GB of RAM for Docker
 [guide 2](guias/02-arrancar-y-apagar.md)):
 
 ```bash
-docker pull franki678/bigdata-sandbox
+docker pull franki678/bigdata-sandbox:base
 docker run -d --name bigdata --stop-timeout 20 \
   -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si \
   -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 \
@@ -36,7 +36,7 @@ docker run -d --name bigdata --stop-timeout 20 \
   -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 \
   -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 \
   -v bigdata_hadoop:/hadoop -v "$(pwd)/datos:/datos" \
-  franki678/bigdata-sandbox
+  franki678/bigdata-sandbox:base
 docker logs -f bigdata
 ```
 
@@ -104,6 +104,37 @@ Spanish.
 | **Home**: what you can and can't do now, with the reason and the fix | **Jobs**: templates with parameters, progress, containers and logs |
 | ![Pipeline: ingestion done and the ETL stage with its tools](docs/capturas/pipeline.png) | ![Machine Learning: a decision tree trained with scikit-learn and its detail](docs/capturas/ml.png) |
 | **Pipeline**: from a dirty CSV to a summary and a model, choosing the tool for each stage | **Machine Learning**: the same model with scikit-learn or with Spark MLlib, compared |
+
+#### Inside each model
+
+Below a trained model's detail, **por dentro** (inside) draws it in 3D from
+what it actually learned (weights, splits, centers) and works out one row in front
+of you. Pick a test row or move the inputs with sliders; play, pause, step and
+speed controls on top; drag to orbit the camera and hover to see each neuron's
+activation and each connection's weight and contribution.
+
+- **Neural network** (both scikit-learn and MLlib): layers are planes and
+  connections get thicker the more they weigh (teal when they add, ink when
+  they subtract). The row goes in, pulses move layer by layer, active neurons
+  light up and the probabilities come out on the right. In «cómo aprendió»
+  (how it learned) the network rearranges epoch by epoch next to the loss curve.
+- **Tree**: the row goes down the path, question by question, to its leaf.
+- **KMeans**: points in 3D (PCA when there are more than 3 columns) and the
+  centers moving iteration by iteration until they settle.
+- **Linear and logistic regression**: the learned surface over two columns,
+  with every point and its residual.
+
+The browser's math gives exactly what the server predicted (the smoke test
+compares them row by row, within 1e-6). With the system's «reduce motion» it
+goes step by step; without WebGL it says why and the same math stays on the
+side, as text.
+
+| | |
+|---|---|
+| ![Inside a neural network: layers, connections by weight and the output probabilities](docs/capturas/ml-red.gif) | ![Inside a tree: the row goes down the path to its leaf](docs/capturas/ml-arbol.gif) |
+| **Neural network**: one row's forward pass, layer by layer | **Tree**: the row's path to its leaf |
+| ![KMeans: the centers moving iteration by iteration](docs/capturas/ml-kmeans.gif) | ![The network epoch by epoch, with the loss curve](docs/capturas/ml-entrenamiento.png) |
+| **KMeans**: how the centers settle | **How it learned**: each epoch's weights and the loss curve |
 
 The screenshots come from the [demo](https://franki-678.github.io/bigdata-sandbox/demo/);
 the CI smoke test (`server/tests/humo/humo_ui.py`) takes the same screens

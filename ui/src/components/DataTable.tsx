@@ -34,7 +34,7 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, selected, empt
           {sorted.length ? sorted.map(r => {
             const k = rowKey(r);
             return (
-              <tr key={k} data-sel={selected === k} className={onRowClick ? 'clickable' : undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}
+              <tr key={k} data-key={k} data-sel={selected === k} className={onRowClick ? 'clickable' : undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}
                 tabIndex={onRowClick ? 0 : undefined} onKeyDown={onRowClick ? e => { if (e.key === 'Enter') onRowClick(r); } : undefined}>
                 {columns.map(c => <td key={c.id} className={c.align === 'right' ? 'r' : undefined}>{c.cell(r)}</td>)}
               </tr>

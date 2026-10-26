@@ -88,6 +88,7 @@ export function createHttpApi(): SandboxApi {
     recommend: (dataset, task) => req('POST', '/ml/recommend', { dataset, task }),
     train: async r => (await req<{ id: string }>('POST', '/ml/train', r)).id,
     models: () => req('GET', '/ml/models'),
+    modelViz: id => req('GET', `/ml/models/${encodeURIComponent(id)}/viz`),
   };
 }
 

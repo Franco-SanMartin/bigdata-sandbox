@@ -213,6 +213,7 @@ de Hive, MySQL o MongoDB. `scanned` son las filas que leyó el motor, no las que
 | `recommend(ds, task)` | `POST /api/ml/recommend` | `{ dataset, task }` → `MlRecommendation` | Reglas fijas con los tiempos y la memoria medidos en la imagen. |
 | `train(r)` | `POST /api/ml/train` | `TrainRequest` → 202 `{ id }` | `python3 server/sandbox_server/jobs/entrenar_sklearn.py` o `spark-submit …/jobs/entrenar_spark.py`: entrenan solo el modelo pedido con `target`, `features`, `params` y `trainPct`, con la semilla (42) y los modelos de `ejemplos/ml/modelos_sklearn.py` y `modelos_spark.py`. Avanza por SSE `model`. |
 | `models()` | `GET /api/ml/models` | `ModelRun[]` | Los entrenamientos de la sesión. |
+| `modelViz(id)` | `GET /api/ml/models/{id}/viz` | `Viz` | Lo que escribió `server/sandbox_server/jobs/viz.py` al entrenar (si `ModelRun.hasViz`). La interfaz rehace la cuenta con `src/lib/viz/` y la dibuja con three.js en un chunk aparte (`src/pages/ml/viz/`). En el demo son JSON reales de la imagen (`src/api/demo/viz/`). |
 
 Métrica principal por tipo de problema (en `ModelRun.metrics`): `r2` en regresión, `aciertos` en clasificación y
 `rand_ajustado` en agrupamiento. Valores medidos en la imagen con `clientes_senal.csv`:
