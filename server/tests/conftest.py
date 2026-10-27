@@ -43,6 +43,12 @@ def fixture_json(name: str) -> dict:
     return json.loads(fixture_text(name))
 
 
+@pytest.fixture(autouse=True)
+def host_de_prueba(monkeypatch):
+    """TestClient pide con Host: testserver; la app de verdad solo atiende localhost (seguridad.py)."""
+    monkeypatch.setenv("SANDBOX_HOSTS", "testserver")
+
+
 @pytest.fixture
 def settings(tmp_path, monkeypatch):
     """Settings de un cluster que corre el entrypoint falso y no sondea nada real."""

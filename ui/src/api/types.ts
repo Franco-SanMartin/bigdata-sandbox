@@ -375,6 +375,8 @@ export type ApiErrorCode =
   | 'service_down'
   /** 404 */
   | 'not_found'
+  /** 403: el pedido no vino de la propia interfaz (otra página, otro host): server/sandbox_server/seguridad.py */
+  | 'forbidden'
   /** 400: parámetros inválidos (ruta fuera de HDFS, SQL vacío, porcentaje fuera de rango…) */
   | 'invalid'
   /** 409: ya hay algo corriendo que lo impide (otro paso del pipeline, el mismo archivo escribiéndose) */
