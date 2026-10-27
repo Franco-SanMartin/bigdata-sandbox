@@ -7,7 +7,7 @@ numpy, scikit-learn, matplotlib, pymongo y JupyterLab. Sirve para hacer ETL
 industria: en una sola compu (pandas + scikit-learn) y repartido en el
 cluster (Spark + Spark MLlib), con los mismos datos, para comparar.
 
-[← Guías de base](../README.md) · [README del repo](../../README.md)
+[← Índice de guías](../README.md) · [README del repo](../../README.md)
 
 ## Para quién es
 

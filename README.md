@@ -9,7 +9,9 @@ arquitectura de HDFS **la elegís vos** al crear el contenedor: cuántos
 DataNodes y NameNodes, cuántas réplicas, de qué tamaño los bloques. Nada de
 caja negra: es el Hadoop de verdad, en tu compu.
 
-- **[Guías paso a paso](guias/README.md)**: de instalar Docker a MongoDB.
+- **[Guías](guias/README.md)**: de instalar Docker a MongoDB, y para cada
+  versión (`base`, `ml`, `full`, `empresa`) su paso a paso, referencia, teoría
+  y evaluación.
 - **[Mapa de la arquitectura](https://franki-678.github.io/bigdata-sandbox/)**:
   cada módulo del cluster, qué hace, cómo se conecta con los demás y sus
   comandos (también está en el repo: `docs/index.html`).
@@ -60,11 +62,12 @@ La versión se elige con el *tag*, lo que va después de los dos puntos:
 | `latest` = `base` | **Publicada. La de la materia** | Ubuntu 24.04 + Hadoop, Hive, Spark, Pig, Sqoop, MySQL, ZooKeeper y MongoDB. Es la de las guías |
 | `ml` | Publicada | `base` + Python para datos (pandas, numpy, scikit-learn, matplotlib, pymongo) y JupyterLab, para ETL y machine learning |
 | `full` | Publicada | `ml` + una interfaz web en el puerto 8080 para prender, configurar y mirar el cluster desde el navegador ([abajo](#la-versión-full)) |
-| `empresa` | En desarrollo | Un cluster repartido entre varias compus por red, con seguridad, ingesta en tiempo real y métricas |
+| `empresa` | Beta | `full` + varias compus arman un solo cluster: la del profe es el maestro y cada PC suma un DataNode y un NodeManager, con racks por fila. Hoy anda el aula simulada en una sola compu; la red entre PCs reales viene después ([guías](guias/empresa/README.md)) |
 
-- Las guías y el mapa son de `base`. Con `ml` y `full` valen igual (son `base`
-  con agregados); `empresa` va a tener su propia documentación cuando se
-  publique.
+- Cada versión tiene su documentación completa en
+  [`guias/`](guias/README.md#qué-versión-uso): paso a paso, referencia,
+  teoría y evaluación. Lo de `base` vale igual para las otras tres (son `base`
+  con agregados).
 - Las publicadas sirven para Intel/AMD (amd64) y ARM (Mac M1–M4): Docker baja
   sola la que corresponde.
 - Hasta octubre de 2026, `latest` era una imagen anterior sobre Ubuntu 20.04,
@@ -98,7 +101,9 @@ ahora, con lo que todavía no está disponible, por qué y cómo habilitarlo. Ca
 pantalla (HDFS, Trabajos, Consultas, Pipeline, Machine Learning, Cluster)
 dice, con el cluster apagado o arrancando, qué vas a poder hacer y cuánto
 falta; los botones deshabilitados dicen por qué. En **Prácticas** están las
-guías 03 a 10 paso a paso, chequeadas contra el cluster.
+guías 03 a 10 paso a paso, chequeadas contra el cluster: en cada paso primero
+elegís el comando entre varias opciones (te dice por qué sí o por qué no) y
+después lo ejecutás y ves dónde quedó cada cosa.
 
 | | |
 |---|---|
@@ -182,6 +187,12 @@ Medidos por GitHub en cada versión nueva de la imagen (Intel/AMD y ARM):
   ([guía 1](guias/01-instalacion.md#windows)).
 
 ## Las guías
+
+Para cada versión hay paso a paso, referencia (qué hace cada cosa, dónde se
+usa y cómo), teoría y evaluación: [`base`](guias/base/README.md) ·
+[`ml`](guias/ml/README.md) · [`full`](guias/full/README.md) ·
+[`empresa`](guias/empresa/README.md). Las de `base`, que son el punto de
+partida:
 
 | # | Guía |
 |---|---|

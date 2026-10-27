@@ -9,8 +9,9 @@ the HDFS architecture when you create the container: how many DataNodes and
 NameNodes, how many replicas, how big the blocks are. No black box: it's real
 Hadoop, on your computer.
 
-- **[Step-by-step guides](guias/README.md)** (in Spanish): from installing
-  Docker to MongoDB.
+- **[Guides](guias/README.md)** (in Spanish): from installing Docker to
+  MongoDB, and for each version (`base`, `ml`, `full`, `empresa`) its
+  step-by-step guides, reference, theory and assessment.
 - **[Architecture map](https://franki-678.github.io/bigdata-sandbox/)**:
   each module of the cluster, what it does, how it connects to the others and
   its commands (also in the repo: `docs/index.html`).
@@ -61,11 +62,11 @@ You choose the version with the *tag*, what goes after the colon:
 | `latest` = `base` | **Published. The one used in class** | Ubuntu 24.04 + Hadoop, Hive, Spark, Pig, Sqoop, MySQL, ZooKeeper and MongoDB. The one the guides use |
 | `ml` | Published | `base` + Python for data (pandas, numpy, scikit-learn, matplotlib, pymongo) and JupyterLab, for ETL and machine learning |
 | `full` | Published | `ml` + a web interface on port 8080 to start, configure and watch the cluster from the browser ([below](#the-full-version)) |
-| `empresa` | In development | A cluster spread across several computers over the network, with security, real-time ingestion and metrics |
+| `empresa` | Beta | `full` + several computers build a single cluster: the teacher's is the master and each PC adds a DataNode and a NodeManager, with one rack per row. Today the simulated classroom runs on a single computer; the network between real PCs comes later ([guides](guias/empresa/README.md)) |
 
-- The guides and the map are for `base`. They work the same with `ml` and
-  `full` (they are `base` with extras); `empresa` will have its own
-  documentation when it's published.
+- Each version has its full documentation in [`guias/`](guias/README.md):
+  step by step, reference, theory and assessment. Everything for `base`
+  also applies to the other three (they are `base` with extras).
 - The published ones work on Intel/AMD (amd64) and ARM (Mac M1–M4): Docker
   pulls the right one by itself.
 - Until October 2026, `latest` was an older image on Ubuntu 20.04, without
@@ -185,7 +186,10 @@ Measured by GitHub on every new version of the image (Intel/AMD and ARM):
 
 ## The guides
 
-The guides are in Spanish.
+The guides are in Spanish. Each version has step-by-step guides, a
+reference, theory and assessment: [`base`](guias/base/README.md) ·
+[`ml`](guias/ml/README.md) · [`full`](guias/full/README.md) ·
+[`empresa`](guias/empresa/README.md). The `base` guides, the starting point:
 
 | # | Guide |
 |---|---|

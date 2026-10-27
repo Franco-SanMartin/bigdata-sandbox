@@ -9,10 +9,26 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
-Las Prácticas de `full` ahora te hacen pensar el comando antes de correrlo y
-te dicen, en cada paso, dónde quedó cada cosa.
+## [1.3.0] - 2026-10-27
+
+Documentación completa para cada versión, las Prácticas de `full` te hacen
+pensar el comando antes de correrlo, y sale `empresa` en beta.
 
 ### Agregado
+
+- **Documentación por versión** en `guias/base`, `guias/ml`, `guias/full` y
+  `guias/empresa`: paso a paso, referencia (qué hace cada cosa, dónde se usa y
+  cómo), teoría y evaluación (opción múltiple con el porqué de cada respuesta,
+  preguntas de desarrollo con respuesta modelo y ejercicios sobre la imagen
+  con solución y rúbrica). El [índice de guías](guias/README.md) dice qué
+  versión usar. Las guías 03 a 10 terminan con un *Para profundizar*.
+- **`empresa` en beta** (tag `empresa`, amd64 y arm64): varias compus arman un
+  solo cluster, con la del profe como maestro y cada PC como DataNode y
+  NodeManager, racks por fila y una copia de cada bloque en el maestro. Hoy
+  anda el aula simulada en una sola compu (`empresa/aula-simulada.yml`); la
+  red entre PCs reales viene después, con lo que mida la sonda del
+  laboratorio. Guía para probarla en clase:
+  [`guias/empresa/03-laboratorio.md`](guias/empresa/03-laboratorio.md).
 
 - **Pregunta antes de ejecutar** en cada paso que corre un comando (guías 03 a
   10): tres o cuatro opciones, y al elegir te dice por qué esa sí o por qué no
@@ -223,7 +239,8 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.2.0...main
+[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.3.0...main
+[1.3.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0

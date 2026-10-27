@@ -6,7 +6,7 @@ un modo **cluster de varias PCs**: cada compu corre un contenedor y entre
 todos arman **un solo cluster** de Hadoop, como en un datacenter chico. La
 PC del profe es el **maestro** y cada PC de alumno es un **trabajador**.
 
-[← Guías de `base`](../README.md) · [README del repo](../../README.md)
+[← Índice de guías](../README.md) · [README del repo](../../README.md)
 
 ## Para quién es
 

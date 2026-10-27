@@ -1,11 +1,32 @@
 # Guías
 
-Un cluster de Big Data entero en tu compu, con la imagen
-`franki678/bigdata-sandbox:base` (la versión `base`: Hadoop, Hive, Spark, Pig,
-Sqoop, ZooKeeper, MySQL y MongoDB). Las guías van en orden: cada una usa lo
-que quedó armado en las anteriores.
+Un cluster de Big Data entero en tu compu. La imagen viene en cuatro
+versiones, cada una con todo lo de la anterior más algo nuevo, y cada versión
+tiene su documentación completa: **paso a paso**, **referencia** (qué hace
+cada cosa, dónde se usa y cómo), **teoría** y **evaluación** (preguntas de
+opción múltiple con el porqué de cada respuesta, preguntas de desarrollo y
+ejercicios sobre la imagen con su solución y rúbrica).
 
 [← README del repo](../README.md)
+
+## Qué versión uso
+
+| Versión | Qué agrega | Para qué | Paso a paso | Referencia | Teoría | Evaluación |
+|---|---|---|---|---|---|---|
+| [`base`](base/README.md) (= `latest`) | Hadoop (HDFS, YARN, MapReduce), Pig, Hive, Spark, Sqoop, MySQL, ZooKeeper y MongoDB | La materia: aprender cada pieza del cluster desde la terminal | [Guías 1 a 11](#las-guías-de-base) | [referencia](base/referencia.md) | [teoría](base/teoria/README.md) | [evaluación](base/evaluacion/README.md) |
+| [`ml`](ml/README.md) | Python para datos: pandas, scikit-learn, Spark MLlib, JupyterLab | ETL y machine learning, en una compu y repartido en el cluster | [Guías de ml](ml/README.md) | [referencia](ml/referencia.md) | [teoría](ml/teoria/README.md) | [evaluación](ml/evaluacion/README.md) |
+| [`full`](full/README.md) | La interfaz web: el cluster, HDFS, trabajos, consultas, pipeline, ML y las prácticas guiadas con multiple choice | Hacer todo desde el navegador, viendo qué pasa y dónde queda cada cosa | [Guías de full](full/README.md) | [referencia](full/referencia.md) | [teoría](full/teoria/README.md) | [evaluación](full/evaluacion/README.md) |
+| [`empresa`](empresa/README.md) (beta) | Varias PCs arman un solo cluster: maestro, trabajadores, racks por fila | Ver un cluster distribuido de verdad en el aula, con el profe | [Guías de empresa](empresa/README.md) | [referencia](empresa/referencia.md) | [teoría](empresa/teoria/README.md) | [evaluación](empresa/evaluacion/README.md) |
+
+Si recién empezás, andá por `base` y las guías de abajo: todo lo demás se
+apoya en eso. Lo que dicen las guías de `base` vale igual para las otras
+tres versiones.
+
+## Las guías de base
+
+Las guías van en orden: cada una usa lo que quedó armado en las anteriores.
+Al final de las guías 3 a 10 hay un **Para profundizar** con la teoría, la
+evaluación y la referencia de ese tema.
 
 | # | Guía | Qué se aprende |
 |---|---|---|
