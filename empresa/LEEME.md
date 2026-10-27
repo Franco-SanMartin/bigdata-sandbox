@@ -1,6 +1,7 @@
 # Versión empresa: el cluster del aula
 
-> Para probarla en el laboratorio con el profe: [GUIA-AULA.md](GUIA-AULA.md).
+> Documentación completa (guías paso a paso, referencia, teoría y evaluación): [guías de `empresa`](../guias/empresa/README.md).
+> Para probarla en el laboratorio con el profe: [guía 3, el laboratorio](../guias/empresa/03-laboratorio.md).
 
 La imagen `franki678/bigdata-sandbox:empresa` es la `full` más un modo de
 cluster de verdad: cada compu del aula corre un contenedor y entre todas arman
