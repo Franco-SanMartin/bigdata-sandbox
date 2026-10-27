@@ -1,0 +1,5 @@
+#!/bin/sh
+# GET -> una linea por inscripto: nombre ip_tunel ip_pc puerto (en orden de llegada)
+# shellcheck source=../../cgi.sh
+. /sonda/cgi.sh
+find "$DATOS/inscriptos" -type f -exec cat {} + 2> /dev/null | sort -n | awk '{ print $2, $3, $4, $5 }'

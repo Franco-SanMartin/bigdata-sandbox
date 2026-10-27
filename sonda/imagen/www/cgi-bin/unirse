@@ -1,0 +1,39 @@
+#!/bin/sh
+# POST nombre, ip_pc, puerto, pub, version -> ip (del tunel), hub_pub, hub_modo
+# shellcheck source=../../cgi.sh
+. /sonda/cgi.sh
+c=$(cuerpo 4096)
+nombre=$(limpiar "$(echo "$c" | valor nombre)")
+pub=$(echo "$c" | valor pub)
+ip_pc=$(echo "$c" | valor ip_pc | tr -cd '0-9A-Za-z.:-')
+puerto=$(echo "$c" | valor puerto | tr -cd '0-9')
+version=$(echo "$c" | valor version | tr -cd '0-9A-Za-z.-')
+[ -n "$nombre" ] || { echo "error=falta el nombre"; exit 0; }
+case $pub in ''|*[!A-Za-z0-9+/=]*) echo "error=clave invalida"; exit 0 ;; esac
+[ ${#pub} -eq 44 ] || { echo "error=clave invalida"; exit 0; }
+
+# Una inscripcion por vez (llegan todas juntas)
+while ! mkdir /tmp/inscribiendo 2> /dev/null; do sleep 0.1; done
+f=$DATOS/inscriptos/$nombre
+if [ -f "$f" ]; then
+    # Se vuelve a inscribir: misma IP, clave nueva, y se prueba otra vez su puerto
+    read -r num _ ip _ _ viejo < "$f"
+    [ -s /tmp/hub_pub ] && wg set wg0 peer "$viejo" remove 2> /dev/null
+else
+    num=$(( $(find "$DATOS/inscriptos" -type f | wc -l) + 1 ))
+    ip=$RED_TUNEL.$((10 + num))
+fi
+if [ "$num" -gt 240 ]; then rmdir /tmp/inscribiendo; echo "error=demasiadas PCs"; exit 0; fi
+echo "$num $nombre $ip ${ip_pc:--} ${puerto:-0} $pub" > "$f"
+rm -f "$DATOS/tcp/$nombre"
+rmdir /tmp/inscribiendo
+
+if [ -s /tmp/hub_pub ]; then
+    wg set wg0 peer "$pub" allowed-ips "$ip/32"
+    echo "hub_pub=$(cat /tmp/hub_pub)"
+fi
+echo "ip=$ip"
+echo "hub_modo=$(cat /tmp/hub_modo 2> /dev/null)"
+aviso=
+[ "$version" != "$VERSION_SONDA" ] && aviso=" (OJO: sonda version $version, la del profe es $VERSION_SONDA)"
+evento "$nombre: inscripto, IP del tunel $ip, PC ${ip_pc:-?}$aviso"

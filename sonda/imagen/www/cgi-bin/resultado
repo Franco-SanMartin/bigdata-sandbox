@@ -1,0 +1,16 @@
+#!/bin/sh
+# POST con el archivo de resultados de un alumno (lineas clave=valor)
+# shellcheck source=../../cgi.sh
+. /sonda/cgi.sh
+c=$(cuerpo 65536)
+nombre=$(limpiar "$(echo "$c" | valor nombre)")
+[ -n "$nombre" ] || { echo "error=falta el nombre"; exit 0; }
+printf '%s\n' "$c" > "$DATOS/resultados/$nombre.txt"
+tunel=$(echo "$c" | valor tunel)
+docker=$(echo "$c" | valor docker)
+if [ "${docker:-si}" != si ]; then
+    evento "$nombre: mando resultados SIN Docker: $docker"
+else
+    evento "$nombre: mando resultados: tunel ${tunel:-?}, alumno->profe $(echo "$c" | valor iperf_profe_mbps) Mbit/s, alumno->alumno $(echo "$c" | valor iperf_par_mbps) Mbit/s"
+fi
+echo ok

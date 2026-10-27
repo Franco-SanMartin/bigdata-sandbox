@@ -1,0 +1,6 @@
+#!/bin/sh
+# GET -> el resumen con el veredicto (http://localhost:8099/cgi-bin/resumen en la PC del profe)
+# shellcheck source=../../cgi.sh
+. /sonda/cgi.sh
+/sonda/planilla.sh > /dev/null 2>&1
+cat "$DATOS/resumen.txt"

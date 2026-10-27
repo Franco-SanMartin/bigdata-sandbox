@@ -29,6 +29,28 @@ entre "$REPLICATION" 1 9      || error "REPLICATION=$REPLICATION: tiene que ser 
   || error "SERVICIOS=$SERVICIOS: tiene que ser hdfs, mapreduce o todo"
 [[ "$MONGODB" =~ ^(si|no)$ ]] || error "MONGODB=$MONGODB: tiene que ser si o no"
 [[ "$JUPYTER" =~ ^(si|no)$ ]] || error "JUPYTER=$JUPYTER: tiene que ser si o no"
+[[ "$ROL" =~ ^(solo|maestro|trabajador)$ ]] || error "ROL=$ROL: tiene que ser solo, maestro o trabajador"
+if en_aula; then
+  [ "$RED" = docker ] || error "RED=$RED: por ahora solo docker (los nodos en una red de Docker)"
+  [ "$NAMENODES_PEDIDO" = 1 ] \
+    || error "NAMENODES=$NAMENODES_PEDIDO: con ROL=$ROL hay un solo NameNode (la alta disponibilidad se ve con ROL=solo)"
+  [[ "$PCS_POR_FILA" =~ ^[1-9][0-9]*$ ]] || error "PCS_POR_FILA=$PCS_POR_FILA: tiene que ser un numero de 1 en adelante"
+  entre "$TRABAJADOR_RAM" 1024 65536 || error "TRABAJADOR_RAM=$TRABAJADOR_RAM: MB, de 1024 a 65536"
+  [[ "$MAESTRO_NM" =~ ^(si|no)$ ]] || error "MAESTRO_NM=$MAESTRO_NM: tiene que ser si o no"
+  if [ -n "$DATANODES_PEDIDO" ] && [ "$DATANODES_PEDIDO" != 1 ]; then
+    log "AVISO: DATANODES no se usa con ROL=$ROL: cada nodo tiene 1 DataNode"
+  fi
+fi
+
+# Espera a que $1:$2 acepte conexiones (hasta $3 segundos)
+esperar_en() {
+  local _
+  for _ in $(seq 1 "$3"); do
+    timeout 2 bash -c ">/dev/tcp/$1/$2" 2> /dev/null && return 0
+    sleep 1
+  done
+  return 1
+}
 
 # La cantidad de NameNodes se graba en el volumen la primera vez
 if [ ! -f "$NN_FILE" ]; then
@@ -59,7 +81,11 @@ generar_conf
 # ---------------------------------------------------------------------------
 # 1) HDFS
 # ---------------------------------------------------------------------------
-if ha; then
+if es_trabajador; then
+  # El NameNode esta en el maestro: este nodo solo suma su DataNode
+  log "Trabajador $NODO: esperando al NameNode del maestro ($MAESTRO:9000)..."
+  esperar_en "$MAESTRO" 9000 600 || error "el NameNode del maestro ($MAESTRO:9000) no contesta despues de 10 minutos"
+elif ha; then
   log "HDFS en alta disponibilidad: ZooKeeper + $JOURNALNODES JournalNodes + $NAMENODES NameNodes..."
   zookeeper_start
   paralelo journalnode_start $(seq 1 "$JOURNALNODES")
@@ -101,11 +127,14 @@ fi
 log "Arrancando $DATANODES DataNode(s)..."
 paralelo datanode_start $(seq 1 "$DATANODES")
 
-log "Esperando a que HDFS salga de safe mode (en reinicios tarda unos segundos)..."
-if ! timeout 120 hdfs dfsadmin -safemode wait > /dev/null; then
-  log "AVISO: HDFS no salio solo de safe mode: faltan bloques (bajaste DATANODES?)." \
-      "Se fuerza la salida. Revisa que se perdio con: hdfs fsck /"
-  hdfs dfsadmin -safemode leave
+# (un trabajador no decide por el NameNode: eso lo hace el maestro)
+if ! es_trabajador; then
+  log "Esperando a que HDFS salga de safe mode (en reinicios tarda unos segundos)..."
+  if ! timeout 120 hdfs dfsadmin -safemode wait > /dev/null; then
+    log "AVISO: HDFS no salio solo de safe mode: faltan bloques (bajaste DATANODES?)." \
+        "Se fuerza la salida. Revisa que se perdio con: hdfs fsck /"
+    hdfs dfsadmin -safemode leave
+  fi
 fi
 
 # Que todos los DataNodes ya esten anotados en el NameNode: si no, un archivo
@@ -115,16 +144,34 @@ dn_vivos() {
   if ha; then a=$(nn_activo) || return 0; fi
   jmx "$(nn_http "$a")" "Hadoop:service=NameNode,name=FSNamesystemState" | jmx_valor NumLiveDataNodes
 }
+dn_anotado() { # el NameNode del maestro ya tiene a este DataNode entre los vivos
+  curl -s --max-time 3 "http://$MAESTRO:9870/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo" \
+    | grep -q "$NODO:9866"
+}
 for _ in $(seq 1 60); do
-  [ "$(dn_vivos)" -ge "$DATANODES" ] 2>/dev/null && break
+  if es_trabajador; then
+    dn_anotado && break
+  else
+    [ "$(dn_vivos)" -ge "$DATANODES" ] 2>/dev/null && break
+  fi
   sleep 1
 done
 
 # ---------------------------------------------------------------------------
 # 2) Directorios en HDFS (solo la primera vez: cada comando hdfs es una JVM
-#    nueva y tarda en arrancar)
+#    nueva y tarda en arrancar). En el aula los prepara el maestro.
 # ---------------------------------------------------------------------------
-if [ ! -f /hadoop/.dirs-hdfs ]; then
+if ! es_trabajador && [ ! -f /hadoop/.dirs-hdfs ]; then
+  if es_maestro; then
+    # Politica WARM en todo HDFS: 1 replica en disco comun (las PCs de los
+    # alumnos) y el resto en ARCHIVE, que es solo el DataNode del maestro.
+    # Asi el profe guarda una copia de cada bloque y se puede apagar toda el
+    # aula sin perder nada. /aula: la carpeta de la clase.
+    log "Primer arranque: politica WARM (una copia de todo en el maestro)..."
+    hdfs storagepolicies -setStoragePolicy -path / -policy WARM
+    hdfs dfs -mkdir -p /aula
+    hdfs dfs -chmod 1777 /aula
+  fi
   log "Preparando directorios en HDFS..."
   hdfs dfs -mkdir -p /tmp /user/hive/warehouse /user/root /apps/tez /apps/spark /spark-logs
   hdfs dfs -chmod -R 1777 /tmp
@@ -138,7 +185,21 @@ fi
 yarn_daemon() {
   if [ "$1" = historyserver ]; then mapred --daemon start "$1"; else yarn --daemon start "$1"; fi
 }
-if con_yarn; then
+if con_yarn && es_trabajador; then
+  log "Esperando al ResourceManager del maestro ($MAESTRO:8031)..."
+  esperar_en "$MAESTRO" 8031 600 || error "el ResourceManager del maestro ($MAESTRO:8031) no contesta despues de 10 minutos"
+  log "Arrancando NodeManager ($TRABAJADOR_RAM MB para trabajos)..."
+  yarn_daemon nodemanager
+elif con_yarn && es_maestro; then
+  # Los trabajos corren en las PCs de los alumnos; el maestro solo si MAESTRO_NM=si
+  if [ "$MAESTRO_NM" = si ]; then
+    log "Arrancando YARN (ResourceManager + NodeManager) y MapReduce JobHistory..."
+    paralelo yarn_daemon resourcemanager nodemanager historyserver
+  else
+    log "Arrancando YARN (ResourceManager) y MapReduce JobHistory..."
+    paralelo yarn_daemon resourcemanager historyserver
+  fi
+elif con_yarn; then
   log "Arrancando YARN (ResourceManager + NodeManager) y MapReduce JobHistory..."
   paralelo yarn_daemon resourcemanager nodemanager historyserver
 fi
@@ -214,7 +275,7 @@ SQL
     touch /hadoop/mysql/.sandbox-listo
   fi
 }
-if con_yarn; then
+if con_yarn && ! es_trabajador; then
   mysql_start || log "AVISO: MySQL no levanto (Sqoop no va a tener base de ejemplo)." \
                      "Revisar /var/log/mysql/error.log"
 fi
@@ -252,7 +313,7 @@ fi
 # ---------------------------------------------------------------------------
 # 4) Hive + Spark (SERVICIOS=todo)
 # ---------------------------------------------------------------------------
-if con_hive_spark; then
+if con_hive_spark && ! es_trabajador; then
   # Librerias de Tez y Spark en HDFS, la primera vez. Van con bloque de 128m
   # aunque BLOCK_SIZE sea chico: con 1m serian cientos de bloques que solo
   # ensucian lo que se quiere mirar.
@@ -280,7 +341,25 @@ z.close()' "${SPARK_HOME}/jars" /tmp/spark-libs.jar
   # (Desde /hadoop: Derby deja su derby.log en la carpeta actual, y la de
   # trabajo es /datos, la del alumno.)
   cd /hadoop
-  if [ ! -f /hadoop/.metastore-listo ]; then
+  if es_maestro; then
+    # En el maestro, sobre MariaDB: el driver JDBC es el mismo que usa Sqoop
+    ln -sf "$SQOOP_HOME"/lib/mysql-connector-java-*.jar "$HIVE_HOME/lib/"
+    if [ ! -f /hadoop/.metastore-mysql-listo ]; then
+      log "Primer arranque: inicializando schema del Metastore (MariaDB)..."
+      mysql <<'SQL'
+CREATE DATABASE IF NOT EXISTS metastore;
+CREATE OR REPLACE USER 'hive'@'%' IDENTIFIED BY 'hive';
+CREATE OR REPLACE USER 'hive'@'localhost' IDENTIFIED BY 'hive';
+GRANT ALL PRIVILEGES ON metastore.* TO 'hive'@'%', 'hive'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+      if ! schematool -dbType mysql -info > /dev/null 2>&1; then
+        mysql -e "DROP DATABASE metastore; CREATE DATABASE metastore"
+        schematool -dbType mysql -initSchema
+      fi
+      touch /hadoop/.metastore-mysql-listo
+    fi
+  elif [ ! -f /hadoop/.metastore-listo ]; then
     if [ -d /hadoop/metastore_db ] && schematool -dbType derby -info > /dev/null 2>&1; then
       :   # volumen de una version anterior de la imagen: ya estaba listo
     else

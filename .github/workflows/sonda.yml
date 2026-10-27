@@ -1,0 +1,174 @@
+# Sonda del laboratorio (sonda/): arma la imagen chica, la prueba simulando PCs
+# aisladas (cada una en su red de Docker, llegando al profe por la IP del host)
+# y, si todo da bien en la rama empresa, publica el prerelease sonda-v1.
+# La imagen NO va a Docker Hub: se reparte como .tar.gz por Veyon.
+name: sonda
+
+on:
+  push:
+    branches: [empresa]
+    paths:
+      - 'sonda/**'
+      - '.github/workflows/sonda.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonda-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGEN: bigdata-sandbox-sonda:v1
+  ARCHIVO: bigdata-sandbox-sonda.tar.gz
+
+jobs:
+  armar:
+    runs-on: ubuntu-latest
+    outputs:
+      tamano: ${{ steps.tamano.outputs.tamano }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          shellcheck -x -s sh -P SCRIPTDIR sonda/imagen/*.sh sonda/imagen/www/cgi-bin/*
+          shellcheck -s bash sonda/pruebas/escenario.sh
+
+      - name: Los .cmd con CRLF y en ASCII
+        run: |
+          for f in sonda/*.cmd; do
+            if grep -qP '[^\x00-\x7F]' "$f"; then echo "$f tiene caracteres no ASCII"; exit 1; fi
+            lf=$(grep -c $'[^\r]$' "$f" || true)
+            if [ "$lf" != 0 ]; then echo "$f tiene $lf lineas sin CRLF"; exit 1; fi
+            echo "$f ok"
+          done
+
+      - name: Armar la imagen (amd64)
+        run: docker build --platform linux/amd64 -t "$IMAGEN" sonda
+
+      - name: Tamaño (tiene que ser menor a 40 MB)
+        id: tamano
+        run: |
+          bytes=$(docker image inspect -f '{{.Size}}' "$IMAGEN")
+          mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1000000 }')
+          echo "Imagen: $bytes bytes ($mb MB)"
+          echo "tamano=$mb" >> "$GITHUB_OUTPUT"
+          echo "Imagen \`$IMAGEN\`: **$mb MB**" >> "$GITHUB_STEP_SUMMARY"
+          [ "$bytes" -lt 40000000 ] || { echo "La imagen pasa los 40 MB"; exit 1; }
+          docker run --rm --entrypoint sh "$IMAGEN" -c 'wg --version; wireguard-go --version; iperf3 --version | head -n 1; socat -V | grep "socat version"; busybox-extras httpd --help 2>&1 | head -n 1 || true'
+
+      - name: Guardar la imagen
+        run: |
+          docker save "$IMAGEN" | gzip -9 > "$ARCHIVO"
+          ls -l "$ARCHIVO"
+          echo "Archivo \`$ARCHIVO\`: $(stat -c %s "$ARCHIVO") bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagen-sonda
+          path: ${{ env.ARCHIVO }}
+          retention-days: 7
+
+  escenario:
+    needs: armar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        caso: [tun, go, sin-tun, aislado]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagen-sonda
+      - name: Cargar la imagen
+        run: docker load -i "$ARCHIVO"
+      # Docker Desktop trae WireGuard en el kernel de su VM; en el runner es un
+      # modulo: se carga en el host (desde el contenedor no se puede)
+      - name: Modulo WireGuard en el host
+        run: sudo modprobe wireguard && lsmod | grep -w wireguard || echo "sin modulo wireguard"
+      - name: Escenario ${{ matrix.caso }}
+        run: bash sonda/pruebas/escenario.sh ${{ matrix.caso }}
+
+  windows:
+    # La parte PowerShell de los .cmd (datos de la PC), sin Docker Desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: sonda-alumno.cmd hardware
+        shell: cmd
+        run: |
+          set SONDA_SIN_PAUSA=1
+          call sonda\sonda-alumno.cmd hardware
+          if errorlevel 1 exit /b 1
+      - name: sonda-profe.cmd hardware
+        shell: cmd
+        run: |
+          set SONDA_SIN_PAUSA=1
+          call sonda\sonda-profe.cmd hardware
+          if errorlevel 1 exit /b 1
+      - name: Verificar los datos juntados
+        shell: pwsh
+        run: |
+          $mal = 0
+          $archivos = @{
+            (Join-Path $env:USERPROFILE 'sonda-resultados\pc.txt') = @('nombre', 'ip_pc', 'windows', 'ram_gb', 'cpu', 'nucleos', 'gpu')
+            (Join-Path $env:USERPROFILE 'sonda-profe\profe-pc.txt') = @('nombre', 'ip_pc', 'windows', 'ram_gb', 'cpu', 'firewall_docker')
+          }
+          foreach ($f in $archivos.Keys) {
+            Write-Host "== $f"
+            $t = Get-Content $f
+            $t | Write-Host
+            foreach ($k in $archivos[$f]) {
+              $l = $t | Where-Object { $_ -match "^$k=." }
+              if (-not $l) { Write-Host "FALTA $k"; $mal++ }
+            }
+          }
+          if ($mal) { exit 1 }
+
+  publicar:
+    needs: [armar, escenario, windows]
+    if: github.ref == 'refs/heads/empresa'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagen-sonda
+      - name: Prerelease sonda-v1
+        run: |
+          if gh release view sonda-v1 > /dev/null 2>&1; then
+            gh release delete sonda-v1 --cleanup-tag -y
+          fi
+          cp sonda/sonda-profe.cmd sonda/sonda-alumno.cmd sonda/LEEME.md .
+          cat > notas.md <<EOF
+          Sonda del laboratorio (versión empresa, etapa 0): se corre una clase para decidir
+          con datos entre el túnel WireGuard con hub en la PC del profe (A), la red directa
+          con puertos fijos (B) o seguir con el modo simulado.
+
+          Bajar los cuatro archivos y seguir **LEEME.md** (paso a paso con Veyon).
+          La imagen (${{ needs.armar.outputs.tamano }} MB sin comprimir) no está en Docker Hub:
+          se carga con \`docker load -i $ARCHIVO\` (el .cmd lo hace solo).
+          EOF
+          gh release create sonda-v1 --prerelease --target "$GITHUB_SHA" \
+            --title "Sonda del laboratorio v1" --notes-file notas.md \
+            "$ARCHIVO" sonda-profe.cmd sonda-alumno.cmd LEEME.md
+      - name: Verificar los archivos subidos
+        run: |
+          {
+            echo "| Archivo | Bytes |"
+            echo "|---|---|"
+            gh release view sonda-v1 --json assets --jq '.assets[] | "| \(.name) | \(.size) |"'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for f in "$ARCHIVO" sonda-profe.cmd sonda-alumno.cmd LEEME.md; do
+            subido=$(gh release view sonda-v1 --json assets --jq ".assets[] | select(.name == \"$f\") | .size")
+            [ "$subido" = "$(stat -c %s "$f")" ] || { echo "$f: subido $subido, local $(stat -c %s "$f")"; exit 1; }
+          done
+          gh release view sonda-v1 --json isPrerelease,tagName --jq '"\(.tagName) prerelease=\(.isPrerelease)"'

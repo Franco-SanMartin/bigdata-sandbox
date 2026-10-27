@@ -1,0 +1,316 @@
+# Versión empresa: el cluster del aula (un maestro y varias PCs, cada una un
+# contenedor). Arma base, ml y empresa (target empresa del Dockerfile: full +
+# ROL=maestro/trabajador) y prueba:
+#
+#   aula, aula-caida        pruebas/aula.sh: maestro + 3 PCs en una red de
+#                           Docker; racks, réplicas, trabajos repartidos, Hive,
+#                           Spark, y una PC que se cae y vuelve
+#   humo-full               el humo de la API de la versión full, con la imagen
+#                           empresa sin ROL: tiene que andar igual que la full
+#   regresion-<escenario>   los escenarios de siempre (pruebas/escenarios.sh)
+#                           sobre base y ml: el modo de un solo contenedor no
+#                           cambia
+#
+# En push no publica nada en Docker Hub: es la rama de trabajo. Solo usa el
+# cache de capas de ghcr.io (lee el de base, ml y full; escribe solo el de
+# empresa).
+#
+# Publicar la beta: a mano (Run workflow) sobre la rama empresa con publicar
+# tildado. Si las pruebas dan bien en las dos arquitecturas, sube
+# franki678/bigdata-sandbox:empresa (amd64 + arm64) igual que Full sube la full:
+# se rearma del cache (fecha del commit fija, la imagen es la que se probó),
+# sube por digest sin tag y recién al final pone el tag empresa. No toca
+# latest, base, ml ni full. Necesita lo mismo que Imagen: la variable
+# DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN.
+name: Empresa
+
+on:
+  push:
+    branches: [empresa]
+    paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**', 'sonda/**', '.github/workflows/sonda.yml']
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar franki678/bigdata-sandbox:empresa (amd64 + arm64) si las pruebas dan bien'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write   # cache de capas en ghcr.io
+
+concurrency:
+  group: empresa-${{ github.ref }}
+  # una corrida que publica no la corta un push que llega atrás
+  cancel-in-progress: ${{ !(github.event_name == 'workflow_dispatch' && inputs.publicar) }}
+
+env:
+  LOCAL: franki678/bigdata-sandbox
+  CACHE: ghcr.io/franki-678/bigdata-sandbox-cache
+  REPO: docker.io/franki678/bigdata-sandbox
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Armar base, ml y empresa, una maquina por arquitectura
+  # -------------------------------------------------------------------------
+  armar:
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arq: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lugar en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          command -v zstd > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zstd; }
+          df -h / "$RUNNER_TEMP"
+
+      - name: Fecha del commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # base y ml: solo leen el cache (lo escribe el workflow Imagen desde main)
+      - name: Armar base (${{ matrix.arq }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: base
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.LOCAL }}:base
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
+
+      - name: Armar ml (${{ matrix.arq }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ml
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.LOCAL }}:ml
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
+
+      - name: Armar empresa (${{ matrix.arq }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: empresa
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.LOCAL }}:empresa
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:full-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
+          cache-to: type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
+
+      - name: Guardar las imagenes para las pruebas
+        run: |
+          docker image ls "$LOCAL"
+          docker save "$LOCAL:base" "$LOCAL:ml" "$LOCAL:empresa" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
+          ls -lh "$RUNNER_TEMP/imagenes.tar.zst"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: empresa-imagenes-${{ matrix.arq }}
+          path: ${{ runner.temp }}/imagenes.tar.zst
+          compression-level: 0
+          retention-days: 2
+
+  # -------------------------------------------------------------------------
+  # 2. Pruebas, cada una en una maquina aparte, en las dos arquitecturas
+  # -------------------------------------------------------------------------
+  pruebas:
+    needs: armar
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arq: [amd64, arm64]
+        prueba: [aula, aula-caida, humo-full,
+                 reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, imagen-vieja, volumen-cortado, ml, tutoriales]
+        exclude:
+          - arq: arm64
+            prueba: tutoriales
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: empresa-imagenes-${{ matrix.arq }}
+          path: ${{ runner.temp }}
+      - name: Cargar las imagenes armadas
+        run: |
+          command -v zstd > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zstd; }
+          zstd -dc "$RUNNER_TEMP/imagenes.tar.zst" | docker load
+          rm "$RUNNER_TEMP/imagenes.tar.zst"
+          docker image ls "$LOCAL"
+
+      - name: Cluster del aula (${{ matrix.prueba }}, ${{ matrix.arq }})
+        if: startsWith(matrix.prueba, 'aula')
+        env:
+          IMAGEN: ${{ env.LOCAL }}:empresa
+          MEDIDAS: medidas.md
+        run: bash pruebas/aula.sh ${{ matrix.prueba }}
+
+      - name: Humo de la API, imagen empresa sin ROL (${{ matrix.arq }})
+        if: matrix.prueba == 'humo-full'
+        env:
+          HUMO_CONTENEDOR: humo
+          HUMO_SALIDAS: ${{ runner.temp }}/humo-salidas
+          HUMO_TAG: empresa
+        run: |
+          docker run -d --name humo -p 127.0.0.1:8080:8080 -v humo_hadoop:/hadoop "$LOCAL:empresa"
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/api/status > /dev/null && break
+            sleep 1
+          done
+          echo "el servidor contestó a los ${i} s"
+          python3 server/tests/humo/humo_full.py
+
+      - name: Regresion ${{ matrix.prueba }} (${{ matrix.arq }})
+        if: ${{ !startsWith(matrix.prueba, 'aula') && matrix.prueba != 'humo-full' }}
+        env:
+          IMAGEN: ${{ env.LOCAL }}:${{ matrix.prueba == 'ml' && 'ml' || 'base' }}
+        run: bash pruebas/escenarios.sh ${{ matrix.prueba }}
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "### ${{ matrix.prueba }} (${{ matrix.arq }})"
+            [ -f medidas.md ] && { echo; echo "| Prueba | Momento | Nodo | RAM |"; echo "|---|---|---|---|"; cat medidas.md; }
+            cat "$RUNNER_TEMP/humo-salidas/resumen.md" 2> /dev/null
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.prueba == 'humo-full'
+        with:
+          name: empresa-humo-${{ matrix.arq }}
+          path: ${{ runner.temp }}/humo-salidas
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # 3. Publicar la beta (solo a mano con publicar, y con todas las pruebas en
+  #    verde): una maquina por arquitectura sube por digest, sin tag
+  # -------------------------------------------------------------------------
+  subir:
+    needs: [armar, pruebas]
+    # solo a mano, con publicar tildado y desde la rama empresa: nunca en push
+    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/empresa'
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      matrix:
+        arq: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lugar en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      # La misma fecha que en "armar": con todo del cache, la imagen que se
+      # sube es la misma que se probó
+      - name: Fecha del commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Subir empresa por digest (sin tag)
+        id: subir
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: empresa
+          platforms: linux/${{ matrix.arq }}
+          provenance: false
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:ml-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:full-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
+
+      - name: Digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "${{ steps.subir.outputs.digest }}" | tee "$RUNNER_TEMP/digests/empresa-${{ matrix.arq }}"
+          grep -q '^sha256:' "$RUNNER_TEMP/digests/empresa-${{ matrix.arq }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-empresa-${{ matrix.arq }}
+          path: ${{ runner.temp }}/digests
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # 4. El tag empresa, con las dos arquitecturas ya subidas
+  # -------------------------------------------------------------------------
+  publicar:
+    needs: subir
+    # solo a mano, con publicar tildado y desde la rama empresa: nunca en push
+    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/empresa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-empresa-*
+          path: digests
+          merge-multiple: true
+
+      - name: Tag empresa, amd64 + arm64
+        run: |
+          docker buildx imagetools create -t "$REPO:empresa" \
+            "$REPO@$(cat digests/empresa-amd64)" "$REPO@$(cat digests/empresa-arm64)"
+
+      - name: Verificar lo publicado
+        run: |
+          m=$(docker buildx imagetools inspect "$REPO:empresa" --format '{{json .Manifest}}')
+          {
+            echo "## Publicado"
+            echo
+            echo "| Tag | Digest | Arquitectura | Digest de la arquitectura |"
+            echo "|---|---|---|---|"
+            jq -r --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
+              | "| empresa | \($d) | \(.platform.os)/\(.platform.architecture) | \(.digest) |"' <<< "$m"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for a in amd64 arm64; do
+            [ "$(jq -r --arg a "$a" '.manifests[] | select(.platform.architecture == $a) | .digest' <<< "$m")" = "$(cat digests/empresa-$a)" ]
+          done

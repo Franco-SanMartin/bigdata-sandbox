@@ -4,7 +4,7 @@ import type {
   Activity, AppType, ApiEvent, BlockTransfer, BootProgress, BootStep, ClusterConfig, ClusterPhase, ClusterStatus,
   DataNode, ExampleJob, HdfsFile, LogLine, Process, ProcState, YarnApp, YarnStage, YarnTask,
 } from '../types';
-import { DEFAULT_CONFIG, DOCKER_LIMIT_MB, blockSizeMb, configSummary, estimateRam, processSpecs, type ProcSpec } from '../../lib/cluster';
+import { DEFAULT_CONFIG, DEFAULT_IMAGE_TAG, DOCKER_LIMIT_MB, blockSizeMb, configSummary, estimateRam, processSpecs, type ProcSpec } from '../../lib/cluster';
 
 import { SPEED } from './speed';
 export { SPEED };
@@ -551,7 +551,7 @@ export class DemoEngine {
       hdfs: { available: running && !this.hdfsDown, safeMode: false, liveDataNodes: this.dns.filter(d => d.s === 'up').length, staleDataNodes: this.dns.filter(d => d.s === 'stopping').length, deadDataNodes: this.dns.filter(d => d.s === 'dead').length, files: this.files.length, blocks, replicas, underReplicated: under, missing, overReplicated: over, usedMb },
       yarn: { totalMb: running && cfg.services !== 'hdfs' ? YARN_MB : 0, usedMb: this.usedYarn(), running: this.jobs.filter(a => a.state === 'RUNNING').length, pending: this.jobs.filter(a => a.state === 'ACCEPTED').length, finished: this.jobs.filter(a => a.state === 'FINISHED').length },
       boot: this.boot ? { kind: this.boot.kind, startedAt: this.boot.startedAt, finishedAt: this.boot.finishedAt, expectedSec: this.boot.expectedSec, steps: this.boot.steps.map(({ lines: _lines, ...s }) => ({ ...s, log: s.log.slice() })) } : null,
-      image: { name: 'franki678/bigdata-sandbox', tag: 'full', hadoop: '3.3.6', hive: '4.0.0', spark: '3.5.9' },
+      image: { name: 'franki678/bigdata-sandbox', tag: DEFAULT_IMAGE_TAG, hadoop: '3.3.6', hive: '4.0.0', spark: '3.5.9' },
     };
   }
 }

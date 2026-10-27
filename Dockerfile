@@ -13,6 +13,9 @@
 #            docker build --target ml -t franki678/bigdata-sandbox:ml .
 #   full   ml + el servidor de la interfaz web (:8080), que prende el cluster
 #            docker build --target full -t franki678/bigdata-sandbox:full .
+#   empresa  full + el cluster del aula: con ROL=maestro / ROL=trabajador cada
+#            contenedor es un nodo de un cluster de varias PCs
+#            docker build --target empresa -t franki678/bigdata-sandbox:empresa .
 # Sin --target se arma la base.
 
 ARG HADOOP_VERSION=3.3.6
@@ -338,6 +341,25 @@ EXPOSE 8080
 # orden (apagar_en_orden de sandbox/lib.sh) antes de salir. Conviene darle
 # 20 s (docker stop -t 20, o stop_grace_period: 20s en el compose).
 ENTRYPOINT ["/usr/bin/tini", "--", "python3", "-m", "sandbox_server"]
+
+# ===========================================================================
+# Version "empresa" (franki678/bigdata-sandbox:empresa): la full, mas el
+# cluster del aula. Sin ROL (o ROL=solo) es igual a la full. Con ROL=maestro
+# el contenedor es el nodo del profe (NameNode, ResourceManager, Hive, Spark
+# History y un DataNode que guarda una copia de todo); con ROL=trabajador es
+# una PC del aula (un DataNode y un NodeManager) que se suma al maestro.
+# ===========================================================================
+FROM full AS empresa
+
+COPY empresa/arranque.sh /opt/sandbox/arranque-empresa.sh
+RUN sed -i 's/\r$//' /opt/sandbox/arranque-empresa.sh \
+ && chmod +x /opt/sandbox/arranque-empresa.sh
+ENV SANDBOX_VERSION=empresa
+
+# DataNode 9866/9867, NodeManager 8041/8031 (RPC entre nodos del aula)
+EXPOSE 9864 9866 9867 8031 8041 10020
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/sandbox/arranque-empresa.sh"]
 
 # ===========================================================================
 # Sin --target, "docker build ." arma la version base

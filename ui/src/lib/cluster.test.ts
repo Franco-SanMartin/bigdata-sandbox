@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClusterStatus, DataNode, Process } from '../api/types';
-import { DEFAULT_CONFIG, clusterHealth, configDiff } from './cluster';
+import { DEFAULT_CONFIG, clusterHealth, composeYaml, configDiff } from './cluster';
 
 const proc = (id: string, kind: Process['kind'], state: Process['state'] = 'up'): Process =>
   ({ id, kind, name: id === 'rm' ? 'ResourceManager' : kind === 'datanode' ? `DataNode ${id.slice(2)}` : id, layer: 'hdfs', state, ports: [], controllable: true });
@@ -55,5 +55,20 @@ describe('configDiff', () => {
       { field: 'blockSize', label: 'Bloque', from: '1 MB', to: '128 MB' },
       { field: 'mongodb', label: 'MongoDB', from: 'no', to: 'sí' },
     ]);
+  });
+});
+
+describe('composeYaml', () => {
+  it('sin tag usa full, como SANDBOX_VERSION en el backend', () => {
+    const y = composeYaml(DEFAULT_CONFIG);
+    expect(y).toContain('# BigData Sandbox :full,');
+    expect(y).toContain('    image: franki678/bigdata-sandbox:full\n');
+  });
+
+  it('toma el tag de la imagen que corre', () => {
+    const y = composeYaml(DEFAULT_CONFIG, 'empresa');
+    expect(y).toContain('# BigData Sandbox :empresa,');
+    expect(y).toContain('    image: franki678/bigdata-sandbox:empresa\n');
+    expect(y).not.toContain(':full');
   });
 });

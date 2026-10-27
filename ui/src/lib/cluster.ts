@@ -81,10 +81,14 @@ export function processSpecs(c: ClusterConfig): ProcSpec[] {
 
 /* ---------- docker-compose.yml ---------- */
 
-export function composeYaml(c: ClusterConfig): string {
+/** Tag de la imagen cuando no se sabe cuál corre: el mismo default que SANDBOX_VERSION en el backend */
+export const DEFAULT_IMAGE_TAG = 'full';
+
+/** `tag` = SANDBOX_VERSION de la imagen que corre (status().image.tag); la empresa sin ROL se usa igual que la full */
+export function composeYaml(c: ClusterConfig, tag: string = DEFAULT_IMAGE_TAG): string {
   const yn = (b: boolean) => (b ? 'si' : 'no');
   const L: string[] = [
-    '# BigData Sandbox :full, generado desde la interfaz (localhost:8080)',
+    `# BigData Sandbox :${tag}, generado desde la interfaz (localhost:8080)`,
     '#   docker compose up -d        crear y prender',
     '#   docker compose logs -f      seguir el arranque hasta "Cluster LISTO"',
     '#   docker compose stop         apagar en orden (los datos quedan)',
@@ -94,7 +98,7 @@ export function composeYaml(c: ClusterConfig): string {
     '',
     'services:',
     '  bigdata:',
-    '    image: franki678/bigdata-sandbox:full',
+    `    image: franki678/bigdata-sandbox:${tag}`,
     '    container_name: bigdata',
     '    environment:',
     '      AUTOSTART: "1"                 # arranca solo con estas variables; sin ella espera «Iniciar» en la interfaz',
