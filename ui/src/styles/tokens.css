@@ -63,6 +63,19 @@
   --eng-spark: #C38C64;
   --eng-uno: #B48AA2;
 
+  /* Series de los gráficos de datos (estudio de ML): ocho tonos en orden fijo, para identificar series
+     (entrenamiento / validación, clases, grupos), nunca estados. Validados para la superficie oscura
+     (#131313): luminosidad 0,48–0,67, croma ≥ 0,1, separación para daltonismo ≥ 8,4 entre vecinos y
+     contraste ≥ 3:1. La interfaz sigue en grises: estos colores van solo en las marcas de los datos */
+  --viz-1: #3987E5;
+  --viz-2: #D95926;
+  --viz-3: #199E70;
+  --viz-4: #C98500;
+  --viz-5: #D55181;
+  --viz-6: #008300;
+  --viz-7: #9085E9;
+  --viz-8: #E66767;
+
   --focus: rgba(237, 237, 237, .6);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-2: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px -2px rgba(0, 0, 0, .5);
