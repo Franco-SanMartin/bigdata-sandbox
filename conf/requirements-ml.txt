@@ -3,7 +3,7 @@
 # alumnos tienen exactamente lo mismo. Para actualizarlas, cambiar el numero
 # y correr las pruebas (pruebas/probar_ml.sh).
 #
-# Peso instalado de cada una (sin sus tests). En total ~690 MB, ~200 MB de
+# Peso instalado de cada una (sin sus tests). En total ~710 MB, ~205 MB de
 # descarga.
 
 # numpy: arrays y calculo numerico. La ultima 1.x a proposito: Spark 3.5
@@ -23,6 +23,12 @@ pyarrow==25.0.0
 # (~110 MB)
 scikit-learn==1.9.1
 scipy==1.17.1
+
+# xgboost-cpu: el gradient boosting de XGBoost, sin CUDA (la rueda "xgboost"
+# de amd64 trae CUDA y pesa 111 MB; esta pesa 5 MB y en arm64 es la misma).
+# Usa numpy y scipy, que ya estan. LightGBM no: no tiene rueda para arm64 y
+# habria que compilarlo.  ~18 MB
+xgboost-cpu==3.1.1
 
 # matplotlib: graficos.  ~85 MB con sus fuentes y pillow
 matplotlib==3.11.2
