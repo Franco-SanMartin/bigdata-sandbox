@@ -124,3 +124,9 @@ yarn application -list -appStates FINISHED
 | `yarn application -kill <id>` | Corta un trabajo (el id es `application_...`) |
 | `yarn logs -applicationId <id>` | Los logs de un trabajo terminado |
 | `mapred job -list` | Los trabajos MapReduce corriendo |
+
+## Para profundizar
+
+- Teoría: [YARN y MapReduce](base/teoria/03-yarn-mapreduce.md): el porqué y cómo funciona por dentro.
+- Evaluación: [YARN y MapReduce](base/evaluacion/03-yarn-mapreduce.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [YARN](base/referencia.md#yarn) y [MapReduce y JobHistory](base/referencia.md#mapreduce-y-jobhistory): comandos, opciones y puertos.

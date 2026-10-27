@@ -120,3 +120,9 @@ Para correrlo en el cluster sobre las 200.000 ventas: cambiá el `LOAD` por
 | `DUMP r` | Muestra el resultado (ejecuta) | |
 | `STORE r INTO 'ruta' USING PigStorage(',')` | Guarda en HDFS (ejecuta) | `INSERT` |
 | `DESCRIBE r` | Muestra el esquema de una relación | `DESCRIBE` |
+
+## Para profundizar
+
+- Teoría: [Pig](base/teoria/04-pig.md): el porqué y cómo funciona por dentro.
+- Evaluación: [Pig](base/evaluacion/04-pig.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [Pig](base/referencia.md#pig): comandos, opciones y puertos.

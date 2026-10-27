@@ -142,3 +142,9 @@ Si querés conservar el de HA para otra clase, en vez de borrarlo:
 | `hdfs haadmin -getServiceState nn1` | El de uno solo |
 | `zkCli.sh -server localhost:2181` | Consola de ZooKeeper (`ls /`, `get <nodo>`, salir: `quit`) |
 | `zkCli.sh -server localhost:2181 ls /hadoop-ha/sandbox` | El candado de la elección |
+
+## Para profundizar
+
+- Teoría: [ZooKeeper y alta disponibilidad](base/teoria/08-zookeeper-ha.md): el porqué y cómo funciona por dentro.
+- Evaluación: [ZooKeeper y HA](base/evaluacion/08-zookeeper-ha.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [ZooKeeper](base/referencia.md#zookeeper) y [NameNode](base/referencia.md#namenode): comandos, opciones y puertos.

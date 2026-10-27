@@ -153,3 +153,9 @@ Los 4 pasos juntos están en `ejemplos/sqoop.sh` (`bash ejemplos/sqoop.sh`).
 | `--where "cond"` | Solo las filas que cumplen |
 | `--query "SELECT ... WHERE \$CONDITIONS"` | Importar una consulta en vez de una tabla (con `--split-by` o `-m 1`) |
 | `--fields-terminated-by '\t'` | Otro separador |
+
+## Para profundizar
+
+- Teoría: [Sqoop](base/teoria/06-sqoop.md): el porqué y cómo funciona por dentro.
+- Evaluación: [Sqoop y bases relacionales](base/evaluacion/06-sqoop.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [Sqoop](base/referencia.md#sqoop) y [MySQL (MariaDB)](base/referencia.md#mysql-mariadb): comandos, opciones y puertos.
