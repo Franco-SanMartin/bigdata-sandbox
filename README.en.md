@@ -78,11 +78,13 @@ You choose the version with the *tag*, what goes after the colon:
 
 ```bash
 docker run -d --name bigdata-full --stop-timeout 20 \
-  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 \
+  -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
   franki678/bigdata-sandbox:full
 ```
 
-Open http://localhost:8080. As with `base`, the `datos/` folder on your
+Open http://localhost:8080 (JupyterLab, when enabled, is at
+http://localhost:8888). As with `base`, the `datos/` folder on your
 computer shows up inside as `/datos` (PowerShell: `"${PWD}/datos:/datos"`;
 CMD: `"%cd%\datos:/datos"`): the examples are copied there when the cluster
 starts (`/datos/ejemplos`), the Practices upload to HDFS from there, and what

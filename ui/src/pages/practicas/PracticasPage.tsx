@@ -4,14 +4,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
 import {
-  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, practiceById, practiceState, requirements, score, stepVars, suggested,
+  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, pinVars, practiceById, practiceState, requirements, score, stepVars, suggested,
   type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
 } from '../../lib/practicas';
 import type { ClusterStatus } from '../../api/types';
 import type { Capability } from '../../lib/capabilities';
 import { useStatus } from '../../state/store';
 import { runFix } from '../../state/capabilities';
-import { answerStep, checkStep, liveOf, markManual, restartPractice, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
+import { answerStep, checkStep, liveOf, markManual, pinStep, restartPractice, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
 import { confirm, navigate, practiceReturn, useRouteArg, type PracticeReturn } from '../../state/ui';
 import { Chip, EmptyState, GatedButton, KeyValue, PageHeader, ResultTable, Why } from '../../components/base';
 import { CodeBlock, Meter } from '../../components/ui';
@@ -258,6 +258,11 @@ function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
   const done = pp?.done[step.id];
   const vars = stepVars(step, status, pp?.vars ?? {});
   const lines = fill(step.command, vars).split('\n');
+  // Los pasos con fija guardan lo que muestran apenas aparecen: lo que se copia en la terminal es lo que
+  // después usan Verificar, "Lo hice en la terminal" y los pasos siguientes
+  const pin = open && !done ? pinVars(step, status, pp?.vars ?? {}) : null;
+  const pinKey = pin ? JSON.stringify(pin) : '';
+  useEffect(() => { if (pin) pinStep(pr, pin); }, [pinKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const ans = pp?.answers?.[step.id];
   const [peek, setPeek] = useState(false);
   const unlocked = canRun(step, pp);

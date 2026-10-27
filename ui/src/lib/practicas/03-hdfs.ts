@@ -26,8 +26,14 @@ async function head(c: StepCtx, path: string): Promise<{ text: string; command: 
   }
 }
 
-/** -w solo si hay DataNodes vivos para esa réplica: con menos, setrep -w no terminaría nunca (igual que el servidor) */
-const waitFlag = (live: number, n: number) => (live >= n ? '-w ' : '');
+/** -w salvo que falten DataNodes vivos para esa réplica: con menos, setrep -w no terminaría nunca (igual que
+    el servidor). Sin -w el comando vuelve enseguida y el fsck de después marca sub-replicados aunque haya
+    DataNodes de sobra, porque el NameNode todavía está copiando: por eso, ante la duda, va con -w */
+const waitFlag = (live: number, n: number) => (live >= n || live === 0 ? '-w ' : '');
+
+/** DataNodes prendidos o prendiéndose (los que van a poder recibir copias) */
+const dnAlive = (s: Parameters<NonNullable<Practice['needs']>>[0]) =>
+  s.processes.filter(p => p.kind === 'datanode' && (p.state === 'up' || p.state === 'starting')).length;
 
 /** Cambia la réplica y espera, sin apurar al NameNode, a que estén las copias (o a que no haya dónde ponerlas).
     Sigue la acción del setrep -w si el servidor la da; si no (demo, servidor viejo), mira el listado */
@@ -159,7 +165,7 @@ export const hdfsBasico: Practice = {
     {
       id: 'setrep', title: 'Pedir 3 copias de cada bloque',
       command: `hdfs dfs -setrep {w}3 ${VENTAS_FILE}`, input: 'El archivo y la réplica nueva',
-      plan: s => ({ w: waitFlag(dnUp(s), 3) }),
+      plan: s => ({ w: waitFlag(dnAlive(s), 3) }),
       does: 'El NameNode anota la réplica nueva y ordena copiar los bloques. Con -w el comando espera a que estén todas las copias.',
       expect: 'El archivo queda con réplica 3. Con menos de 3 DataNodes queda sub-replicado: no hay dónde poner la tercera copia',
       pregunta: {
@@ -191,7 +197,7 @@ export const hdfsBasico: Practice = {
         const live = dnUp(await c.status());
         return { ok: true, detail: live >= 3 ? 'Réplica 3 (el NameNode todavía está copiando lo que falta)' : `Réplica 3 (sub-replicado: hay ${plural(live, 'DataNode vivo', 'DataNodes vivos')})` };
       },
-      tip: 'Con menos DataNodes que la réplica, fsck lo marca Under replicated: no es un error, es que no hay dónde.',
+      tip: 'Sin -w, setrep vuelve enseguida y el NameNode copia por detrás: un fsck justo después marcaría Under replicated aunque haya 3 DataNodes. Con menos DataNodes que la réplica, fsck lo marca igual: no es un error, es que no hay dónde.',
     },
     {
       id: 'fsck', title: 'Revisar la salud con fsck',
@@ -208,7 +214,11 @@ export const hdfsBasico: Practice = {
       },
       donde: { hdfs: 'Nada cambia: fsck solo lee los metadatos del NameNode', compu: 'HDFS → Salud muestra lo mismo para todo el cluster' },
       run: async c => {
-        const f = await c.api.fsck(VENTAS_DIR);
+        let f = await c.api.fsck(VENTAS_DIR);
+        // Con DataNodes de sobra, un sub-replicado es que el NameNode todavía copia (pasa si el setrep fue
+        // sin -w): se espera un poco, con un fsck cada 5 s y no uno por segundo
+        if (f.underReplicated && !f.missing && f.liveDataNodes >= 3)
+          f = (await waitFor(c, () => c.api.fsck(VENTAS_DIR), x => x.underReplicated === 0, { seconds: 45, every: 5000, what: 'El NameNode todavía está copiando bloques: esperando que fsck dé sano…' })).value;
         return {
           summary: f.healthy && !f.underReplicated ? 'HEALTHY: ningún bloque perdido ni con copias de menos' : f.healthy ? `HEALTHY, con ${plural(f.underReplicated, 'bloque')} sub-replicado${f.underReplicated === 1 ? '' : 's'}` : `${plural(f.underReplicated, 'sub-replicado')}, ${plural(f.missing, 'perdido')}`,
           out: { kind: 'kv', items: [['Archivos', String(f.files)], ['Bloques', String(f.blocks)], ['Sub-replicados', String(f.underReplicated)], ['Perdidos', String(f.missing)], ['Réplica promedio', f.avgReplication.toLocaleString('es-AR')], ['DataNodes vivos', String(f.liveDataNodes)]] },
@@ -219,18 +229,18 @@ export const hdfsBasico: Practice = {
         const f = await c.api.fsck(VENTAS_DIR);
         return f.missing === 0 && f.corrupt === 0 ? { ok: true, detail: `${f.blocks} bloque(s), ninguno perdido` } : { ok: false, detail: `${f.missing} bloque(s) perdido(s)` };
       },
-      tip: 'Sub-replicados con menos DataNodes vivos que la réplica pedida es lo esperable: HDFS sigue sano porque cada bloque tiene al menos una copia.',
+      tip: 'Si fsck marca sub-replicados: con menos DataNodes vivos que la réplica pedida es lo esperable (no hay dónde poner la copia; HDFS sigue sano porque cada bloque tiene al menos una). Con DataNodes de sobra, es que el NameNode todavía está copiando: por eso el setrep va con -w, que espera a que terminen.',
     },
     {
       id: 'get', title: 'Bajarlo a tu compu (por el navegador)',
       command: `curl -L "${OPEN_URL}" -o ${NAME}`, input: 'El archivo en HDFS', cap: 'hdfs.read',
-      does: 'El navegador le pide el archivo a WebHDFS: el NameNode dice en qué DataNodes está cada bloque y se leen en orden. No pasa por el disco del contenedor.',
+      does: 'Ejecutar lo baja con el navegador por WebHDFS (como el curl): el NameNode dice en qué DataNodes está cada bloque, se leen en orden y el archivo cae en tus descargas, sin pasar por el disco del contenedor. hdfs dfs -get es otra cosa: copia de HDFS al disco del contenedor, no a tu compu.',
       expect: `${NAME} en la carpeta de descargas de tu compu`,
       pregunta: {
         enunciado: `Ahora queremos tener ${NAME} en tu compu, no en el contenedor. El botón lo baja por WebHDFS, la API web de HDFS. ¿Cuál es el comando que hace lo mismo?`,
         opciones: [
           { cmd: `curl -L "${OPEN_URL}" -o ${NAME}`, correcta: true, porque: 'WebHDFS sirve los archivos por HTTP: op=OPEN pide el contenido, -L sigue la redirección al DataNode que tiene los bloques y -o lo guarda con ese nombre. Es lo que hace el navegador.' },
-          { cmd: `hdfs dfs -get ${VENTAS_FILE} .`, porque: '-get lo copia de HDFS al disco del contenedor (a la carpeta donde estás parado), no a tu compu. Sirve, pero deja el archivo en otro lado.' },
+          { cmd: `hdfs dfs -get ${VENTAS_FILE} .`, porque: '-get lo copia de HDFS al disco del contenedor (a la carpeta donde estás parado, por ejemplo /root), no a tu compu: no aparece en tus descargas. Solo si lo bajás a /datos lo ves en la carpeta datos/ de tu compu.' },
           { cmd: `hdfs dfs -put ${VENTAS_FILE} .`, porque: '-put sube del contenedor a HDFS: es el camino contrario.' },
           { cmd: `curl "http://localhost:9870/webhdfs/v1${VENTAS_FILE}?op=GETFILESTATUS&user.name=root"`, porque: 'op=GETFILESTATUS devuelve los datos del archivo (tamaño, réplica, dueño) en JSON, no su contenido.' },
         ],
@@ -254,7 +264,7 @@ export const hdfsBasico: Practice = {
           raw: armada([], 'La descarga la hace el navegador: no hay salida en la terminal del contenedor'),
         };
       },
-      tip: 'hdfs dfs -get hace otra cosa: copia de HDFS a una carpeta del contenedor. Para tenerlo en tu compu por ese camino, después habría que sacarlo del contenedor.',
+      tip: 'Con hdfs dfs -get el archivo queda adentro del contenedor, en la carpeta donde estás parado (por ejemplo /root), y desde tu compu no lo ves. Si querés ese camino, bajalo a /datos: hdfs dfs -get ' + VENTAS_FILE + ' /datos/ lo deja en la carpeta datos/ de tu compu, que es la misma que /datos adentro.',
     },
   ],
 };
@@ -265,6 +275,14 @@ const procState = async (c: StepCtx, id: string) => (await c.status()).processes
 const lastUp = (s: Parameters<NonNullable<Practice['needs']>>[0]) => [...s.processes].reverse().find(p => p.kind === 'datanode' && p.state === 'up');
 
 const dnNumOf = (c: StepCtx) => Number(c.vars.dnNum ?? (c.vars.dn ?? '').replace(/\D/g, ''));
+
+const dnVars = (p: { id: string; name: string } | undefined): Record<string, string> => (p ? { dn: p.id, dnNum: p.id.replace(/\D/g, ''), dnName: p.name } : {});
+
+/** Para los pasos de después de apagarlo: el DataNode que está apagado. Lo que guardó el paso de apagar
+    gana; esto es por si se perdió (otro navegador, lo apagó en la terminal sin abrir ese paso) */
+const planDown = (s: Parameters<NonNullable<Practice['needs']>>[0]) => dnVars(
+  [...s.processes].reverse().find(p => p.kind === 'datanode' && (p.state === 'down' || p.state === 'stopping'))
+  ?? [...s.processes].reverse().find(p => p.kind === 'datanode' && p.state === 'off'));
 
 export const hdfsFalla: Practice = {
   id: 'hdfs-falla', guide: '03', guideFile: '03-hdfs.md',
@@ -277,7 +295,7 @@ export const hdfsFalla: Practice = {
     {
       id: 'prep', title: 'Dejar el archivo con 2 copias',
       command: `hdfs dfs -setrep {w}2 ${VENTAS_FILE}`, input: `${NAME} (lo sube si no está)`,
-      plan: s => ({ w: waitFlag(dnUp(s), 2) }),
+      plan: s => ({ w: waitFlag(dnAlive(s), 2) }),
       does: 'Cada bloque queda en dos DataNodes distintos. Con -w el comando espera a que estén las 2 copias.', expect: 'Réplica 2 y fsck sano',
       pregunta: {
         enunciado: 'Ahora queremos que cada bloque del archivo quede en 2 DataNodes distintos antes de apagar uno. ¿Cuál es el comando correcto?',
@@ -303,7 +321,9 @@ export const hdfsFalla: Practice = {
     {
       id: 'stop', title: 'Apagar un DataNode',
       command: 'datanode stop {dnNum}', input: 'El número de DataNode (el último prendido)',
-      plan: (s): Record<string, string> => { const p = lastUp(s); return p ? { dn: p.id, dnNum: p.id.replace(/\D/g, ''), dnName: p.name } : {}; },
+      // fija: el número se decide cuando aparece el paso. Si se recalculara después de apagar el 3 en la
+      // terminal, "el último prendido" sería el 2 y los pasos siguientes dirían "datanode start 2"
+      plan: s => dnVars(lastUp(s)), fija: true,
       does: 'Mata el proceso del DataNode: deja de mandar latidos al NameNode.', expect: 'El DataNode queda apagado',
       pregunta: {
         enunciado: 'Ahora queremos apagar el DataNode {dnNum} para simular que se cae. ¿Cuál es el comando correcto?',
@@ -334,6 +354,7 @@ export const hdfsFalla: Practice = {
     {
       id: 'dead', title: 'Esperar a que el NameNode lo dé por muerto',
       command: 'hdfs dfsadmin -report', input: 'Nada: el NameNode cuenta los latidos que no llegan',
+      plan: planDown,
       does: 'Primero lo marca stale (sin latidos) y, pasado el plazo, dead.', expect: 'El DataNode figura como dead',
       pregunta: {
         enunciado: 'Ahora queremos ver qué DataNodes da el NameNode por vivos y cuáles por muertos. ¿Cuál es el comando correcto?',
@@ -363,6 +384,7 @@ export const hdfsFalla: Practice = {
     {
       id: 'under', title: 'Ver los bloques sub-replicados',
       command: `hdfs fsck ${VENTAS_DIR}`, input: 'La carpeta', cap: 'hdfs.read',
+      plan: planDown,
       does: 'Cuenta las copias vivas: los bloques que estaban en el DataNode caído tienen una menos.',
       expect: 'Bloques Under replicated (con 2 DataNodes no hay dónde reponer la copia)',
       pregunta: {
@@ -397,6 +419,7 @@ export const hdfsFalla: Practice = {
     {
       id: 'start', title: 'Volver a prender el DataNode',
       command: 'datanode start {dnNum}', input: 'El mismo DataNode que apagaste',
+      plan: planDown,
       does: 'Arranca, le avisa al NameNode qué bloques tiene (block report) y las copias vuelven a contar.', expect: 'fsck sano: ningún bloque sub-replicado',
       pregunta: {
         enunciado: 'Ahora queremos volver a prender el DataNode {dnNum} para que sus copias vuelvan a contar. ¿Cuál es el comando correcto?',

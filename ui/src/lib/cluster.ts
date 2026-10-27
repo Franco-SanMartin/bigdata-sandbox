@@ -122,7 +122,8 @@ export function composeYaml(c: ClusterConfig, tag: string = DEFAULT_IMAGE_TAG): 
   if (c.services !== 'hdfs') L.push('      - "127.0.0.1:8088:8088"             # YARN ResourceManager', '      - "127.0.0.1:8042:8042"             # NodeManager', '      - "127.0.0.1:19888:19888"           # JobHistory');
   if (c.services === 'todo') L.push('      - "127.0.0.1:10000:10000"           # HiveServer2 (JDBC)', '      - "127.0.0.1:10002:10002"           # HiveServer2 (web)', '      - "127.0.0.1:18080:18080"           # Spark History', '      - "127.0.0.1:4040:4040"             # trabajo de Spark activo');
   if (c.mongodb) L.push('      - "127.0.0.1:27017:27017"           # MongoDB');
-  if (c.jupyter) L.push('      - "127.0.0.1:8888:8888"             # JupyterLab');
+  // Siempre: si después se prende JupyterLab desde la interfaz, el puerto ya está publicado
+  L.push(`      - "127.0.0.1:8888:8888"             # JupyterLab${c.jupyter ? '' : ' (con JUPYTER: "si")'}`);
   L.push('    volumes:', '      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB', '      - ./datos:/datos                      # tu carpeta datos/ adentro', '    stop_grace_period: 20s', '', 'volumes:', '  bigdata_hadoop:', '    name: bigdata_hadoop', '');
   return L.join('\n');
 }

@@ -3,7 +3,7 @@ import { ApiFailure } from '../../api/errors';
 import type { ClusterStatus, SandboxApi } from '../../api/types';
 import {
   STORAGE_KEY, answer, canRun, currentStep, doneCount, executeStep, fill, loadProgress, markDone, optionOrder, practiceState,
-  requirements, resetPractice, saveProgress, score, shownCommand, notThere, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
+  requirements, resetPractice, saveProgress, score, shownCommand, notThere, pinVars, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
@@ -211,5 +211,27 @@ describe('requirements', () => {
   });
   it('cada práctica tiene al menos lo suyo en la lista', () => {
     for (const pr of PRACTICES) expect(requirements(null, pr)[0].cap.id, pr.id).toBe(pr.cap);
+  });
+});
+
+describe('DataNode fijo en hdfs-falla', () => {
+  const pr = practiceById('hdfs-falla')!;
+  const step = (id: string) => pr.steps.find(s => s.id === id)!;
+  const dn = (n: number, state: string) => ({ id: `dn${n}`, kind: 'datanode', name: `DataNode ${n}`, state }) as unknown as ClusterStatus['processes'][number];
+  const st = (...states: string[]) => ({ processes: states.map((x, i) => dn(i + 1, x)) }) as unknown as ClusterStatus;
+
+  it('el número se fija al mostrar "Apagar" y no cambia al apagarlo en la terminal', () => {
+    const pin = pinVars(step('stop'), st('up', 'up', 'up'), {});
+    expect(pin).toMatchObject({ dn: 'dn3', dnNum: '3' });
+    const vars = { ...pin };
+    // Ya apagado el 3 desde la terminal: "el último prendido" sería el 2, pero queda el 3
+    expect(pinVars(step('stop'), st('up', 'up', 'down'), vars)).toBeNull();
+    expect(shownCommand(step('stop'), st('up', 'up', 'down'), vars)).toContain('3');
+    expect(shownCommand(step('start'), st('up', 'up', 'down'), vars)).toMatch(/start 3\b/);
+  });
+
+  it('si se perdió lo guardado, "Volver a prender" usa el que está apagado', () => {
+    expect(shownCommand(step('start'), st('up', 'up', 'down'), {})).toMatch(/start 3\b/);
+    expect(shownCommand(step('start'), st('up', 'down', 'up'), {})).toMatch(/start 2\b/);
   });
 });

@@ -65,6 +65,15 @@ describe('composeYaml', () => {
     expect(y).toContain('    image: franki678/bigdata-sandbox:full\n');
   });
 
+  it('monta datos/ y publica JupyterLab aunque esté apagado (se puede prender después)', () => {
+    for (const jupyter of [true, false]) {
+      const y = composeYaml({ ...DEFAULT_CONFIG, jupyter });
+      expect(y).toContain('./datos:/datos');
+      expect(y).toContain('"127.0.0.1:8888:8888"');
+    }
+    expect(composeYaml({ ...DEFAULT_CONFIG, jupyter: false })).toContain('# JupyterLab (con JUPYTER: "si")');
+  });
+
   it('toma el tag de la imagen que corre', () => {
     const y = composeYaml(DEFAULT_CONFIG, 'empresa');
     expect(y).toContain('# BigData Sandbox :empresa,');

@@ -99,6 +99,10 @@ export interface Step {
   /** Calcula, con el estado del cluster, las variables que el paso usa antes de correr (qué DataNode
       apagar, por ejemplo). Lo que ya dejó un paso anterior gana */
   plan?: (s: ClusterStatus, vars: Record<string, string>) => Record<string, string>;
+  /** Lo que calcula plan() queda fijo desde que se muestra el paso (se guarda en las variables): si el
+      alumno lo hace en la terminal, el cluster cambia y plan() ya no daría lo mismo (apagado el DataNode 3,
+      "el último prendido" pasa a ser el 2) */
+  fija?: boolean;
   /** Multiple choice antes de ejecutar */
   pregunta?: Pregunta;
   /** Dónde queda cada cosa después del paso (puede tener {variables}) */

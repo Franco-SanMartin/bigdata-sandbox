@@ -97,6 +97,13 @@ def test_formulas_de_puertos_iguales_a_lib_sh():
             assert getattr(specs, en_py)(n) == int(formulas[en_lib]) + n, (en_lib, n)
 
 
+def test_compose_publica_jupyter_aunque_este_apagado():
+    # Si después se prende JupyterLab desde la interfaz, el puerto ya tiene que estar publicado
+    y = cfg.compose_yaml(cfg.normalize({"jupyter": False}))
+    assert '"127.0.0.1:8888:8888"             # JupyterLab (con JUPYTER: \"si\")' in y
+    assert 'JUPYTER: "no"' in y
+
+
 @pytest.mark.parametrize("nn,services", [(1, "todo"), (3, "hdfs")])
 def test_compose_de_la_version_full(nn, services):
     y = cfg.compose_yaml(cfg.normalize({"namenodes": nn, "services": services, "datanodes": 3, "replication": 3}))
@@ -104,6 +111,7 @@ def test_compose_de_la_version_full(nn, services):
     assert 'AUTOSTART: "1"' in y
     assert '"127.0.0.1:8080:8080"' in y
     assert "stop_grace_period: 20s" in y
+    assert "./datos:/datos" in y and '"127.0.0.1:8888:8888"' in y
     if nn == 3:
         assert '"127.0.0.1:9871-9872:9871-9872"' in y and '"127.0.0.1:8480-8482:8480-8482"' in y
         assert "8088" not in y

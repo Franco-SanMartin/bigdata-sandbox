@@ -206,8 +206,8 @@ def compose_yaml(c: dict) -> str:
               '      - "127.0.0.1:4040:4040"             # trabajo de Spark activo']
     if c["mongodb"]:
         L.append('      - "127.0.0.1:27017:27017"           # MongoDB')
-    if c["jupyter"]:
-        L.append('      - "127.0.0.1:8888:8888"             # JupyterLab')
+    # Siempre: si después se prende JupyterLab desde la interfaz, el puerto ya está publicado
+    L.append('      - "127.0.0.1:8888:8888"             # JupyterLab' + ("" if c["jupyter"] else " (con JUPYTER: \"si\")"))
     L += ["    volumes:",
           "      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB",
           "      - ./datos:/datos                      # tu carpeta datos/ adentro",

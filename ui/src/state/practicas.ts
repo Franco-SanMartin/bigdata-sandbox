@@ -56,7 +56,7 @@ async function go(pr: Practice, s: Step, mode: 'run' | 'verify') {
   setLive(k, { busy: mode });
   const outcome = mode === 'run' ? await executeStep(s, ctx(pr, k)) : await verifyStep(s, ctx(pr, k));
   setLive(k, { outcome });
-  if (outcome.ok) setProgress(markDone(st.progress, pr, s.id, mode, outcome.result?.vars ?? {}));
+  if (outcome.ok) setProgress(markDone(st.progress, pr, s.id, mode, { ...(outcome.vars ?? {}), ...(outcome.result?.vars ?? {}) }));
   else if (outcome.result?.vars) {
     // corrió pero no verificó: igual guarda lo que dejó (el id del trabajo, por ejemplo)
     setProgress(setVars(st.progress, pr, outcome.result.vars));
@@ -71,6 +71,13 @@ export const checkStep = (pr: Practice, s: Step) => go(pr, s, 'verify');
 export function markManual(pr: Practice, s: Step, vars: Record<string, string> = {}) {
   setProgress(markDone(st.progress, pr, s.id, 'manual', vars));
   setLive(key(pr, s), undefined);
+}
+
+/** Deja fijas las variables con las que se mostró un paso (solo las que faltan: lo guardado gana) */
+export function pinStep(pr: Practice, vars: Record<string, string>) {
+  const cur = st.progress[pr.id]?.vars ?? {};
+  const add = Object.fromEntries(Object.entries(vars).filter(([k]) => cur[k] == null));
+  if (Object.keys(add).length) setProgress(setVars(st.progress, pr, add));
 }
 
 /** Responde el multiple choice de un paso (cuenta solo la primera vez) */

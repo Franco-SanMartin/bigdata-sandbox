@@ -297,6 +297,28 @@ def test_replicacion_sin_lugar_y_dn_recien_muerto(settings, tmp_path, fake_hdfs)
     asyncio.run(main())
 
 
+def test_fsck_de_fondo_se_espacia_si_nada_cambia(settings, tmp_path, fake_hdfs, monkeypatch):
+    """Sub-replicados sin adónde copiarse quedan así para siempre: no se corre un fsck (una JVM) por sondeo."""
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        cl.hdfs = {**cl.hdfs, "underReplicated": 45}
+        fake_hdfs["fsck"].write_text(fixture_text("fsck_dn_muerto.txt"))
+        h.datanodes = lambda: [{"id": 1, "state": "live"}, {"id": 2, "state": "live"}]
+        clock = [1000.0]
+        monkeypatch.setattr(H.time, "monotonic", lambda: clock[0])
+        fscks = lambda: sum(1 for l in fake_hdfs["log"].read_text().splitlines() if l.startswith("fsck"))  # noqa: E731
+        for _ in range(10):               # 10 sondeos, uno cada 2 s, sin que cambie nada
+            await h.watch()
+            clock[0] += 2
+        assert fscks() <= 2               # antes: uno por sondeo
+        # Cambia algo (un DataNode se cae): vuelve a mirar enseguida
+        h.datanodes = lambda: [{"id": 1, "state": "dead"}, {"id": 2, "state": "live"}]
+        n = fscks()
+        await h.watch()
+        assert fscks() == n + 1
+    asyncio.run(main())
+
+
 # ------------------------------------------------------------------ acciones
 
 

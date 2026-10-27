@@ -16,12 +16,14 @@ que van en el contenedor (`docker exec -it bigdata-full bash`).
 <!-- prueba: no (baja y arranca la imagen full: lo prueba el humo de full.yml) -->
 ```bash
 docker run -d --name bigdata-full --stop-timeout 20 \
-  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 \
+  -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
   franki678/bigdata-sandbox:full
 ```
 
 **Qué se ve.** Docker devuelve el id del contenedor y vuelve al prompt. En
-`docker ps` aparece `bigdata-full` con el puerto `127.0.0.1:8080->8080/tcp`.
+`docker ps` aparece `bigdata-full` con los puertos `127.0.0.1:8080->8080/tcp` (la interfaz) y
+`127.0.0.1:8888->8888/tcp` (JupyterLab).
 
 **Qué significa.** A diferencia de `base` y `ml`, el contenedor de `full`
 **no** prende Hadoop: el proceso principal es el servidor de la interfaz

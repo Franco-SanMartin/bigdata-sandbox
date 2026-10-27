@@ -45,4 +45,16 @@ describe('replicationView', () => {
   it('perdidos', () => {
     expect(replicationView(st({ missing: 1 }))).toMatchObject({ k: 'bad', label: 'bloques perdidos' });
   });
+
+  it('la cola atrasada no dice "todo bien" al lado de una tarjeta con sub-replicados', () => {
+    const v = replicationView(st({ underReplicated: 0, noRoom: 0, liveDataNodes: 3 }), 45);
+    expect(v.empty).not.toMatch(/todos los bloques/);
+    expect(v.k).toBe('run');
+    expect(v.sub).not.toBe('ninguno');
+  });
+
+  it('si la cola ya está al día manda la cola', () => {
+    expect(replicationView(st({ underReplicated: 3, noRoom: 3, liveDataNodes: 2 }), 0)).toMatchObject({ stuck: 3 });
+    expect(replicationView(st({}), 0).empty).toMatch(/todos los bloques/);
+  });
 });

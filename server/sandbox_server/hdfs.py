@@ -57,6 +57,8 @@ PREVIEW_BYTES = 64 * 1024
 PREVIEW_ROWS = 10
 MAX_UPLOAD_MB = int(os.environ.get("SANDBOX_MAX_UPLOAD_MB", "2048"))
 COPYING = "._COPYING_"   # lo que agrega hdfs dfs -put mientras escribe
+# Con HDFS quieto (sub-replicados sin adónde copiarse y nada más moviéndose), un fsck de fondo cada tanto
+QUIET_FSCK = 30.0
 CAT_DEFAULT = 64 * 1024
 CAT_MAX = 1024 * 1024       # tope de un tramo de /api/hdfs/cat
 # Carpetas que arma el arranque y usan los servicios: no se mueven
@@ -419,6 +421,8 @@ class Hdfs:
         self._last_blocks: int | None = None
         self._last_files: int | None = None
         self._last_dn: str = ""
+        # Cómo estaba HDFS en el último fsck de fondo: si no cambió nada, no hace falta otro
+        self._quiet_sig: str = ""
         self._seq = itertools.count(1)
         self.tmp_root = Path(os.environ.get("SANDBOX_UPLOADS", tempfile.gettempdir())) / "sandbox-subidas"
         cluster.watchers.append(self.watch)
@@ -579,9 +583,21 @@ class Hdfs:
         self._last_blocks, self._last_files, self._last_dn = h.get("blocks"), h.get("files"), dn_sig
         if busy:
             try:
-                await self.fsck_all(max_age=1.5)
+                await self.fsck_all(max_age=self._fsck_age())
             except ApiError:
                 pass
+
+    def _fsck_age(self, moving: float = 1.5) -> float:
+        """Cada cuánto vale la pena otro fsck (un proceso Java entero cada vez). Mientras algo se mueve
+        (subidas, copias en la cola, DataNodes que cambian, bloques nuevos), seguido; si HDFS quedó quieto
+        con bloques sub-replicados que no tienen adónde copiarse, una vez cada QUIET_FSCK segundos."""
+        h = self.c.hdfs
+        pending = int(self._fsn().get("PendingReplicationBlocks", 0) or 0)
+        sig = json.dumps([h.get("blocks"), h.get("files"), h.get("underReplicated"), h.get("overReplicated"),
+                          h.get("missing"), self._last_dn, sorted(self.uploads)])
+        quiet = sig == self._quiet_sig and not pending and not self.uploads
+        self._quiet_sig = sig
+        return QUIET_FSCK if quiet else moving
 
     # ------------------------------------------------------------ consultas
 
@@ -734,7 +750,7 @@ class Hdfs:
         no_room = 0
         if h.get("underReplicated") or h.get("overReplicated") or pending:
             try:
-                files = await self.fsck_all(max_age=3)
+                files = await self.fsck_all(max_age=self._fsck_age(3))
             except ApiError:
                 files = []
             for f in files:

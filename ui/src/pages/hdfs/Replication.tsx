@@ -25,8 +25,9 @@ function useHistory(r: ReplicationState | undefined, now: number) {
   return h;
 }
 
-export function Replication({ res, files, now }: { res: Res<ReplicationState>; files: HdfsFile[]; now: number }) {
-  const r = res.data;
+export function Replication({ res, files, now, under }: { res: Res<ReplicationState>; files: HdfsFile[]; now: number; under?: number }) {
+  // El mismo número de sub-replicados que la tarjeta del resumen (ver replicationView)
+  const r = res.data && under != null && under > res.data.underReplicated ? { ...res.data, underReplicated: under } : res.data;
   const hist = useHistory(r, now);
   const peak = Math.max(1, ...hist.map(x => x.v));
   const blockName = (id: number) => files.flatMap(f => f.blocks).find(b => b.id === id)?.name ?? `blk_${id}`;

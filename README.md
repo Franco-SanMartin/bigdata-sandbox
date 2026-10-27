@@ -78,11 +78,13 @@ La versión se elige con el *tag*, lo que va después de los dos puntos:
 
 ```bash
 docker run -d --name bigdata-full --stop-timeout 20 \
-  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 \
+  -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
   franki678/bigdata-sandbox:full
 ```
 
-Abrís http://localhost:8080. Como en `base`, la carpeta `datos/` de tu compu
+Abrís http://localhost:8080 (JupyterLab, si lo prendés, queda en
+http://localhost:8888). Como en `base`, la carpeta `datos/` de tu compu
 aparece adentro como `/datos` (en PowerShell, `"${PWD}/datos:/datos"`; en CMD,
 `"%cd%\datos:/datos"`): al iniciar el cluster se copian ahí los ejemplos
 (`/datos/ejemplos`), las Prácticas suben desde ahí a HDFS y lo que bajás con

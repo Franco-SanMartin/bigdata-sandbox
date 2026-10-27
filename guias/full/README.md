@@ -59,7 +59,8 @@ En una carpeta de trabajo (la misma que usás para las guías), con una carpeta
 <!-- prueba: no (baja y arranca la imagen full: lo prueba el humo de full.yml, no este corredor) -->
 ```bash
 docker run -d --name bigdata-full --stop-timeout 20 \
-  -p 127.0.0.1:8080:8080 -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 \
+  -v bigdata_full:/hadoop -v "$(pwd)/datos:/datos" \
   franki678/bigdata-sandbox:full
 ```
 
@@ -67,6 +68,8 @@ En PowerShell el último `-v` va como `"${PWD}/datos:/datos"`; en CMD, como
 `"%cd%\datos:/datos"`.
 
 - `-p 127.0.0.1:8080:8080`: la interfaz, solo para tu compu.
+- `-p 127.0.0.1:8888:8888`: JupyterLab (http://localhost:8888), también solo
+  para tu compu.
 - `-v bigdata_full:/hadoop`: el volumen con HDFS, las tablas de Hive, MySQL,
   MongoDB y la configuración que elijas en la interfaz.
 - `-v …/datos:/datos`: tu carpeta `datos/` adentro. Al iniciar el cluster se

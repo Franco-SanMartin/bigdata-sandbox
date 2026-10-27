@@ -20,7 +20,11 @@ export interface ReplicationView {
   sub: string;
 }
 
-export function replicationView(r: ReplicationState): ReplicationView {
+/** under: los sub-replicados que muestra la tarjeta del resumen (el estado del cluster). La cola llega en otro
+    pedido y puede venir de un momento anterior: se usa el mayor de los dos, así nunca dice "todos los
+    bloques tienen sus copias" al lado de una tarjeta con sub-replicados */
+export function replicationView(r0: ReplicationState, under?: number): ReplicationView {
+  const r = under != null && under > r0.underReplicated ? { ...r0, underReplicated: under } : r0;
   const stuck = Math.min(r.noRoom ?? 0, r.underReplicated);
   const copying = r.underReplicated - stuck;
   const live = r.liveDataNodes;
@@ -40,6 +44,8 @@ export function replicationView(r: ReplicationState): ReplicationView {
     : undefined;
   const empty = r.missing ? `${plural(r.missing, 'bloque')} sin ninguna copia: no hay de dónde copiar hasta que vuelva el DataNode`
     : stuck ? 'Cola vacía, pero no porque esté todo bien: lo que falta no tiene adónde copiarse (mirá el aviso de arriba)'
+    : r.underReplicated && live != null && live <= 1
+      ? 'Cola vacía, pero no porque esté todo bien: con un solo DataNode vivo no hay adónde copiar lo que falta'
     : r.underReplicated ? 'Cola vacía por ahora: el NameNode encola lo que falta en el próximo latido'
     : 'Cola vacía: todos los bloques tienen las copias que piden';
   const sub = !r.underReplicated ? 'ninguno'

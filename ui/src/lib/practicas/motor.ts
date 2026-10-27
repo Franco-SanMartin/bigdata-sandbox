@@ -144,6 +144,15 @@ export function stepVars(step: Step, status: ClusterStatus | null, vars: Record<
   return { ...planned, ...vars };
 }
 
+/** Para los pasos con fija: las variables de plan() que todavía no están guardadas (null si no hay nada
+    nuevo). La pantalla las guarda apenas muestra el paso */
+export function pinVars(step: Step, status: ClusterStatus | null, vars: Record<string, string>): Record<string, string> | null {
+  if (!step.fija || !step.plan || !status) return null;
+  const all = stepVars(step, status, vars);
+  const add = Object.fromEntries(Object.entries(all).filter(([k]) => vars[k] == null));
+  return Object.keys(add).length ? add : null;
+}
+
 /** El comando del paso tal cual va a correr */
 export const shownCommand = (step: Step, status: ClusterStatus | null, vars: Record<string, string>) => fill(step.command, stepVars(step, status, vars));
 
@@ -229,6 +238,8 @@ export interface StepOutcome {
   error?: string;
   /** El método todavía no existe en esta versión de la interfaz: el paso se hace en la terminal */
   unsupported?: boolean;
+  /** Variables con las que se verificó (las de plan(), si el paso tiene): se guardan como las de run */
+  vars?: Record<string, string>;
 }
 
 /** Lo que la API no tiene: unsupported, o una ruta que el servidor no conoce (la interfaz es más nueva que él) */
@@ -275,8 +286,10 @@ export async function executeStep(step: Step, ctx: StepCtx): Promise<StepOutcome
 export async function verifyStep(step: Step, ctx: StepCtx): Promise<StepOutcome> {
   if (!step.verify) return { ok: false, error: 'Este paso no tiene verificación automática: marcalo como hecho si te dio lo esperado.' };
   try {
-    const check = await step.verify(ctx);
-    return { ok: check.ok, check };
+    // Lo mismo que se mostró: si el paso tiene plan(), se verifica con esas variables (y quedan guardadas)
+    const vars = step.plan ? stepVars(step, await ctx.status(), ctx.vars) : undefined;
+    const check = await step.verify(vars ? { ...ctx, vars } : ctx);
+    return { ok: check.ok, check, ...(vars ? { vars } : {}) };
   } catch (e) {
     return { ok: false, ...explain(e) };
   }

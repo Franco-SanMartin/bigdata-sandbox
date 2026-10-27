@@ -68,17 +68,25 @@ pruebas de humo.
 
 **Prácticas guiadas de `full`:**
 
-- [ ] "HDFS: se cae un DataNode": el paso 5 muestra `datanode start 2` aunque se
+- [x] "HDFS: se cae un DataNode": el paso 5 muestra `datanode start 2` aunque se
       apagó y prendió el DataNode 3. El comando visible tiene que salir del nodo
-      elegido (el alumno lo copia en la terminal).
-- [ ] "HDFS: subir, mirar y replicar": usar `hdfs dfs -setrep -w 3`; sin `-w`, el
+      elegido (el alumno lo copia en la terminal). *Hecho: el número se fija
+      cuando aparece "Apagar" (`fija` en el paso) y los pasos siguientes usan el
+      DataNode apagado si se perdió lo guardado.*
+- [x] "HDFS: subir, mirar y replicar": usar `hdfs dfs -setrep -w 3`; sin `-w`, el
       fsck siguiente marca sub-replicados con 3 DataNodes y la pista confunde.
-- [ ] HDFS → Salud: "Sub-replicados: 45" junto a "Cola vacía: todos los bloques
+      *Hecho: `-w` cuando hay DataNodes para todas las copias (o no se sabe), y
+      el fsck espera hasta 45 s a que terminen de copiarse.*
+- [x] HDFS → Salud: "Sub-replicados: 45" junto a "Cola vacía: todos los bloques
       tienen las copias que piden". Tiene que decir que no hay a dónde copiar.
-- [ ] La verificación automática corre un `fsck` por segundo (un proceso Java
+      *Hecho: la tarjeta y la cola usan el mismo número (el mayor de los dos).*
+- [x] La verificación automática corre un `fsck` por segundo (un proceso Java
       cada vez): dejar de verificar cuando el paso dio bien o espaciar.
-- [ ] "Bajarlo a tu compu": explicar que `hdfs dfs -get` deja el archivo adentro
-      del contenedor y que el botón lo baja por el navegador.
+      *Hecho: con HDFS quieto (nada cambió desde el último fsck) el de fondo pasa
+      a uno cada 30 s; si algo cambia vuelve enseguida.*
+- [x] "Bajarlo a tu compu": explicar que `hdfs dfs -get` deja el archivo adentro
+      del contenedor y que el botón lo baja por el navegador. *Hecho, con
+      `hdfs dfs -get … /datos/` para que aparezca en la carpeta `datos/`.*
 - [ ] Mostrar la salida real del comando (como en la terminal) además de las tablas.
 - [ ] Autoevaluación al final de cada práctica (2 o 3 preguntas y un desafío).
 - [ ] Exportar e importar el avance (hoy solo vive en el navegador).
@@ -88,9 +96,13 @@ pruebas de humo.
 
 **Versión `full`:**
 
-- [ ] El `docker run` del README no monta `datos/` (`-v ...:/datos`) ni publica
+- [x] El `docker run` del README no monta `datos/` (`-v ...:/datos`) ni publica
       JupyterLab (`-p 127.0.0.1:8888:8888`). Lo mismo en el `docker-compose.yml`
-      que genera la interfaz.
+      que genera la interfaz. *Hecho: README, README.en y guías de `full` con los
+      dos; el compose generado publica 8888 aunque JupyterLab esté apagado (se
+      puede prender después desde la interfaz).*
+- [ ] El compose que genera la interfaz usa el volumen `bigdata_hadoop` (el de
+      `base`), no `bigdata_full` como el `docker run`: decidir si se unifican.
 - [ ] Seguridad de la API: `TrustedHostMiddleware`, rechazar POST/PUT/PATCH/DELETE
       de otro origen y exigir `application/json` (en curso en la etapa a).
 

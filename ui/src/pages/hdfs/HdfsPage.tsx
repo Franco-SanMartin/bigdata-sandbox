@@ -70,7 +70,7 @@ function Hdfs() {
   const c = status?.config;
   const live = dataNodes.filter(d => d.state === 'live').length;
   const issues = (h?.underReplicated ?? 0) + (h?.missing ?? 0);
-  const rv = repl.data ? replicationView(repl.data) : undefined;
+  const rv = repl.data ? replicationView(repl.data, h?.underReplicated) : undefined;
   const chip: { k: Tone; label: string } = !h ? { k: 'off', label: 'sin datos' }
     : !h.available ? { k: 'bad', label: 'NameNode no responde' }
     : h.safeMode ? { k: 'run', label: 'safe mode' }
@@ -113,7 +113,7 @@ function Hdfs() {
       )}
       {tab === 'health' && (
         <div className="grid cols-12">
-          <Replication res={repl} files={files} now={status?.now ?? 0} />
+          <Replication res={repl} files={files} now={status?.now ?? 0} under={h?.underReplicated} />
           <Fsck defaultPath={path} />
         </div>
       )}
