@@ -4,7 +4,8 @@ Lo carga humo_ui.py (no se corre solo). Cada función recibe la página de Playw
 módulo humo_ui como `h`, con sus ayudas (Chequeo, ir, captura, esperar, pedir...).
 
 - todo: hdfs-basico, hive, mongodb, pig, mapreduce y spark se hacen desde la interfaz con el botón
-  Ejecutar de cada paso, contra el cluster de verdad, y quedan completas. Un paso que la
+  Ejecutar de cada paso, contra el cluster de verdad, y quedan completas. Los pasos con pregunta
+  no muestran Ejecutar hasta responderla: se elige una opción y aparece la explicación. Un paso que la
   interfaz todavía no sabe correr contesta "unsupported": se marca con "Lo hice en la
   terminal" y queda anotado en el detalle del chequeo (no es una falla).
 - solo_hdfs: hdfs-basico se puede hacer; Hive y MongoDB dicen por qué no y ofrecen el
@@ -50,11 +51,25 @@ def _abrir(page, h, practica: str) -> None:
         expect(page.locator('.pr-step[data-done="true"]')).to_have_count(0)
 
 
+def _responder(li) -> None:
+    """Si el paso tiene una pregunta sin responder, Ejecutar todavía no está (salvo que la
+    práctica ya se haya completado antes): elige la primera opción (bien o mal, cualquiera
+    habilita) y espera la explicación"""
+    opciones = li.locator(".pr-q-op:not([disabled])")
+    if not opciones.count():
+        return
+    if li.locator(".pr-locked").count():
+        expect(li.get_by_role("button", name=EJECUTAR)).to_have_count(0)
+    opciones.first.click()
+    expect(li.locator(".pr-q-fb")).to_be_visible()
+
+
 def _paso(page, pid: str, segundos: int = 900) -> tuple[str, str]:
     """Corre un paso con Ejecutar y espera el resultado: (ok | info | bad | bloqueado, texto)"""
     li = page.locator(f"#paso-{pid}")
     if li.get_attribute("data-open") != "true":
         li.locator(".pr-step-h").click()
+    _responder(li)
     boton = li.get_by_role("button", name=EJECUTAR).first
     if boton.get_attribute("data-gated") == "true":
         return "bloqueado", boton.get_attribute("aria-description") or ""
@@ -157,6 +172,7 @@ def solo_hdfs(page, h) -> None:
         boton = page.locator("#paso-limit").get_by_role("button", name=EJECUTAR)
         if page.locator("#paso-limit").get_attribute("data-open") != "true":
             page.locator("#paso-limit .pr-step-h").click()
+        _responder(page.locator("#paso-limit"))
         expect(boton).to_have_attribute("data-gated", "true")
         expect(page.locator("#paso-limit pre, #paso-limit code").first).to_be_visible()
         c.detalle = nota.inner_text()[:140].replace("\n", " ")
@@ -174,6 +190,7 @@ def apagado(page, h) -> None:
         li = page.locator("#paso-mkdir")
         if li.get_attribute("data-open") != "true":
             li.locator(".pr-step-h").click()
+        _responder(li)
         expect(li.get_by_role("button", name=EJECUTAR)).to_have_attribute("data-gated", "true")
         h.captura(page, "p4-apagado-detalle")
         c.detalle = page.locator(".pr-main .capnote").inner_text()[:140].replace("\n", " ")

@@ -43,7 +43,7 @@ env:
 
 jobs:
   humo:
-    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
