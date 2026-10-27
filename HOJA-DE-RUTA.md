@@ -87,12 +87,35 @@ pruebas de humo.
 - [x] "Bajarlo a tu compu": explicar que `hdfs dfs -get` deja el archivo adentro
       del contenedor y que el botón lo baja por el navegador. *Hecho, con
       `hdfs dfs -get … /datos/` para que aparezca en la carpeta `datos/`.*
-- [ ] Mostrar la salida real del comando (como en la terminal) además de las tablas.
-- [ ] Autoevaluación al final de cada práctica (2 o 3 preguntas y un desafío).
-- [ ] Exportar e importar el avance (hoy solo vive en el navegador).
-- [ ] Revisar los requisitos de cada práctica antes de empezar (DataNodes, servicios).
-- [ ] Terminal integrada en la interfaz (recién después de cerrar la API).
-- [ ] Decidir el tema: hoy sigue al de Windows; se había pedido oscuro siempre.
+- [x] Mostrar la salida real del comando (como en la terminal) además de las tablas.
+      *Hecho: cada paso de la terminal del contenedor tiene "Correr en la
+      terminal": lo escribe en la terminal integrada, muestra lo que imprimió
+      con su código de salida ("lo que imprimió en tu terminal") y después
+      verifica; sin verificación alcanza con el código 0.*
+- [x] Autoevaluación al final de cada práctica (2 o 3 preguntas y un desafío).
+      *Hecho: preguntas de concepto con el porqué, y un desafío con pista,
+      solución a la vista si hace falta y "Lo resolví" (`lib/practicas/autoeval.ts`).*
+- [x] Exportar e importar el avance (hoy solo vive en el navegador).
+      *Hecho: un `.json` desde la lista de Prácticas; al importar, de cada
+      práctica queda la versión más avanzada (no se pierde nada).*
+- [x] Revisar los requisitos de cada práctica antes de empezar (DataNodes, servicios).
+      *Hecho: la tarjeta de la lista muestra los servicios que pide (prendidos
+      o no) y las prácticas previas; el detalle ya tenía "Antes de empezar".*
+- [x] Terminal integrada en la interfaz (recién después de cerrar la API).
+      *Hecho: bash de verdad por websocket en `/api/terminal`, por el mismo
+      8080 (xterm.js en un panel abajo, Ctrl+`). Solo atiende con Host local y
+      Origin de la misma interfaz; `TERMINAL=0` la apaga y `TERMINAL_HOSTS`
+      suma nombres. El humo de `full` la prueba contra la imagen.*
+- [x] Decidir el tema: hoy sigue al de Windows; se había pedido oscuro siempre.
+      *Ya está en `main`: oscuro siempre, sin selector (lo cuida
+      `styles/tema.test.ts`). Ver abajo si se quiere el selector.*
+- [ ] Tema: ¿oscuro por defecto **con selector** de claro? Hoy es oscuro fijo;
+      agregar el claro implica una paleta nueva y sacar la regla de `tema.test.ts`.
+- [ ] Terminal en `empresa`: si el servidor se publica para otras PCs y se
+      suma su nombre a `TERMINAL_HOSTS`, cualquiera que llegue tiene root en el
+      contenedor. Decidir si en `empresa` va apagada de fábrica (`TERMINAL=0`).
+- [ ] Rearmar la demo (`docs/demo`) con la autoevaluación y exportar/importar
+      (la terminal no anda en la demo: no hay contenedor).
 
 **Versión `full`:**
 

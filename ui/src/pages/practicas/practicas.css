@@ -158,3 +158,23 @@
 .pr-needs li { display: flex; gap: 8px; align-items: baseline; line-height: 1.4; }
 .pr-needs li .dot { transform: translateY(-1px); }
 .pr-needs b { font-weight: 500; color: var(--text); }
+
+/* Requisitos en la tarjeta de la lista */
+.pr-card-needs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-sm); color: var(--text-3); }
+.pr-card-needs li { display: inline-flex; gap: 6px; align-items: center; }
+.pr-card-needs li[data-ok="true"] { color: var(--text-2); }
+
+/* Autoevaluación */
+.pr-self { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-5); padding: 16px 18px; border-radius: var(--r-3); border: 1px solid var(--line); background: var(--surface); scroll-margin-top: var(--s-4); }
+.pr-self-top { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }
+.pr-self-top h2 { display: flex; align-items: center; gap: 8px; margin: 0; font: var(--t-section); }
+.pr-self-top .muted { font-size: var(--fs-sm); }
+.pr-self-qs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.pr-challenge { display: flex; flex-direction: column; gap: var(--s-2); padding: 12px 14px; border-radius: var(--r-2); border: 1px dashed var(--line-strong); background: var(--n-1); }
+.pr-challenge[data-done="true"] { border-style: solid; border-color: var(--ok-line); background: var(--ok-bg); }
+.pr-challenge h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.pr-challenge p { margin: 0; }
+.pr-challenge details > summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-md); }
+.pr-challenge details[open] { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
+.pr-challenge details[open] > * { max-width: 100%; }
+.pr-challenge-ok { display: inline-flex; gap: 8px; align-items: center; font-size: var(--fs-md); cursor: pointer; }

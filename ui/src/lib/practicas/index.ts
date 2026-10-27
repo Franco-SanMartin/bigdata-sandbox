@@ -15,3 +15,4 @@ export const practiceById = (id: string) => PRACTICES.find(p => p.id === id);
 
 export * from './tipos';
 export * from './motor';
+export * from './autoeval';

@@ -32,8 +32,9 @@ export interface RawOut {
   lines: { stream: 'out' | 'err'; text: string }[];
   exitCode?: number;
   /** proceso: lo que imprimió el comando de verdad · armada: armada con lo que respondió el servicio
-      (WebHDFS, JMX, el modo demo), con el mismo formato que en la terminal */
-  origen: 'proceso' | 'armada';
+      (WebHDFS, JMX, el modo demo), con el mismo formato que en la terminal · terminal: lo que imprimió
+      en la terminal integrada del alumno ("Correr en la terminal") */
+  origen: 'proceso' | 'armada' | 'terminal';
   /** Una aclaración corta (por qué no hay salida, de dónde salió) */
   nota?: string;
 }

@@ -129,6 +129,7 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `POST /api/cluster/reset` | Borra el volumen (menos la configuración) | 202, 409 si está prendido |
 | `POST /api/processes/{id}/{start\|stop}` | DataNode, NameNode, MySQL, MongoDB, HiveServer2, JupyterLab | 202 `{id}` de la acción |
 | `GET /api/actions/{id}` | Una acción: estado, salida, antes/después | 200, 404 |
+| `WS /api/terminal?cols=C&rows=R` | Una terminal (bash como root en `/datos`). Manda `{t:'i',d}` (lo tipeado) y `{t:'r',c,r}` (tamaño); recibe la salida tal cual. Solo desde `localhost`/`127.0.0.1` (Host y Origin) | 101; cierra con 4403 desde otro host u origen, 4404 con `TERMINAL=0`, 4429 con muchas sesiones, 1000 cuando sale bash |
 
 ### HDFS
 
@@ -325,6 +326,9 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 | `SANDBOX_DATOS` | `/datos` | Donde están los ejemplos (`ejemplos/`, `ventas_grandes.csv`...) |
 | `SANDBOX_UPLOADS` | `$TMPDIR/sandbox-subidas` | Carpeta temporal de las subidas desde la compu |
 | `SANDBOX_MAX_UPLOAD_MB` | `2048` | Tamaño máximo de una subida |
+| `TERMINAL` | `1` | `0`: apaga la terminal de la interfaz (`/api/terminal`) |
+| `TERMINAL_HOSTS` | (vacío) | Otros nombres desde los que se acepta la terminal, separados por coma (además de `localhost`, `127.0.0.1` y `::1`). Ojo: quien llegue por ese nombre tiene una terminal de root |
+| `TERMINAL_CWD` | `/datos` | Dónde arranca la terminal |
 | `SANDBOX_SQOOP_USER` / `SANDBOX_SQOOP_PASS` | los de `ejemplos/sqoop.sh` | Usuario y clave de MySQL para `sqoop import`/`export`. Le llegan a sqoop por variables de entorno, no en el comando que se muestra |
 
 Si el contenedor se apaga con `docker stop`, conviene darle 20 s

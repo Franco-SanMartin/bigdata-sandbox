@@ -3,13 +3,16 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../api';
 import {
-  answer, executeStep, loadProgress, markDone, resetPractice, saveProgress, setVars, verifyStep,
+  answer, answerQuiz, executeStep, exportProgress, importProgress, loadProgress, markChallenge, markDone, resetPractice, saveProgress, setVars, terminalOutcome, verifyStep,
   type Practice, type Progress, type Step, type StepCtx, type StepOutcome,
 } from '../lib/practicas';
+import { terminal } from '../lib/terminal';
+import { terminalOpen, toast } from './ui';
+import { downloadText } from '../lib/csv';
 
 /** Lo que pasa con un paso en esta visita (no se guarda: al recargar queda solo si está hecho) */
 export interface StepLive {
-  busy?: 'run' | 'verify';
+  busy?: 'run' | 'verify' | 'term';
   /** En qué está mientras espera */
   note?: string;
   outcome?: StepOutcome;
@@ -39,12 +42,12 @@ export function usePractices(): State { return useSyncExternalStore(subscribe, (
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-function ctx(pr: Practice, k: string): StepCtx {
+function ctx(pr: Practice, k: string, extra: Record<string, string> = {}): StepCtx {
   const a = api();
   return {
     api: a,
     status: () => a.status(),
-    vars: { ...(st.progress[pr.id]?.vars ?? {}) },
+    vars: { ...(st.progress[pr.id]?.vars ?? {}), ...extra },
     sleep,
     progress: note => { const cur = st.live[k]; if (cur?.busy) setLive(k, { ...cur, note }); },
   };
@@ -66,6 +69,31 @@ async function go(pr: Practice, s: Step, mode: 'run' | 'verify') {
 export const runStep = (pr: Practice, s: Step) => go(pr, s, 'run');
 export const checkStep = (pr: Practice, s: Step) => go(pr, s, 'verify');
 
+/** "Correr en la terminal": escribe el comando en la terminal integrada (la abre si hace falta), espera a
+    que vuelva el prompt, muestra lo que imprimió y, si el paso se puede verificar, verifica. Corre con las
+    variables con las que se mostró el comando, así lo que se verifica es lo que se tipeó */
+export async function runInTerminal(pr: Practice, s: Step, command: string, vars: Record<string, string> = {}) {
+  const k = key(pr, s);
+  if (st.live[k]?.busy) return;
+  terminalOpen.set(true);
+  setLive(k, { busy: 'term', note: 'Corriendo en la terminal de abajo: podés mirarlo ahí' });
+  let run;
+  try {
+    run = await terminal.run(command);
+  } catch (e) {
+    setLive(k, { outcome: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+    return;
+  }
+  let verified: StepOutcome | undefined;
+  if (s.verify) {
+    setLive(k, { busy: 'verify', note: 'Mirando que haya quedado como tiene que dar' });
+    verified = await verifyStep(s, ctx(pr, k, vars));
+  }
+  const outcome = terminalOutcome(command, run, verified);
+  setLive(k, { outcome });
+  if (outcome.ok) setProgress(markDone(st.progress, pr, s.id, verified ? 'verify' : 'manual', { ...vars, ...(outcome.vars ?? {}) }));
+}
+
 /** "Lo hice en la terminal": lo marca hecho sin verificar. Guarda las variables con las que se mostró
     el comando (qué DataNode, por ejemplo), así el paso siguiente muestra el mismo */
 export function markManual(pr: Practice, s: Step, vars: Record<string, string> = {}) {
@@ -83,6 +111,32 @@ export function pinStep(pr: Practice, vars: Record<string, string>) {
 /** Responde el multiple choice de un paso (cuenta solo la primera vez) */
 export function answerStep(pr: Practice, s: Step, pick: number) {
   setProgress(answer(st.progress, pr, s.id, pick));
+}
+
+/** Autoevaluación: responde una pregunta (cuenta la primera) */
+export function answerSelf(pr: Practice, qi: number, pick: number, ok: boolean) {
+  setProgress(answerQuiz(st.progress, pr, qi, pick, ok));
+}
+
+export function solveChallenge(pr: Practice, solved: boolean) {
+  setProgress(markChallenge(st.progress, pr, solved));
+}
+
+/** Baja el avance de todas las prácticas en un .json */
+export function downloadProgress(now = new Date()) {
+  const day = now.toISOString().slice(0, 10);
+  downloadText(`practicas-bigdata-${day}.json`, exportProgress(st.progress, now.getTime()), 'application/json');
+}
+
+/** Junta un avance exportado con el de este navegador (de cada práctica queda la más avanzada) */
+export async function uploadProgress(file: File) {
+  try {
+    const { progress, practices } = importProgress(await file.text(), st.progress);
+    setProgress(progress);
+    toast({ kind: 'ok', title: 'Avance importado', description: `${practices} práctica${practices === 1 ? '' : 's'} del archivo. De cada una quedó la versión más avanzada.` });
+  } catch (e) {
+    toast({ kind: 'bad', title: 'No se pudo importar', description: e instanceof Error ? e.message : String(e), console: false });
+  }
 }
 
 export function undoStep(pr: Practice, s: Step) {

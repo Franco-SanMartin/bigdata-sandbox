@@ -98,6 +98,12 @@ it starts by itself, with the usual variables (`DATANODES`, `REPLICATION`,
 anything, there's the [demo](https://franki-678.github.io/bigdata-sandbox/demo/)
 (a cluster simulated in the browser).
 
+`Ctrl+`` ` (or the terminal icon, top right) opens a **terminal** into the
+container inside the interface: bash in `/datos`, with `hdfs`, `hive`, `pig`,
+`spark-submit` and the rest at hand, no `docker exec` needed. The Prácticas
+(exercises) use it to *run each step in the terminal*. It only opens from the
+same computer (`localhost`); `-e TERMINAL=0` turns it off.
+
 The interface opens on **Inicio** (home): the cluster's state and what you
 can do now, with what isn't available yet, why, and how to enable it. Every
 screen (HDFS, Trabajos/jobs, Consultas/queries, Pipeline, Machine Learning,

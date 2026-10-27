@@ -48,6 +48,8 @@ export const setRouteArg = (arg: string, opts: { replace?: boolean } = { replace
 
 /* ---------- Paneles ---------- */
 export const consoleOpen = store(false);
+/** El panel de la terminal (bash adentro del contenedor). Una vez abierto queda montado: cerrarlo lo esconde */
+export const terminalOpen = store(false);
 export const helpOpen = store(false);
 export const paletteOpen = store(false);
 export const composeOpen = store(false);

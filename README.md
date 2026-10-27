@@ -98,6 +98,12 @@ su API en [server/README.md](server/README.md). Para mirarla sin instalar nada,
 está la [demo](https://franki-678.github.io/bigdata-sandbox/demo/) (un cluster
 simulado en el navegador).
 
+Con `Ctrl+`` ` (o el ícono de terminal, arriba a la derecha) se abre una **terminal** del
+contenedor adentro de la interfaz: bash en `/datos`, con `hdfs`, `hive`,
+`pig`, `spark-submit` y el resto a mano, sin `docker exec`. Las Prácticas la
+usan para *Correr en la terminal* cada paso. Solo se abre desde la misma compu
+(`localhost`); con `-e TERMINAL=0` se apaga.
+
 La interfaz arranca en **Inicio**: el estado del cluster y qué podés hacer
 ahora, con lo que todavía no está disponible, por qué y cómo habilitarlo. Cada
 pantalla (HDFS, Trabajos, Consultas, Pipeline, Machine Learning, Cluster)

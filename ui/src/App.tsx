@@ -5,6 +5,7 @@ import { useHotkeys } from './shell/hotkeys';
 import { Sidebar } from './shell/Sidebar';
 import { Topbar } from './shell/Topbar';
 import { ConsoleDrawer } from './shell/ConsoleDrawer';
+import { TerminalDrawer } from './shell/TerminalDrawer';
 import { HelpSheet } from './shell/HelpSheet';
 import { CommandPalette } from './shell/CommandPalette';
 import { ComposeSheet, ConfirmHost, Toaster } from './shell/Overlays';
@@ -45,6 +46,7 @@ export function App() {
             <PageFrame page={page}><Page /></PageFrame>
           </main>
           <ConsoleDrawer />
+          <TerminalDrawer />
         </div>
       </div>
       <CommandPalette />

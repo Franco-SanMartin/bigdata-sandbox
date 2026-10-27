@@ -1075,6 +1075,90 @@ def ml() -> None:
         assert not malos, malos
 
 
+# ---------------------------------------------------------------- terminal
+
+class WsMini:
+    """Cliente websocket mínimo (solo biblioteca estándar): texto y close, sin fragmentos"""
+
+    def __init__(self, ruta: str, origin: str | None):
+        import base64
+        import socket
+        u = urllib.parse.urlsplit(URL)
+        self.s = socket.create_connection((u.hostname, u.port or 80), timeout=30)
+        key = base64.b64encode(os.urandom(16)).decode()
+        h = [f"GET {ruta} HTTP/1.1", f"Host: {u.netloc}", "Upgrade: websocket", "Connection: Upgrade",
+             f"Sec-WebSocket-Key: {key}", "Sec-WebSocket-Version: 13"] + ([f"Origin: {origin}"] if origin else [])
+        self.s.sendall(("\r\n".join(h) + "\r\n\r\n").encode())
+        self.buf = b""
+        while b"\r\n\r\n" not in self.buf:
+            self.buf += self.s.recv(4096)
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        assert head.startswith(b"HTTP/1.1 101"), head[:80]
+        self.cerro: tuple[int, str] | None = None
+
+    def mandar(self, texto: str) -> None:
+        data, mask = texto.encode(), os.urandom(4)
+        n = len(data)
+        largo = bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack("!H", n) if n < 65536 else bytes([0x80 | 127]) + struct.pack("!Q", n)
+        self.s.sendall(b"\x81" + largo + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def _leer(self, n: int) -> bytes:
+        while len(self.buf) < n:
+            parte = self.s.recv(65536)
+            if not parte:
+                raise ConnectionError("se cortó la conexión")
+            self.buf += parte
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def recibir(self) -> str | None:
+        b0, b1 = self._leer(2)
+        n = b1 & 0x7F
+        if n == 126:
+            n = struct.unpack("!H", self._leer(2))[0]
+        elif n == 127:
+            n = struct.unpack("!Q", self._leer(8))[0]
+        data = self._leer(n)
+        if (b0 & 0x0F) == 8:
+            self.cerro = (struct.unpack("!H", data[:2])[0], data[2:].decode()) if len(data) >= 2 else (1005, "")
+            return None
+        return data.decode()
+
+    def hasta(self, patron: str, segundos: float) -> str:
+        fin, todo = time.time() + segundos, ""
+        while time.time() < fin:
+            t = self.recibir()
+            if t is None:
+                raise AssertionError(f"se cerró: {self.cerro} {todo[-500:]!r}")
+            todo += t
+            if re.search(patron, todo):
+                return todo
+        raise AssertionError(f"no apareció {patron!r}: {todo[-500:]!r}")
+
+
+def terminal() -> None:
+    """La terminal de la interfaz (/api/terminal): bash de verdad en el contenedor, solo desde la interfaz"""
+    marca = r"\x1b\]777;bds;(\d+)\x07"
+    with Chequeo("terminal: corre comandos en el contenedor") as c:
+        ws = WsMini("/api/terminal?cols=120&rows=30", URL)
+        ws.hasta(marca, 30)
+        ws.mandar(json.dumps({"t": "i", "d": "echo humo-$((6*7)) $SANDBOX_TERMINAL; whoami; pwd; hdfs dfs -ls / > /dev/null && echo hdfs-ok\r"}))
+        todo = ws.hasta(r"hdfs-ok\r\n" + marca, 120)
+        (SALIDAS / "crudas").mkdir(parents=True, exist_ok=True)
+        (SALIDAS / "crudas" / "terminal.txt").write_text(todo)
+        assert "humo-42 1" in todo, todo[-500:]
+        assert re.search(r"root\r\n/datos\r\n", todo), todo[-500:]
+        ws.mandar(json.dumps({"t": "i", "d": "exit 3\r"}))
+        while ws.recibir() is not None:
+            pass
+        assert ws.cerro and ws.cerro[0] == 1000 and "código 3" in ws.cerro[1], ws.cerro
+        c.detalle = "root en /datos, hdfs anda y exit 3 cierra con «bash terminó (código 3)»"
+    with Chequeo("terminal: rechaza otro origen") as c:
+        ws = WsMini("/api/terminal", "http://malo.example")
+        assert ws.recibir() is None and ws.cerro and ws.cerro[0] == 4403, ws.cerro
+        c.detalle = f"{ws.cerro[0]} {ws.cerro[1]}"
+
+
 # ---------------------------------------------------------------- resumen
 
 def resumen() -> int:
@@ -1104,6 +1188,7 @@ def main() -> int:
             esperar(lambda: (lambda p: all(p.get(x) == "up" for x in ("nn1", "dn1", "dn2", "rm", "nm", "jh", "hiveserver2", "mysql", "mongodb")))(procesos()),
                     300, "servicios")
             c.detalle = str(procesos())
+        terminal()
         yarn()
         p2()
         pipeline()

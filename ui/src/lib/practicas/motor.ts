@@ -3,7 +3,7 @@
 import { ApiFailure } from '../../api/errors';
 import { capabilities, type Capability } from '../capabilities';
 import type { ClusterStatus } from '../../api/types';
-import type { Check, Practice, Pregunta, Step, StepCtx, StepResult } from './tipos';
+import type { Check, Practice, Pregunta, RawOut, Step, StepCtx, StepResult } from './tipos';
 
 export const STORAGE_KEY = 'bds.practicas.v1';
 
@@ -23,6 +23,10 @@ export interface PracticeProgress {
   answers?: Record<string, Answer>;
   /** Cuándo se completó por primera vez (sobrevive a "Empezar de nuevo": deja ver las respuestas) */
   completedBefore?: number;
+  /** Autoevaluación: número de pregunta → primera respuesta */
+  quiz?: Record<string, Answer>;
+  /** Cuándo marcó el desafío como resuelto */
+  desafio?: number;
 }
 
 export type Progress = Record<string, PracticeProgress>;
@@ -34,28 +38,75 @@ function defaultStorage(): Storage | null {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; }
 }
 
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** Lo que se guardó (o se importó), con lo raro afuera: nunca rompe la pantalla */
+export function parseProgress(v: unknown): Progress {
+  if (!isObj(v)) return {};
+  const out: Progress = {};
+  for (const [k, raw] of Object.entries(v)) {
+    if (!isObj(raw)) continue;
+    const p = raw as Partial<PracticeProgress>;
+    out[k] = {
+      done: isObj(p.done) ? p.done as PracticeProgress['done'] : {},
+      vars: isObj(p.vars) ? p.vars as PracticeProgress['vars'] : {},
+      startedAt: typeof p.startedAt === 'number' ? p.startedAt : Date.now(),
+      ...(typeof p.finishedAt === 'number' ? { finishedAt: p.finishedAt } : {}),
+      ...(isObj(p.answers) ? { answers: p.answers as Record<string, Answer> } : {}),
+      ...(typeof p.completedBefore === 'number' ? { completedBefore: p.completedBefore } : {}),
+      ...(isObj(p.quiz) ? { quiz: p.quiz as Record<string, Answer> } : {}),
+      ...(typeof p.desafio === 'number' ? { desafio: p.desafio } : {}),
+    };
+  }
+  return out;
+}
+
 /** Lee el progreso; si lo guardado está roto, arranca de cero sin romper la pantalla */
 export function loadProgress(st: Storage | null = defaultStorage()): Progress {
   if (!st) return {};
   try {
     const raw = st.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const v = JSON.parse(raw) as unknown;
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-    const out: Progress = {};
-    for (const [k, p] of Object.entries(v as Record<string, Partial<PracticeProgress>>)) {
-      if (!p || typeof p !== 'object') continue;
-      out[k] = {
-        done: p.done && typeof p.done === 'object' ? p.done : {},
-        vars: p.vars && typeof p.vars === 'object' ? p.vars : {},
-        startedAt: typeof p.startedAt === 'number' ? p.startedAt : Date.now(),
-        ...(typeof p.finishedAt === 'number' ? { finishedAt: p.finishedAt } : {}),
-        ...(p.answers && typeof p.answers === 'object' && !Array.isArray(p.answers) ? { answers: p.answers } : {}),
-        ...(typeof p.completedBefore === 'number' ? { completedBefore: p.completedBefore } : {}),
-      };
-    }
-    return out;
+    return raw ? parseProgress(JSON.parse(raw)) : {};
   } catch { return {}; }
+}
+
+/* ---------- Exportar e importar ---------- */
+
+const EXPORT_KIND = 'bigdata-sandbox/practicas';
+
+/** El avance en un archivo, para llevarlo a otra compu o a otro navegador */
+export function exportProgress(p: Progress, now = Date.now()): string {
+  return JSON.stringify({ tipo: EXPORT_KIND, version: 1, exportado: new Date(now).toISOString(), progreso: p }, null, 2);
+}
+
+/** Lee un archivo exportado. Junta con lo que ya hay: de cada práctica queda la versión más avanzada
+    (más pasos hechos; si empatan, la más reciente), así importar nunca hace perder avance */
+export function importProgress(text: string, cur: Progress): { progress: Progress; practices: number } {
+  let v: unknown;
+  // downloadText le pone BOM (para Excel): se saca antes de leer
+  try { v = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { throw new Error('El archivo no es un avance exportado (no es JSON)'); }
+  if (!isObj(v) || v.tipo !== EXPORT_KIND || !isObj(v.progreso)) throw new Error('El archivo no es un avance exportado de las Prácticas');
+  const inc = parseProgress(v.progreso);
+  const out: Progress = { ...cur };
+  const last = (pp: PracticeProgress) => Math.max(pp.startedAt, pp.finishedAt ?? 0, ...Object.values(pp.done).map(d => d?.at ?? 0));
+  let n = 0;
+  for (const [id, pp] of Object.entries(inc)) {
+    const mine = cur[id];
+    const a = Object.keys(pp.done).length, b = mine ? Object.keys(mine.done).length : -1;
+    const take = !mine || a > b || (a === b && last(pp) > last(mine));
+    const keep = take ? pp : mine;
+    const other = take ? mine : pp;
+    // Lo que no se pisa: respuestas, autoevaluación y "completada alguna vez" se suman de las dos
+    out[id] = {
+      ...keep,
+      ...(other?.answers || keep.answers ? { answers: { ...other?.answers, ...keep.answers } } : {}),
+      ...(other?.quiz || keep.quiz ? { quiz: { ...other?.quiz, ...keep.quiz } } : {}),
+      ...(keep.desafio ?? other?.desafio ? { desafio: keep.desafio ?? other?.desafio } : {}),
+      ...(keep.completedBefore ?? other?.completedBefore ? { completedBefore: Math.min(...[keep.completedBefore, other?.completedBefore].filter((x): x is number => x != null)) } : {}),
+    };
+    n++;
+  }
+  return { progress: out, practices: n };
 }
 
 export function saveProgress(p: Progress, st: Storage | null = defaultStorage()) {
@@ -96,6 +147,22 @@ export function answer(p: Progress, pr: Practice, stepId: string, pick: number, 
   const cur = p[pr.id] ?? { ...empty(), startedAt: now };
   if (cur.answers?.[stepId]) return p;
   return { ...p, [pr.id]: { ...cur, answers: { ...cur.answers, [stepId]: { pick, ok: !!op.correcta, at: now } } } };
+}
+
+/* ---------- Autoevaluación ---------- */
+
+/** Responde una pregunta de la autoevaluación (cuenta la primera) */
+export function answerQuiz(p: Progress, pr: Practice, qi: number, pick: number, ok: boolean, now = Date.now()): Progress {
+  const cur = p[pr.id] ?? { ...empty(), startedAt: now };
+  if (cur.quiz?.[qi]) return p;
+  return { ...p, [pr.id]: { ...cur, quiz: { ...cur.quiz, [qi]: { pick, ok, at: now } } } };
+}
+
+/** Marca (o desmarca) el desafío como resuelto */
+export function markChallenge(p: Progress, pr: Practice, solved: boolean, now = Date.now()): Progress {
+  const cur = p[pr.id] ?? { ...empty(), startedAt: now };
+  const { desafio: _, ...rest } = cur;
+  return { ...p, [pr.id]: solved ? { ...rest, desafio: now } : rest };
 }
 
 /** La opción correcta de una pregunta (su índice) */
@@ -293,6 +360,17 @@ export async function verifyStep(step: Step, ctx: StepCtx): Promise<StepOutcome>
   } catch (e) {
     return { ok: false, ...explain(e) };
   }
+}
+
+/** "Correr en la terminal": lo que imprimió el comando en la terminal integrada y, si el paso se puede
+    verificar, lo que dio la verificación. Sin verificación, alcanza con que haya terminado con código 0 */
+export function terminalOutcome(command: string, run: { lines: string[]; exitCode: number }, verified?: StepOutcome): StepOutcome {
+  const raw: RawOut = { command, lines: run.lines.map(text => ({ stream: 'out', text })), exitCode: run.exitCode, origen: 'terminal' };
+  const summary = run.exitCode === 0 ? 'Corrió en tu terminal' : `En tu terminal terminó con código ${run.exitCode}`;
+  if (verified) return { ...verified, result: { summary, ...verified.result, raw } };
+  return run.exitCode === 0
+    ? { ok: true, result: { summary, raw } }
+    : { ok: false, error: `El comando terminó con código ${run.exitCode}: mirá qué dijo`, result: { summary, raw } };
 }
 
 /** Pregunta cada tanto hasta que se cumple o se acaba el tiempo. Devuelve el último valor.

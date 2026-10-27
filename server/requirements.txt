@@ -8,3 +8,5 @@ idna==3.20
 typing_extensions==4.16.0
 # Subidas desde la compu (multipart/form-data): Starlette lo usa para request.form()
 python-multipart==0.0.32
+# Websockets para la terminal de la interfaz (uvicorn lo usa si está; Python puro, sobre h11)
+wsproto==1.3.2

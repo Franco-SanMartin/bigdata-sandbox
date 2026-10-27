@@ -1,21 +1,23 @@
 /* Prácticas guiadas: la lista (qué se puede hacer ya y qué no, con el arreglo) y cada práctica paso a
    paso: la pregunta (¿cuál es el comando?), el comando de la terminal, qué entra, qué hace, qué tiene
    que dar, la salida como en la terminal y dónde queda cada cosa. Al terminar, el resumen. */
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, RotateCcw, SearchCheck, SquareTerminal } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, ClipboardCheck, Download, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, Upload, RotateCcw, SearchCheck, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
 import {
-  PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, pinVars, practiceById, practiceState, requirements, score, stepVars, suggested,
+  AUTOEVAL, PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, pinVars, practiceById, practiceState, requirements, score, stepVars, suggested,
   type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
 } from '../../lib/practicas';
 import type { ClusterStatus } from '../../api/types';
 import type { Capability } from '../../lib/capabilities';
 import { useStatus } from '../../state/store';
 import { runFix } from '../../state/capabilities';
-import { answerStep, checkStep, liveOf, markManual, pinStep, restartPractice, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
-import { confirm, navigate, practiceReturn, useRouteArg, type PracticeReturn } from '../../state/ui';
+import { answerSelf, answerStep, checkStep, downloadProgress, liveOf, solveChallenge, uploadProgress, markManual, pinStep, restartPractice, runInTerminal, runStep, undoStep, usePractices, type StepLive } from '../../state/practicas';
+import { api } from '../../api';
+import { confirm, navigate, terminalOpen, practiceReturn, useRouteArg, type PracticeReturn } from '../../state/ui';
 import { Chip, EmptyState, GatedButton, KeyValue, PageHeader, ResultTable, Why } from '../../components/base';
 import { CodeBlock, Meter } from '../../components/ui';
 import { TraceView } from '../../components/Trace';
+import { terminal } from '../../lib/terminal';
 import './practicas.css';
 
 const GUIDE_URL = 'https://github.com/Franki-678/bigdata-sandbox/blob/main/guias/';
@@ -45,10 +47,23 @@ function List() {
   const { progress } = usePractices();
   const done = PRACTICES.filter(p => practiceState(p, progress[p.id]) === 'completa').length;
   const next = useMemo(() => suggested(PRACTICES, progress, status, 3), [progress, status]);
+  const file = useRef<HTMLInputElement>(null);
   return (
     <div className="page-in">
       <PageHeader title="Prácticas" sub="Las guías de la materia paso a paso: el comando de cada paso y un botón que lo corre y lo verifica."
-        status={{ k: done === PRACTICES.length ? 'ok' : 'off', label: `${done} de ${PRACTICES.length} completas` }} />
+        status={{ k: done === PRACTICES.length ? 'ok' : 'off', label: `${done} de ${PRACTICES.length} completas` }}
+        actions={<>
+          <button type="button" className="btn btn-sm" onClick={() => downloadProgress()} disabled={!Object.keys(progress).length}
+            title="Baja un .json con lo que hiciste en todas las prácticas, para seguir en otra compu o en otro navegador">
+            <Download size={14} aria-hidden="true" /> Exportar avance
+          </button>
+          <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}
+            title="Junta un avance exportado con el de acá: de cada práctica queda la versión más avanzada, no se pierde nada">
+            <Upload size={14} aria-hidden="true" /> Importar avance
+          </button>
+          <input ref={file} type="file" accept="application/json,.json" hidden aria-label="Archivo de avance"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void uploadProgress(f); }} />
+        </>} />
 
       {next.length > 0 && (
         <>
@@ -96,11 +111,40 @@ function Card({ pr, pp, cap }: { pr: Practice; pp?: PracticeProgress; cap: Capab
       <h3><button type="button" className="pr-title-btn" onClick={() => navigate('practicas', pr.id)}>{pr.title}</button></h3>
       <p className="muted">{pr.summary}</p>
       <div className="pr-meta"><Clock size={13} aria-hidden="true" /> {pr.minutes} min · {pr.steps.length} pasos</div>
+      <Needs pr={pr} />
       {blocked && cap && <div className="capcard-why"><Why reason={cap.reason ?? 'No disponible'} cap={cap} /></div>}
       <div className="capcard-f">
         <Progress pr={pr} pp={pp} />
       </div>
     </article>
+  );
+}
+
+/** Lo que pide antes de empezar, corto: los servicios (prendidos o no) y las prácticas previas */
+function Needs({ pr }: { pr: Practice }) {
+  const status = useStatus();
+  const { progress } = usePractices();
+  const needs = requirements(status, pr);
+  const prev = (pr.after ?? []).map(id => practiceById(id)).filter((p): p is Practice => !!p);
+  if (!needs.length && !prev.length) return null;
+  return (
+    <ul className="pr-card-needs" aria-label="Antes de empezar">
+      {needs.map(n => (
+        <li key={n.key} data-ok={n.ready} title={n.ready ? 'Andando' : n.cap.reason ?? 'No está lista'}>
+          <span className="dot" data-s={n.ready ? 'ok' : n.cap.state === 'starting' ? 'starting' : 'off'} aria-hidden="true" />{n.label}
+          <span className="sr-only">{n.ready ? ' (andando)' : ' (no está lista)'}</span>
+        </li>
+      ))}
+      {prev.map(p => {
+        const ok = practiceState(p, progress[p.id]) === 'completa';
+        return (
+          <li key={p.id} data-ok={ok} title={ok ? 'Hecha' : 'Conviene hacerla antes'}>
+            <span className="dot" data-s={ok ? 'ok' : 'off'} aria-hidden="true" />Antes: {p.title}
+            <span className="sr-only">{ok ? ' (hecha)' : ' (sin hacer)'}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -242,9 +286,71 @@ function Detail({ pr }: { pr: Practice }) {
                 open={open.has(s.id)} onToggle={() => toggle(s.id)} cap={blocker(status, pr, s)} />
             ))}
           </ol>
+          {AUTOEVAL[pr.id] && <SelfCheck pr={pr} pp={pp} done={st === 'completa'} />}
         </div>
       </div>
     </div>
+  );
+}
+
+/** Autoevaluación: preguntas de concepto y un desafío para hacer solo */
+function SelfCheck({ pr, pp, done }: { pr: Practice; pp?: PracticeProgress; done: boolean }) {
+  const ae = AUTOEVAL[pr.id];
+  const answered = ae.preguntas.filter((_, i) => pp?.quiz?.[i]).length;
+  const right = ae.preguntas.filter((_, i) => pp?.quiz?.[i]?.ok).length;
+  const d = ae.desafio;
+  const inTerm = !d.en && api().mode !== 'demo';
+  return (
+    <section className="pr-self" id="autoevaluacion" aria-labelledby="pr-self-h">
+      <div className="pr-self-top">
+        <h2 id="pr-self-h"><ClipboardCheck size={16} aria-hidden="true" /> Autoevaluación</h2>
+        <span className="muted">
+          {answered ? `Acertaste ${right} de ${answered}${answered < ae.preguntas.length ? ` (faltan ${ae.preguntas.length - answered})` : ''}` : done ? 'Ahora que terminaste, probá si te quedó' : 'Conviene hacerla al terminar los pasos'}
+          {pp?.desafio ? ' · desafío resuelto' : ''}
+        </span>
+      </div>
+      <ol className="pr-self-qs">
+        {ae.preguntas.map((q, i) => {
+          const a = pp?.quiz?.[i];
+          return (
+            <li key={i} className="pr-q">
+              <p className="pr-q-h"><CircleHelp size={15} aria-hidden="true" /> <span>{q.enunciado}</span></p>
+              <div className="pr-q-ops" role="group" aria-label={`Opciones de la pregunta ${i + 1}`}>
+                {q.opciones.map((o, j) => {
+                  const k = !a ? undefined : j === q.correcta ? 'ok' : a.pick === j ? 'bad' : 'off';
+                  return (
+                    <button key={j} type="button" className="pr-q-op" data-k={k} disabled={!!a} aria-pressed={a?.pick === j}
+                      onClick={() => answerSelf(pr, i, j, j === q.correcta)}>
+                      <span className="pr-q-mark" aria-hidden="true">{k === 'ok' ? <CircleCheck size={14} /> : k === 'bad' ? <CircleX size={14} /> : null}</span>
+                      <span>{o}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {a && <div className="pr-q-fb" data-k={a.ok ? 'ok' : 'bad'} role="status"><b>{a.ok ? '¡Bien!' : `Es: ${q.opciones[q.correcta]}.`}</b> {q.porque}</div>}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="pr-challenge" data-done={!!pp?.desafio}>
+        <h3><Lightbulb size={15} aria-hidden="true" /> Desafío</h3>
+        <p>{d.enunciado}</p>
+        {d.en && <p className="muted">{d.en}</p>}
+        <details><summary>Una pista</summary><p>{d.pista}</p></details>
+        <details>
+          <summary>Ver una solución</summary>
+          <CodeBlock lines={d.solucion.split('\n')} prompt={d.en ? null : '$'} label={d.en ?? 'En la terminal del contenedor'} />
+          {inTerm && (
+            <button type="button" className="btn btn-sm" onClick={() => { terminalOpen.set(true); terminal.run(d.solucion).catch(() => { /* el motivo queda en la terminal */ }); }}>
+              <TerminalIcon size={14} aria-hidden="true" /> Correr en la terminal
+            </button>
+          )}
+        </details>
+        <label className="pr-challenge-ok">
+          <input type="checkbox" checked={!!pp?.desafio} onChange={e => solveChallenge(pr, e.target.checked)} /> Lo resolví
+        </label>
+      </div>
+    </section>
   );
 }
 
@@ -268,6 +374,9 @@ function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
   const unlocked = canRun(step, pp);
   // Antes de responder no se muestra el comando: sería la respuesta
   const showCmd = !step.pregunta || !!ans || peek || (!!pp?.completedBefore && !!done);
+  // Lo que va en la terminal del contenedor se puede mandar a la terminal integrada (no lo de beeline,
+  // mongosh o el navegador, ni en el demo, que no tiene contenedor)
+  const inTerm = !step.en && api().mode !== 'demo';
   return (
     <li className="pr-step" id={`paso-${step.id}`} data-done={!!done} data-open={open}>
       <button type="button" className="pr-step-h" onClick={onToggle} aria-expanded={open}>
@@ -275,7 +384,7 @@ function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
         <span className="pr-step-t">{step.title}</span>
         {ans && <span className="pr-ans-chip" data-ok={ans.ok} title={ans.ok ? 'Acertaste al primer intento' : 'No acertaste al primer intento'}>{ans.ok ? <CircleCheck size={13} aria-hidden="true" /> : <CircleX size={13} aria-hidden="true" />}</span>}
         {done && <span className="pr-how">{done.how === 'manual' ? 'Hecho en la terminal' : done.how === 'verify' ? 'Verificado' : 'Hecho'}</span>}
-        {busy && <Chip k="run">{busy === 'run' ? 'Corriendo' : 'Verificando'}</Chip>}
+        {busy && <Chip k="run">{busy === 'run' ? 'Corriendo' : busy === 'term' ? 'En la terminal' : 'Verificando'}</Chip>}
       </button>
       {open && (
         <div className="pr-step-b">
@@ -288,6 +397,12 @@ function StepCard({ pr, step, n, pp, status, live, open, onToggle, cap }: {
                 <GatedButton cap={cap ?? undefined} className="btn btn-primary" busy={busy === 'run'} onClick={() => runStep(pr, step)}>
                   <Play size={14} aria-hidden="true" /> {busy === 'run' ? 'Corriendo…' : done ? 'Ejecutar de nuevo' : 'Ejecutar'}
                 </GatedButton>
+              )}
+              {inTerm && showCmd && (
+                <button type="button" className="btn" disabled={!!busy} aria-busy={busy === 'term'} onClick={() => runInTerminal(pr, step, lines.join('\n'), vars)}
+                  title={'Lo escribe en la terminal de abajo como si lo tipearas, muestra lo que imprimió' + (step.verify ? ' y lo verifica' : '')}>
+                  <TerminalIcon size={14} aria-hidden="true" /> {busy === 'term' ? 'En la terminal…' : 'Correr en la terminal'}
+                </button>
               )}
               {step.verify && (
                 <GatedButton cap={cap ?? undefined} className="btn" busy={busy === 'verify'} onClick={() => checkStep(pr, step)}
@@ -410,7 +525,7 @@ function Terminal({ raw }: { raw: RawOut }) {
   const hasErr = raw.lines.some(l => l.stream === 'err');
   return (
     <details className="pr-term" open>
-      <summary>Salida en la terminal <span className="pr-term-src">{raw.origen === 'proceso' ? 'lo que imprimió el comando' : 'armada con lo que respondió el servicio'}</span></summary>
+      <summary>Salida en la terminal <span className="pr-term-src">{raw.origen === 'proceso' ? 'lo que imprimió el comando' : raw.origen === 'terminal' ? 'lo que imprimió en tu terminal' : 'armada con lo que respondió el servicio'}</span></summary>
       <pre className="pr-term-b" aria-label="Salida del comando">
         <div className="pr-term-cmd"><span aria-hidden="true">$ </span>{raw.command}</div>
         {raw.lines.map((l, i) => <div key={i} data-s={l.stream}>{l.text || ' '}</div>)}

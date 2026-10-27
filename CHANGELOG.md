@@ -9,6 +9,24 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Agregado
+
+- Terminal integrada en la interfaz de `full` (``Ctrl+` `` o el ícono de arriba):
+  bash del contenedor por websocket (`/api/terminal`), solo desde `localhost`
+  (chequea Host y Origin). `TERMINAL=0` la apaga; `TERMINAL_HOSTS` suma
+  nombres permitidos.
+- Prácticas: *Correr en la terminal* en cada paso con comando. Se tipea en la
+  terminal, toma lo que imprimió y el código de salida y, si el paso tiene
+  verificación, la corre igual que antes.
+- Prácticas: autoevaluación al final de cada una (2-3 preguntas y un desafío
+  con pista y solución).
+- Prácticas: exportar e importar el avance como JSON (al importar se queda,
+  de cada práctica, la versión más avanzada).
+- Prácticas: en cada tarjeta, qué servicios necesita (con su estado) y qué
+  práctica conviene hacer antes.
+- Prueba de humo de `full`: abre la terminal, corre comandos (`whoami`,
+  `pwd`, `hdfs`) y comprueba que rechaza otro origen.
+
 ## [1.3.0] - 2026-10-27
 
 Documentación completa para cada versión, las Prácticas de `full` te hacen

@@ -143,7 +143,7 @@ Qué tiene el archivo:
 | `AUTOSTART: "1"` | Arranca solo con estas variables | Sin ella, la imagen espera **Iniciar** en la interfaz. |
 | `DATANODES` ... `JUPYTER` | Las variables de la pantalla | Con un comentario si las réplicas superan a los DataNodes o si hay alta disponibilidad. |
 | `PIG_HEAPSIZE` | Comentada si es 512 (el valor de fábrica) | Solo aparece si la cambiaste. |
-| `ports:` | 8080 (la interfaz), 9870, 9868 o los de los NameNodes y JournalNodes en HA, 9901-9909; 8088, 8042 y 19888 sin `hdfs`; 10000, 10002, 18080 y 4040 con `todo`; 27017 con MongoDB; 8888 con JupyterLab | Solo los puertos de lo que se prende, y todos en `127.0.0.1`. |
+| `ports:` | 8080 (la interfaz), 9870, 9868 o los de los NameNodes y JournalNodes en HA, 9901-9909; 8088, 8042 y 19888 sin `hdfs`; 10000, 10002, 18080 y 4040 con `todo`; 27017 con MongoDB; 8888 siempre (JupyterLab se puede prender después) | Solo los puertos de lo que se prende, y todos en `127.0.0.1`. |
 | `volumes:` | `bigdata_hadoop:/hadoop` (HDFS, metastore, MySQL y MongoDB) y `./datos:/datos` | Los datos sobreviven al contenedor; la carpeta `datos/` de tu compu aparece adentro. |
 | `stop_grace_period: 20s` | Tiempo para apagar en orden | Para que HDFS cierre bien al hacer `docker compose stop`. |
 

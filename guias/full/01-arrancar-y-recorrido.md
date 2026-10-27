@@ -165,6 +165,15 @@ que hizo el cluster, con la hora y, si corrió un comando, el comando. La
 
 **Qué se ve.** La ayuda de la pantalla en la que estás y la lista de atajos.
 
+**Qué hacer.** Apretá ``Ctrl+` `` (o el ícono de terminal, arriba a la derecha).
+
+**Qué se ve.** Una terminal del contenedor abajo: bash en `/datos`, como
+`root`. Probá `hdfs dfs -ls /` o `ls ejemplos`. Es la misma que usan las
+Prácticas cuando apretás *Correr en la terminal*: el comando se tipea ahí y la
+práctica toma lo que imprimió. Se cierra con el mismo atajo; si salís con
+`exit`, la próxima vez que la abras arranca otra. Solo se abre entrando por
+`localhost` o `127.0.0.1`.
+
 ## Paso 8. Apagar
 
 **Qué hacer.** Desde Inicio o Cluster, **Detener** el cluster. O desde tu

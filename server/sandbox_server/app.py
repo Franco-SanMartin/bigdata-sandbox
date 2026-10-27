@@ -20,6 +20,7 @@ from . import datos as datos_mod
 from . import hdfs as hdfs_mod
 from . import ml as ml_mod
 from . import pipeline as pipeline_mod
+from . import terminal as terminal_mod
 from . import yarn as yarn_mod
 from .actions import ActionRunner
 from .cluster import Cluster, Conflict, Invalid, Settings
@@ -158,6 +159,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     datos = datos_mod.Datos(cluster, runner, bus, hdfs)
     ml = ml_mod.Ml(cluster, runner, bus, hdfs)
     pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)
+    terminal = terminal_mod.Terminal()
 
     api = [
         Route("/api/status", status),
@@ -178,6 +180,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         *pipeline.routes(),
         *datos.routes(),
         *ml.routes(),
+        *terminal.routes(),
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     if ui.is_dir():
@@ -224,5 +227,6 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     app.state.datos = datos
     app.state.ml = ml
     app.state.pipeline = pipeline
+    app.state.terminal = terminal
     return app
 

@@ -1,6 +1,6 @@
-import { ArrowRight, CircleHelp, Play, Search, Square, SquareTerminal } from 'lucide-react';
+import { ArrowRight, CircleHelp, Play, Search, Square, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
 import { useSnapshot } from '../state/store';
-import { consoleOpen, helpOpen, navigate, paletteOpen, route } from '../state/ui';
+import { consoleOpen, helpOpen, navigate, paletteOpen, route, terminalOpen } from '../state/ui';
 import { startCluster, stopCluster } from '../state/actions';
 import { clusterHealth } from '../lib/cluster';
 import { navById } from './nav';
@@ -24,7 +24,7 @@ function TopAction() {
 export function Topbar() {
   const { status: s, dataNodes } = useSnapshot();
   const page = route.use();
-  const cons = consoleOpen.use(), help = helpOpen.use();
+  const cons = consoleOpen.use(), help = helpOpen.use(), term = terminalOpen.use();
   const h = clusterHealth(s, dataNodes);
   const ram = s ? s.memory.usedMb / s.memory.limitMb : 0;
   const memK = ram > .9 ? 'bad' : ram > .75 ? 'run' : undefined;
@@ -50,6 +50,7 @@ export function Topbar() {
       <button className="search-btn" type="button" onClick={() => paletteOpen.set(true)} aria-label="Buscar o ejecutar un comando">
         <Search size={14} /><span className="txt">Buscar o ejecutar…</span><Kbd k="Ctrl+K" />
       </button>
+      <Tip content={<>Terminal del contenedor · Ctrl+`</>}><button className="btn btn-icon btn-ghost" type="button" aria-pressed={term} onClick={() => terminalOpen.set(v => !v)} aria-label="Terminal del contenedor"><TerminalIcon size={17} /></button></Tip>
       <Tip content={<>Consola de actividad · Ctrl+J</>}><button className="btn btn-icon btn-ghost" type="button" aria-pressed={cons} onClick={() => consoleOpen.set(v => !v)} aria-label="Consola de actividad"><SquareTerminal size={17} /></button></Tip>
       <Tip content={<>Ayuda de esta pantalla · ?</>}><button className="btn btn-icon btn-ghost" type="button" aria-pressed={help} onClick={() => helpOpen.set(v => !v)} aria-label="Ayuda"><CircleHelp size={17} /></button></Tip>
     </header>

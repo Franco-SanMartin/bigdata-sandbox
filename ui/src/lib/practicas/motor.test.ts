@@ -3,7 +3,7 @@ import { ApiFailure } from '../../api/errors';
 import type { ClusterStatus, SandboxApi } from '../../api/types';
 import {
   STORAGE_KEY, answer, canRun, currentStep, doneCount, executeStep, fill, loadProgress, markDone, optionOrder, practiceState,
-  requirements, resetPractice, saveProgress, score, shownCommand, notThere, pinVars, setVars, stepVars, suggested, verifyStep, waitFor, type Storage,
+  requirements, resetPractice, saveProgress, score, shownCommand, notThere, pinVars, setVars, stepVars, suggested, terminalOutcome, verifyStep, waitFor, type Storage,
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
@@ -233,5 +233,26 @@ describe('DataNode fijo en hdfs-falla', () => {
   it('si se perdió lo guardado, "Volver a prender" usa el que está apagado', () => {
     expect(shownCommand(step('start'), st('up', 'up', 'down'), {})).toMatch(/start 3\b/);
     expect(shownCommand(step('start'), st('up', 'down', 'up'), {})).toMatch(/start 2\b/);
+  });
+});
+
+describe('Correr en la terminal', () => {
+  const run = (exitCode: number) => ({ lines: ['Found 1 items', '-rw-r--r--   3 root supergroup  6 /x'], exitCode });
+  it('sin verificación alcanza con el código 0, y la salida es la de la terminal', () => {
+    const o = terminalOutcome('hdfs dfs -ls /x', run(0));
+    expect(o.ok).toBe(true);
+    expect(o.result?.raw).toEqual({ command: 'hdfs dfs -ls /x', exitCode: 0, origen: 'terminal', lines: [
+      { stream: 'out', text: 'Found 1 items' }, { stream: 'out', text: '-rw-r--r--   3 root supergroup  6 /x' }] });
+    const bad = terminalOutcome('hdfs dfs -ls /x', run(1));
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toMatch(/código 1/);
+  });
+  it('con verificación manda lo que diga la verificación (aunque el comando haya salido bien)', () => {
+    const v = terminalOutcome('hdfs dfs -ls /x', run(0), { ok: false, check: { ok: false, detail: 'Tiene réplica 2' } });
+    expect(v.ok).toBe(false);
+    expect(v.check?.detail).toBe('Tiene réplica 2');
+    expect(v.result?.raw?.origen).toBe('terminal');
+    const ok = terminalOutcome('x', run(0), { ok: true, check: { ok: true, detail: 'Réplica 3' }, vars: { dn: '2' } });
+    expect(ok).toMatchObject({ ok: true, vars: { dn: '2' }, result: { summary: 'Corrió en tu terminal' } });
   });
 });
