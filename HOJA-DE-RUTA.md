@@ -1,0 +1,157 @@
+# Hoja de ruta
+
+Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
+partida para retomar el trabajo desde cualquier sesión o compu. Última
+actualización: 2026-10-27 (versión 1.3.0).
+
+## Dónde estamos
+
+| Versión | Estado | Qué es |
+|---|---|---|
+| `base` (= `latest`) | Publicada | Hadoop, Hive + Tez, Spark, Pig, Sqoop, MariaDB y MongoDB en un contenedor (Ubuntu 24.04) |
+| `ml` | Publicada | `base` + pandas, numpy, scikit-learn, Spark MLlib y JupyterLab |
+| `full` | Publicada | `ml` + interfaz web en `:8080` (servidor en `server/`, app en `ui/`), con Prácticas guiadas |
+| `empresa` | Beta | Varias compus arman un cluster real; la `sonda/` mide la red del aula para decidir cómo |
+| `ubuntu20` | Archivada | La imagen vieja de la clase, por si hay que volver |
+
+Documentación por versión en [`guias/`](guias/README.md); cambios en el [CHANGELOG](CHANGELOG.md).
+
+## En curso: ML distribuido sobre HDFS (versiones `ml` y `full`)
+
+Rama `ui2-ml-pro`, con PRs a `main` por etapa (no se mergean sin el OK de Franki).
+
+**La idea:** entrenar modelos sobre los datos que YA están en HDFS, en el formato
+que estén, eligiendo cómo limpiar cada columna, guardar cada modelo en una
+biblioteca y usarlo con datos nuevos. Spark sobre YARN primero; scikit-learn
+queda como "probar en una muestra en una sola máquina".
+
+1. **Datos en HDFS en cualquier formato:** Parquet, ORC, Avro, JSON y JSON lines,
+   CSV/TSV, texto, comprimidos (gzip, snappy, bz2), carpetas particionadas
+   (`anio=/mes=`) y tablas de Hive. Esquema inferido y editable, filas,
+   particiones y tamaño.
+2. **Perfil a escala:** nulos, distintos aproximados, mín/máx, cuantiles, top de
+   categorías e histogramas, calculados con Spark (muestra o pasada completa).
+3. **Receta de limpieza columna por columna**, versionada: tipos, texto, regex,
+   fechas, nulos (con columna indicadora), outliers, duplicados, filtros,
+   categorías raras, mapeos y columnas derivadas, con vista previa antes/después
+   y filas afectadas. Lo que es solo de entrenamiento (duplicados, filtros) se
+   separa de lo que se aplica igual a los datos nuevos (va adentro del modelo).
+4. **Variables:** codificación, hashing, escaladores, fechas, TF-IDF, selección
+   y PCA, como `pyspark.ml.Pipeline`.
+5. **Modelos de MLlib** con todos sus parámetros explicados (clasificación,
+   regresión, clustering y ALS) y XGBoost distribuido (`xgboost.spark`).
+   Búsqueda con CrossValidator/TrainValidationSplit en paralelo y recursos de
+   Spark configurables.
+6. **Evaluación distribuida y honesta:** train, validación y test separados de
+   entrada; métricas y curvas calculadas en el cluster.
+7. **Biblioteca de modelos:** versiones, estado (candidato, en producción,
+   archivado), linaje completo (datos, receta, variables, parámetros, métricas,
+   app de YARN) y el modelo guardado en HDFS. Comparar, promover y volver atrás
+   (evaluar MLflow con MariaDB contra un registro propio).
+8. **Predicción:** por lotes (datos nuevos de HDFS o Hive → misma limpieza →
+   predicciones en HDFS o Hive, con validación de esquema y aviso de deriva), al
+   instante (unas filas por formulario o JSON), y exportar el modelo con un
+   servicio mínimo para usarlo fuera del sandbox.
+9. **Código:** cada etapa genera su PySpark completo, editable y ejecutable con
+   spark-submit en YARN.
+10. **Generador a escala:** un trabajo de Spark que escribe en HDFS un dataset
+    sintético con señal y "suciedad", del tamaño que se elija.
+11. **Honestidad:** en un contenedor el límite es el hardware; el pipeline es el
+    mismo que en un cluster real y en `empresa` escala a varias PCs.
+
+Etapas (un PR cada una): **(a)** seguridad de la API + motor base, **(b)** datos
+en HDFS, formatos, perfil y limpieza, **(c)** modelos, búsqueda y evaluación,
+**(d)** biblioteca, predicción y deriva, **(e)** generador a escala, guías y
+pruebas de humo.
+
+## Pendientes de la revisión (2026-10-26 y 27)
+
+**Prácticas guiadas de `full`:**
+
+- [ ] "HDFS: se cae un DataNode": el paso 5 muestra `datanode start 2` aunque se
+      apagó y prendió el DataNode 3. El comando visible tiene que salir del nodo
+      elegido (el alumno lo copia en la terminal).
+- [ ] "HDFS: subir, mirar y replicar": usar `hdfs dfs -setrep -w 3`; sin `-w`, el
+      fsck siguiente marca sub-replicados con 3 DataNodes y la pista confunde.
+- [ ] HDFS → Salud: "Sub-replicados: 45" junto a "Cola vacía: todos los bloques
+      tienen las copias que piden". Tiene que decir que no hay a dónde copiar.
+- [ ] La verificación automática corre un `fsck` por segundo (un proceso Java
+      cada vez): dejar de verificar cuando el paso dio bien o espaciar.
+- [ ] "Bajarlo a tu compu": explicar que `hdfs dfs -get` deja el archivo adentro
+      del contenedor y que el botón lo baja por el navegador.
+- [ ] Mostrar la salida real del comando (como en la terminal) además de las tablas.
+- [ ] Autoevaluación al final de cada práctica (2 o 3 preguntas y un desafío).
+- [ ] Exportar e importar el avance (hoy solo vive en el navegador).
+- [ ] Revisar los requisitos de cada práctica antes de empezar (DataNodes, servicios).
+- [ ] Terminal integrada en la interfaz (recién después de cerrar la API).
+- [ ] Decidir el tema: hoy sigue al de Windows; se había pedido oscuro siempre.
+
+**Versión `full`:**
+
+- [ ] El `docker run` del README no monta `datos/` (`-v ...:/datos`) ni publica
+      JupyterLab (`-p 127.0.0.1:8888:8888`). Lo mismo en el `docker-compose.yml`
+      que genera la interfaz.
+- [ ] Seguridad de la API: `TrustedHostMiddleware`, rechazar POST/PUT/PATCH/DELETE
+      de otro origen y exigir `application/json` (en curso en la etapa a).
+
+**Mantenimiento:**
+
+- [ ] Correr el workflow **aula** para que el `.tar.gz` del Release coincida con `latest`.
+- [ ] Borrar las ramas viejas que ya están en `main` (`full`, `ui`, `versiones`).
+- [ ] Decidir si Grupo-ManIAco sigue de colaborador; pedir a GitHub Support que
+      limpie la lista de contributors (commits viejos 50a18a8, 61db729, 9b4080a, 74f289a).
+
+## Siguiente gran objetivo: `empresa` en el aula
+
+El laboratorio: 20 PCs con 16 GB de RAM (i5 de 8.ª generación, GPU básica) y la
+PC del profe como central, con Veyon y una carpeta compartida (solo el profe
+escribe).
+
+**1. Medir la red con la sonda** (`sonda/LEEME.md`, release `sonda-v1`). El
+veredicto (A túnel, B directo o SIMULADO) decide cómo se conectan las PCs.
+Guardar `sonda-profe/` (resumen.txt y planilla.csv) y analizarlo.
+
+**2. Preparar las PCs:** Docker Desktop en todas, usuario en `docker-users`, RAM
+para WSL (con 16 GB, Docker toma 8 por defecto; para un NodeManager generoso se
+puede subir con `%UserProfile%\.wslconfig`), y la prueba del "día siguiente"
+para saber si el reset borra Docker.
+
+**3. La clase demo, paso a paso:**
+
+1. **Carga:** desde la central del profe, subir un dataset grande a HDFS y ver
+   cómo los bloques y sus réplicas quedan repartidos entre las 20 PCs.
+2. **Consultas:** el mismo análisis con Hive (Tez), Spark SQL y Pig, para ver
+   cuándo conviene cada uno y cuánto tarda.
+3. **Caída de una PC "desde la fuente":** apagar una PC de verdad y ver al
+   NameNode darla por muerta, la re-replicación de sus bloques y a YARN
+   reintentar sus tareas en otras PCs.
+4. **Recursos:** ver en el ResourceManager cuánta memoria y CPU aporta cada
+   NodeManager (una por PC) y cómo YARN reparte los contenedores de varios
+   trabajos a la vez (colas por grupo de alumnos).
+5. **ML distribuido:** entrenar un modelo sobre el dataset con el estudio de ML,
+   guardarlo en la biblioteca y predecir con datos nuevos.
+6. **Medir la escala:** el mismo trabajo con 1, 5, 10 y 20 PCs (tiempo y
+   aceleración). Es el número que más luce en el portfolio.
+
+**Datasets candidatos** (verificar tamaño y licencia antes de usarlos):
+
+- **HIGGS** (UCI): unos 11 millones de filas, 28 columnas, clasificación
+  binaria; ideal para ML distribuido.
+- **NYC Taxi (TLC Trip Records):** Parquet mensual, cientos de millones de
+  viajes por año; regresión (tarifa, propina, duración) y mucha escala.
+- **Criteo (Kaggle Display Advertising):** unos 45 millones de filas;
+  predicción de clics con muchas categóricas (hashing).
+
+## Reglas para trabajar en el repo
+
+- Commits firmados como `Franki <fransanmartin.ies@gmail.com>`, **sin** líneas
+  `Co-Authored-By`.
+- Un push a `main` que no sea solo `.md` republica las imágenes: si el cambio no
+  es de la imagen, `[skip ci]` en el mensaje. Lo nuevo va en ramas (`ui2-*`
+  dispara las pruebas de `full`) y entra por PR.
+- Para probar con Docker, nunca tocar los contenedores ni volúmenes de uso
+  diario (`bigdata`, `bigdata-full`, `bigdata_hadoop`, `bigdata_full`).
+- Si Docker Desktop no arranca con "initializing Secrets Engine ... engine.sock":
+  cerrarlo, renombrar `%LOCALAPPDATA%\docker-secrets-engine` y abrirlo de nuevo.
+  Nunca "Reset to factory defaults".
+- Todo en castellano rioplatense, como el resto del repo.
