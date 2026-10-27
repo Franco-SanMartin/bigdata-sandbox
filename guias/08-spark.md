@@ -126,3 +126,9 @@ las consolas de `pyspark` que no uses.
 | `spark.sql("SELECT ...")` | SQL sobre las tablas de Hive |
 | `df.write.mode("overwrite").csv(ruta, header=True)` | Guardar en HDFS |
 | `df.write.saveAsTable("nombre")` | Guardar como tabla (se ve en Hive) |
+
+## Para profundizar
+
+- Teoría: [Spark](base/teoria/07-spark.md): el porqué y cómo funciona por dentro.
+- Evaluación: [Spark](base/evaluacion/07-spark.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [Spark](base/referencia.md#spark): comandos, opciones y puertos.

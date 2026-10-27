@@ -393,3 +393,9 @@ mongosh --quiet ejemplos/tienda_mongo.js
 | borrar | `DELETE` | `deleteOne`, `deleteMany` |
 | agregar un campo | `ALTER TABLE` (a todas las filas) | `$set` en los documentos que lo tengan |
 | índice | `CREATE INDEX` | `createIndex` |
+
+## Para profundizar
+
+- Teoría: [MongoDB y NoSQL](base/teoria/09-mongodb.md): el porqué y cómo funciona por dentro.
+- Evaluación: [MongoDB y NoSQL](base/evaluacion/09-mongodb.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [MongoDB](base/referencia.md#mongodb): comandos, opciones y puertos.

@@ -110,3 +110,9 @@ Hive y Spark comparten el metastore: las tablas `ventas` y
 | `CREATE EXTERNAL TABLE ... LOCATION '/carpeta'` | Tabla sobre archivos que ya están en HDFS |
 | `CREATE TABLE t AS SELECT ...` | Tabla nueva, con sus archivos en el warehouse |
 | `INSERT OVERWRITE DIRECTORY '/carpeta' ... SELECT ...` | Guarda un resultado como archivos en HDFS |
+
+## Para profundizar
+
+- Teoría: [Hive](base/teoria/05-hive.md): el porqué y cómo funciona por dentro.
+- Evaluación: [Hive](base/evaluacion/05-hive.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [Hive](base/referencia.md#hive) y [Tez](base/referencia.md#tez): comandos, opciones y puertos.

@@ -173,3 +173,9 @@ hasta que lo prendés otra vez.)
 | `hdfs dfsadmin -report` | Estado de cada DataNode |
 | `hdfs dfsadmin -safemode get` | Si HDFS está en *safe mode* |
 | `datanode`, `datanode stop N`, `datanode start N` | Lista, apaga o prende el DataNode N |
+
+## Para profundizar
+
+- Teoría: [HDFS](base/teoria/02-hdfs.md): el porqué y cómo funciona por dentro.
+- Evaluación: [HDFS](base/evaluacion/02-hdfs.md): preguntas y ejercicios con sus respuestas.
+- Referencia: [HDFS](base/referencia.md#hdfs): comandos, opciones y puertos.
