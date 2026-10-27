@@ -114,8 +114,10 @@ pruebas de humo.
 - [ ] Terminal en `empresa`: si el servidor se publica para otras PCs y se
       suma su nombre a `TERMINAL_HOSTS`, cualquiera que llegue tiene root en el
       contenedor. Decidir si en `empresa` va apagada de fábrica (`TERMINAL=0`).
-- [ ] Rearmar la demo (`docs/demo`) con la autoevaluación y exportar/importar
-      (la terminal no anda en la demo: no hay contenedor).
+- [x] Rearmar la demo (`docs/demo`) con la autoevaluación y exportar/importar
+      (la terminal no anda en la demo: no hay contenedor; el panel lo explica).
+      Ojo: el CI (Documentación → `demo`) falla si `docs/demo` no es la
+      compilación de `ui/`: cada cambio de `ui/` va con `npm run build:demo`.
 
 **Versión `full`:**
 
