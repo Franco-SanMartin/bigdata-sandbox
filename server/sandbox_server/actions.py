@@ -13,6 +13,7 @@ import asyncio
 import itertools
 import os
 import shlex
+import signal
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
@@ -65,6 +66,9 @@ class Run:
     after: object = None
     lines: list[dict] = field(default_factory=list)
     error: str | None = None
+    # Líneas que salieron en total (lines guarda las últimas MAX_LINES) y el proceso, para cancelarlo
+    count: int = 0
+    pid: int | None = None
 
     def to_json(self) -> dict:
         a = self.action
@@ -120,6 +124,7 @@ class ActionRunner:
     def _line(self, run: Run, stream: str, text: str) -> None:
         entry = {"t": now_ms(), "stream": stream, "text": text}
         run.lines.append(entry)
+        run.count += 1
         if len(run.lines) > MAX_LINES:
             del run.lines[: len(run.lines) - MAX_LINES]
         self.bus.publish("action", {"id": run.id, **entry})
@@ -149,6 +154,7 @@ class ActionRunner:
             run.error = str(e)
             await self._finish(run, None)
             return
+        run.pid = proc.pid
 
         async def pump(stream: asyncio.StreamReader, name: str) -> None:
             while True:
@@ -189,6 +195,26 @@ class ActionRunner:
                      tech=run.error or (last_err if run.state == "failed" else None),
                      processId=a.process_id, appId=a.app_id)
         self.bus.publish("action", {"id": run.id, "state": run.state, "exitCode": code})
+
+    def cancel(self, run_id: str, why: str = "cancelado") -> bool:
+        """Corta una acción en curso: SIGTERM a todo su grupo de procesos (y SIGKILL si en 3 s no salió)."""
+        run = self.runs.get(run_id)
+        if run is None or run.state != "running" or run.pid is None:
+            return False
+        run.error = why
+        try:
+            os.killpg(run.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, AttributeError):
+            return False
+
+        def matar() -> None:
+            if run.state == "running":
+                try:
+                    os.killpg(run.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+        asyncio.get_running_loop().call_later(3, matar)
+        return True
 
     async def wait_all(self) -> None:
         if self._tasks:

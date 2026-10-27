@@ -6,3 +6,5 @@ numpy==1.26.4
 pandas==2.3.3
 scipy==1.17.1
 scikit-learn==1.9.1
+# El gradient boosting de XGBoost, como en la imagen (conf/requirements-ml.txt)
+xgboost-cpu==3.1.1

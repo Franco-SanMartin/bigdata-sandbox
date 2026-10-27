@@ -6,6 +6,8 @@ import pytest
 
 SERVER = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER))
+# sandbox_ml (el apoyo del estudio de ML), que en la imagen está en /opt/sandbox/ml
+sys.path.insert(0, str(SERVER.parent / "ml"))
 
 FIX = Path(__file__).resolve().parent / "fixtures"
 FALSO = FIX / "entrypoint_falso.sh"
