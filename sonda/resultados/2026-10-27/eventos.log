@@ -1,0 +1,29 @@
+01:05:19 PC182: inscripto, IP del tunel 10.13.0.11, PC aula.182
+01:05:21 PC182: el profe entra a su puerto 8098: si
+01:05:24 PC137: inscripto, IP del tunel 10.13.0.12, PC aula.137
+01:05:30 PC241: inscripto, IP del tunel 10.13.0.13, PC aula.241
+01:05:38 PC182: mando resultados: tunel si, alumno->profe 89 Mbit/s, alumno->alumno 53 Mbit/s
+01:05:39 PC137: el profe entra a su puerto 8098: si
+01:05:39 PC241: el profe entra a su puerto 8098: si
+01:05:40 PC137: mando resultados: tunel si, alumno->profe 89 Mbit/s, alumno->alumno 10 Mbit/s
+01:05:43 PC241: mando resultados: tunel si, alumno->profe 37 Mbit/s, alumno->alumno 35 Mbit/s
+01:05:49 PC228: inscripto, IP del tunel 10.13.0.14, PC aula.228
+01:05:53 PC223: inscripto, IP del tunel 10.13.0.15, PC aula.223
+01:05:54 PC165: inscripto, IP del tunel 10.13.0.16, PC aula.165
+01:06:01 PC223: el profe entra a su puerto 8098: si
+01:06:02 PC228: mando resultados: tunel si, alumno->profe 60 Mbit/s, alumno->alumno 31 Mbit/s
+01:06:06 PC165: mando resultados: tunel si, alumno->profe 61 Mbit/s, alumno->alumno 54 Mbit/s
+01:06:12 PC223: mando resultados: tunel si, alumno->profe 60 Mbit/s, alumno->alumno 82 Mbit/s
+01:06:14 PC228: el profe entra a su puerto 8098: no (sin respuesta (firewall))
+01:06:20 PC165: el profe entra a su puerto 8098: no (sin respuesta (firewall))
+01:06:21 PC109: inscripto, IP del tunel 10.13.0.17, PC aula.109
+01:06:24 PC121: inscripto, IP del tunel 10.13.0.18, PC aula.121
+01:06:25 PC180: inscripto, IP del tunel 10.13.0.19, PC aula.180
+01:06:28 PC107: inscripto, IP del tunel 10.13.0.20, PC aula.107
+01:06:33 PC157: inscripto, IP del tunel 10.13.0.21, PC aula.157
+01:06:34 PC109: mando resultados: tunel si, alumno->profe 49 Mbit/s, alumno->alumno 16 Mbit/s
+01:06:40 PC121: mando resultados: tunel si, alumno->profe 40 Mbit/s, alumno->alumno 31 Mbit/s
+01:06:45 PC157: mando resultados: tunel si, alumno->profe 46 Mbit/s, alumno->alumno 34 Mbit/s
+01:06:51 PC109: el profe entra a su puerto 8098: no (sin respuesta (firewall))
+01:06:52 PC107: mando resultados: tunel si, alumno->profe 46 Mbit/s, alumno->alumno 31 Mbit/s
+01:06:58 PC180: mando resultados: tunel si, alumno->profe 50 Mbit/s, alumno->alumno 29 Mbit/s

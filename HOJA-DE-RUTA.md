@@ -140,18 +140,42 @@ pruebas de humo.
 
 ## Siguiente gran objetivo: `empresa` en el aula
 
-El laboratorio: 20 PCs con 16 GB de RAM (i5 de 8.ª generación, GPU básica) y la
-PC del profe como central, con Veyon y una carpeta compartida (solo el profe
-escribe).
+El laboratorio, medido por la sonda el 27/10
+([resultados](sonda/resultados/2026-10-27/LEEME.md)): la PC del profe (i3-12100,
+16 GB) como central, con Veyon y una carpeta compartida (solo el profe escribe),
+y PCs de alumnos con Windows 11 LTSC y Docker Desktop 4.55: 8 de 11 con 8 GB
+(Docker con unos 3,8 GB) y 3 con 16 GB (7,8 GB); CPUs de i3-2120 a i3-12100; sin
+GPU NVIDIA.
 
-**1. Medir la red con la sonda** (`sonda/LEEME.md`, release `sonda-v1`). El
-veredicto (A túnel, B directo o SIMULADO) decide cómo se conectan las PCs.
-Guardar `sonda-profe/` (resumen.txt y planilla.csv) y analizarlo.
+**1. ✅ Medir la red con la sonda.** Veredicto **A**: túnel WireGuard con hub en
+la PC del profe, arriba en 11 de 11 PCs (módulo del kernel). Pero la red es
+lenta: unos **50 Mbit/s** alumno → profe y 31 alumno → alumno por el hub.
 
-**2. Preparar las PCs:** Docker Desktop en todas, usuario en `docker-users`, RAM
-para WSL (con 16 GB, Docker toma 8 por defecto; para un NodeManager generoso se
-puede subir con `%UserProfile%\.wslconfig`), y la prueba del "día siguiente"
-para saber si el reset borra Docker.
+**2. Lo que el aula impone a `empresa` (etapa 2, la red del aula):**
+
+- [ ] **El reset borra todo cada día** (imágenes, carpetas y HDFS): cada clase
+      arranca de cero. La imagen `empresa` pesa 1,59 GB comprimida porque sale de
+      `full`; cargarla en 20 PCs por esta red tardaría más de una hora. Hace falta
+      una **imagen de trabajador chica** (solo Java, DataNode y NodeManager, y el
+      Python mínimo para los executors de PySpark; Spark y Tez llegan desde HDFS)
+      que se cargue en segundos desde la carpeta compartida, y un arranque de un
+      solo paso por Veyon.
+- [ ] **`RED=wireguard`** en `empresa/arranque.sh`: el maestro levanta el hub
+      (como la sonda) y cada trabajador se suma con una conexión **saliente**, y
+      anuncia su IP del túnel (10.13.0.x) a HDFS y YARN. Los trabajadores **no
+      publican puertos**, así no aparece el cartel del firewall en cada PC.
+- [ ] **Recursos según la PC**: detectar la RAM de Docker y ajustar
+      `TRABAJADOR_RAM` sola (unos 2 GB en las de 8 GB, unos 5 GB en las de 16 GB).
+- [ ] **`.cmd` para Veyon** (profe y alumnos), con la IP y un código de la clase,
+      como planeaba la guía 3. La línea para Veyon tiene que apuntar a donde Veyon
+      deja los archivos (si se transfieren desde el Escritorio, quedan en el
+      Escritorio).
+- [ ] **Datos a la medida de la red**: datasets de pocos GB (HIGGS sí; NYC Taxi,
+      algunos meses), réplica 2, y que el profe los suba una sola vez desde su PC.
+- [ ] **La sonda sin la prueba B**: un modo que no abra el 8098 (con A ganadora,
+      no hace falta y es lo que dispara el cartel).
+- [ ] Avisar a sistemas: red vista como "Pública" en todas las PCs y direcciones
+      192.169.0.x, que no son un rango privado.
 
 **3. La clase demo, paso a paso:**
 

@@ -1,0 +1,9 @@
+nombre=PC86
+ip_pc=aula.86
+imagen_cargada_antes=si
+fecha=2026-10-28 01:03:22
+version_sonda=1
+esperados=
+umbral=80
+hub=kernel
+hub_reenvio=1

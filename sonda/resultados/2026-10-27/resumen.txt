@@ -1,0 +1,33 @@
+SONDA DEL LABORATORIO - resumen (actualizado 2026-10-28 01:07:00)
+
+PC del profe: PC86 (aula.86), hub WireGuard: kernel, imagen ya cargada antes: si
+PCs de alumnos con resultados: 11
+
+VEREDICTO: A (red del aula con tunel WireGuard y hub en la PC del profe)
+Por qué:
+  - El túnel WireGuard levantó en 11 de 11 PCs (100%, umbral 80%): 11 con el módulo del kernel y 0 con wireguard-go.
+  - Los alumnos solo hacen conexiones salientes hacia el profe: no hace falta abrir el firewall de sus PCs.
+  - Ancho de banda por el túnel alumno → profe: mediana 50 Mbit/s.
+  - Alumno → alumno pasando por el hub: mediana 31 Mbit/s.
+
+Red:
+  - UDP al profe (eco 51821): 11 de 11
+  - Inscripción (TCP 8099): 11 de 11
+  - WireGuard disponible: módulo del kernel en 11 de 11, wireguard-go en 11 de 11
+  - Túnel arriba: 11 de 11 (kernel 11, wireguard-go 0)
+  - El profe entra al puerto publicado del alumno: 4 de 11; no: PC109 (sin respuesta (firewall)) PC165 (sin respuesta (firewall)) PC228 (sin respuesta (firewall))
+  - TCP directo alumno → alumno: 22 de 22 pruebas
+  - iperf3 alumno → profe por el túnel: mediana 50 Mbit/s (11 mediciones, de 37 a 89)
+  - iperf3 alumno → alumno por el hub: mediana 31 Mbit/s (11 mediciones, de 10 a 82)
+  - Ping al profe por el túnel: mediana 3.073 ms
+
+PCs:
+  - Windows: Microsoft Windows 11 Enterprise LTSC 24H2 (build 26100) (11)
+  - Docker Desktop: Docker Desktop 4.55.0 (213807) (11)
+  - RAM de la PC: de 8 a 16 GB
+  - RAM que tiene Docker: de 3769 a 7828 MB
+  - CPU: Intel(R) Core(TM) i3-3220 CPU @ 3.30GHz (3), 12th Gen Intel(R) Core(TM) i3-12100 (3), Intel(R) Core(TM) i3-2120 CPU @ 3.30GHz (3), Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz (1), Intel(R) Core(TM) i5-4440 CPU @ 3.10GHz (1)
+  - GPU: Intel(R) HD Graphics (4), Adaptador de pantalla básico de Microsoft (5), Intel(R) HD Graphics 4600 (2)
+  - Imagen de la sonda ya cargada antes de la clase: 0 de 11
+
+Detalle por PC: planilla.csv (se abre con Excel; separador ";").
