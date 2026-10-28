@@ -8,6 +8,7 @@ import { DemoYarn } from './yarn';
 import { DemoData } from './datos';
 import { DemoMl } from './ml';
 import { DemoPipeline } from './pipeline';
+import { demoAula } from './aula';
 
 export { SPEED as DEMO_SPEED };
 
@@ -22,6 +23,7 @@ export function createDemoApi(): SandboxApi {
   /** Los módulos nuevos tiran ApiFailure al validar: así llega como promesa rechazada, igual que del backend */
   const call = <T>(fn: () => T | Promise<T>) => Promise.resolve().then(fn);
   const copy = <T>(v: T): T => structuredClone(v);
+  const abierta = e.now();
   return {
     mode: 'demo',
     now: () => e.now(),
@@ -61,6 +63,7 @@ export function createDemoApi(): SandboxApi {
     jobTemplates: () => call(() => yarn.templates()),
     submitJob: r => call(() => yarn.submit(r)),
     yarnCluster: () => call(() => yarn.cluster()),
+    aula: () => ok(demoAula(abierta, e.now())),
     app: id => call(() => yarn.app(id)),
     appLogs: (id, c) => call(() => yarn.logs(id, c)),
 

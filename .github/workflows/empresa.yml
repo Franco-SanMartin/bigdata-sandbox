@@ -1,37 +1,56 @@
 # Versión empresa: el cluster del aula (un maestro y varias PCs, cada una un
-# contenedor). Arma base, ml y empresa (target empresa del Dockerfile: full +
-# ROL=maestro/trabajador) y prueba:
+# contenedor). Arma base, ml, empresa (target empresa del Dockerfile: full +
+# ROL=maestro/trabajador) y trabajador (la imagen chica de las PCs del aula) y
+# prueba:
 #
-#   aula, aula-caida        pruebas/aula.sh: maestro + 3 PCs en una red de
-#                           Docker; racks, réplicas, trabajos repartidos, Hive,
-#                           Spark, y una PC que se cae y vuelve
+#   aula, aula-caida        pruebas/aula.sh con RED=docker: maestro + 3 PCs en
+#                           una red de Docker; racks, réplicas, trabajos
+#                           repartidos, Hive, Spark, y una PC que se cae y vuelve
+#   aula-wg, aula-wg-caida, pruebas/aula.sh con RED=wireguard: cada PC (imagen
+#   aula-wg-cero            trabajador) en su propia red de Docker, unida al
+#                           maestro solo por el túnel y sin publicar puertos,
+#                           como el aula de verdad; PCs de distinta RAM, una PC
+#                           que se apaga, y el arranque de cero de cada clase
 #   humo-full               el humo de la API de la versión full, con la imagen
 #                           empresa sin ROL: tiene que andar igual que la full
 #   regresion-<escenario>   los escenarios de siempre (pruebas/escenarios.sh)
 #                           sobre base y ml: el modo de un solo contenedor no
 #                           cambia
 #
-# En push no publica nada en Docker Hub: es la rama de trabajo. Solo usa el
-# cache de capas de ghcr.io (lee el de base, ml y full; escribe solo el de
-# empresa).
+# Además mide la imagen trabajador: el .tar.gz que se reparte en el aula y lo
+# que tarda docker load (en el resumen de la corrida).
+#
+# En push (ramas empresa y empresa-*) no publica nada: es la rama de trabajo.
+# Solo usa el cache de capas de ghcr.io (lee el de base, ml y full; escribe
+# solo el de empresa y el de trabajador).
 #
 # Publicar la beta: a mano (Run workflow) sobre la rama empresa con publicar
 # tildado. Si las pruebas dan bien en las dos arquitecturas, sube
-# franki678/bigdata-sandbox:empresa (amd64 + arm64) igual que Full sube la full:
-# se rearma del cache (fecha del commit fija, la imagen es la que se probó),
-# sube por digest sin tag y recién al final pone el tag empresa. No toca
-# latest, base, ml ni full. Necesita lo mismo que Imagen: la variable
+# franki678/bigdata-sandbox:empresa y :trabajador (amd64 + arm64) igual que
+# Full sube la full: se rearma del cache (fecha del commit fija, la imagen es
+# la que se probó), sube por digest sin tag y recién al final pone los tags.
+# No toca latest, base, ml ni full. Necesita lo mismo que Imagen: la variable
 # DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN.
+#
+# El release del aula (aula-v1, prerelease): a mano con release tildado, desde
+# cualquier rama de empresa. Si las pruebas dan bien, sube las imágenes ya
+# probadas como .tar.gz (trabajador amd64 y arm64, empresa amd64 para la PC
+# del profe) y los .cmd del aula, para llevarlos en un pendrive o dejarlos en
+# la carpeta compartida.
 name: Empresa
 
 on:
   push:
-    branches: [empresa]
+    branches: [empresa, 'empresa-*']
     paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**', 'sonda/**', '.github/workflows/sonda.yml']
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar franki678/bigdata-sandbox:empresa (amd64 + arm64) si las pruebas dan bien'
+        description: 'Publicar franki678/bigdata-sandbox:empresa y :trabajador (amd64 + arm64) si las pruebas dan bien'
+        type: boolean
+        default: false
+      release:
+        description: 'Armar el release aula-v1 (imágenes en .tar.gz y los .cmd del aula) si las pruebas dan bien'
         type: boolean
         default: false
 
@@ -123,10 +142,65 @@ jobs:
             type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
           cache-to: type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
 
+      # La imagen chica de las PCs: no sale de full, se arma aparte (Hadoop
+      # recortado, Java, Python con numpy y WireGuard)
+      - name: Armar trabajador (${{ matrix.arq }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: trabajador
+          platforms: linux/${{ matrix.arq }}
+          load: true
+          provenance: false
+          tags: ${{ env.LOCAL }}:trabajador
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:trabajador-${{ matrix.arq }}
+          cache-to: type=registry,ref=${{ env.CACHE }}:trabajador-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
+
+      # Lo que se reparte en el aula: el .tar.gz de la imagen trabajador (con
+      # un solo nombre, franki678/bigdata-sandbox:trabajador) y cuánto tarda
+      # docker load. Las PCs del aula son más lentas que este runner: el
+      # número del aula sale de empresa-alumno.cmd (lo muestra y lo anota).
+      - name: Medir la imagen trabajador (${{ matrix.arq }})
+        run: |
+          plataforma=
+          docker save --help | grep -q -- --platform && plataforma="--platform linux/${{ matrix.arq }}"
+          archivo=bigdata-sandbox-trabajador-${{ matrix.arq }}.tar.gz
+          docker save $plataforma "$LOCAL:trabajador" | gzip -9 > "$RUNNER_TEMP/$archivo"
+          bytes=$(stat -c %s "$RUNNER_TEMP/$archivo")
+          sin_comprimir=$(docker image inspect -f '{{.Size}}' "$LOCAL:trabajador")
+          docker image rm "$LOCAL:trabajador" > /dev/null
+          t0=$(date +%s%N)
+          docker load -i "$RUNNER_TEMP/$archivo" | tee /tmp/load.txt
+          carga=$(awk -v n="$(( $(date +%s%N) - t0 ))" 'BEGIN { printf "%.1f", n / 1e9 }')
+          [ "$(cat /tmp/load.txt)" = "Loaded image: $LOCAL:trabajador" ]
+          docker run --rm --entrypoint sh "$LOCAL:trabajador" -c 'java -version 2>&1 | head -1; hadoop version | head -1; python3 -c "import numpy; print(\"numpy\", numpy.__version__)"; wg --version; wireguard-go --version | head -1'
+          mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1048576 }')
+          {
+            echo "### Imagen trabajador (${{ matrix.arq }})"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| \`$archivo\` | **$mb MB** ($bytes bytes) |"
+            echo "| Sin comprimir | $(awk -v b="$sin_comprimir" 'BEGIN { printf "%.0f", b / 1048576 }') MB |"
+            echo "| \`docker load\` en el runner | **$carga s** |"
+            echo "| 20 PCs a 50 Mbit/s (todo por la PC del profe) | $(awk -v b="$bytes" 'BEGIN { printf "%.1f", b * 20 * 8 / 50e6 / 60 }') min |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          # Que no se vaya de las manos: la de las PCs tiene que seguir chica
+          [ "$bytes" -lt 262144000 ] || { echo "::error::la imagen trabajador pasa los 250 MB"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: empresa-trabajador-${{ matrix.arq }}
+          path: ${{ runner.temp }}/bigdata-sandbox-trabajador-${{ matrix.arq }}.tar.gz
+          compression-level: 0
+          retention-days: 7
+
       - name: Guardar las imagenes para las pruebas
         run: |
           docker image ls "$LOCAL"
-          docker save "$LOCAL:base" "$LOCAL:ml" "$LOCAL:empresa" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
+          docker save "$LOCAL:base" "$LOCAL:ml" "$LOCAL:empresa" "$LOCAL:trabajador" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
           ls -lh "$RUNNER_TEMP/imagenes.tar.zst"
 
       - uses: actions/upload-artifact@v4
@@ -147,7 +221,7 @@ jobs:
       fail-fast: false
       matrix:
         arq: [amd64, arm64]
-        prueba: [aula, aula-caida, humo-full,
+        prueba: [aula, aula-caida, aula-wg, aula-wg-caida, aula-wg-cero, humo-full,
                  reinicio, ha, servicios, parametros, volumen-viejo, corte, mongodb, imagen-vieja, volumen-cortado, ml, tutoriales]
         exclude:
           - arq: arm64
@@ -165,10 +239,19 @@ jobs:
           rm "$RUNNER_TEMP/imagenes.tar.zst"
           docker image ls "$LOCAL"
 
+      # Docker Desktop trae WireGuard en el kernel de su máquina virtual; en el
+      # runner es un módulo y se carga en el host (desde un contenedor no se
+      # puede). Si no estuviera, el túnel va con wireguard-go.
+      - name: Módulo WireGuard en el host
+        if: startsWith(matrix.prueba, 'aula-wg')
+        run: |
+          sudo modprobe wireguard && lsmod | grep -w wireguard || echo "sin módulo wireguard: va wireguard-go"
+
       - name: Cluster del aula (${{ matrix.prueba }}, ${{ matrix.arq }})
         if: startsWith(matrix.prueba, 'aula')
         env:
           IMAGEN: ${{ env.LOCAL }}:empresa
+          IMAGEN_TRABAJADOR: ${{ env.LOCAL }}:trabajador
           MEDIDAS: medidas.md
         run: bash pruebas/aula.sh ${{ matrix.prueba }}
 
@@ -262,11 +345,26 @@ jobs:
             type=registry,ref=${{ env.CACHE }}:full-${{ matrix.arq }}
             type=registry,ref=${{ env.CACHE }}:empresa-${{ matrix.arq }}
 
+      - name: Subir trabajador por digest (sin tag)
+        id: subir-trabajador
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: trabajador
+          platforms: linux/${{ matrix.arq }}
+          provenance: false
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: |
+            type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
+            type=registry,ref=${{ env.CACHE }}:trabajador-${{ matrix.arq }}
+
       - name: Digest
         run: |
           mkdir -p "$RUNNER_TEMP/digests"
           echo "${{ steps.subir.outputs.digest }}" | tee "$RUNNER_TEMP/digests/empresa-${{ matrix.arq }}"
+          echo "${{ steps.subir-trabajador.outputs.digest }}" | tee "$RUNNER_TEMP/digests/trabajador-${{ matrix.arq }}"
           grep -q '^sha256:' "$RUNNER_TEMP/digests/empresa-${{ matrix.arq }}"
+          grep -q '^sha256:' "$RUNNER_TEMP/digests/trabajador-${{ matrix.arq }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -275,7 +373,7 @@ jobs:
           retention-days: 7
 
   # -------------------------------------------------------------------------
-  # 4. El tag empresa, con las dos arquitecturas ya subidas
+  # 4. Los tags empresa y trabajador, con las dos arquitecturas ya subidas
   # -------------------------------------------------------------------------
   publicar:
     needs: subir
@@ -295,22 +393,112 @@ jobs:
           path: digests
           merge-multiple: true
 
-      - name: Tag empresa, amd64 + arm64
+      - name: Tags empresa y trabajador, amd64 + arm64
         run: |
-          docker buildx imagetools create -t "$REPO:empresa" \
-            "$REPO@$(cat digests/empresa-amd64)" "$REPO@$(cat digests/empresa-arm64)"
+          for t in empresa trabajador; do
+            docker buildx imagetools create -t "$REPO:$t" \
+              "$REPO@$(cat digests/$t-amd64)" "$REPO@$(cat digests/$t-arm64)"
+          done
 
       - name: Verificar lo publicado
         run: |
-          m=$(docker buildx imagetools inspect "$REPO:empresa" --format '{{json .Manifest}}')
           {
             echo "## Publicado"
             echo
             echo "| Tag | Digest | Arquitectura | Digest de la arquitectura |"
             echo "|---|---|---|---|"
-            jq -r --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
-              | "| empresa | \($d) | \(.platform.os)/\(.platform.architecture) | \(.digest) |"' <<< "$m"
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          for a in amd64 arm64; do
-            [ "$(jq -r --arg a "$a" '.manifests[] | select(.platform.architecture == $a) | .digest' <<< "$m")" = "$(cat digests/empresa-$a)" ]
+          for t in empresa trabajador; do
+            m=$(docker buildx imagetools inspect "$REPO:$t" --format '{{json .Manifest}}')
+            jq -r --arg t "$t" --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
+              | "| \($t) | \($d) | \(.platform.os)/\(.platform.architecture) | \(.digest) |"' <<< "$m" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            for a in amd64 arm64; do
+              [ "$(jq -r --arg a "$a" '.manifests[] | select(.platform.architecture == $a) | .digest' <<< "$m")" = "$(cat digests/$t-$a)" ]
+            done
+          done
+
+  # -------------------------------------------------------------------------
+  # 5. El release del aula (prerelease aula-v1): las imágenes ya probadas en
+  #    .tar.gz y los .cmd, para el pendrive o la carpeta compartida. Solo a
+  #    mano, con release tildado y con todas las pruebas en verde.
+  # -------------------------------------------------------------------------
+  release-aula:
+    needs: [armar, pruebas]
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: aula-v1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lugar en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          command -v zstd > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zstd; }
+          df -h /
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: empresa-trabajador-*
+          path: aula
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: empresa-imagenes-amd64
+          path: ${{ runner.temp }}
+
+      # La PC del profe es Intel: la empresa va solo en amd64 (1,6 GB). Un solo
+      # nombre adentro (franki678/bigdata-sandbox:empresa), como el de Docker Hub.
+      - name: La imagen del maestro (empresa, amd64)
+        run: |
+          zstd -dc "$RUNNER_TEMP/imagenes.tar.zst" | docker load
+          rm "$RUNNER_TEMP/imagenes.tar.zst"
+          plataforma=
+          docker save --help | grep -q -- --platform && plataforma="--platform linux/amd64"
+          docker save $plataforma franki678/bigdata-sandbox:empresa | gzip > aula/bigdata-sandbox-empresa.tar.gz
+          # Las PCs del aula son Intel: la de amd64 va con el nombre corto
+          mv aula/bigdata-sandbox-trabajador-amd64.tar.gz aula/bigdata-sandbox-trabajador.tar.gz
+          cp empresa/empresa-profe.cmd empresa/empresa-alumno.cmd aula/
+          cp guias/empresa/03-laboratorio.md aula/LEEME.md
+          ls -l aula
+          for f in aula/*.tar.gz; do [ "$(stat -c %s "$f")" -lt 2147483648 ]; done   # tope de GitHub: 2 GiB
+
+      - name: Prerelease aula-v1
+        run: |
+          mb() { awk -v b="$(stat -c %s "$1")" 'BEGIN { printf "%.0f", b / 1048576 }'; }
+          if gh release view "$TAG" > /dev/null 2>&1; then gh release delete "$TAG" --cleanup-tag -y; fi
+          cat > notas.md <<EOF
+          El cluster del aula con las PCs de verdad (versión empresa, etapa 2): túnel WireGuard con
+          hub en la PC del profe, como midió la sonda el 27/10. Commit $GITHUB_SHA, rama ${GITHUB_REF_NAME}.
+
+          | Archivo | Para qué | Tamaño |
+          |---|---|---|
+          | \`bigdata-sandbox-empresa.tar.gz\` | La imagen del maestro (PC del profe, Intel) | $(mb aula/bigdata-sandbox-empresa.tar.gz) MB |
+          | \`bigdata-sandbox-trabajador.tar.gz\` | La imagen de las PCs del aula (Intel) | $(mb aula/bigdata-sandbox-trabajador.tar.gz) MB |
+          | \`bigdata-sandbox-trabajador-arm64.tar.gz\` | La de las PCs, para ARM (Mac, Raspberry) | $(mb aula/bigdata-sandbox-trabajador-arm64.tar.gz) MB |
+          | \`empresa-profe.cmd\` | Se corre en la PC del profe | |
+          | \`empresa-alumno.cmd\` | Se corre en cada PC (por Veyon) | |
+          | \`LEEME.md\` | El paso a paso de la clase (guía 3) | |
+
+          Las imágenes también están en Docker Hub cuando se publica la beta (\`:empresa\` y \`:trabajador\`).
+          EOF
+          gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Aula v1: el cluster con las PCs del laboratorio" \
+            --notes-file notas.md aula/*
+      - name: Verificar lo subido
+        run: |
+          {
+            echo "## Release $TAG"
+            echo
+            echo "| Archivo | Bytes |"
+            echo "|---|--:|"
+            gh release view "$TAG" --json assets --jq '.assets[] | "| \(.name) | \(.size) |"'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for f in aula/*; do
+            n=$(basename "$f")
+            subido=$(gh release view "$TAG" --json assets --jq ".assets[] | select(.name == \"$n\") | .size")
+            [ "$subido" = "$(stat -c %s "$f")" ] || { echo "$n: subido $subido, local $(stat -c %s "$f")"; exit 1; }
           done

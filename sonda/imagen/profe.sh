@@ -69,6 +69,7 @@ esac
 echo "   Inscripcion y resultados: TCP $P_HTTP"
 echo " En las PCs de alumnos (Veyon > Ejecutar programa):"
 echo "   sonda-alumno.cmd ${IP_PC:-IP_DEL_PROFE}"
+echo "   (con sin-b al final no se prueba la red directa: las PCs no publican nada y no aparece el cartel del firewall)"
 echo " Planilla y resumen: carpeta sonda-profe (se actualizan solos)."
 echo " Para terminar: Ctrl+C."
 echo "=========================================================="
@@ -80,6 +81,9 @@ probar_tcp() {   # nombre ip puerto
     intentos=$(valor intentos "$f"); intentos=${intentos:-0}
     if [ "$2" = - ] || [ -z "$2" ]; then
         printf 'tcp_entrante=no (sin IP de la PC)\nintentos=9\n' > "$f"; return
+    fi
+    if [ "$3" = 0 ]; then   # la PC corrio sin la prueba B: no publico ningun puerto
+        printf 'tcp_entrante=no medido (sin prueba B)\nintentos=9\n' > "$f"; return
     fi
     salida=$(socat -t3 -T3 - "TCP:$2:$3,connect-timeout=3" < /dev/null 2>&1)
     intentos=$((intentos + 1))
