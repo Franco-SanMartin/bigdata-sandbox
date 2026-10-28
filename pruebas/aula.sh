@@ -122,7 +122,14 @@ subir() { # $1=nodo desde donde $2=archivo en HDFS $3=MB: archivo con bloques de
   en "$1" "head -c ${3}M /dev/urandom > /tmp/subida && hdfs dfs -D dfs.blocksize=1m -put -f /tmp/subida $2 && rm /tmp/subida"
 }
 
-sin_subreplicados() { igual 0 nn UnderReplicatedBlocks; }
+# El JMX del NameNode da 0 justo cuando marca muerta una PC, antes de encolar sus
+# bloques: por eso tambien se mira fsck, que cuenta las copias vivas de verdad
+sin_subreplicados() {
+  igual 0 nn UnderReplicatedBlocks &&
+    en maestro "hdfs fsck / 2>/dev/null | grep -Eq 'Under-replicated blocks:[[:space:]]+0 '"
+}
+
+bien_ubicados() { en maestro "hdfs fsck / 2>/dev/null | grep -Eq 'Mis-replicated blocks:[[:space:]]+0 '"; }
 
 fsck_sano() { en maestro "hdfs fsck / 2>/dev/null | grep -q 'is HEALTHY'"; }
 
@@ -478,6 +485,7 @@ esc_aula_wg_caida() {
   esperar 300 "siguen bloques sub-replicados sin pc02" sin_subreplicados
   echo "sin bloques sub-replicados a los $(( SECONDS - t0 )) s"
   esperar 60 "fsck no da HEALTHY sin pc02" fsck_sano
+  esperar 60 "quedaron bloques fuera de la politica de racks sin pc02" bien_ubicados
   replicas_wg /aula/caida.bin 2
   en wpc1 "hdfs dfs -cat /aula/caida.bin | wc -c" | grep -qx 12582912 || falla "no se lee el archivo sin pc02"
 

@@ -6,20 +6,20 @@ Teoría: [redes](../teoria/06-redes.md) y [RAM por rol](../teoria/07-ram-por-rol
 
 ## Opción múltiple
 
-**1.** ¿Qué pasa hoy si arrancás `empresa` con `RED=wireguard`?
+**1.** Con `RED=wireguard`, ¿cómo llega una PC de alumno al cluster?
 
-- a) Arma el túnel WireGuard solo.
-- b) Corta con `RED=...: por ahora solo docker`.
-- c) Arranca igual, con red de Docker.
-- d) Usa la red del laboratorio directamente.
+- a) El maestro abre una conexión hacia cada PC, que publica sus puertos.
+- b) La PC se inscribe con el código de la clase y levanta un túnel saliente hacia el maestro, que hace de hub.
+- c) Todas las PCs se ven directo por la red del laboratorio, como en una red de Docker.
+- d) Cada PC arma su propio cluster y después se juntan.
 
 <details><summary>Respuesta</summary>
 
-**b)** La validación del arranque solo acepta `docker`.
+**b)** Reserva su `pcNN` y se inscribe en el TCP 8099 del maestro, y levanta el túnel hacia su UDP 51820. Se anuncia con su IP del túnel (`10.13.0.x`).
 
-- a) WireGuard solo lo prueba la sonda; la imagen no lo implementa todavía.
-- c) No sigue: corta antes de prender nada.
-- d) No existe esa opción todavía.
+- a) Al revés: las PCs no publican ningún puerto (por eso no aparece el cartel del firewall).
+- c) Eso es `RED=docker`, en una sola compu; entre PCs reales todo pasa por el hub.
+- d) Hay un solo cluster, con un solo NameNode y un solo ResourceManager en el maestro.
 
 </details>
 
