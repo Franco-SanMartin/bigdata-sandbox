@@ -1,11 +1,12 @@
-# 6. Redes: por qué el aula simulada anda y el laboratorio todavía no
+# 6. Redes: del aula simulada al laboratorio
 
 [← 5. Localidad y YARN](05-localidad-y-yarn.md) · [Teoría](README.md) · Siguiente: [7. RAM por rol →](07-ram-por-rol.md)
 
-Hoy `empresa` solo arranca con `RED=docker`: todos los nodos en una misma
-red de Docker, o sea en una sola compu. Con otro valor se corta con `RED=...:
-por ahora solo docker`. Este tema explica qué le falta a la red de un
-laboratorio de verdad, y qué mide la sonda para decidir cómo armarla.
+`empresa` arranca con `RED=docker` (todos los nodos en una misma red de
+Docker, o sea en una sola compu) o con `RED=wireguard` (las PCs del
+laboratorio, por un túnel con hub en la PC del profe). Este tema explica qué
+le pide Hadoop a la red, por qué un laboratorio no lo da de entrada, qué
+midió la sonda y cómo quedó armada la opción A (al final).
 
 ## Lo que Hadoop le pide a la red
 
@@ -133,11 +134,36 @@ Por qué el 80% y no el 100%: en un laboratorio siempre hay alguna PC rota,
 sin Docker o con otro perfil de red. Un cluster que necesite el 100% no
 arranca nunca.
 
-## Lo que todavía falta
+## Cómo quedó: la opción A en la imagen (`RED=wireguard`)
 
-Nada de esto está en la imagen: `RED` solo acepta `docker`. La etapa 2 del
-plan es implementar la red que diga la sonda (ver [Lo que viene en la guía
-3](../03-laboratorio.md#lo-que-viene)).
+La sonda dio **A** el 27/10 (el túnel anduvo en 11 de 11 PCs), pero también
+midió que la red es lenta: unos 50 Mbit/s de una PC al profe y 31 entre PCs,
+porque todo pasa por la PC del profe. Así quedó armado (el paso a paso de la
+clase está en la [guía 3](../03-laboratorio.md)):
+
+- **Las PCs solo salen.** Cada una reserva un número en el maestro (TCP 8099,
+  con el código de la clase), se inscribe con su clave pública y levanta el
+  túnel hacia el UDP 51820 del profe. Nadie entra a una PC de alumno: no hay
+  que tocar su firewall ni aparece el cartel de Windows.
+- **Una IP y un nombre por PC.** `pc03` es `10.13.0.13`. Como el nombre sale
+  del número, cada nodo tiene en `/etc/hosts` los 240 nombres posibles y nadie
+  tiene que repartir una lista: el NameNode, el ResourceManager, los
+  ApplicationMasters y los executors se encuentran por nombre, y ese nombre
+  va siempre por el túnel.
+- **El contenedor se llama como el nodo.** Tez (y cualquier programa que
+  pregunte "¿cómo me llamo?") se anuncia con el nombre de la máquina: por eso
+  la PC reserva su número antes de crear el contenedor (`--hostname pc03`).
+  MapReduce y Spark usan el nombre del NodeManager y no tendrían problema.
+- **Todo escucha en 0.0.0.0.** Lo que llega por el túnel y lo que llega por
+  los puertos publicados (la interfaz en la PC del profe) entra igual.
+- **MTU 1380.** WireGuard le suma 60 bytes (IPv4) u 80 (IPv6) a cada paquete:
+  si el de adentro es de 1500, el de afuera no entra en la red y se pierde o
+  se fragmenta. 1380 deja margen; si en una PC igual no pasa, esa PC baja a
+  1280 sola (TCP acuerda el tamaño con cada punta).
+- **El hub reenvía.** Una PC le habla a otra (copias de HDFS, shuffle) por la
+  PC del profe: es el cuello de botella, y por eso la réplica de fábrica es 2
+  (una copia en una PC y la otra en el maestro, que no cruza la red) y los
+  datasets son de pocos GB.
 
 ## En la industria
 
@@ -157,7 +183,8 @@ plan es implementar la red que diga la sonda (ver [Lo que viene en la guía
 - Opción A: túnel WireGuard hacia el profe (solo hay que abrir la PC del
   profe; el profe es el cuello de botella).
 - Opción B: red directa (puertos fijos y firewall abierto en todas las PCs).
-- La sonda prueba las dos y decide con el 80%.
+- La sonda prueba las dos y decide con el 80%. En el laboratorio ganó A, y
+  es lo que hace `RED=wireguard`.
 
 Preguntas: [evaluación, redes y dimensionamiento](../evaluacion/05-redes-y-dimensionamiento.md).
 
