@@ -53,6 +53,7 @@ Toda respuesta 4xx/5xx trae este cuerpo:
 | `cluster_stopped` | 409 | El cluster no está en marcha. |
 | `service_down` | 503 | El servicio que hace falta está apagado: HiveServer2, MySQL, MongoDB, YARN… |
 | `not_found` | 404 | Ruta de HDFS, tabla, aplicación o paso que no existe. |
+| `forbidden` | 403 | El pedido no vino de la propia interfaz: otro host, u otra página en un pedido que cambia algo. |
 | `invalid` | 400 | Parámetros inválidos: ruta fuera de HDFS, SQL vacío, porcentaje fuera de rango, falta la etapa anterior del pipeline. |
 | `busy` | 409 | Ya hay algo corriendo que lo impide: otro paso del pipeline, el mismo archivo escribiéndose. |
 | `unsupported` | 501 | No está en esta versión de la imagen (por ejemplo, ML en `:base`). |

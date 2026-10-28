@@ -4,10 +4,12 @@ Desde que la pantalla de ML deja editar y correr código, la API es, en los
 hechos, una consola del contenedor. Un navegador abierto en cualquier otra
 página no tiene que poder usarla. Tres barreras, todas en este archivo:
 
-1. Host confiable (TrustedHostMiddleware de Starlette): solo localhost,
-   127.0.0.1 y [::1] (más los de SANDBOX_HOSTS, separados por coma). Corta el
-   "DNS rebinding": una página de internet que hace que su dominio apunte a
-   127.0.0.1 para hablarle al contenedor como si fuera ella misma.
+1. Host confiable: solo localhost, 127.0.0.1 y [::1] (más los de SANDBOX_HOSTS
+   o TERMINAL_HOSTS, separados por coma). Corta el "DNS rebinding": una página
+   de internet que hace que su dominio apunte a 127.0.0.1 para hablarle al
+   contenedor como si fuera ella misma. Es la misma lista que usa la terminal
+   (terminal.py), que controla Host y Origin de su websocket por su cuenta para
+   poder cerrarlo con el motivo; este middleware solo mira los pedidos http.
 2. Origen: un POST, PUT, PATCH o DELETE que trae Origin (o, si no, Referer)
    tiene que venir de la misma interfaz (mismo esquema, host y puerto que el
    Host del pedido). Los navegadores siempre mandan Origin en un pedido que
@@ -28,20 +30,28 @@ from urllib.parse import urlsplit
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+HOSTS = ["localhost", "127.0.0.1", "::1"]
 CAMBIAN = {"POST", "PUT", "PATCH", "DELETE"}
 CON_CUERPO = {"POST", "PUT", "PATCH"}
 # Rutas que reciben multipart/form-data (un archivo de la compu)
 MULTIPART = {"/api/hdfs/upload"}
 
 
+def host_sin_puerto(value: str) -> str:
+    """'localhost:8080' → 'localhost'; '[::1]:8080' → '::1'"""
+    value = value.strip().lower()
+    if value.startswith("["):
+        return value[1:value.find("]")] if "]" in value else value
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
 def hosts_permitidos(extra: str | None = None) -> list[str]:
-    """localhost, 127.0.0.1 y [::1], más los de SANDBOX_HOSTS (p. ej. el nombre de la PC del profe)."""
+    """localhost, 127.0.0.1 y ::1, más los de SANDBOX_HOSTS y TERMINAL_HOSTS (p. ej. el nombre de la PC del profe)."""
     if extra is None:
-        extra = os.environ.get("SANDBOX_HOSTS", "")
+        extra = os.environ.get("SANDBOX_HOSTS", "") + "," + os.environ.get("TERMINAL_HOSTS", "")
     out = list(HOSTS)
     for h in extra.split(","):
-        h = h.strip().lower()
+        h = host_sin_puerto(h)
         if h and h not in out and "*" not in h:
             out.append(h)
     return out
@@ -64,10 +74,14 @@ def _origen(url: str) -> str | None:
 
 def revisar(scope: Scope) -> tuple[int, bytes] | None:
     """None si el pedido pasa; si no, (status, cuerpo JSON) del rechazo."""
+    h = Headers(scope=scope)
+    host = host_sin_puerto(h.get("host", ""))
+    if host not in hosts_permitidos():
+        return _rechazo(403, f"La interfaz solo se abre desde esta compu (localhost), no desde {host or 'otro nombre'}",
+                        "forbidden")
     method = scope.get("method", "GET")
     if method not in CAMBIAN:
         return None
-    h = Headers(scope=scope)
     propio = f"{scope.get('scheme', 'http')}://{h.get('host', '')}".lower()
     origin = h.get("origin")
     referer = h.get("referer")
@@ -98,7 +112,7 @@ def _tiene_cuerpo(h: Headers) -> bool:
 
 
 class SoloLaInterfaz:
-    """Barreras 2 y 3 (la 1 es TrustedHostMiddleware, que va por fuera de esta)."""
+    """Las tres barreras, para los pedidos http (el websocket de la terminal se controla en terminal.py)."""
 
     def __init__(self, app: ASGIApp):
         self.app = app

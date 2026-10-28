@@ -27,6 +27,16 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 - Prueba de humo de `full`: abre la terminal, corre comandos (`whoami`,
   `pwd`, `hdfs`) y comprueba que rechaza otro origen.
 
+### Seguridad
+
+- La API de `full` solo atiende a la propia interfaz, con el mismo criterio
+  que la terminal: Host `localhost`, `127.0.0.1` o `[::1]` (más
+  `SANDBOX_HOSTS`/`TERMINAL_HOSTS`); POST, PUT, PATCH y DELETE con Origin o
+  Referer de otra página reciben 403 `forbidden`, y los cuerpos tienen que ir
+  como `application/json` (415). Antes cualquier página abierta en el mismo
+  navegador podía, por ejemplo, mandar `POST /api/cluster/reset`. curl y los
+  scripts, que no mandan Origin, siguen andando.
+
 ## [1.3.0] - 2026-10-27
 
 Documentación completa para cada versión, las Prácticas de `full` te hacen

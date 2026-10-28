@@ -13,6 +13,7 @@ UI = "http://localhost:8080"
 def cliente(settings, tmp_path, monkeypatch):
     """Como la ve el navegador: http://localhost:8080, sin hosts extra."""
     monkeypatch.delenv("SANDBOX_HOSTS", raising=False)
+    monkeypatch.delenv("TERMINAL_HOSTS", raising=False)
     ui = tmp_path / "ui"
     ui.mkdir()
     (ui / "index.html").write_text("<!doctype html><title>BigData Sandbox</title>")
@@ -21,8 +22,8 @@ def cliente(settings, tmp_path, monkeypatch):
 
 
 def test_hosts_permitidos():
-    assert hosts_permitidos("") == ["localhost", "127.0.0.1", "[::1]"]
-    assert hosts_permitidos(" profe-pc , LOCALHOST,*.algo ") == ["localhost", "127.0.0.1", "[::1]", "profe-pc"]
+    assert hosts_permitidos("") == ["localhost", "127.0.0.1", "::1"]
+    assert hosts_permitidos(" profe-pc , LOCALHOST,*.algo,[::1]") == ["localhost", "127.0.0.1", "::1", "profe-pc"]
 
 
 @pytest.mark.parametrize("host", ["localhost:8080", "127.0.0.1:8080", "[::1]:8080", "localhost"])
@@ -34,12 +35,16 @@ def test_host_local_pasa(cliente, host):
 @pytest.mark.parametrize("host", ["evil.example.com", "evil.example.com:8080", "192.168.0.10:8080", "localhost.evil.com"])
 def test_host_ajeno_no(cliente, host):
     """DNS rebinding: el dominio de otra página que apunta a 127.0.0.1 no entra (ni a la interfaz ni a la API)"""
-    assert cliente.get("/api/status", headers={"Host": host}).status_code == 400
-    assert cliente.get("/", headers={"Host": host}).status_code == 400
+    r = cliente.get("/api/status", headers={"Host": host})
+    assert r.status_code == 403 and r.json()["code"] == "forbidden"
+    assert cliente.get("/", headers={"Host": host}).status_code == 403
 
 
-def test_sandbox_hosts_agrega(settings, tmp_path, monkeypatch):
-    monkeypatch.setenv("SANDBOX_HOSTS", "profe-pc")
+@pytest.mark.parametrize("var", ["SANDBOX_HOSTS", "TERMINAL_HOSTS"])
+def test_hosts_extra_agregan(settings, tmp_path, monkeypatch, var):
+    """La misma lista que la terminal (terminal.py): cualquiera de las dos variables suma"""
+    monkeypatch.delenv("SANDBOX_HOSTS", raising=False)
+    monkeypatch.setenv(var, "profe-pc")
     with TestClient(build_app(settings, ui_dir=tmp_path), base_url="http://profe-pc:8080") as c:
         assert c.get("/api/status").status_code == 200
 
@@ -109,5 +114,7 @@ def test_subida_multipart_solo_en_upload(cliente):
 
 
 def test_revisar_sin_scope_http():
-    assert revisar({"type": "http", "method": "GET", "headers": []}) is None
-    assert revisar({"type": "http", "method": "OPTIONS", "headers": []}) is None
+    local = [(b"host", b"localhost:8080")]
+    assert revisar({"type": "http", "method": "GET", "headers": local}) is None
+    assert revisar({"type": "http", "method": "OPTIONS", "headers": local}) is None
+    assert revisar({"type": "http", "method": "GET", "headers": []})[0] == 403   # sin Host no hay a quién atender
