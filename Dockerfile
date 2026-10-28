@@ -40,8 +40,7 @@ ARG WIREGUARD_GO_VERSION=v0.0.0-20250521234502-f333402bd9cb
 # imagen para las dos arquitecturas se bajan una sola vez y no se desarman
 # emulando el otro procesador (lo que mas tarda).
 # Hadoop va en una etapa propia (hadoop-dist) para que la imagen trabajador lo
-# tome sin bajar todo lo demas. Las capas son las mismas de siempre: el cache
-# no cambia.
+# tome sin bajar todo lo demas.
 # ===========================================================================
 FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-noble AS hadoop-dist
 ARG HADOOP_VERSION
@@ -57,8 +56,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Baja de la CDN de Apache (rapida); si esa version ya no esta ahi (la CDN solo
-# tiene las ultimas), del archivo historico (lento pero tiene todas).
-RUN printf '#!/bin/sh\ncurl -fSL "https://dlcdn.apache.org/$1" -o "$2" || curl -fSL "https://archive.apache.org/dist/$1" -o "$2"\n' \
+# tiene las ultimas), del archivo historico (lento pero tiene todas). El
+# archivo historico a veces no contesta desde GitHub Actions: se reintenta.
+RUN printf '#!/bin/sh\ncurl -fSL "https://dlcdn.apache.org/$1" -o "$2" || curl -fSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 30 "https://archive.apache.org/dist/$1" -o "$2"\n' \
       > /usr/local/bin/apache-dl \
  && chmod +x /usr/local/bin/apache-dl
 
@@ -144,7 +144,7 @@ RUN apache-dl "pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" /tmp/pig.tgz \
 # sistemas no estan y no hacen falta.
 # (directo del archivo historico: la CDN redirige los proyectos retirados a
 # una pagina web)
-RUN curl -fSL "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0.tar.gz" -o /tmp/sqoop.tgz \
+RUN curl -fSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 30 "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0.tar.gz" -o /tmp/sqoop.tgz \
  && tar -xzf /tmp/sqoop.tgz -C /opt \
  && mv /opt/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0 /opt/sqoop \
  && rm /tmp/sqoop.tgz \

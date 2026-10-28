@@ -73,7 +73,11 @@ jobs:
 
   escenario:
     needs: armar
-    runs-on: ubuntu-latest
+    # 24.04 fijo, como el humo de full: en ubuntu-latest (26.04 desde 10/2026)
+    # el eco UDP del profe (socat con fork, puerto publicado) le contesta solo a
+    # la primera PC. El túnel anda igual. En el aula, con Docker Desktop, el eco
+    # anduvo en 11 de 11 PCs.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
