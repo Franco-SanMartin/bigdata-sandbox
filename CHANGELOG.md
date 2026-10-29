@@ -42,7 +42,61 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     la tabla de experimentos con las corridas de la sesión. Si una ruta falla,
     el panel lo dice con el mensaje del servidor. El recorrido de clase
     anterior sigue en *Guiado*.
+- Estudio de ML, etapa (b) (datos en HDFS, perfil y limpieza en `full`):
+  - Datos en HDFS en cualquier formato: Parquet, ORC, Avro, JSON (documento o
+    JSON lines), CSV y TSV, y texto. También comprimidos (gzip, bz2, snappy),
+    carpetas de partes, particionadas (`anio=/mes=`) y tablas de Hive
+    (`sandbox_ml/fuentes.py`). Se ven el formato, la compresión, los
+    archivos, el tamaño y las particiones. El esquema inferido se puede
+    editar (cada tipo cambiado es un cast al leer) y hay filtro de
+    particiones. Si el separador elegido no es el del archivo, se sugiere
+    otro.
+  - Perfil a escala con Spark (`perfil_spark.py`, con `spark-submit` en YARN),
+    sobre una muestra o con pasada completa: nulos, distintos aproximados,
+    mínimo y máximo, cuantiles del 1 al 99 %, extremos, histogramas, top de
+    categorías y fechas, en pocas pasadas. El perfil con pandas sigue para lo
+    chico de `/datos`.
+  - Receta de limpieza columna por columna (`limpieza.py`), con versiones
+    (`/api/ml/cleaning`, en `/hadoop/ml/limpiezas`):
+    - pasos de tipo, texto, regex, fechas, nulos (con columna indicadora),
+      extremos, categorías raras, mapeos, columnas derivadas, duplicados y
+      filtros;
+    - lo que es solo de entrenamiento (duplicados, filtros, filas que se
+      sacan) se aplica antes de partir;
+    - el resto va adentro del modelo, en el paso `Limpiar` del Pipeline
+      (`transformadores_spark.py`), que se guarda con el `PipelineModel` y
+      limpia igual los datos nuevos. Lo que aprende (medianas, bordes,
+      categorías) sale solo del entrenamiento.
+  - Vista previa en Spark local sobre una muestra
+    (`/api/ml/cleaning/preview`): filas afectadas, lo aprendido y ejemplos
+    antes y después de cada paso. Un paso que falla queda marcado y los demás
+    siguen.
+  - Cada paso genera su PySpark (`POST /api/ml/code` con `parte` igual a
+    `entrenamiento`, `perfil` o `limpieza`): scripts completos para correr con
+    `spark-submit` en YARN. El de la limpieza guarda los datos limpios y el
+    paso `Limpiar` en HDFS.
+  - Los errores de Spark y de HDFS se muestran en una frase (ruta que no
+    existe, formato equivocado, columna o tabla que no está, sintaxis de
+    SQL, memoria, modo seguro…) con la línea original abajo.
+  - Pantallas: el paso *Datos* lee cualquier formato y perfila con Spark; hay
+    un paso nuevo, *Limpieza*; y *Código* muestra también el del perfil y el
+    de la limpieza. La demo trae perfiles y una vista previa reales de
+    `ventas_sucias` en HDFS.
+  - Humo de `full`: datos de ejemplo en HDFS (`ml/preparar_demo_hdfs.py`),
+    perfil en YARN de Parquet particionado, CSV con gzip, ORC y Avro, la vista
+    previa y un entrenamiento con la limpieza adentro del modelo.
+- `spark-avro` en `ml` y `full`, para leer y escribir Avro con Spark.
 - XGBoost (`xgboost-cpu`, 18 MB, amd64 y arm64) en las imágenes `ml` y `full`.
+
+### Corregido
+
+- Código de Spark del estudio: el recorte de extremos usaba
+  `least`/`greatest`, que se saltean los nulos, así que un nulo terminaba en
+  el borde de abajo antes de imputarse. Ahora es un `CASE` y el nulo sigue
+  nulo hasta el `Imputer`.
+- `spark-libs.jar` (lo que los trabajos de YARN bajan de HDFS) se vuelve a
+  armar si cambian los jars de Spark de la imagen. Antes, en un volumen viejo,
+  quedaba el de la primera vez.
 
 ### Seguridad
 
