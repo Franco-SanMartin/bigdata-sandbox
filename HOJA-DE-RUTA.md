@@ -2,7 +2,56 @@
 
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
-actualización: 2026-10-28 (versión 1.3.0).
+actualización: 2026-10-29. Las decisiones están en [DECISIONES.md](DECISIONES.md)
+y lo que pasó día a día, en [EVENTOS.md](EVENTOS.md).
+
+## Para el hub (desde la noche del 2026-10-29)
+
+Franki apaga su compu. El hub controla git y el CI mientras duerme
+([D-07](DECISIONES.md)). **Desarrollo mínimo: solo lo necesario para que las pruebas
+pasen.** Antes de empezar, leé [DECISIONES.md](DECISIONES.md) completo y
+[EVENTOS.md](EVENTOS.md) del 29/10.
+
+**1. Vigilar el CI (con `gh run list` y `gh pr checks`, un bucle cada 10-15 min, sin
+gastar de más):**
+- **Workflow Empresa** sobre `main` (lo lanzó Franki el 29/10 a las 04:50): tiene
+  que publicar `:empresa` y `:trabajador` y armar el release **`aula-v1`**. Si da
+  rojo, buscá la causa en el log y, si es del código, arreglala en una rama
+  `empresa-fix-*` con PR. Si es del CI (por ejemplo `short read` o `unexpected
+  EOF`), relanzá solo los jobs que fallaron (`gh run rerun --failed`). Franki lo
+  necesita para probar en el laboratorio.
+- **PR #5** (ML a) y **PR #7** (ML b): ya tienen el arreglo del humo (`92a5053`).
+  Si quedan **todo en verde**, mergealos **en orden: #5 y después #7**. Si la
+  falla es intermitente (`short read` o el `fsck` del apagado), relanzá. Si es
+  real, arreglala en la rama de la (a) y llevala con merge (no rebase) a la (b) y
+  a la (c).
+- **Workflow Imagen** en `main`: falló dos veces por `short read` (infraestructura).
+  Si vuelve a fallar igual, relanzá los jobs fallidos. `latest` es la imagen de la
+  clase: no la dejes rota.
+
+**2. Pensar el rediseño 360 de `full` ([D-05](DECISIONES.md)) y el tema claro
+([D-06](DECISIONES.md)). Pensar y escribir, no implementar:**
+- Escribí `REDISENO-FULL.md` en la raíz. Tiene que traer:
+  - la navegación nueva por capas: almacenamiento, recursos, procesamiento, ingesta, ML y prácticas;
+  - qué pantalla actual va a cada lugar y qué se junta, separa o borra;
+  - la vista "Comparar" (la misma tarea con varias herramientas), con qué tareas, qué métricas y de dónde salen (YARN, historial de Spark y de MapReduce);
+  - cómo se reordenan las guías y las prácticas;
+  - la paleta clara (tokens), qué tests y gráficos cambian y el orden de trabajo en PRs chicos.
+- Abrilo como **PR solo de documentación** (rama `ui2-rediseno-plan`), sin código.
+  Franki lo revisa a la mañana y recién ahí se implementa.
+- Si encontrás algo del modelo de D-05 que esté mal o falte, corregilo en ese PR.
+
+**3. No hacer esta noche:**
+- seguir la etapa (c) de ML (WIP en `ui2-ml-etapa-c`), ni la (d) o la (e);
+- cambios grandes de interfaz;
+- force-push o borrar ramas;
+- tocar `ui2-ml-pro` (queda como respaldo).
+
+**4. Al terminar:** anotá en [EVENTOS.md](EVENTOS.md) qué pasó: qué se mergeó, qué
+dio rojo y por qué, qué quedó corriendo. Es un commit con `[skip ci]` a `main`.
+
+Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
+`Co-Authored-By` ni "Generated with". Todo en castellano rioplatense.
 
 ## Dónde estamos
 
@@ -121,8 +170,9 @@ pruebas de humo.
 - [x] Decidir el tema: hoy sigue al de Windows; se había pedido oscuro siempre.
       *Ya está en `main`: oscuro siempre, sin selector (lo cuida
       `styles/tema.test.ts`). Ver abajo si se quiere el selector.*
-- [ ] Tema: ¿oscuro por defecto **con selector** de claro? Hoy es oscuro fijo;
-      agregar el claro implica una paleta nueva y sacar la regla de `tema.test.ts`.
+- [x] Tema: ¿oscuro por defecto **con selector** de claro? *Decidido el
+      2026-10-29 ([D-06](DECISIONES.md)): **todas las interfaces en claro**, sin
+      selector. Falta implementarlo, dentro del rediseño de D-05.*
 - [ ] Terminal en `empresa`: si el servidor se publica para otras PCs y se
       suma su nombre a `TERMINAL_HOSTS`, cualquiera que llegue tiene root en el
       contenedor. Decidir si en `empresa` va apagada de fábrica (`TERMINAL=0`).
