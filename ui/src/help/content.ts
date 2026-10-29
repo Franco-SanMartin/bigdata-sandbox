@@ -69,8 +69,13 @@ export const HELP: Record<PageId, Help> = {
     ],
   },
   ml: {
-    intro: 'Elegís qué querés predecir y te dice qué tipo de problema es y qué modelo conviene. Entrená con scikit-learn o Spark MLlib, separando datos para entrenar y para probar, y compará métricas, tiempo y memoria.',
+    intro: 'Un estudio de ML de punta a punta: elegís los datos (/datos, HDFS o Hive), el objetivo y el rol de cada columna, el preprocesamiento, el modelo con todos sus hiperparámetros, la validación y la búsqueda. Cada corrida es un script de Python completo que podés ver, editar, correr y bajar como .py o notebook, y queda guardada como experimento para compararla.',
     terms: [
+      ['Receta', 'Todo lo que define un experimento (datos, variables, preprocesamiento, modelo, validación y búsqueda). La misma receta da siempre el mismo resultado.'],
+      ['Pipeline', 'El preprocesamiento y el modelo en un solo objeto: aprende solo con el entrenamiento y se aplica igual al predecir. Así no hay fuga de datos.'],
+      ['Validación cruzada', 'Partir el entrenamiento en k partes y validar k veces: da la métrica con su desvío.'],
+      ['Búsqueda de hiperparámetros', 'Probar combinaciones (grilla, al azar o successive halving) y quedarse con la mejor según la validación cruzada.'],
+      ['Fuga de datos', 'Una columna que no estaría disponible al predecir (o que sale del objetivo): el modelo parece perfecto y en la vida real falla.'],
       ['Regresión', 'Predecir un número (cuánto va a gastar). Se mide con R²: 1 es perfecto.'],
       ['Clasificación', 'Predecir una categoría (si vuelve o no). Se mide con el porcentaje de aciertos.'],
       ['Agrupamiento', 'Encontrar grupos sin decirle la respuesta (KMeans). Se compara con los grupos reales con el índice de Rand ajustado.'],

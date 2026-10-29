@@ -21,6 +21,7 @@ from . import config as cfg
 from . import datos as datos_mod
 from . import hdfs as hdfs_mod
 from . import ml as ml_mod
+from . import ml_estudio
 from . import pipeline as pipeline_mod
 from . import terminal as terminal_mod
 from . import yarn as yarn_mod
@@ -161,6 +162,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     yarn.hdfs = hdfs
     datos = datos_mod.Datos(cluster, runner, bus, hdfs)
     ml = ml_mod.Ml(cluster, runner, bus, hdfs)
+    estudio = ml_estudio.Estudio(cluster, runner, bus, hdfs, datos)
     pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)
     terminal = terminal_mod.Terminal()
     aula = aula_mod.Aula(cluster)
@@ -185,6 +187,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         *datos.routes(),
         *ml.routes(),
         *terminal.routes(),
+        *estudio.routes(),
         *aula.routes(),
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
@@ -220,6 +223,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         await cluster.shutdown()
         await runner.wait_all()
         await ml.wait_all()
+        await estudio.wait_all()
         await pipeline.wait_all()
 
     # Solo la propia interfaz: host confiable, origen y cuerpos JSON (seguridad.py)
@@ -233,6 +237,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     app.state.yarn = yarn
     app.state.datos = datos
     app.state.ml = ml
+    app.state.estudio = estudio
     app.state.pipeline = pipeline
     app.state.terminal = terminal
     app.state.aula = aula

@@ -9,7 +9,7 @@
 # Versiones de la imagen (cada una es un --target):
 #   base   el stack de Hadoop + MySQL + MongoDB
 #            docker build --target base -t franki678/bigdata-sandbox:base .
-#   ml     base + pandas, scikit-learn, Spark MLlib y JupyterLab
+#   ml     base + pandas, scikit-learn, XGBoost, Spark MLlib y JupyterLab
 #            docker build --target ml -t franki678/bigdata-sandbox:ml .
 #   full   ml + el servidor de la interfaz web (:8080), que prende el cluster
 #            docker build --target full -t franki678/bigdata-sandbox:full .
@@ -300,21 +300,31 @@ RUN pip install --no-cache-dir --break-system-packages -r /opt/sandbox/requireme
  && find pyarrow -name '*.pyx' -o -name '*.pxd' -o -name '*.h' | xargs rm -f
 
 # PYTHONPATH: que "import pyspark" ande en cualquier python3 (JupyterLab, un
-# script suelto), no solo con spark-submit o pyspark.
+# script suelto), no solo con spark-submit o pyspark; y "import sandbox_ml",
+# el apoyo del estudio de ML (ver mas abajo).
 # PIP_BREAK_SYSTEM_PACKAGES: que "pip install <libreria>" ande adentro sin
 # tener que agregar la opcion.
 ENV SANDBOX_VERSION=ml \
-    PYTHONPATH=/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
+    PYTHONPATH=/opt/sandbox/ml:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
 # JupyterLab sin contrasena y sin el cartel de noticias de Jupyter. El primer
 # import de matplotlib arma la lista de fuentes (tarda): se hace ahora.
 COPY conf/jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
 RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements" \
- && python3 -c "import pyspark, py4j, numpy, pandas, pyarrow, sklearn, pymongo, matplotlib.pyplot"
+ && python3 -c "import pyspark, py4j, numpy, pandas, pyarrow, sklearn, xgboost, pymongo, matplotlib.pyplot"
 
 COPY datos/ejemplos/ml/ /opt/sandbox/ejemplos/ml/
 RUN find /opt/sandbox/ejemplos/ml -type f -exec sed -i 's/\r$//' {} +
+
+# sandbox_ml: el apoyo del estudio de ML (ml/sandbox_ml en el repo): catalogo
+# de modelos con sus hiperparametros, recetas, el codigo que generan, perfil
+# de datos y registro de experimentos en /hadoop/ml/experimentos. Lo usan los
+# scripts que arma la pantalla de ML de la full, y desde JupyterLab:
+# "from sandbox_ml import receta, codigo, estudio". Python puro, ~150 KB.
+COPY ml/sandbox_ml/ /opt/sandbox/ml/sandbox_ml/
+RUN find /opt/sandbox/ml -name '*.py' -exec sed -i 's/\r$//' {} + \
+ && python3 -c "import sandbox_ml.catalogo, sandbox_ml.receta, sandbox_ml.codigo, sandbox_ml.estudio, sandbox_ml.perfil"
 
 EXPOSE 8888
 
@@ -350,7 +360,7 @@ RUN find /opt/sandbox/server -name '*.py' -exec sed -i 's/\r$//' {} + \
 # Si no esta, el servidor anda igual (la API en /api) y en / avisa que falta.
 COPY --from=interfaz /ui/dist/ /opt/sandbox/ui/
 ENV SANDBOX_VERSION=full \
-    PYTHONPATH=/opt/sandbox/server:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
+    PYTHONPATH=/opt/sandbox/server:/opt/sandbox/ml:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip \
     UI_DIR=/opt/sandbox/ui \
     AUTOSTART=0
 EXPOSE 8080
