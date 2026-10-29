@@ -297,9 +297,9 @@ filas tienen 6 PCs.
 3. La sonda mide si cada PC llega al profe (`udp_profe`, `inscripcion`),
    si levanta el túnel WireGuard (`tunel`) y si el profe llega a la PC
    (`tcp_entrante`), además de la RAM (`ram_gb`, `docker_ram_mb`). Decide
-   con el 80% de las PCs que contestaron. Hoy, aunque dé A o B, `empresa`
-   solo arranca con `RED=docker`: falta implementar esa red (etapa 2). Lo
-   que sí se puede es el aula simulada en cada PC.
+   con el 80% de las PCs que contestaron. Con A, `empresa` arranca con
+   `RED=wireguard` ([guía 3](../03-laboratorio.md)); con B, la red directa
+   no está implementada y queda el aula simulada en cada PC.
 4. Desde pc01:
 
 <!-- prueba: no (solución de un práctico; se corre adentro de pc01 con el aula de la guía 1) -->
@@ -320,7 +320,7 @@ yarn node -list -showDetails
 | `TRABAJADOR_RAM` razonable (entre 2048 y 4096), restando servicios y margen | 3 |
 | `MAESTRO_NM` justificado | 1 |
 | Cuenta de memoria total y de SparkPi a la vez | 2 |
-| Qué mide la sonda y que hoy solo hay `RED=docker` | 2 |
+| Qué mide la sonda y qué red arranca con cada veredicto | 2 |
 | Verifica la memoria anunciada en el aula simulada | 1 |
 
 ## Al terminar

@@ -82,6 +82,18 @@ export const HELP: Record<PageId, Help> = {
       ['Entrenar y probar', 'El modelo aprende con una parte de las filas y se mide con las que no vio.'],
     ],
   },
+  aula: {
+    intro: 'El laboratorio visto desde la PC del profe (versión empresa, el maestro): cada PC es una lámpara, agrupada por fila. Arriba están la IP y el código de la clase y la línea para Veyon; abajo, si ya se puede apagar el aula sin perder nada. Se proyecta con la Demostración de Veyon (botón Pantalla completa).',
+    terms: [
+      ['Sumándose', 'La PC se inscribió con el código de la clase y está prendiendo su DataNode y su NodeManager. Tarda menos de un minuto.'],
+      ['Arriba', 'Guarda bloques de HDFS y corre trabajos de YARN con la memoria y los cores que presta (dos tercios de lo que tiene Docker en esa PC).'],
+      ['Sin respuesta', 'Dejó de mandar latidos. A los 40 s el NameNode la da por muerta y copia sus bloques en otras PCs.'],
+      ['Caída', 'HDFS ya la dio por muerta (o YARN la perdió): sus bloques se copian a las que quedan y sus tareas se reintentan en otras PCs.'],
+      ['Túnel', 'Cada PC llega al maestro por WireGuard (10.13.0.x): solo hace conexiones salientes, así que no abre puertos ni aparece el cartel del firewall.'],
+      ['Ya pueden apagar', 'El DataNode del maestro (ARCHIVE) tiene una copia de cada bloque, por la política WARM: se puede apagar toda el aula y los datos siguen en la PC del profe.'],
+      ['Fila', 'El rack de cada PC (de a PCS_POR_FILA por fila, en orden de inscripción). HDFS reparte las copias de un bloque entre filas distintas.'],
+    ],
+  },
   consola: {
     intro: 'Todo lo que pasó en el cluster. Elegí un evento a la izquierda y a la derecha ves el comando exacto (con botón para copiarlo), lo que entró, lo que hizo y lo que salió. También está abajo en cualquier pantalla con Ctrl+J.',
     terms: [
