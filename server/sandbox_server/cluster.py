@@ -133,6 +133,8 @@ class Cluster:
         self.nn_active_port: int | None = None
         # Lo que corre después de cada sondeo (HDFS y YARN miran ahí qué cambió)
         self.watchers: list = []
+        # Lo que corre al empezar y al terminar el apagado (HDFS mata ahí sus clientes en vuelo)
+        self.stoppers: list = []
         self.mem_limit, self.mem_used = 0, 0
         self.mem_history: deque[dict] = deque(maxlen=MEM_HISTORY)
         self._last_mem = 0
@@ -316,6 +318,7 @@ class Cluster:
         proc, tracker = self.proc, self.tracker
         trap_puesto = tracker is not None and tracker.ready
         t0 = time.monotonic()
+        await self._run_stoppers()
         if proc is not None and proc.returncode is None:
             try:
                 proc.send_signal(signal.SIGTERM)
@@ -347,6 +350,8 @@ class Cluster:
                 await asyncio.wait_for(self._reader, timeout=2)
             except Exception:  # noqa: BLE001 (al apagar no importa cómo terminó la lectura)
                 self._reader.cancel()
+        # Otra vuelta por si algún cliente se lanzó justo mientras se apagaba
+        await self._run_stoppers()
         self.phase = "stopped"
         self.startedAt = None
         # Sin esto el estado sale con la última lectura del sondeo (todo 'up') hasta
@@ -359,6 +364,13 @@ class Cluster:
         self.bus.log("Cluster", "ok", "Cluster apagado",
                      output=f"en {time.monotonic() - t0:.1f} s; los datos quedan en el volumen /hadoop")
         self._status_changed()
+
+    async def _run_stoppers(self) -> None:
+        for stop in list(self.stoppers):
+            try:
+                await stop()
+            except Exception as e:  # noqa: BLE001 (el apagado sigue igual)
+                self.logs.append(f"[interfaz] error cortando clientes al apagar: {e}")
 
     @staticmethod
     async def _kill_group(pgid: int) -> None:
