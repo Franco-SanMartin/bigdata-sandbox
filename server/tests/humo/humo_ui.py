@@ -42,7 +42,8 @@ import humo_full as hf
 URL = os.environ.get("SANDBOX_URL", "http://localhost:8080").rstrip("/")
 SALIDAS = Path(os.environ.get("HUMO_SALIDAS", "humo-salidas"))
 CAPTURAS = SALIDAS / "capturas"
-PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "yarn", "pipeline", "datos", "ml", "consola", "config"]
+# "ml/guiado" es la ML de clase (la de antes del estudio): sigue en la imagen del aula
+PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "yarn", "pipeline", "datos", "ml", "ml/guiado", "consola", "config"]
 SOLO_HDFS = hf.SOLO_HDFS
 
 RESULTADOS: list[dict] = []
@@ -121,6 +122,15 @@ def ir(page: Page, pantalla: str) -> None:
     page.wait_for_timeout(2500)         # que lleguen las primeras respuestas de la API
 
 
+def ir_guiado(page: Page) -> None:
+    """La ML guiada (dataset de clase, Entrenar y el detalle de cada modelo), por su pestaña en Machine Learning"""
+    ir(page, "ml")
+    page.get_by_role("tab", name="Guiado").click()
+    expect(page).to_have_url(re.compile(r"#ml/guiado$"))
+    expect(page.locator("#contenido [aria-busy=true]")).to_have_count(0, timeout=20_000)
+    page.wait_for_timeout(2500)
+
+
 def extensiones() -> list:
     """Los humo_ui_*.py de esta carpeta, cargados como módulos (en orden alfabético)"""
     mods = []
@@ -164,7 +174,7 @@ def recorrer(page: Page, sufijo: str) -> None:
         with Chequeo(f"{sufijo}: pantalla {p} sin errores de consola") as c:
             n = len(CONSOLA)
             ir(page, p)
-            captura(page, f"{sufijo}-{p}")
+            captura(page, f"{sufijo}-{p.replace('/', '-')}")
             errs = errores_desde(n)
             c.detalle = f"{len(errs)} errores" + (f": {errs[:3]}" if errs else "")
             assert not errs, errs
@@ -214,7 +224,7 @@ def todo(page: Page) -> None:
         n = len(CONSOLA)
         _, antes = pedir("GET", "/api/ml/models")
         ids = {m["id"] for m in antes or []}
-        ir(page, "ml")
+        ir_guiado(page)
         boton = page.get_by_role("button", name="Entrenar", exact=True)
         expect(boton).to_be_enabled(timeout=30_000)
         boton.click()
