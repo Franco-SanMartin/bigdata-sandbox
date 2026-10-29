@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BigData Sandbox · maqueta del rediseño 360</title>
+<!-- Maqueta navegable del rediseño 360 (REDISENO-FULL.md, PR #9). Un solo archivo,
+     sin red: todo inline y los datos son simulados. Se abre con doble clic. -->
+<style>
+:root{
+  color-scheme:light;
+  --n-0:#FFFFFF;--n-1:#F7F7F7;--n-2:#F2F2F2;--n-3:#EBEBEB;--n-4:#E3E3E3;--n-5:#D9D9D9;
+  --n-6:#C7C7C7;--n-7:#B0B0B0;--n-8:#8F8F8F;--n-9:#6B6B6B;--n-10:#525252;--n-11:#333333;--n-12:#141414;
+  --ok:#1A7F37;--warn:#9A6700;--err:#CF222E;
+  --mr:#B35900;--tez:#8250DF;--spark:#0969DA;
+  --blk:#0A7EA4;--shf:#BF3989;--ctl:#8F8F8F;
+  --r:12px;--sh:0 1px 2px rgba(0,0,0,.05),0 6px 24px rgba(0,0,0,.06);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;color:var(--n-12);background:var(--n-1);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+kbd{font:11px var(--mono);border:1px solid var(--n-5);border-bottom-width:2px;border-radius:4px;padding:0 4px;color:var(--n-9);background:var(--n-0)}
+code,pre{font-family:var(--mono)}
+.top{height:56px;display:flex;align-items:center;gap:18px;padding:0 18px;background:var(--n-0);border-bottom:1px solid var(--n-5);position:sticky;top:0;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
+.brand small{font-weight:500;color:var(--n-9)}
+.tabs{display:flex;background:var(--n-2);border:1px solid var(--n-5);border-radius:10px;padding:3px;gap:3px;margin-left:12px}
+.tabs button{border:0;background:none;padding:6px 14px;border-radius:7px;font-weight:600;font-size:13px;color:var(--n-10);letter-spacing:.02em}
+.tabs button.on{background:var(--n-0);color:var(--n-12);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pill{margin-left:auto;font-size:12px;color:var(--n-9);border:1px dashed var(--n-6);padding:3px 10px;border-radius:99px}
+.tab{display:none;height:calc(100vh - 56px)}
+.tab.on{display:grid}
+/* FULL */
+#tab-full{grid-template-columns:236px 1fr}
+.side{background:var(--n-1);border-right:1px solid var(--n-5);overflow:auto;padding:12px 10px 20px}
+.side h6{margin:16px 10px 6px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--n-9);display:flex;gap:6px;align-items:center}
+.side a{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--n-11);text-decoration:none;font-size:13.5px;position:relative}
+.side a:hover{background:var(--n-3)}
+.side a.on{background:var(--n-0);box-shadow:0 1px 2px rgba(0,0,0,.08);color:var(--n-12);font-weight:600}
+.side a.on::before{content:"";position:absolute;left:-10px;top:7px;bottom:7px;width:3px;border-radius:3px;background:var(--n-12)}
+.side a kbd{margin-left:auto}
+.side .new{font-size:9.5px;font-weight:700;letter-spacing:.05em;color:var(--spark);border:1px solid #b6d4f5;border-radius:4px;padding:0 4px}
+.side .operar{margin-top:18px;border-top:1px solid var(--n-5);padding-top:6px;opacity:.85}
+.side .operar a{font-size:12.5px}
+.page{overflow:auto;padding:22px 28px 40px}
+.crumb{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.layer{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--n-10);background:var(--n-0);border:1px solid var(--n-5);border-radius:6px;padding:2px 8px}
+h1{font-size:24px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--n-9);margin:4px 0 14px}
+.franja{display:flex;align-items:stretch;gap:0;margin:6px 0 20px;background:var(--n-0);border:1px solid var(--n-5);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+.franja .c{flex:1;padding:9px 14px;min-width:0}
+.franja .c small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--n-9)}
+.franja .c b{font-weight:600;font-size:13.5px}
+.franja .ar{display:flex;align-items:center;color:var(--n-7);font-size:18px;padding:0 2px}
+.franja .q{border:0;border-left:1px solid var(--n-5);background:var(--n-1);width:38px;font-weight:700;color:var(--n-9)}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{background:var(--n-0);border:1px solid var(--n-5);border-radius:var(--r);padding:16px;box-shadow:var(--sh);min-width:0}
+.card h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}
+.card h3 .x{margin-left:auto;font-weight:500;color:var(--n-9);font-size:12px}
+.kpi small{color:var(--n-9);font-size:12px}
+.kpi b{display:block;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi i{font-style:normal;color:var(--n-9);font-size:12px}
+.eng{white-space:nowrap;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;border-radius:99px;padding:1px 9px;border:1px solid}
+.eng.mr{color:var(--mr);border-color:#e9c7a5;background:#fdf5ee}
+.eng.tez{color:var(--tez);border-color:#d6c6f5;background:#f7f3fe}
+.eng.spark{color:var(--spark);border-color:#b6d4f5;background:#f0f6fd}
+.eng.py{color:var(--n-10);border-color:var(--n-5);background:var(--n-1)}
+.btn{border:1px solid var(--n-6);background:var(--n-0);border-radius:8px;padding:6px 12px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.15s}
+.btn:hover{border-color:var(--n-8);background:var(--n-1)}
+.btn.pri{background:var(--n-12);color:var(--n-0);border-color:var(--n-12)}
+.btn.pri:hover{background:var(--n-11)}
+.btn:disabled{opacity:.45;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--n-6);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--n-0);padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--n-10)}
+.seg button+button{border-left:1px solid var(--n-5)}
+.seg button.on{background:var(--n-12);color:var(--n-0)}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--n-9);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--n-5)}
+table.t td{padding:8px;border-bottom:1px solid var(--n-3);vertical-align:top}
+table.t tr:last-child td{border-bottom:0}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--n-9)}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}
+.bar{height:8px;border-radius:99px;background:var(--n-3);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:99px;background:var(--n-12);transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.note{font-size:12.5px;color:var(--n-10);background:var(--n-1);border:1px solid var(--n-4);border-left:3px solid var(--n-8);border-radius:8px;padding:8px 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--n-5);background:var(--n-0);border-radius:99px;padding:4px 12px;font-size:12.5px;font-weight:600;color:var(--n-10);transition:.15s}
+.chip:hover{border-color:var(--n-8)}
+.chip.on{background:var(--n-12);border-color:var(--n-12);color:var(--n-0)}
+.chip.tool.on.mr{background:var(--mr);border-color:var(--mr)}
+.chip.tool.on.tez{background:var(--tez);border-color:var(--tez)}
+.chip.tool.on.spark{background:var(--spark);border-color:var(--spark)}
+.chip.tool.on.py{background:var(--n-10);border-color:var(--n-10)}
+.code{background:var(--n-1);border:1px solid var(--n-4);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;white-space:pre;overflow:auto;margin:0;max-height:200px}
+.code .k{color:#8250DF;font-weight:600}.code .s{color:#0A7EA4}.code .c{color:var(--n-8);font-style:italic}.code .f{color:#B35900}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.map .box rect{fill:var(--n-0);stroke:var(--n-6);transition:.2s}
+.map .box{cursor:pointer}
+.map .box:hover rect{stroke:var(--n-12);stroke-width:1.5}
+.map .box text{font-size:13px;font-weight:600;fill:var(--n-11)}
+.map .box text.s{font-size:10.5px;font-weight:500;fill:var(--n-9)}
+.map path.ln{fill:none;stroke:var(--n-6);stroke-width:1.5;transition:.2s}
+.map path.ln.hl{stroke:var(--n-12);stroke-width:2.5}
+.map path.ln.dash{stroke-dasharray:4 4}
+.map.dim path.ln:not(.hl){opacity:.25}
+.map .lane{fill:var(--n-1);stroke:var(--n-4)}
+.map .lane-t{font-size:10.5px;font-weight:700;letter-spacing:.09em;fill:var(--n-9);text-transform:uppercase}
+.col-cmp{display:flex;flex-direction:column;gap:10px}
+.status{font-size:12px;color:var(--n-9);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--n-6);display:inline-block}
+.dot.run{background:var(--warn);animation:pulse 1s infinite}
+.dot.done{background:var(--ok)}
+@keyframes pulse{50%{opacity:.35}}
+.mrow{display:grid;grid-template-columns:190px 1fr;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--n-3)}
+.mrow:last-child{border-bottom:0}
+.mrow .lbl{font-size:12.5px;color:var(--n-10)}
+.mrow .lbl small{display:block;color:var(--n-8);font-size:10.5px}
+.mbars{display:grid;gap:4px}
+.mb{display:grid;grid-template-columns:120px 1fr 74px;align-items:center;gap:8px;font-size:11.5px}
+.mb .nm{color:var(--n-9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mb .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.mb .bar{height:10px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--n-12);color:var(--n-0);padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:50;max-width:80vw;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.gloss{display:none;margin:-10px 0 18px}
+.gloss.on{display:block}
+/* AULA */
+#tab-aula{grid-template-columns:1fr 380px;background:var(--n-1)}
+.aula-main{display:flex;flex-direction:column;min-width:0;padding:14px 16px 16px;gap:10px;overflow:hidden}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar .sp{flex:1}
+.clock{font:600 13px var(--mono);background:var(--n-0);border:1px solid var(--n-5);border-radius:8px;padding:5px 10px;font-variant-numeric:tabular-nums}
+.plano-wrap{flex:1;min-height:0;background:var(--n-0);border:1px solid var(--n-5);border-radius:16px;box-shadow:var(--sh);position:relative;overflow:hidden}
+#plano{width:100%;height:100%;display:block;user-select:none;touch-action:none}
+.legend{position:absolute;left:14px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap}
+.legend button{border:1px solid var(--n-5);background:rgba(255,255,255,.92);border-radius:99px;padding:3px 10px 3px 8px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--n-10)}
+.legend button.off{opacity:.4;text-decoration:line-through}
+.legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+.hint{position:absolute;right:14px;top:12px;font-size:12px;color:var(--n-9);background:rgba(255,255,255,.92);padding:3px 10px;border-radius:8px;border:1px solid var(--n-4)}
+.aula-side{border-left:1px solid var(--n-5);background:var(--n-0);overflow:auto;padding:14px 16px 24px;display:flex;flex-direction:column;gap:14px}
+.aula-side h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--n-9);display:flex;align-items:center;gap:8px}
+.aula-side h4 .x{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kp{border:1px solid var(--n-4);border-radius:10px;padding:8px 10px;background:var(--n-1)}
+.kp small{display:block;font-size:10.5px;color:var(--n-9);line-height:1.2}
+.kp i{display:block}
+.kp b{font-size:17px;white-space:nowrap;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kp i{font-style:normal;font-size:11px;color:var(--n-9)}
+.kp.bad{border-color:#f3b9bd;background:#fff6f6}.kp.bad b{color:var(--err)}
+.apagar{border-radius:10px;padding:8px 12px;font-weight:650;font-size:13px;display:flex;align-items:center;gap:8px;transition:.3s}
+.apagar.si{background:#effaf2;color:var(--ok);border:1px solid #b5e0c1}
+.apagar.no{background:#fff8e6;color:var(--warn);border:1px solid #f0d58a}
+.top-t{display:grid;gap:4px}
+.tr{display:grid;grid-template-columns:10px 1fr 66px;gap:8px;align-items:center;font-size:12.5px}
+.tr i{width:10px;height:10px;border-radius:3px}
+.tr .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.tr .bar{height:4px;grid-column:2/4;margin-top:-2px}
+.app{border:1px solid var(--n-4);border-radius:10px;padding:8px 10px;display:grid;gap:5px;font-size:12.5px;transition:.3s}
+.app.fin{opacity:.55}
+.app .h{display:flex;gap:8px;align-items:center}
+.app .h b{font-weight:650}
+.app .h .x{margin-left:auto;color:var(--n-9);font-size:11.5px;font-variant-numeric:tabular-nums}
+canvas{display:block;width:100%}
+.resumen{font-size:12.5px;background:var(--n-1);border:1px solid var(--n-4);border-radius:10px;padding:9px 12px;line-height:1.5}
+.resumen b{font-variant-numeric:tabular-nums}
+.pop{position:absolute;z-index:5;background:var(--n-0);border:1px solid var(--n-6);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.16);padding:12px 14px;width:250px;font-size:12.5px;display:none}
+.pop.on{display:block}
+.pop h5{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px}
+.pop .r{display:flex;justify-content:space-between;padding:2px 0;color:var(--n-10)}
+.pop .r b{color:var(--n-12);font-weight:600}
+.pop .acts{display:flex;gap:6px;margin-top:10px}
+#plano .pc{cursor:grab}
+#plano .pc.drag{cursor:grabbing}
+#plano .seat{fill:none;stroke:var(--n-4);stroke-dasharray:3 4}
+#plano .seat.hot{stroke:var(--n-12);stroke-dasharray:none;fill:rgba(20,20,20,.03)}
+@media (max-width:1100px){#tab-aula{grid-template-columns:1fr}.aula-side{border-left:0;border-top:1px solid var(--n-5)}.g4{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="3" width="22" height="6" rx="2" fill="#141414"/><rect x="2" y="10.5" width="22" height="6" rx="2" fill="#525252"/><rect x="2" y="18" width="22" height="6" rx="2" fill="#B0B0B0"/><circle cx="20" cy="6" r="1.3" fill="#1A7F37"/><circle cx="20" cy="13.5" r="1.3" fill="#1A7F37"/><circle cx="20" cy="21" r="1.3" fill="#9A6700"/></svg>
+    BigData Sandbox <small>maqueta del rediseño 360</small>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button data-tab="full" class="on">FULL · 360</button>
+    <button data-tab="aula">EMPRESA · AULA</button>
+  </nav>
+  <div class="pill">datos simulados · sin red · REDISENO-FULL.md</div>
+</header>
+
+<section id="tab-full" class="tab on">
+  <aside class="side" id="side"></aside>
+  <div class="page" id="page"></div>
+</section>
+
+<section id="tab-aula" class="tab">
+  <div class="aula-main">
+    <div class="toolbar">
+      <button class="btn pri" id="a-demo">▶ Demo guiada</button>
+      <button class="btn" id="a-spark">Trabajo Spark</button>
+      <button class="btn" id="a-hive">Hive sobre Tez</button>
+      <button class="btn" id="a-load">Cargar dataset · 1,5 GB</button>
+      <button class="btn" id="a-add">+ Sumar PC</button>
+      <span class="sp"></span>
+      <button class="btn" id="a-exp" title="plano-aula.json: vive fuera del contenedor (el reset borra todo)">Exportar plano</button>
+      <label class="btn" style="margin:0">Importar<input type="file" id="a-imp" accept=".json" hidden></label>
+      <div class="seg" id="a-speed"><button data-s="1">×1</button><button data-s="5" class="on">×5</button><button data-s="20">×20</button></div>
+      <span class="clock" id="a-clock">T+00:00</span>
+    </div>
+    <div class="plano-wrap" id="plano-wrap">
+      <svg id="plano" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend" id="a-legend">
+        <button data-f="blk"><i style="background:var(--blk)"></i>bloques HDFS · 9866</button>
+        <button data-f="shf"><i style="background:var(--shf)"></i>shuffle · 13562 / Spark</button>
+        <button data-f="ctl"><i style="background:var(--ctl)"></i>control YARN · 8030/8041</button>
+      </div>
+      <div class="hint">clic en una PC: apagarla o prenderla · arrastrala para cambiarla de fila</div>
+      <div class="pop" id="a-pop"></div>
+    </div>
+  </div>
+  <aside class="aula-side">
+    <div>
+      <h4>El cluster del aula <span class="x mono" id="a-code">código K7Q2</span></h4>
+      <div class="kpis" id="a-kpis"></div>
+    </div>
+    <div class="apagar si" id="a-apagar">● Ya pueden apagar</div>
+    <div>
+      <h4>Tráfico entre PCs <span class="x" id="a-hubtxt"></span></h4>
+      <canvas id="a-traf" height="110"></canvas>
+      <div class="top-t" id="a-top" style="margin-top:8px"></div>
+    </div>
+    <div>
+      <h4>YARN en vivo <span class="x" id="a-yarntxt"></span></h4>
+      <div id="a-apps" style="display:grid;gap:6px"></div>
+    </div>
+    <div>
+      <h4>Línea de tiempo de la caída <span class="x" id="a-tltxt">apagá una PC</span></h4>
+      <canvas id="a-tl" height="150"></canvas>
+      <div class="resumen" id="a-res" style="margin-top:8px">Apagá una PC (clic → <b>Apagar</b>, como desde Veyon) y mirá: ámbar a los ~10 s, roja a los 40 s (el NameNode empieza a re-copiar sus bloques), y a los 60 s YARN la da por perdida y reintenta sus tareas.</div>
+    </div>
+  </aside>
+</section>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ---------- utilidades ----------
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const fmt = (n, d = 0) => n.toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3600); }
+const ENG = { mr: 'MapReduce', tez: 'Tez', spark: 'Spark', py: 'Python local' };
+const engChip = e => `<span class="eng ${e}">● ${ENG[e]}</span>`;
+
+// ---------- pestañas ----------
+$$('.tabs button').forEach(b => b.onclick = () => {
+  $$('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $$('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'aula') Aula.resize();
+});
+
+// =====================================================================
+//  FULL: navegación por capas (REDISENO-FULL §2 a §8)
+// =====================================================================
+const LAYERS = { alm: '▦ Almacenamiento', rec: '◫ Recursos', proc: '⚙ Procesamiento', ing: '⇣ Ingesta', ml: '∿ ML', prac: '✎ Prácticas', op: '⌁ Operar' };
+const NAV = [
+  { g: null, items: [['inicio', 'Inicio', 'G I']] },
+  { g: 'alm', items: [['hdfs', 'HDFS', 'G H'], ['tablas', 'Tablas', 'G T', 1], ['bases', 'Bases', 'G B'], ['formatos', 'Formatos', 'G F', 1]] },
+  { g: 'rec', items: [['yarn', 'YARN', 'G Y']] },
+  { g: 'proc', items: [['motores', 'Motores', 'G M', 1], ['lenguajes', 'Lenguajes', 'G L'], ['comparar', 'Comparar', 'G K', 1]] },
+  { g: 'ing', items: [['subir', 'Subir archivos', 'G U'], ['sqoop', 'Sqoop', 'G Q'], ['pipeline', 'Pipeline', 'G P']] },
+  { g: 'ml', items: [['ml', 'Estudio de ML', 'G A']] },
+  { g: 'prac', items: [['practicas', 'Prácticas guiadas', 'G R']] },
+];
+const OPERAR = [['cluster', 'Cluster'], ['consola', 'Consola'], ['config', 'Configuración']];
+
+function renderSide() {
+  let h = '';
+  for (const grp of NAV) {
+    if (grp.g) h += `<h6>${LAYERS[grp.g]}</h6>`;
+    for (const [id, name, k, nu] of grp.items) h += `<a href="#${id}" data-p="${id}">${name}${nu ? ' <span class="new">NUEVO</span>' : ''}<kbd>${k}</kbd></a>`;
+  }
+  h += `<div class="operar"><h6>${LAYERS.op}</h6>`;
+  for (const [id, name] of OPERAR) h += `<a href="#${id}" data-p="${id}">${name}</a>`;
+  h += `<a href="#" data-goaula="1">Aula <span class="muted" style="font-size:11px">(solo empresa)</span></a></div>`;
+  $('#side').innerHTML = h;
+  $$('#side a').forEach(a => a.onclick = e => { e.preventDefault(); if (a.dataset.goaula) { $('.tabs button[data-tab=aula]').click(); return; } go(a.dataset.p); });
+}
+
+// Atajos G + tecla (como en §2)
+let gPressed = 0;
+const KEYS = { i: 'inicio', h: 'hdfs', t: 'tablas', b: 'bases', f: 'formatos', y: 'yarn', m: 'motores', l: 'lenguajes', k: 'comparar', u: 'subir', q: 'sqoop', p: 'pipeline', a: 'ml', r: 'practicas' };
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'g') { gPressed = performance.now(); return; }
+  if (performance.now() - gPressed < 900 && KEYS[k]) { $('.tabs button[data-tab=full]').click(); go(KEYS[k]); gPressed = 0; }
+});
+
+const GLOSS = {
+  alm: [['HDFS', 'Sistema de archivos repartido: parte cada archivo en bloques de 128 MB y guarda copias en varios DataNodes.'], ['Metastore', 'El catálogo de tablas: nombre, columnas, formato y carpeta de HDFS. Lo leen Hive, Spark y (con HCatalog) Pig.'], ['Formato columnar', 'Parquet y ORC guardan por columna: pesan menos y una consulta lee solo las columnas que usa.']],
+  rec: [['YARN', 'Reparte memoria y cores del cluster en contenedores. No procesa nada: presta recursos a los motores.'], ['Contenedor', 'Un pedazo de memoria y cores en un nodo, donde corre una tarea o el Application Master.']],
+  proc: [['Motor', 'Quién ejecuta: MapReduce, Tez o Spark. Corren sobre YARN.'], ['Lenguaje', 'Cómo se escribe el trabajo: HiveQL, Pig Latin, Spark SQL, PySpark o MapReduce a mano. Un lenguaje puede usar distintos motores.'], ['Shuffle', 'Los resultados intermedios que viajan entre máquinas. Va a disco local en los tres motores; MapReduce además escribe a HDFS entre trabajos.']],
+  ing: [['Sqoop', 'Copia tablas de una base relacional (MariaDB) a HDFS o Hive con trabajos MapReduce.'], ['Pipeline', 'Una cadena de pasos: traer, limpiar, transformar. Cada paso dice qué lenguaje y motor usa.']],
+};
+
+function franja(f) {
+  if (!f) return '';
+  const [a, b, c] = f;
+  const cell = (t, v) => `<div class="c"><small>${t}</small><b>${v}</b></div>`;
+  return `<div class="franja">${a ? cell('De dónde', a) + '<div class="ar">→</div>' : ''}${b ? cell('Qué lo procesa · con qué motor', b) + '<div class="ar">→</div>' : ''}${cell('Dónde queda', c)}<button class="q" title="Glosario">?</button></div>`;
+}
+
+let curPage = 'inicio', pageTick = null;
+function go(id) {
+  const P = PAGES[id] || PAGES.inicio;
+  curPage = id; pageTick = null;
+  $$('#side a').forEach(a => a.classList.toggle('on', a.dataset.p === id));
+  const gl = GLOSS[P.layer] ? `<div class="gloss card"><h3>Glosario · ${LAYERS[P.layer]}</h3><table class="t">${GLOSS[P.layer].map(([a, b]) => `<tr><td style="width:150px"><b>${a}</b></td><td>${b}</td></tr>`).join('')}</table></div>` : '';
+  $('#page').innerHTML = `<div class="crumb">${P.layer ? `<span class="layer">${LAYERS[P.layer]}</span>` : ''}<h1>${P.title}</h1></div><p class="sub">${P.sub}</p>${franja(P.franja)}${gl}<div id="pb"></div>`;
+  const q = $('.franja .q'); if (q) q.onclick = () => $('.gloss') && $('.gloss').classList.toggle('on');
+  P.render($('#pb'));
+  $('#page').scrollTop = 0;
+}
+
+// ---------- Inicio: el mapa 360 ----------
+function renderInicio(el) {
+  el.innerHTML = `
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="card kpi"><small>HDFS usado</small><b id="k-hdfs">2,41 GB</b><i>3 DataNodes · réplica 2</i></div>
+    <div class="card kpi"><small>Memoria de YARN</small><b id="k-yarn">5,0 / 8 GB</b><div class="bar" style="margin-top:6px"><i id="k-yarnb" style="width:62%"></i></div></div>
+    <div class="card kpi"><small>Trabajos corriendo</small><b id="k-jobs">2</b><i id="k-jobsd">Hive (Tez) · PySpark</i></div>
+    <div class="card kpi"><small>Tablas en el Metastore</small><b>7</b><i>CSV, Parquet y ORC</i></div>
+  </div>
+  <div class="card" style="padding:10px 10px 4px">
+    <h3 style="padding:4px 6px 0">El camino de los datos <span class="x">pasá el mouse por un lenguaje · clic para entrar</span></h3>
+    <svg class="map" id="map" viewBox="0 -40 1000 510" style="width:100%;height:auto"></svg>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h3>Lo que cambia</h3><div class="muted" style="font-size:13px">La barra se ordena por <b>capas</b>: dónde quedan los datos, con qué recursos y quién los procesa. Cada pantalla dice en qué capa está y, si hay un trabajo, la franja de arriba muestra de dónde viene, qué motor lo corre y dónde queda.</div></div>
+    <div class="card"><h3>Motores y lenguajes, separados</h3><div class="muted" style="font-size:13px">Hive, Pig, Spark SQL y PySpark son <b>lenguajes</b>; MapReduce, Tez y Spark son <b>motores</b>. Un mismo lenguaje puede correr en motores distintos: eso se ve en <a href="#" data-go="comparar">Comparar</a>.</div></div>
+    <div class="card"><h3>Tema claro (D-06)</h3><div class="muted" style="font-size:13px">Fondo blanco, escala de grises invertida y tres colores de estado con contraste ≥ 4,5:1: <b class="ok">ok</b>, <b class="warn">en curso</b>, <b class="err">caído</b>. Los motores tienen color propio, igual en todas las pantallas: ${engChip('mr')} ${engChip('tez')} ${engChip('spark')}</div></div>
+  </div>`;
+  $$('[data-go]', el).forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+  buildMap($('#map'));
+}
+
+function buildMap(svg) {
+  const lanes = [[20, 'Ingesta', 170], [210, 'Almacenamiento', 210], [440, 'Procesamiento · lenguajes', 200], [660, 'Procesamiento · motores', 320]];
+  for (const [x, t, w] of lanes) { svgEl('rect', { x, y: 10, width: w, height: 360, rx: 14, class: 'lane' }, svg); const tt = svgEl('text', { x: x + 14, y: 32, class: 'lane-t' }, svg); tt.textContent = t; }
+  svgEl('rect', { x: 440, y: 386, width: 540, height: 74, rx: 14, class: 'lane' }, svg);
+  const tl = svgEl('text', { x: 454, y: 406, class: 'lane-t' }, svg); tl.textContent = 'Recursos';
+  const B = {};
+  const box = (id, x, y, w, h, t, s, go, k) => {
+    const g = svgEl('g', { class: 'box', 'data-go': go || id, 'data-k': k || '' }, svg);
+    svgEl('rect', { x, y, width: w, height: h, rx: 10 }, g);
+    const a = svgEl('text', { x: x + 12, y: y + (s ? 21 : h / 2 + 5) }, g); a.textContent = t;
+    if (s) { const b = svgEl('text', { x: x + 12, y: y + 37, class: 's' }, g); b.textContent = s; }
+    B[id] = { x, y, w, h, cx: x + w / 2, cy: y + h / 2, g };
+    return g;
+  };
+  box('subir', 36, 54, 138, 48, 'Subir archivos', 'CSV, Parquet, JSON', 'subir');
+  box('sqoop', 36, 120, 138, 48, 'Sqoop', 'MariaDB → HDFS', 'sqoop', 'sqoop');
+  box('pipe', 36, 186, 138, 48, 'Pipeline', 'traer · limpiar · curar', 'pipeline');
+  box('maria', 36, 290, 138, 48, 'MariaDB', 'base tienda', 'bases');
+  box('hdfs', 226, 54, 178, 112, 'HDFS', '/datos/crudo · limpio · curado', 'hdfs');
+  box('tablas', 226, 184, 178, 48, 'Tablas (Metastore)', '7 tablas', 'tablas');
+  box('fmt', 226, 248, 178, 48, 'Formatos', 'CSV · Parquet · ORC', 'formatos');
+  box('mongo', 226, 312, 178, 44, 'MongoDB', '', 'bases');
+  const L = [['hive', 'Hive (HiveQL)'], ['pig', 'Pig Latin'], ['ssql', 'Spark SQL'], ['pys', 'PySpark'], ['mrm', 'MapReduce a mano']];
+  L.forEach(([id, t], i) => box(id, 456, 50 + i * 62, 168, 46, t, '', 'lenguajes', id));
+  const M = [['mr', 'MapReduce', 'map → shuffle a disco → reduce', 'mr'], ['tez', 'Tez', 'DAG, sin HDFS entre pasos', 'tez'], ['spark', 'Spark', 'stages en memoria · derrama a disco', 'spark']];
+  M.forEach(([id, t, s], i) => { const g = box(id, 700, 60 + i * 100, 250, 64, t, s, 'motores', id); svgEl('rect', { x: 700, y: 60 + i * 100, width: 5, height: 64, rx: 2, fill: css('--' + id) }, g); });
+  box('yarn', 456, 414, 508, 36, 'YARN · nodos, colas y contenedores', '', 'yarn', 'yarn');
+  const paths = [];
+  const P = (a, b, k, dash, bend = 0) => {
+    const A = B[a], C = B[b];
+    const x1 = A.x + A.w, y1 = A.cy, x2 = C.x, y2 = C.cy;
+    const mx = (x1 + x2) / 2;
+    const d = `M${x1},${y1} C${mx},${y1 + bend} ${mx},${y2 + bend} ${x2},${y2}`;
+    const p = svgEl('path', { d, class: 'ln' + (dash ? ' dash' : ''), 'data-k': k }, svg);
+    svg.insertBefore(p, svg.querySelector('.box'));
+    paths.push({ p, k, len: p.getTotalLength(), parts: [] });
+  };
+  P('subir', 'hdfs', 'subir pipe'); P('sqoop', 'hdfs', 'sqoop'); P('pipe', 'hdfs', 'pipe');
+  P('maria', 'sqoop', 'sqoop', 0, 0);
+  P('hive', 'tez', 'hive'); P('hive', 'mr', 'hive', 1); P('pig', 'mr', 'pig'); P('ssql', 'spark', 'ssql'); P('pys', 'spark', 'pys'); P('mrm', 'mr', 'mrm');
+  P('tablas', 'hive', 'hive ssql', 1); P('tablas', 'ssql', 'ssql', 1); P('tablas', 'pig', 'pig', 1);
+  // motores -> YARN (abajo) y lectura de HDFS (arco por arriba)
+  for (const m of ['mr', 'tez', 'spark']) {
+    const A = B[m];
+    const mi = ['mr', 'tez', 'spark'].indexOf(m), yy = A.cy + 14;
+    const d = `M${A.x},${yy} C${A.x - 30 + mi * 4},${yy} ${A.x - 30 + mi * 4},${400} ${A.x - 70 + mi * 18},${414}`;
+    const p = svgEl('path', { d, class: 'ln', 'data-k': m + ' yarn ' + (m === 'mr' ? 'hive pig mrm sqoop' : m === 'tez' ? 'hive' : 'ssql pys') }, svg);
+    svg.insertBefore(p, svg.querySelector('.box'));
+    paths.push({ p, k: p.dataset.k, len: p.getTotalLength(), parts: [] });
+    const mi2 = ['mr', 'tez', 'spark'].indexOf(m);
+    const d2 = `M${A.x + 190 + mi2 * 18},${A.y} C${A.x + 190 + mi2 * 18},${-34 + mi2 * 6} ${B.hdfs.cx + 40},${-34 + mi2 * 6} ${B.hdfs.cx + 20 - mi2 * 20},${B.hdfs.y}`;
+    const p2 = svgEl('path', { d: d2, class: 'ln dash', 'data-k': m + ' ' + (m === 'mr' ? 'hive pig mrm sqoop' : m === 'tez' ? 'hive' : 'ssql pys') }, svg);
+    svg.insertBefore(p2, svg.querySelector('.box'));
+    paths.push({ p: p2, k: p2.dataset.k, len: p2.getTotalLength(), parts: [], back: 1, col: css('--' + m) });
+  }
+  const dotsG = svgEl('g', {}, svg);
+  for (const pa of paths) {
+    const n = Math.max(1, Math.round(pa.len / 140));
+    for (let i = 0; i < n; i++) pa.parts.push({ t: i / n, c: svgEl('circle', { r: 3, fill: pa.col || css('--n-10'), opacity: .85 }, dotsG) });
+  }
+  $$('.box', svg).forEach(g => {
+    g.onclick = () => go(g.dataset.go);
+    g.onmouseenter = () => { const k = g.dataset.k; if (!k) return; svg.classList.add('dim'); paths.forEach(pa => pa.p.classList.toggle('hl', pa.k.split(' ').includes(k))); };
+    g.onmouseleave = () => { svg.classList.remove('dim'); paths.forEach(pa => pa.p.classList.remove('hl')); };
+  });
+  let jobsT = 0;
+  pageTick = dt => {
+    for (const pa of paths) {
+      const hl = pa.p.classList.contains('hl'), dim = svg.classList.contains('dim') && !hl;
+      for (const d of pa.parts) {
+        d.t = (d.t + dt * (hl ? .5 : .16) * (140 / pa.len) * 2.2) % 1;
+        const pt = pa.p.getPointAtLength((pa.back ? 1 - d.t : d.t) * pa.len);
+        d.c.setAttribute('cx', pt.x); d.c.setAttribute('cy', pt.y);
+        d.c.setAttribute('opacity', dim ? .1 : hl ? 1 : .7); d.c.setAttribute('r', hl ? 4 : 2.6);
+      }
+    }
+    jobsT += dt;
+    if (jobsT > 1.2) {
+      jobsT = 0;
+      const u = clamp(5 + Math.sin(performance.now() / 4000) * 1.6 + rnd(-.2, .2), 1, 8);
+      const kb = $('#k-yarn'); if (kb) { kb.textContent = fmt(u, 1) + ' / 8 GB'; $('#k-yarnb').style.width = (u / 8 * 100) + '%'; }
+    }
+  };
+}
+
+// ---------- HDFS ----------
+function renderHdfs(el) {
+  const files = [['/datos/crudo/viajes.csv', 612, 5, '#0A7EA4'], ['/datos/limpio/viajes.parquet', 118, 1, '#1A7F37'], ['/datos/curado/viajes_dia.orc', 4, 1, '#8250DF'], ['/user/alumno/texto.txt', 1, 1, '#B35900'], ['/user/hive/warehouse/tienda.db/ventas', 2, 1, '#BF3989']];
+  el.innerHTML = `<div class="grid g3" id="dns"></div>
+  <div class="card" style="margin-top:16px"><h3>Explorador <span class="x">las zonas del data lake se crean al arrancar (corrección 4 de D-05)</span></h3>
+  <table class="t"><tr><th>Ruta</th><th>Tamaño</th><th>Bloques</th><th>Réplica</th><th>Tabla</th></tr>
+  ${files.map(([p, s, b, c]) => `<tr><td class="mono"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:8px"></span>${p}</td><td>${fmt(s)} MB</td><td>${b}</td><td>2</td><td>${p.includes('crudo') ? 'viajes_csv' : p.includes('limpio') ? 'viajes' : p.includes('curado') ? 'viajes_dia' : p.includes('ventas') ? 'tienda.ventas' : '—'}</td></tr>`).join('')}</table></div>`;
+  const blocks = []; files.forEach(([p, s, b, c], fi) => { for (let i = 0; i < b; i++) blocks.push({ c, fi }); });
+  const dn = [[], [], []]; blocks.forEach((b, i) => { dn[i % 3].push(b); dn[(i + 1) % 3].push(b); });
+  $('#dns').innerHTML = dn.map((bl, i) => `<div class="card"><h3><span class="dot done"></span>DataNode ${i + 1}<span class="x">:${9864 + i}</span></h3>
+    <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:5px" id="dn${i}">${bl.map(b => `<div style="aspect-ratio:1;border-radius:4px;background:${b.c};opacity:.85"></div>`).join('')}${'<div style="aspect-ratio:1;border-radius:4px;border:1px dashed var(--n-5)"></div>'.repeat(16 - bl.length)}</div>
+    <div class="muted" style="font-size:12px;margin-top:8px">${bl.length} bloques · ${fmt(bl.length * 64)} MB de 20 GB</div></div>`).join('');
+  let t = 0;
+  pageTick = dt => { t += dt; if (t > .7) { t = 0; const i = Math.floor(rnd(0, 3)); const cells = $$(`#dn${i} > div`).filter(c => !c.style.border); const c = pick(cells); if (c) c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.25)', boxShadow: '0 0 0 3px rgba(10,126,164,.25)' }, { transform: 'scale(1)' }], { duration: 600 }); } };
+}
+
+// ---------- Tablas ----------
+function renderTablas(el) {
+  const T = [['viajes_csv', 'vendor, pickup, dropoff, distancia, monto, propina…', 'CSV', '/datos/crudo/viajes.csv', 612], ['viajes', 'las mismas, tipadas', 'Parquet', '/datos/limpio/viajes.parquet', 118], ['viajes_orc', 'las mismas', 'ORC', '/datos/limpio/viajes_orc', 104], ['viajes_dia', 'dia, viajes, propina_media', 'ORC', '/datos/curado/viajes_dia.orc', 4], ['zonas', 'zona_id, barrio, distrito', 'CSV', '/datos/crudo/zonas.csv', .01], ['tienda.ventas', 'id, producto, cantidad, precio, fecha', 'Texto', '/user/hive/warehouse/tienda.db/ventas', 2], ['tienda.clientes', 'id, nombre, ciudad', 'Texto', '/user/hive/warehouse/tienda.db/clientes', .1]];
+  el.innerHTML = `<div class="card"><h3>Metastore de Hive <span class="x">thrift://localhost:9083</span></h3><table class="t"><tr><th>Tabla</th><th>Columnas</th><th>Formato</th><th>Carpeta en HDFS</th><th>La pueden leer</th></tr>
+  ${T.map(([n, c, f, p, s]) => `<tr><td><b>${n}</b></td><td class="muted">${c}</td><td><span class="chip" style="padding:1px 9px">${f}</span></td><td class="mono"><a href="#" data-go="hdfs">${p}</a> <span class="muted">${s < 1 ? '<1' : fmt(s)} MB</span></td><td>${engChip('tez').replace('Tez', 'Hive')} ${engChip('spark')} <span class="eng py" title="pig -useHCatalog: verificar en la imagen antes de prometerlo (corrección 3)">Pig* </span></td></tr>`).join('')}</table>
+  <p class="note" style="margin:12px 0 0">* Pig con HCatalog: hoy solo aparece en <code>guias/base</code>. Hasta verificar <code>pig -useHCatalog</code> en la imagen, la interfaz dice "se puede, en este sandbox no está armado".</p></div>`;
+  $$('[data-go]', el).forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+}
+function renderBases(el) {
+  el.innerHTML = `<div class="grid g2"><div class="card"><h3>MariaDB · base <code>tienda</code><span class="x">jdbc:mysql://localhost/tienda</span></h3><table class="t"><tr><th>Tabla</th><th>Filas</th><th></th></tr><tr><td>clientes</td><td>500</td><td><button class="btn" data-go="sqoop">Sqoop → HDFS</button></td></tr><tr><td>productos</td><td>40</td><td><button class="btn" data-go="sqoop">Sqoop → HDFS</button></td></tr><tr><td>ventas</td><td>5.000</td><td><button class="btn" data-go="sqoop">Sqoop → HDFS</button></td></tr></table></div>
+  <div class="card"><h3>MongoDB · base <code>tienda</code><span class="x">mongodb://localhost:27017</span></h3><table class="t"><tr><th>Colección</th><th>Documentos</th></tr><tr><td>clientes</td><td>500</td></tr><tr><td>resenas</td><td>1.200</td></tr></table><p class="note" style="margin:10px 0 0">Las pestañas de MariaDB y MongoDB salen de la vieja <i>Consultas</i>; <code>#datos/mariadb</code> redirige acá.</p></div></div>`;
+  $$('[data-go]', el).forEach(a => a.onclick = () => go(a.dataset.go));
+}
+
+// ---------- Formatos ----------
+function renderFormatos(el) {
+  const F = [['CSV', 612, 5, 41, 'Lee todas las columnas y parsea texto'], ['Parquet', 118, 1, 9, 'Lee solo las columnas de la consulta, ya tipadas'], ['ORC', 104, 1, 11, 'Columnar, con índices livianos por franja']];
+  el.innerHTML = `<div class="card"><h3>La misma tabla en tres formatos <span class="x"><button class="btn pri" id="fm-run">Medir con Spark SQL</button></span></h3>
+  <div class="mono muted" style="margin-bottom:12px">SELECT dia, count(*), avg(propina) FROM viajes GROUP BY dia</div>
+  <div class="grid g3">${F.map(([n, s, b, t, d], i) => `<div><div style="display:flex;justify-content:space-between"><b>${n}</b><span class="muted">${b} bloque${b > 1 ? 's' : ''}</span></div>
+  <div class="mb" style="grid-template-columns:70px 1fr 64px;margin-top:8px"><span class="nm">en HDFS</span><div class="bar"><i style="width:${s / 612 * 100}%;background:var(--blk)"></i></div><span class="v">${fmt(s)} MB</span></div>
+  <div class="mb" style="grid-template-columns:70px 1fr 64px;margin-top:6px"><span class="nm">consulta</span><div class="bar"><i id="fm${i}" style="width:0;background:var(--spark)"></i></div><span class="v" id="fmv${i}">—</span></div>
+  <div class="muted" style="font-size:12px;margin-top:6px">${d}</div></div>`).join('')}</div>
+  <p class="note" style="margin:14px 0 0">El formato también es almacenamiento: es la fila que se suma a la tabla 5 de D-05 (CSV contra Parquet con la misma consulta en Hive y Spark).</p></div>`;
+  $('#fm-run').onclick = () => F.forEach(([n, s, b, t], i) => { $('#fm' + i).style.width = '0'; $('#fmv' + i).textContent = '…'; setTimeout(() => { $('#fm' + i).style.width = (t / 41 * 100) + '%'; $('#fmv' + i).textContent = t + ' s'; }, 300 + i * 600); });
+}
+
+// ---------- YARN (full) ----------
+function renderYarn(el) {
+  el.innerHTML = `<div class="grid g3" style="margin-bottom:16px" id="ynodes"></div><div class="card"><h3>Aplicaciones <span class="x">cola <b>default</b> · 100 %</span></h3><table class="t" id="yapps"></table></div>`;
+  const nodes = [{ n: 'nm1', mem: 3072 }, { n: 'nm2', mem: 3072 }, { n: 'nm3', mem: 2048 }];
+  const apps = [{ id: 'application_1761_0041', nm: 'INSERT OVERWRITE viajes_dia', e: 'tez', c: 4, p: .3 }, { id: 'application_1761_0042', nm: 'pyspark: modelos_spark.py', e: 'spark', c: 3, p: .6 }, { id: 'application_1761_0040', nm: 'pig: wordcount.pig', e: 'mr', c: 2, p: .9 }];
+  const draw = () => {
+    const slots = nodes.map(n => ({ ...n, cs: [] }));
+    let k = 0; apps.forEach(a => { for (let i = 0; i < a.c; i++) { slots[k % 3].cs.push({ e: a.e, am: i === 0 }); k++; } });
+    $('#ynodes').innerHTML = slots.map(s => { const used = Math.min(s.mem, s.cs.length * 512 + 512); return `<div class="card"><h3><span class="dot done"></span>${s.n}<span class="x">${fmt(used)} / ${fmt(s.mem)} MB</span></h3><div class="bar"><i style="width:${used / s.mem * 100}%"></i></div><div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">${s.cs.map(c => `<div title="${c.am ? 'Application Master' : 'contenedor'}" style="width:22px;height:22px;border-radius:5px;background:var(--${c.e});opacity:.85;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700">${c.am ? 'AM' : ''}</div>`).join('')}</div></div>`; }).join('');
+    $('#yapps').innerHTML = `<tr><th>Aplicación</th><th>Motor</th><th>Contenedores</th><th style="width:30%">Progreso</th></tr>` + apps.map(a => `<tr><td><b>${a.nm}</b><div class="mono muted">${a.id}</div></td><td>${engChip(a.e)}</td><td>${a.c}</td><td><div class="bar"><i style="width:${a.p * 100}%;background:var(--${a.e})"></i></div></td></tr>`).join('');
+  };
+  draw();
+  let t = 0;
+  pageTick = dt => { t += dt; if (t < .8) return; t = 0; apps.forEach(a => { a.p += rnd(.02, .07); if (a.p >= 1) { a.p = 0; a.c = Math.floor(rnd(2, 5)); } }); draw(); };
+}
+
+// ---------- Motores ----------
+function renderMotores(el) {
+  el.innerHTML = `<div class="grid g3">${['mr', 'tez', 'spark'].map(e => `<div class="card"><h3>${engChip(e)}<span class="x">último trabajo</span></h3><svg viewBox="0 0 300 170" style="width:100%" id="mot-${e}"></svg><div class="muted" style="font-size:12.5px" id="mt-${e}"></div></div>`).join('')}</div>
+  <div class="card" style="margin-top:16px"><h3>"Fue a disco" no es uno solo <span class="x">corrección 1 de D-05</span></h3><table class="t"><tr><th></th><th>MapReduce</th><th>Tez</th><th>Spark</th></tr>
+  <tr><td>Entre trabajos</td><td>escribe a <b>HDFS</b></td><td>un solo DAG: <b>sin escribir en HDFS</b> entre pasos</td><td>un solo trabajo con stages</td></tr>
+  <tr><td>Shuffle</td><td>a <b>disco local</b> de cada máquina</td><td>a <b>disco local</b></td><td>a <b>disco local</b></td></tr>
+  <tr><td>Cuando no entra en memoria</td><td>derrama (spill) a disco local</td><td>derrama a disco local</td><td>derrama a disco local (<code>diskBytesSpilled</code>)</td></tr></table></div>`;
+  const T = { mr: 'Dos trabajos encadenados: el primero escribe a HDFS y el segundo lo vuelve a leer.', tez: 'Un DAG: Map 1 → Reducer 2 → Reducer 3. El shuffle va a disco local, nunca a HDFS.', spark: 'Stage 0 → Stage 1 → Stage 2. Lo intermedio queda en memoria; el shuffle, a disco local.' };
+  const G = {};
+  for (const e of ['mr', 'tez', 'spark']) {
+    $('#mt-' + e).textContent = T[e];
+    const s = $('#mot-' + e), col = css('--' + e);
+    const nodes = e === 'mr' ? [[40, 50, 'map'], [130, 50, 'reduce'], [215, 50, 'HDFS'], [40, 125, 'map'], [130, 125, 'reduce'], [215, 125, 'HDFS']] : e === 'tez' ? [[40, 85, 'Map 1'], [135, 50, 'Reducer 2'], [135, 125, 'Map 4'], [235, 85, 'Reducer 3']] : [[40, 85, 'Stage 0'], [140, 85, 'Stage 1'], [240, 85, 'Stage 2']];
+    const edges = e === 'mr' ? [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]] : e === 'tez' ? [[0, 1], [1, 3], [2, 3]] : [[0, 1], [1, 2]];
+    const ps = edges.map(([a, b]) => { const A = nodes[a], B = nodes[b]; const d = `M${A[0] + 26},${A[1]} C${(A[0] + B[0]) / 2 + 13},${A[1]} ${(A[0] + B[0]) / 2 + 13},${B[1]} ${B[0] - 26},${B[1]}`; return svgEl('path', { d, fill: 'none', stroke: css('--n-6'), 'stroke-width': 2 }, s); });
+    const rs = nodes.map(([x, y, t]) => { const g = svgEl('g', {}, s); const hd = t === 'HDFS'; const r = svgEl('rect', { x: x - 26, y: y - 17, width: 52, height: 34, rx: hd ? 17 : 8, fill: hd ? '#eef7fa' : '#fff', stroke: hd ? css('--blk') : col, 'stroke-width': 1.5 }, g); const tx = svgEl('text', { x, y: y + 4, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600, fill: hd ? css('--blk') : css('--n-11') }, g); tx.textContent = t; return r; });
+    const dots = ps.map(p => ({ p, len: p.getTotalLength(), c: svgEl('circle', { r: 3.5, fill: col }, s), t: Math.random() }));
+    G[e] = { rs, dots, col, t: 0 };
+  }
+  pageTick = dt => { for (const e in G) { const g = G[e]; g.t += dt; g.dots.forEach((d, i) => { d.t = (d.t + dt * .45) % 1; const pt = d.p.getPointAtLength(d.t * d.len); d.c.setAttribute('cx', pt.x); d.c.setAttribute('cy', pt.y); }); const act = Math.floor(g.t * 1.2) % g.rs.length; g.rs.forEach((r, i) => r.setAttribute('fill-opacity', i === act ? .0 : 1) || r.setAttribute('stroke-width', i === act ? 3 : 1.5)); } };
+}
+
+// ---------- Lenguajes ----------
+const SNIP = {
+  hive: `<span class="c">-- HiveQL: corre en Tez (o en MapReduce con hive.execution.engine=mr)</span>
+<span class="k">SELECT</span> to_date(pickup) <span class="k">AS</span> dia, <span class="f">count</span>(*) <span class="k">AS</span> viajes
+<span class="k">FROM</span> viajes
+<span class="k">GROUP BY</span> to_date(pickup);`,
+  pig: `<span class="c">-- Pig Latin: cada paso es un trabajo MapReduce</span>
+v = <span class="k">LOAD</span> <span class="s">'/datos/crudo/viajes.csv'</span> <span class="k">USING</span> PigStorage(<span class="s">','</span>) <span class="k">AS</span> (vendor, pickup:chararray, …);
+d = <span class="k">FOREACH</span> v <span class="k">GENERATE</span> <span class="f">SUBSTRING</span>(pickup, 0, 10) <span class="k">AS</span> dia;
+g = <span class="k">GROUP</span> d <span class="k">BY</span> dia;
+r = <span class="k">FOREACH</span> g <span class="k">GENERATE</span> group, <span class="f">COUNT</span>(d);
+<span class="k">STORE</span> r <span class="k">INTO</span> <span class="s">'/datos/curado/viajes_dia_pig'</span>;`,
+  ssql: `<span class="c">-- Spark SQL: la misma tabla del Metastore</span>
+<span class="k">SELECT</span> to_date(pickup) <span class="k">AS</span> dia, <span class="f">count</span>(*) <span class="k">AS</span> viajes
+<span class="k">FROM</span> viajes
+<span class="k">GROUP BY</span> 1;`,
+  pys: `<span class="c"># PySpark: DataFrames sobre YARN</span>
+<span class="k">from</span> pyspark.sql <span class="k">import</span> functions <span class="k">as</span> F
+df = spark.table(<span class="s">"viajes"</span>)
+(df.groupBy(F.to_date(<span class="s">"pickup"</span>).alias(<span class="s">"dia"</span>))
+   .count().orderBy(<span class="s">"dia"</span>).show())`,
+  mrm: `<span class="c"># MapReduce a mano (Streaming): mapper.py</span>
+<span class="k">import</span> sys
+<span class="k">for</span> linea <span class="k">in</span> sys.stdin:
+    campos = linea.split(<span class="s">","</span>)
+    <span class="f">print</span>(f<span class="s">"{campos[1][:10]}\\t1"</span>)
+<span class="c"># reducer.py suma por día · hadoop jar hadoop-streaming.jar -mapper … -reducer …</span>`,
+};
+function renderLenguajes(el) {
+  const L = [['hive', 'Hive', ['tez', 'mr']], ['pig', 'Pig', ['mr']], ['ssql', 'Spark SQL', ['spark']], ['pys', 'PySpark', ['spark']], ['mrm', 'MapReduce a mano', ['mr']]];
+  el.innerHTML = `<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)"><div class="card"><h3>Lenguaje → motor</h3><table class="t"><tr><th>Lenguaje</th><th>MapReduce</th><th>Tez</th><th>Spark</th></tr>
+  ${L.map(([id, n, es]) => `<tr data-l="${id}" style="cursor:pointer"><td><b>${n}</b></td>${['mr', 'tez', 'spark'].map(e => `<td>${es.includes(e) ? `<span class="eng ${e}">● ${es[0] === e ? 'de fábrica' : 'se puede'}</span>` : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}</table>
+  <p class="note" style="margin:12px 0 0">El plan de la consulta (<code>PlanTree</code>) se queda con el editor de Hive y muestra qué motor se usó.</p></div>
+  <div class="card"><h3>La misma tarea, en cada lenguaje <span class="x"><a href="#" id="to-cmp">abrir en Comparar →</a></span></h3><div class="chips" id="lchips">${L.map(([id, n], i) => `<button class="chip${i ? '' : ' on'}" data-l="${id}">${n}</button>`).join('')}</div><pre class="code" id="lcode" style="margin-top:10px;max-height:none">${SNIP.hive}</pre></div></div>`;
+  const sel = id => { $$('#lchips .chip').forEach(c => c.classList.toggle('on', c.dataset.l === id)); $('#lcode').innerHTML = SNIP[id]; };
+  $$('[data-l]', el).forEach(c => c.onclick = () => sel(c.dataset.l));
+  $('#to-cmp').onclick = e => { e.preventDefault(); go('comparar'); };
+}
+
+// ---------- Comparar (§5) ----------
+const MET = [['t', 'Tiempo total', 's', 'RM elapsedTime'], ['cont', 'Contenedores', '', 'RM'], ['mem', 'Memoria × tiempo', 'GB·s', 'RM memorySeconds'], ['hr', 'Leído de HDFS', 'MB', 'HDFS_BYTES_READ · inputBytes'], ['hw', 'Escrito a HDFS', 'MB', 'HDFS_BYTES_WRITTEN · outputBytes'], ['sh', 'Shuffle (lo que viaja)', 'MB', 'REDUCE_SHUFFLE_BYTES · shuffleReadBytes'], ['sp', 'Derramado a disco local', 'MB', 'SPILLED · diskBytesSpilled'], ['loc', 'Localidad (data-local)', '%', 'DATA_LOCAL_MAPS · taskLocality'], ['lin', 'Líneas de código', '', 'del archivo de ejemplo']];
+const TOOL = (n, e, code, ph, m) => ({ n, e, code, ph, m });
+const TASKS = [
+  { id: 'grupo', n: 'Contar por grupo (viajes por día)', why: 'Los cuatro leen lo mismo de HDFS. La diferencia está en cuánto arranque pagan (contenedores) y en el shuffle: MapReduce lo escribe a disco local y lo relee; Tez y Spark combinan antes de mandarlo. Pig genera MapReduce: mismo motor, menos código.', tools: [
+    TOOL('MapReduce Streaming', 'mr', SNIP.mrm, ['map ×5', 'shuffle', 'reduce ×1'], { t: 96, cont: 7, mem: 410, hr: 612, hw: .2, sh: 41, sp: 83, loc: 92, lin: 24 }),
+    TOOL('Pig', 'mr', SNIP.pig, ['map ×5', 'shuffle', 'reduce ×1'], { t: 88, cont: 7, mem: 395, hr: 612, hw: .2, sh: 38, sp: 76, loc: 92, lin: 5 }),
+    TOOL('Hive (Tez)', 'tez', SNIP.hive, ['Map 1', 'Reducer 2'], { t: 31, cont: 4, mem: 140, hr: 612, hw: .2, sh: 12, sp: 12, loc: 100, lin: 4 }),
+    TOOL('Spark SQL', 'spark', SNIP.ssql, ['Stage 0', 'Stage 1'], { t: 19, cont: 3, mem: 96, hr: 612, hw: .2, sh: 9, sp: 0, loc: 100, lin: 4 })] },
+  { id: 'join', n: 'Join de dos datasets (viajes + zonas)', why: 'Con una tabla chica, Hive y Spark la mandan entera a cada tarea (broadcast) y casi no hay shuffle. Pig, sin la pista "replicated", hace un join con reduce: todo el dataset grande viaja.', tools: [
+    TOOL('Pig', 'mr', `v = <span class="k">LOAD</span> <span class="s">'/datos/crudo/viajes.csv'</span> …;\nz = <span class="k">LOAD</span> <span class="s">'/datos/crudo/zonas.csv'</span> …;\nj = <span class="k">JOIN</span> v <span class="k">BY</span> zona, z <span class="k">BY</span> zona_id;\n<span class="k">STORE</span> j <span class="k">INTO</span> <span class="s">'/datos/limpio/viajes_zona'</span>;`, ['map ×6', 'shuffle', 'reduce ×2'], { t: 124, cont: 9, mem: 610, hr: 613, hw: 640, sh: 598, sp: 702, loc: 88, lin: 4 }),
+    TOOL('Hive (Tez)', 'tez', `<span class="k">SELECT</span> v.*, z.barrio\n<span class="k">FROM</span> viajes v <span class="k">JOIN</span> zonas z <span class="k">ON</span> v.zona = z.zona_id;`, ['Map 2 (broadcast)', 'Map 1'], { t: 38, cont: 4, mem: 170, hr: 119, hw: 131, sh: 1, sp: 0, loc: 100, lin: 2 }),
+    TOOL('Spark SQL', 'spark', `<span class="k">SELECT</span> v.*, z.barrio\n<span class="k">FROM</span> viajes v <span class="k">JOIN</span> zonas z <span class="k">ON</span> v.zona = z.zona_id;`, ['Stage 0 (broadcast)', 'Stage 1'], { t: 24, cont: 3, mem: 110, hr: 119, hw: 128, sh: 1, sp: 0, loc: 100, lin: 2 })] },
+  { id: 'misma', n: 'Consulta ad hoc sobre la misma tabla', why: 'Mismo lenguaje (HiveQL), dos motores: con MapReduce cada etapa es un trabajo nuevo que escribe a HDFS; con Tez es un solo DAG. Spark SQL lee la misma tabla del Metastore.', tools: [
+    TOOL('Hive (Tez)', 'tez', SNIP.hive, ['Map 1', 'Reducer 2', 'Reducer 3'], { t: 29, cont: 4, mem: 132, hr: 118, hw: 0, sh: 6, sp: 6, loc: 100, lin: 4 }),
+    TOOL('Hive (MapReduce)', 'mr', `<span class="k">SET</span> hive.execution.engine=mr;\n` + SNIP.hive, ['job 1: map', 'reduce → HDFS', 'job 2: map', 'reduce'], { t: 84, cont: 8, mem: 360, hr: 121, hw: 3, sh: 7, sp: 14, loc: 100, lin: 5 }),
+    TOOL('Spark SQL', 'spark', SNIP.ssql, ['Stage 0', 'Stage 1'], { t: 17, cont: 3, mem: 80, hr: 118, hw: 0, sh: 5, sp: 0, loc: 100, lin: 4 })] },
+  { id: 'formato', n: 'CSV contra Parquet', why: 'La misma consulta lee 612 MB en CSV y 118 MB en Parquet (y solo las columnas que usa). El formato pesa tanto como el motor.', tools: [
+    TOOL('Hive · CSV', 'tez', `<span class="k">SELECT</span> … <span class="k">FROM</span> viajes_csv …`, ['Map 1 ×5', 'Reducer 2'], { t: 44, cont: 6, mem: 210, hr: 612, hw: 0, sh: 12, sp: 12, loc: 100, lin: 4 }),
+    TOOL('Hive · Parquet', 'tez', `<span class="k">SELECT</span> … <span class="k">FROM</span> viajes …`, ['Map 1', 'Reducer 2'], { t: 22, cont: 3, mem: 90, hr: 31, hw: 0, sh: 12, sp: 12, loc: 100, lin: 4 }),
+    TOOL('Spark · CSV', 'spark', `spark.read.csv(<span class="s">"/datos/crudo/viajes.csv"</span>, header=<span class="k">True</span>)…`, ['Stage 0 ×5', 'Stage 1'], { t: 33, cont: 3, mem: 120, hr: 612, hw: 0, sh: 9, sp: 0, loc: 100, lin: 3 }),
+    TOOL('Spark · Parquet', 'spark', `spark.read.parquet(<span class="s">"/datos/limpio/viajes.parquet"</span>)…`, ['Stage 0', 'Stage 1'], { t: 11, cont: 3, mem: 45, hr: 29, hw: 0, sh: 9, sp: 0, loc: 100, lin: 3 })] },
+  { id: 'sqoop', n: 'Traer una tabla de MariaDB', why: 'Sqoop arma un trabajo MapReduce de solo maps, uno por partición de la tabla; Spark JDBC hace lo mismo con tareas. Con 5.000 filas manda el arranque, no el volumen.', tools: [
+    TOOL('Sqoop', 'mr', `sqoop import --connect jdbc:mysql://localhost/tienda \\\n  --username alumno --table ventas -m 2 \\\n  --target-dir /datos/crudo/ventas`, ['map ×2', '(sin reduce)'], { t: 41, cont: 3, mem: 120, hr: 0, hw: .3, sh: 0, sp: 0, loc: 0, lin: 3 }),
+    TOOL('Spark JDBC', 'spark', `spark.read.jdbc(<span class="s">"jdbc:mysql://localhost/tienda"</span>, <span class="s">"ventas"</span>, …)\n     .write.parquet(<span class="s">"/datos/crudo/ventas"</span>)`, ['Stage 0'], { t: 14, cont: 2, mem: 40, hr: 0, hw: .1, sh: 0, sp: 0, loc: 0, lin: 2 })] },
+  { id: 'ml', n: 'Entrenar un modelo (HIGGS chico)', why: 'MLlib reparte el entrenamiento en executors de YARN y lee de HDFS; scikit-learn corre en una sola máquina con una muestra. Para datos chicos gana sklearn; cuando no entra en memoria, MLlib.', tools: [
+    TOOL('MLlib (YARN)', 'spark', `<span class="k">from</span> pyspark.ml.classification <span class="k">import</span> GBTClassifier\nm = GBTClassifier(maxIter=<span class="s">20</span>).fit(train)`, ['Stage ×20 (iteraciones)', 'evaluación'], { t: 142, cont: 4, mem: 820, hr: 380, hw: 2, sh: 64, sp: 0, loc: 96, lin: 9 }),
+    TOOL('scikit-learn (muestra)', 'py', `<span class="k">from</span> sklearn.ensemble <span class="k">import</span> HistGradientBoostingClassifier\nm = HistGradientBoostingClassifier().fit(X, y)`, ['leer muestra', 'fit en 1 máquina'], { t: 58, cont: 0, mem: 0, hr: 76, hw: 0, sh: 0, sp: 0, loc: 0, lin: 7 })] },
+];
+function renderComparar(el) {
+  let task = TASKS[0], sel = new Set(task.tools.map((_, i) => i)), run = null;
+  el.innerHTML = `<div class="card" style="margin-bottom:16px"><div style="display:grid;gap:10px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="width:110px">Tarea</b><div class="chips" id="c-tasks">${TASKS.map((t, i) => `<button class="chip${i ? '' : ' on'}" data-t="${i}">${t.n}</button>`).join('')}</div></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="width:110px">Herramientas</b><div class="chips" id="c-tools"></div><span class="muted" style="font-size:12px">de 2 a 4 · corren en serie, con los mismos datos</span>
+    <span style="margin-left:auto;display:flex;gap:8px"><button class="btn" id="c-copy">Copiar a la terminal</button><button class="btn pri" id="c-run">▶ Correr</button></span></div></div></div>
+    <div class="grid" id="c-cols"></div>
+    <div class="card" style="margin-top:16px"><h3>Métricas · misma escala <span class="x">de RM, JobHistory (:19888) y Spark History (:18080) · Tez: resumen del DAG en beeline (a probar)</span></h3><div id="c-met"></div></div>
+    <div class="card" style="margin-top:16px"><h3>Qué muestra esto</h3><div id="c-why" style="font-size:13.5px"></div></div>`;
+  const tools = () => task.tools.filter((_, i) => sel.has(i));
+  const drawTools = () => { $('#c-tools').innerHTML = task.tools.map((t, i) => `<button class="chip tool ${t.e}${sel.has(i) ? ' on' : ''}" data-i="${i}">${t.n}</button>`).join(''); $$('#c-tools .chip').forEach(c => c.onclick = () => { const i = +c.dataset.i; if (sel.has(i) && sel.size > 2) sel.delete(i); else if (!sel.has(i) && sel.size < 4) sel.add(i); else toast('Entre 2 y 4 herramientas'); stop(); drawAll(); }); };
+  const drawCols = () => {
+    const ts = tools();
+    $('#c-cols').style.gridTemplateColumns = `repeat(${ts.length},minmax(0,1fr))`;
+    $('#c-cols').innerHTML = ts.map((t, i) => `<div class="card col-cmp" style="border-top:3px solid var(--${t.e === 'py' ? 'n-8' : t.e})"><div style="display:flex;align-items:center;gap:8px"><b>${t.n}</b><span style="margin-left:auto">${engChip(t.e)}</span></div>
+      <pre class="code">${t.code}</pre>
+      <svg viewBox="0 0 300 60" style="width:100%" id="ph${i}"></svg>
+      <div class="status" id="st${i}"><span class="dot"></span>esperando</div><div class="bar"><i id="pr${i}" style="width:0;background:var(--${t.e === 'py' ? 'n-8' : t.e});transition:none"></i></div></div>`).join('');
+    ts.forEach((t, i) => { const s = $('#ph' + i); const n = t.ph.length, w = 300 / n; t.ph.forEach((p, j) => { const g = svgEl('g', { class: 'phn' }, s); svgEl('rect', { x: j * w + 3, y: 14, width: w - 14, height: 32, rx: 7, fill: '#fff', stroke: css('--n-6'), 'stroke-width': 1.5 }, g); const tx = svgEl('text', { x: j * w + 3 + (w - 14) / 2, y: 34, 'text-anchor': 'middle', 'font-size': n > 3 ? 9.5 : 11, 'font-weight': 600, fill: css('--n-10') }, g); tx.textContent = p; if (j < n - 1) svgEl('path', { d: `M${(j + 1) * w - 10},30 l8,0`, stroke: css('--n-7'), 'stroke-width': 1.5, 'marker-end': '' }, s); }); });
+  };
+  const drawMet = (prog) => {
+    const ts = tools();
+    $('#c-met').innerHTML = MET.map(([k, n, u, src]) => { const mx = Math.max(...ts.map(t => t.m[k]), 1e-9); return `<div class="mrow"><div class="lbl">${n}<small>${src}</small></div><div class="mbars">${ts.map((t, i) => { const done = prog[i] >= 1; return `<div class="mb"><span class="nm">${t.n}</span><div class="bar"><i style="width:${done ? t.m[k] / mx * 100 : 0}%;background:var(--${t.e === 'py' ? 'n-8' : t.e})"></i></div><span class="v">${done ? fmt(t.m[k], t.m[k] < 1 && t.m[k] > 0 ? 1 : 0) + (u ? ' ' + u : '') : '—'}</span></div>`; }).join('')}</div></div>`; }).join('');
+  };
+  const drawAll = () => { drawTools(); drawCols(); drawMet(tools().map(() => 0)); $('#c-why').innerHTML = task.why; };
+  const stop = () => { run = null; pageTick = null; };
+  $$('#c-tasks .chip').forEach(c => c.onclick = () => { $$('#c-tasks .chip').forEach(x => x.classList.toggle('on', x === c)); task = TASKS[+c.dataset.t]; sel = new Set(task.tools.slice(0, 4).map((_, i) => i)); stop(); drawAll(); });
+  $('#c-copy').onclick = () => { const txt = tools().map(t => t.code.replace(/<[^>]+>/g, '')).join('\n\n'); (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copiado: pegalo en la terminal integrada (Ctrl+`)'), () => toast('Copiado (simulado)')); };
+  $('#c-run').onclick = () => {
+    const ts = tools(); const prog = ts.map(() => 0); let i = 0; drawMet(prog);
+    ts.forEach((_, j) => { $('#st' + j).innerHTML = '<span class="dot"></span>esperando'; $('#pr' + j).style.width = '0'; });
+    run = { i }; let redraw = 0;
+    pageTick = dt => {
+      if (!run || i >= ts.length) return;
+      const t = ts[i]; const dur = clamp(t.m.t / 14, 1.6, 7);
+      prog[i] = Math.min(1, prog[i] + dt / dur);
+      const sec = Math.round(prog[i] * t.m.t);
+      $('#pr' + i).style.width = prog[i] * 100 + '%';
+      $('#st' + i).innerHTML = prog[i] < 1 ? `<span class="dot run"></span>corriendo · ${sec} s` : `<span class="dot done"></span>listo · ${t.m.t} s`;
+      const n = t.ph.length, act = Math.min(n - 1, Math.floor(prog[i] * n));
+      $$('#ph' + i + ' .phn rect').forEach((r, j) => { r.setAttribute('stroke', j <= act ? css('--' + (t.e === 'py' ? 'n-8' : t.e)) : css('--n-6')); r.setAttribute('fill', j < act || prog[i] >= 1 ? (t.e === 'py' ? '#f2f2f2' : t.e === 'mr' ? '#fdf5ee' : t.e === 'tez' ? '#f7f3fe' : '#f0f6fd') : '#fff'); r.setAttribute('stroke-width', j === act && prog[i] < 1 ? 2.5 : 1.5); });
+      if (prog[i] >= 1) { i++; drawMet(prog); if (i >= ts.length) toast('Listo: las ' + ts.length + ' corridas quedan guardadas en el volumen'); }
+    };
+  };
+  drawAll();
+}
+
+// ---------- Pipeline e ingesta ----------
+function renderPipeline(el) {
+  const S = [['Traer', 'Sqoop', 'mr', 'MariaDB tienda.ventas', '/datos/crudo/ventas'], ['Limpiar', 'Hive', 'tez', '/datos/crudo', '/datos/limpio (Parquet)'], ['Transformar', 'PySpark', 'spark', '/datos/limpio', '/datos/curado'], ['Publicar', 'Hive', 'tez', '/datos/curado', 'tabla ventas_mes']];
+  el.innerHTML = `<div class="card"><h3>Pipeline de la tienda <span class="x"><button class="btn pri" id="pp-run">▶ Correr</button></span></h3><div class="grid g4" id="pp">${S.map(([n, l, e, a, b], i) => `<div class="card" style="box-shadow:none;border-top:3px solid var(--${e})" id="pp${i}"><div class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase">Paso ${i + 1}</div><b style="font-size:15px">${n}</b><div style="margin:6px 0">${l} · ${engChip(e)}</div><div class="mono muted" style="font-size:11.5px">${a}<br>→ ${b}</div><div class="bar" style="margin-top:10px"><i id="ppb${i}" style="width:0;background:var(--${e});transition:none"></i></div></div>`).join('')}</div>
+  <p class="note" style="margin:14px 0 0">Cada etapa dice qué lenguaje y qué motor usa: el servidor ya lo sabe (Sqoop, Hive, Spark).</p></div>`;
+  $('#pp-run').onclick = () => { let i = 0, p = 0; S.forEach((_, j) => $('#ppb' + j).style.width = '0'); pageTick = dt => { if (i >= S.length) return; p += dt / 1.6; $('#ppb' + i).style.width = Math.min(100, p * 100) + '%'; if (p >= 1) { i++; p = 0; } }; };
+}
+function generic(items, extra = '') { return el => { el.innerHTML = `<div class="grid g2">${items.map(([t, d]) => `<div class="card"><h3>${t}</h3><div class="muted" style="font-size:13px">${d}</div></div>`).join('')}</div>${extra}`; }; }
+
+const PAGES = {
+  inicio: { layer: null, title: 'Inicio', sub: 'El mapa 360: de dónde vienen los datos, dónde quedan, quién los procesa y con qué recursos.', render: renderInicio },
+  hdfs: { layer: 'alm', title: 'HDFS', sub: 'Explorador, DataNodes, replicación y fsck. Queda igual; se suma el cartel de capa.', franja: [null, null, '/datos · 3 DataNodes · réplica 2'], render: renderHdfs },
+  tablas: { layer: 'alm', title: 'Tablas', sub: 'El Metastore: tabla, columnas, formato, carpeta en HDFS y quién la puede leer.', franja: [null, null, 'Metastore (MySQL) → carpetas de HDFS'], render: renderTablas },
+  bases: { layer: 'alm', title: 'Bases', sub: 'MariaDB y MongoDB, con las pestañas que antes vivían en Consultas.', franja: [null, null, 'MariaDB tienda · MongoDB tienda'], render: renderBases },
+  formatos: { layer: 'alm', title: 'Formatos', sub: 'La misma tabla en CSV, Parquet y ORC: tamaño en HDFS, bloques y tiempo de una consulta.', franja: ['tabla viajes', 'Spark SQL · Spark', '/datos/limpio'], render: renderFormatos },
+  yarn: { layer: 'rec', title: 'YARN', sub: 'Nodos, colas y contenedores. Los nodos y colas se mudan acá desde Cluster.', franja: [null, null, '3 NodeManagers · 8 GB · cola default'], render: renderYarn },
+  motores: { layer: 'proc', title: 'Motores', sub: 'Una ficha por motor con las fases o el DAG de su último trabajo.', franja: ['tabla viajes', 'MapReduce · Tez · Spark', 'HDFS'], render: renderMotores },
+  lenguajes: { layer: 'proc', title: 'Lenguajes', sub: 'Hive, Pig, Spark SQL, PySpark y MapReduce a mano: qué motor usa cada uno.', franja: ['tabla viajes', 'HiveQL · Tez', '/datos/curado/viajes_dia'], render: renderLenguajes },
+  comparar: { layer: 'proc', title: 'Comparar', sub: 'Elegí una tarea y de 2 a 4 herramientas: corren con los mismos datos y se ven una al lado de la otra.', franja: ['/datos/crudo/viajes.csv', '2 a 4 herramientas · en serie', 'métricas en la misma escala'], render: renderComparar },
+  subir: { layer: 'ing', title: 'Subir archivos', sub: 'La misma acción que el diálogo de HDFS, con entrada propia.', franja: ['tu compu', 'hdfs dfs -put', '/datos/crudo'], render: generic([['Arrastrá archivos acá', 'CSV, Parquet, JSON o texto. Van a <code>/datos/crudo</code> y se ve cuántos bloques ocupó cada uno.'], ['Después', 'Crear una tabla en el Metastore apuntando a esa carpeta (abre <i>Tablas</i>).']]) },
+  sqoop: { layer: 'ing', title: 'Sqoop', sub: 'Pantalla propia: tabla de MariaDB → HDFS o Hive.', franja: ['MariaDB tienda.ventas', 'Sqoop · MapReduce (solo maps)', '/datos/crudo/ventas'], render: generic([['Origen', 'jdbc:mysql://localhost/tienda · tablas clientes, productos, ventas'], ['Destino', 'Carpeta de HDFS o tabla de Hive (<code>--hive-import</code>). Muestra los maps que lanzó y cuánto trajo cada uno.']]) },
+  pipeline: { layer: 'ing', title: 'Pipeline', sub: 'Traer, limpiar, transformar y publicar: cada etapa con su lenguaje y su motor.', franja: ['MariaDB', 'Sqoop · Hive · PySpark', '/datos/curado'], render: renderPipeline },
+  ml: { layer: 'ml', title: 'Estudio de ML', sub: 'Sin cambios de fondo: el estudio sigue en sus etapas (D-04).', franja: ['HIGGS en HDFS', 'MLlib · Spark sobre YARN', 'modelos y métricas'], render: generic([['Etapas a y b', 'Mergeadas: datos de ejemplo en HDFS y estudio guiado.'], ['Etapas c, d y e', 'En la rama ui2-ml-etapa-c.'], ['Colores', 'Las curvas usan los colores de motor y ejes en grises claros (tema claro).'], ['Comparar', 'La tarea "Entrenar un modelo" abre MLlib contra scikit-learn.']]) },
+  practicas: { layer: 'prac', title: 'Prácticas guiadas', sub: 'Reordenadas por capas: almacenamiento → recursos → procesamiento → ML. Los ids no cambian.', render: generic([['1 · Almacenamiento', 'HDFS y bloques · Formatos y data lake · Tablas · Bases'], ['2 · Recursos', 'YARN: contenedores y colas'], ['3 · Procesamiento', 'MapReduce a mano · Hive y Pig · Spark · Comparar. Cada una termina con "probalo también con…"'], ['4 · Ingesta y ML', 'Pipeline · Machine Learning']]) },
+  cluster: { layer: 'op', title: 'Cluster', sub: 'Se queda el sinóptico y los servicios; nodos y colas se van a YARN.', render: generic([['Sinóptico', 'El dibujo 3D del cluster, con fondo claro y líneas grises.'], ['Servicios', 'NameNode, ResourceManager, Hive, Spark History, MariaDB, MongoDB: arriba / abajo.']]) },
+  consola: { layer: 'op', title: 'Consola', sub: 'Sin cambios.', render: generic([['Terminal integrada', 'Ctrl+` · hdfs, yarn, beeline, spark-submit, pig']]) },
+  config: { layer: 'op', title: 'Configuración', sub: 'Sin cambios. Sin selector de tema oscuro (D-06).', render: generic([['Variables', 'REPLICATION, BLOCK_SIZE, SERVICIOS, DATANODES…']]) },
+};
+
+// =====================================================================
+//  EMPRESA / AULA: plano 2D, tráfico, caídas, recursos y YARN (§11)
+// =====================================================================
+const Aula = (() => {
+  const svg = $('#plano');
+  const W = 1000, H = 700, HUB = { x: 500, y: 100 };
+  const ROWS = [250, 390, 530], SEATS = 6, TRAY_Y = 648;
+  const seatX = j => 105 + j * 158;
+  const PCS_POR_FILA = 5, CMB = 1024;
+  const WIN = ['PC107', 'PC109', 'PC112', 'PC118', 'PC121', 'PC126', 'PC131', 'PC137', 'PC142', 'PC149', 'PC157', 'PC163', 'PC170', 'PC176', 'PC182', 'PC188'];
+  const S = { T: 0, speed: 5, pcs: [], blocks: [], copies: [], apps: [], flows: new Map(), ema: new Map(), filters: { blk: 1, shf: 1, ctl: 1 }, seq: 41, fail: null, hist: [], tl: [], loads: [], demo: null, sel: null };
+  const appColors = ['#0969DA', '#8250DF', '#BF3989', '#B35900', '#0A7EA4', '#1A7F37'];
+
+  function newPc(n, row, seat, ram) {
+    const big = ram === 16;
+    return { id: 'pc' + String(n).padStart(2, '0'), n, win: WIN[(n - 1) % WIN.length], ram, mem: big ? 5120 : 2048, cores: big ? 8 : 4, row, seat, rack: 'fila' + Math.ceil(n / PCS_POR_FILA), rackNext: null, state: 'ok', tState: 0, tDown: null, nnDead: false, lost: false, x: 0, y: 0, el: null };
+  }
+  function seatPos(pc) { if (pc.row < 0) return { x: 90 + pc.seat * 128, y: TRAY_Y }; return { x: seatX(pc.seat), y: ROWS[pc.row] }; }
+  function init() {
+    const big = [3, 8, 11];
+    for (let n = 1; n <= 12; n++) { const r = Math.floor((n - 1) / PCS_POR_FILA); const pc = newPc(n, r, (n - 1) % PCS_POR_FILA, big.includes(n) ? 16 : 8); const p = seatPos(pc); pc.x = p.x; pc.y = p.y; S.pcs.push(pc); }
+    // dataset ya cargado: taxi 2024 (12 bloques) + HIGGS Parquet (24 bloques)
+    addBlocks(12, 'taxi'); addBlocks(24, 'higgs');
+    build();
+    launch('spark', true);
+  }
+  const alive = () => S.pcs.filter(p => p.state === 'ok');
+  const inHdfs = p => p.state === 'ok' || (p.state === 'down' && !p.nnDead);
+  function addBlocks(n, f) {
+    for (let i = 0; i < n; i++) {
+      const cands = S.pcs.filter(p => p.state === 'ok');
+      cands.sort((a, b) => blocksOf(a) - blocksOf(b) + rnd(-.5, .5));
+      S.blocks.push({ id: S.blocks.length, f, locs: ['maestro', cands[0].id] });
+    }
+  }
+  const blocksOf = pc => S.blocks.reduce((s, b) => s + (b.locs.includes(pc.id) ? 1 : 0), 0);
+  const under = () => S.blocks.filter(b => !S.copies.some(c => c.b === b && c.load) && b.locs.filter(l => l === 'maestro' || inHdfs(byId(l))).length < 2);
+  const byId = id => S.pcs.find(p => p.id === id);
+
+  // ---------- dibujo ----------
+  let gFlows, gPcs, gSeats, maestroEl, seatEls = [];
+  function build() {
+    svg.innerHTML = '';
+    const defs = svgEl('defs', {}, svg);
+    defs.innerHTML = `<filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".10"/></filter>
+      <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#E3E3E3"/></pattern>
+      <radialGradient id="glow"><stop offset="0" stop-color="#141414" stop-opacity=".07"/><stop offset="1" stop-color="#141414" stop-opacity="0"/></radialGradient>`;
+    svgEl('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#dots)' }, svg);
+    svgEl('rect', { x: 300, y: 14, width: 400, height: 8, rx: 4, fill: '#D9D9D9' }, svg);
+    const pz = svgEl('text', { x: 500, y: 38, 'text-anchor': 'middle', 'font-size': 10.5, 'letter-spacing': '.12em', fill: '#8F8F8F', 'font-weight': 700 }, svg); pz.textContent = 'PIZARRÓN';
+    svgEl('circle', { cx: HUB.x, cy: HUB.y, r: 150, fill: 'url(#glow)' }, svg);
+    gSeats = svgEl('g', {}, svg);
+    ROWS.forEach((y, r) => {
+      svgEl('rect', { x: 22, y: y - 62, width: 956, height: 124, rx: 16, fill: r % 2 ? '#FAFAFA' : '#FCFCFC', stroke: '#EBEBEB' }, gSeats);
+      const t = svgEl('text', { x: 34, y: y - 44, 'font-size': 10.5, 'font-weight': 700, 'letter-spacing': '.08em', fill: '#8F8F8F' }, gSeats); t.textContent = `FILA ${r + 1} · RACK /fila${r + 1}`;
+      for (let j = 0; j < SEATS; j++) { const s = svgEl('rect', { x: seatX(j) - 62, y: y - 48, width: 124, height: 100, rx: 12, class: 'seat' }, gSeats); seatEls.push({ el: s, row: r, seat: j }); }
+    });
+    svgEl('rect', { x: 22, y: TRAY_Y - 40, width: 956, height: 82, rx: 14, fill: 'none', stroke: '#D9D9D9', 'stroke-dasharray': '5 5' }, gSeats);
+    const tt = svgEl('text', { x: 34, y: TRAY_Y - 24, 'font-size': 10.5, 'font-weight': 700, 'letter-spacing': '.08em', fill: '#8F8F8F' }, gSeats); tt.textContent = 'SIN UBICAR · arrastralas a su lugar';
+    for (let j = 0; j < 7; j++) { const s = svgEl('rect', { x: 90 + j * 128 - 58, y: TRAY_Y - 34, width: 116, height: 70, rx: 10, class: 'seat', opacity: 0 }, gSeats); seatEls.push({ el: s, row: -1, seat: j }); }
+    gFlows = svgEl('g', {}, svg);
+    // maestro
+    maestroEl = svgEl('g', { transform: `translate(${HUB.x},${HUB.y})`, filter: 'url(#sh)' }, svg);
+    svgEl('rect', { x: -170, y: -44, width: 340, height: 88, rx: 14, fill: '#141414' }, maestroEl);
+    const mt = (x, y, s, w, c, txt, a = 'start') => { const e = svgEl('text', { x, y, 'font-size': s, 'font-weight': w, fill: c, 'text-anchor': a }, maestroEl); e.textContent = txt; return e; };
+    mt(-154, -20, 14, 700, '#fff', 'maestro');
+    mt(-88, -20, 11, 500, '#B0B0B0', 'PC86 · 10.13.0.1 · UDP 51820');
+    mt(-154, -2, 11, 500, '#C7C7C7', 'NameNode · ResourceManager · Hive · hub WireGuard');
+    maestroEl.blk = mt(-154, 18, 11, 600, '#7EE2A8', '');
+    maestroEl.hub = mt(-154, 34, 11, 500, '#B0B0B0', '');
+    svgEl('circle', { cx: 152, cy: -24, r: 5, fill: '#2DA44E' }, maestroEl);
+    gPcs = svgEl('g', {}, svg);
+    S.pcs.forEach(drawPc);
+  }
+  function drawPc(pc) {
+    const g = svgEl('g', { class: 'pc', filter: 'url(#sh)' }, gPcs);
+    const R = svgEl('rect', { x: -58, y: -44, width: 116, height: 92, rx: 12, fill: '#fff', stroke: '#D9D9D9', 'stroke-width': 1.2 }, g);
+    const T = (x, y, s, w, c, txt) => { const e = svgEl('text', { x, y, 'font-size': s, 'font-weight': w, fill: c }, g); e.textContent = txt; return e; };
+    const name = T(-48, -24, 14, 700, '#141414', pc.id);
+    const sub = T(-48, -10, 9.5, 500, '#6B6B6B', '');
+    const halo = svgEl('circle', { cx: 42, cy: -28, r: 9, fill: '#1A7F37', opacity: .15 }, g);
+    const lamp = svgEl('circle', { cx: 42, cy: -28, r: 5, fill: '#1A7F37' }, g);
+    T(-48, 5, 8.5, 600, '#8F8F8F', 'MEM');
+    svgEl('rect', { x: -26, y: -1, width: 74, height: 6, rx: 3, fill: '#EBEBEB' }, g);
+    const memB = svgEl('rect', { x: -26, y: -1, width: 0, height: 6, rx: 3, fill: '#141414' }, g);
+    T(-48, 17, 8.5, 600, '#8F8F8F', 'CPU');
+    svgEl('rect', { x: -26, y: 11, width: 74, height: 6, rx: 3, fill: '#EBEBEB' }, g);
+    const cpuB = svgEl('rect', { x: -26, y: 11, width: 0, height: 6, rx: 3, fill: '#525252' }, g);
+    const cg = svgEl('g', {}, g);
+    const foot = T(-48, 41, 9.5, 600, '#525252', '');
+    const badge = svgEl('g', { opacity: 0 }, g);
+    svgEl('rect', { x: -60, y: -62, width: 120, height: 16, rx: 8, fill: '#fff8e6', stroke: '#f0d58a' }, badge);
+    const bt = svgEl('text', { x: 0, y: -51, 'font-size': 9, 'font-weight': 700, fill: '#9A6700', 'text-anchor': 'middle' }, badge);
+    const st = svgEl('text', { x: 0, y: 64, 'font-size': 10, 'font-weight': 700, 'text-anchor': 'middle', fill: '#CF222E' }, g);
+    pc.el = { g, R, name, sub, lamp, halo, memB, cpuB, cg, foot, badge, bt, st, lastC: '' };
+    g.addEventListener('pointerdown', e => startDrag(e, pc));
+  }
+  const toSvg = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  let drag = null;
+  function startDrag(e, pc) {
+    e.preventDefault(); const p = toSvg(e);
+    drag = { pc, dx: pc.x - p.x, dy: pc.y - p.y, moved: false, sx: e.clientX, sy: e.clientY };
+    pc.el.g.classList.add('drag'); gPcs.appendChild(pc.el.g);
+    svg.setPointerCapture(e.pointerId);
+  }
+  svg.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    const p = toSvg(e); drag.pc.x = p.x + drag.dx; drag.pc.y = p.y + drag.dy; drag.pc.dragging = true;
+    const s = nearestSeat(drag.pc.x, drag.pc.y); seatEls.forEach(x => x.el.classList.toggle('hot', x === s));
+    hidePop();
+  });
+  svg.addEventListener('pointerup', e => {
+    if (!drag) return;
+    const pc = drag.pc; pc.el.g.classList.remove('drag'); pc.dragging = false;
+    seatEls.forEach(x => x.el.classList.remove('hot'));
+    if (!drag.moved) { showPop(pc); drag = null; return; }
+    const s = nearestSeat(pc.x, pc.y);
+    if (s) {
+      const other = S.pcs.find(o => o !== pc && o.row === s.row && o.seat === s.seat);
+      if (other) { other.row = pc.row; other.seat = pc.seat; checkRack(other); }
+      pc.row = s.row; pc.seat = s.seat; checkRack(pc); savePlano();
+    }
+    drag = null;
+  });
+  function nearestSeat(x, y) { let best = null, bd = 1e9; for (const s of seatEls) { const sx = s.row < 0 ? 90 + s.seat * 128 : seatX(s.seat), sy = s.row < 0 ? TRAY_Y : ROWS[s.row]; const d = Math.hypot(sx - x, sy - y); if (d < bd) { bd = d; best = s; } } return bd < 110 ? best : null; }
+  function checkRack(pc) {
+    if (pc.row < 0) { pc.rackNext = null; return; }
+    const r = 'fila' + (pc.row + 1);
+    if (r !== pc.rack) { if (pc.rackNext !== r) toast(`${pc.id}: su rack pasa de /${pc.rack} a /${r} en el próximo arranque (el rack se lee al registrar el DataNode)`); pc.rackNext = r; }
+    else pc.rackNext = null;
+  }
+
+  // ---------- popover de una PC ----------
+  const pop = $('#a-pop');
+  function showPop(pc) {
+    S.sel = pc;
+    const r = svg.getBoundingClientRect(), wr = $('#plano-wrap').getBoundingClientRect();
+    const m = svg.getScreenCTM(); const px = pc.x * m.a + m.e - wr.left, py = pc.y * m.d + m.f - wr.top;
+    pop.style.left = clamp(px + 70, 8, wr.width - 262) + 'px'; pop.style.top = clamp(py - 60, 8, wr.height - 230) + 'px';
+    renderPop(); pop.classList.add('on');
+  }
+  function hidePop() { pop.classList.remove('on'); S.sel = null; }
+  function renderPop() {
+    const pc = S.sel; if (!pc) return;
+    const u = usage(pc);
+    const est = { ok: '<span class="ok">● En el cluster</span>', join: '<span class="warn">● Sumándose</span>', down: pc.nnDead ? '<span class="err">● Caída</span>' : '<span class="warn">● Sin respuesta</span>' }[pc.state];
+    pop.innerHTML = `<h5>${pc.id} <span class="muted" style="font-weight:500;font-size:12px">${pc.win}</span><span style="margin-left:auto;font-size:12px">${est}</span></h5>
+      <div class="r"><span>IP del túnel</span><b class="mono">10.13.0.${10 + pc.n}</b></div>
+      <div class="r"><span>Rack</span><b>/${pc.rack}${pc.rackNext ? ' → /' + pc.rackNext : ''}</b></div>
+      <div class="r"><span>RAM de la PC</span><b>${pc.ram} GB</b></div>
+      <div class="r"><span>Presta a YARN</span><b>${fmt(pc.mem)} MB · ${pc.cores} cores</b></div>
+      <div class="r"><span>En uso</span><b>${fmt(u.mem)} MB · ${u.n} contenedores</b></div>
+      <div class="r"><span>Bloques</span><b>${blocksOf(pc)}</b></div>
+      <div class="acts">${pc.state === 'down' ? `<button class="btn pri" data-a="on">Prender</button>` : `<button class="btn pri" data-a="off" style="background:var(--err);border-color:var(--err)">Apagar (como Veyon)</button>`}<button class="btn" data-a="x">Cerrar</button></div>`;
+    $$('button', pop).forEach(b => b.onclick = () => { if (b.dataset.a === 'off') powerOff(pc); if (b.dataset.a === 'on') powerOn(pc); if (b.dataset.a === 'x') hidePop(); else renderPop(); });
+  }
+  document.addEventListener('pointerdown', e => { if (pop.classList.contains('on') && !e.target.closest('#a-pop') && !e.target.closest('.pc')) hidePop(); });
+
+  // ---------- acciones ----------
+  function ev(t) { S.fail && S.fail.ev.push({ t: S.T, l: t }); }
+  function powerOff(pc) {
+    if (pc.state === 'down') return;
+    pc.state = 'down'; pc.tDown = S.T; pc.nnDead = false; pc.lost = false;
+    S.copies = S.copies.filter(c => c.to !== pc.id);
+    const job = S.apps.find(a => a.state === 'RUNNING');
+    S.fail = { pc: pc.id, t0: S.T, ev: [{ t: S.T, l: pc.id + ' apagada' }], lost: 0, copied: 0, mb: 0, done: false, jobId: job ? job.id : null, jobT0: job ? job.est() : 0 };
+    S.tl = [];
+    toast(`${pc.id} apagada. El maestro todavía no lo sabe: mirá la lámpara.`);
+  }
+  function powerOn(pc) {
+    if (pc.state !== 'down') return;
+    pc.state = 'join'; pc.tState = S.T; pc.lost = false; pc.nnDead = false;
+    S.blocks.forEach(b => b.locs = b.locs.filter(l => l !== pc.id)); // el reset borró todo
+    if (pc.rackNext) { pc.rack = pc.rackNext; pc.rackNext = null; }
+    toast(`${pc.id} vuelve: el reset ya borró todo; se suma con el mismo nombre y la misma IP.`);
+  }
+  function addPc() {
+    const n = S.pcs.length ? Math.max(...S.pcs.map(p => p.n)) + 1 : 1;
+    if (n > 20) { toast('El laboratorio tiene 20 PCs'); return; }
+    const used = S.pcs.filter(p => p.row < 0).map(p => p.seat);
+    let seat = 0; while (used.includes(seat)) seat++;
+    const pc = newPc(n, -1, seat, Math.random() < .3 ? 16 : 8);
+    pc.state = 'join'; pc.tState = S.T; const p = seatPos(pc); pc.x = p.x; pc.y = p.y - 60;
+    S.pcs.push(pc); drawPc(pc);
+    toast(`${pc.id} reservó su número (lámpara ámbar). Arrastrala a su lugar en el plano.`);
+  }
+  function launch(kind, quiet) {
+    const pcs = alive(); if (!pcs.length) { toast('No hay PCs en el cluster'); return; }
+    const want = kind === 'spark' ? 9 : 7;
+    const cs = [];
+    const cand = pcs.slice().sort(() => Math.random() - .5);
+    for (let k = 0; cs.length < want && k < want * 3; k++) { const pc = cand[k % cand.length]; if (usage(pc).mem + CMB <= pc.mem) cs.push({ pc: pc.id, am: cs.length === 0 }); }
+    if (cs.length < 2) { toast('YARN no tiene memoria libre: esperá que termine un trabajo'); return; }
+    const id = 'application_1761_' + String(S.seq++).padStart(4, '0');
+    const work = kind === 'spark' ? 220 : 160;
+    const a = { id, kind, e: kind === 'spark' ? 'spark' : 'tez', name: kind === 'spark' ? 'MLlib: GBT sobre HIGGS' : 'Hive: viajes por día (taxi 2024)', cs, want, work, done: 0, state: 'RUNNING', t0: S.T, color: appColors[S.seq % appColors.length], retries: 0 };
+    a.est = () => a.t0 + a.work / Math.max(1, a.want * .9);
+    S.apps.unshift(a); S.apps = S.apps.slice(0, 5);
+    if (!quiet) toast(`${a.name}: ${cs.length} contenedores repartidos en ${new Set(cs.map(c => c.pc)).size} PCs`);
+  }
+  function loadDataset() {
+    S.loads.push({ left: 12, acc: 0 });
+    toast('Cargando 1,5 GB (12 bloques): cada bloque va al maestro (sin red) y a una PC por el túnel');
+  }
+  function usage(pc) { let mem = 0, n = 0; for (const a of S.apps) if (a.state === 'RUNNING') for (const c of a.cs) if (c.pc === pc.id) { mem += CMB; n++; } return { mem, n, cores: n }; }
+
+  // ---------- simulación (en segundos simulados) ----------
+  let acc1 = 0;
+  function step(dt) {
+    S.T += dt;
+    // estados de las PCs
+    for (const pc of S.pcs) {
+      if (pc.state === 'join' && S.T - pc.tState > 8) { pc.state = 'ok'; }
+      if (pc.state === 'down') {
+        const d = S.T - pc.tDown;
+        if (d >= 10 && !pc.amb) { pc.amb = true; ev('sin respuesta (10 s)'); }
+        if (d >= 40 && !pc.nnDead) { pc.nnDead = true; ev('NameNode: caída (40 s)'); toast(`${pc.id} caída: el NameNode empieza a re-copiar sus bloques`); }
+        if (d >= 60 && !pc.lost) {
+          pc.lost = true; ev('YARN: LOST (60 s)');
+          let lostN = 0;
+          for (const a of S.apps) if (a.state === 'RUNNING') {
+            const gone = a.cs.filter(c => c.pc === pc.id);
+            if (!gone.length) continue;
+            lostN += gone.length; a.cs = a.cs.filter(c => c.pc !== pc.id); a.retries += gone.length;
+            a.done = Math.max(0, a.done - gone.length * 9);
+            const free = alive().filter(p => usage(p).mem + CMB <= p.mem);
+            gone.forEach((g, i) => { const t = free[i % Math.max(1, free.length)]; if (t) a.cs.push({ pc: t.id, am: g.am }); });
+          }
+          if (S.fail) S.fail.lost += lostN;
+          toast(`YARN perdió ${pc.id}: ${lostN} intento(s) FAILED, reintentados en otras PCs`);
+        }
+      } else pc.amb = false;
+    }
+    // re-replicación: el NameNode copia desde el maestro (la otra copia) a la PC con menos bloques
+    const ur = under();
+    const maxStreams = 4;
+    for (const b of ur) {
+      if (S.copies.length >= maxStreams) break;
+      if (S.copies.some(c => c.b === b)) continue;
+      const tg = alive().filter(p => !b.locs.includes(p.id)).sort((x, y) => blocksOf(x) - blocksOf(y))[0];
+      if (tg) S.copies.push({ b, to: tg.id, left: 128, rr: true });
+    }
+    // cargas de dataset
+    for (const L of S.loads) {
+      if (L.left > 0 && !S.copies.some(c => c.load === L)) {
+        const tg = alive().sort((x, y) => blocksOf(x) - blocksOf(y) + rnd(-.5, .5))[0];
+        if (tg) { const b = { id: S.blocks.length, f: 'nuevo', locs: ['maestro'] }; S.blocks.push(b); S.copies.push({ b, to: tg.id, left: 128, load: L }); L.left--; }
+      }
+    }
+    S.loads = S.loads.filter(L => L.left > 0 || S.copies.some(c => c.load === L));
+    // flujos de este paso (Mbit/s)
+    const F = new Map();
+    const add = (a, b, type, mbps) => { const k = a + '>' + b + '>' + type; F.set(k, (F.get(k) || 0) + mbps); };
+    const nCopies = S.copies.length;
+    for (const c of S.copies) {
+      const rate = clamp(48 / Math.max(1, S.copies.filter(x => x.to === c.to).length), 6, 48) * rnd(.85, 1.05); // ~50 Mbit/s por PC (sonda)
+      c.left -= rate / 8.39 * dt;
+      add('maestro', c.to, 'blk', rate);
+      if (c.left <= 0) { c.b.locs.push(c.to); if (c.rr && S.fail && !S.fail.done) { S.fail.copied++; S.fail.mb += 128; } }
+    }
+    S.copies = S.copies.filter(c => c.left > 0);
+    // trabajos
+    for (const a of S.apps) {
+      if (a.state !== 'RUNNING') continue;
+      const live = a.cs.filter(c => { const p = byId(c.pc); return p && p.state === 'ok'; });
+      a.done += live.length * dt * .9;
+      const p = a.done / a.work;
+      const hosts = [...new Set(live.map(c => c.pc))];
+      if (p < .45) { hosts.forEach(h => add(h, 'maestro', 'ctl', .4)); if (Math.random() < .08 * dt * 5 && hosts.length > 1) { const x = pick(hosts); add('maestro', x, 'blk', 12); } }
+      else if (p < .8) { for (let i = 0; i < hosts.length; i++) for (let j = 0; j < hosts.length; j++) if (i !== j && ((i * 7 + j * 3 + Math.floor(S.T / 3)) % 4 === 0)) add(hosts[i], hosts[j], 'shf', rnd(6, 16) * (a.e === 'spark' ? 1 : .7)); hosts.forEach(h => add(h, 'maestro', 'ctl', .4)); }
+      else { hosts.forEach(h => { add(h, 'maestro', 'ctl', .4); if ((h.charCodeAt(3) + Math.floor(S.T)) % 3 === 0) add(h, 'maestro', 'blk', 8); }); }
+      if (p >= 1) { a.state = 'FINISHED'; a.t1 = S.T; if (S.fail && S.fail.jobId === a.id) { S.fail.jobT1 = S.T; } toast(`${a.name}: terminó en ${Math.round(a.t1 - a.t0)} s`); }
+    }
+    for (const pc of alive()) add('maestro', pc.id, 'ctl', .2);
+    // cap: cada PC no pasa de ~50 Mbit/s de bajada/subida por el túnel
+    const per = new Map();
+    for (const [k, v] of F) { const [a, b] = k.split('>'); for (const n of [a, b]) if (n !== 'maestro') per.set(n, (per.get(n) || 0) + v); }
+    for (const [k, v] of F) { const [a, b] = k.split('>'); let f = 1; for (const n of [a, b]) if (n !== 'maestro') f = Math.min(f, 52 / Math.max(52, per.get(n))); F.set(k, v * f); }
+    S.flows = F;
+    for (const k of new Set([...F.keys(), ...S.ema.keys()])) { const v = F.get(k) || 0; const e = (S.ema.get(k) || 0); const ne = e + (v - e) * Math.min(1, dt / 2.5); if (ne < .05 && !v) S.ema.delete(k); else S.ema.set(k, ne); }
+    // series
+    acc1 += dt;
+    if (acc1 >= 1) {
+      acc1 = 0;
+      const tot = { blk: 0, shf: 0, ctl: 0 }; for (const [k, v] of F) tot[k.split('>')[2]] += v;
+      S.hist.push(tot); if (S.hist.length > 120) S.hist.shift();
+      if (S.fail) {
+        const u = under().length, pend = S.copies.filter(c => c.rr).length;
+        S.tl.push({ t: S.T - S.fail.t0, u, pend });
+        if (S.tl.length > 400) S.tl.shift();
+        const pc = byId(S.fail.pc);
+        if (!S.fail.done && pc && pc.nnDead && u === 0 && pend === 0) { S.fail.done = true; S.fail.tRec = S.T; ev('0 sub-replicados'); toast(`Recuperado: ${S.fail.copied} bloques re-copiados en ${Math.round(S.T - S.fail.t0 - 40)} s`); }
+      }
+    }
+    // demo guiada
+    if (S.demo) demoStep();
+  }
+
+  // ---------- demo guiada ----------
+  function demoStep() {
+    const d = S.demo, t = S.T - d.t0;
+    for (const s of d.steps) if (!s.done && t >= s.at) { s.done = true; s.f(); }
+    if (d.steps.every(s => s.done)) S.demo = null;
+  }
+  function startDemo() {
+    const victim = S.pcs.find(p => p.id === 'pc07' && p.state === 'ok') || pick(alive());
+    S.speed = 5; $$('#a-speed button').forEach(b => b.classList.toggle('on', b.dataset.s === '5'));
+    S.demo = { t0: S.T, steps: [
+      { at: 0, f: () => { toast('1/4 · Lanzo un trabajo Spark: los contenedores se reparten en las PCs'); launch('spark', true); } },
+      { at: 14, f: () => { toast('2/4 · Entra en shuffle: mirá el tráfico PC a PC (pasa por el hub del profe)'); launch('hive', true); } },
+      { at: 30, f: () => { if (victim) { toast(`3/4 · Apago ${victim.id}, como desde Veyon`); powerOff(victim); } } },
+      { at: 100, f: () => toast('4/4 · Re-replicación desde el maestro y tareas reintentadas: mirá la línea de tiempo') },
+    ] };
+  }
+
+  // ---------- render ----------
+  const TYPE = { blk: '#0A7EA4', shf: '#BF3989', ctl: '#8F8F8F' };
+  const flowEls = new Map();
+  let dash = 0;
+  function pos(id) { if (id === 'maestro') return HUB; const p = byId(id); return p ? { x: p.x, y: p.y } : HUB; }
+  function render(rdt) {
+    // posiciones suaves
+    for (const pc of S.pcs) {
+      if (!pc.dragging) { const p = seatPos(pc); pc.x = lerp(pc.x, p.x, Math.min(1, rdt * 10)); pc.y = lerp(pc.y, p.y, Math.min(1, rdt * 10)); }
+      const E = pc.el, u = usage(pc);
+      E.g.setAttribute('transform', `translate(${pc.x.toFixed(1)},${pc.y.toFixed(1)})`);
+      const down = pc.state === 'down', d = down ? S.T - pc.tDown : 0;
+      const col = pc.state === 'join' ? '#9A6700' : down ? (d >= 40 ? '#CF222E' : d >= 10 ? '#9A6700' : '#1A7F37') : '#1A7F37';
+      E.lamp.setAttribute('fill', col); E.halo.setAttribute('fill', col);
+      E.halo.setAttribute('r', 8 + Math.sin(performance.now() / (pc.state === 'ok' ? 600 : 180)) * 2.5);
+      E.g.setAttribute('opacity', down && d >= 10 ? .62 : 1);
+      E.R.setAttribute('stroke', S.sel === pc ? '#141414' : down && d >= 40 ? '#CF222E' : pc.state === 'join' ? '#f0d58a' : '#D9D9D9');
+      E.R.setAttribute('stroke-width', S.sel === pc ? 2 : 1.2);
+      E.R.setAttribute('fill', down && d >= 40 ? '#fff6f6' : '#fff');
+      E.sub.textContent = `${pc.win} · 10.13.0.${10 + pc.n}`;
+      const live = !down && pc.state === 'ok';
+      E.memB.setAttribute('width', live ? 74 * Math.min(1, u.mem / pc.mem) : 0);
+      E.cpuB.setAttribute('width', live ? 74 * Math.min(1, u.cores / pc.cores) : 0);
+      E.foot.textContent = pc.state === 'join' ? 'reservó su número…' : `▦ ${blocksOf(pc)} bloques · ${fmt(pc.mem / 1024, pc.mem % 1024 ? 1 : 0)} GB`;
+      E.st.textContent = !down ? '' : d >= 60 ? 'Caída · YARN: LOST' : d >= 40 ? 'Caída · re-copiando' : d >= 10 ? 'Sin respuesta' : '';
+      E.st.setAttribute('fill', d >= 40 ? '#CF222E' : '#9A6700');
+      const sig = S.apps.filter(a => a.state === 'RUNNING').map(a => a.cs.filter(c => c.pc === pc.id).map(c => a.color + (c.am ? 'A' : '')).join(',')).join('|');
+      if (sig !== E.lastC) {
+        E.lastC = sig; E.cg.innerHTML = ''; let k = 0;
+        for (const a of S.apps) if (a.state === 'RUNNING') for (const c of a.cs) if (c.pc === pc.id && k < 8) { const x = -48 + k * 12; svgEl('rect', { x, y: 23, width: 10, height: 10, rx: 2.5, fill: a.color, opacity: .9 }, E.cg); if (c.am) svgEl('circle', { cx: x + 5, cy: 28, r: 2, fill: '#fff' }, E.cg); k++; }
+      }
+      E.badge.setAttribute('opacity', pc.rackNext ? 1 : 0); if (pc.rackNext) E.bt.textContent = `rack /${pc.rack} → /${pc.rackNext} al reiniciar`;
+    }
+    // maestro
+    maestroEl.blk.textContent = `DataNode "archivo": ${S.blocks.filter(b => b.locs.includes('maestro')).length} bloques (1 copia de c/u)`;
+    let hubT = 0; for (const v of S.flows.values()) hubT += v;
+    maestroEl.hub.textContent = `hub: ${alive().length} PCs en el túnel · ${fmt(hubT, 0)} Mbit/s`;
+    // flujos
+    dash -= rdt * 60;
+    const seen = new Set();
+    for (const [k, v0] of S.ema) {
+      const [a, b, type] = k.split('>');
+      const v = v0;
+      if (!S.filters[type] || v < (type === 'ctl' ? .1 : .6)) continue;
+      seen.add(k);
+      let E = flowEls.get(k);
+      if (!E) { const base = svgEl('path', { fill: 'none', stroke: TYPE[type], 'stroke-linecap': 'round', opacity: .18 }, gFlows); const top = svgEl('path', { fill: 'none', stroke: TYPE[type], 'stroke-linecap': 'round', 'stroke-dasharray': type === 'ctl' ? '1 7' : '2 12' }, gFlows); E = { base, top }; flowEls.set(k, E); }
+      const A = pos(a), B = pos(b);
+      // PC→PC: la curva se dobla hacia el hub (todo pasa por la PC del profe)
+      let cx = (A.x + B.x) / 2, cy = (A.y + B.y) / 2;
+      if (a !== 'maestro' && b !== 'maestro') { cx = lerp(cx, HUB.x, .42); cy = lerp(cy, HUB.y, .42); }
+      else { cx += (type === 'blk' ? 18 : -18); }
+      const off = type === 'shf' ? 6 : 0;
+      const d = `M${A.x + off},${A.y} Q${cx},${cy} ${B.x - off},${B.y}`;
+      const w = type === 'ctl' ? 1.2 : 1.5 + Math.sqrt(v) * 1.1;
+      E.base.setAttribute('d', d); E.base.setAttribute('stroke-width', w + 3);
+      E.top.setAttribute('d', d); E.top.setAttribute('stroke-width', w);
+      E.top.setAttribute('stroke-dashoffset', (dash * (type === 'ctl' ? .4 : 1 + v / 20)).toFixed(1));
+    }
+    for (const [k, E] of flowEls) if (!seen.has(k)) { E.base.remove(); E.top.remove(); flowEls.delete(k); }
+    // reloj
+    const s = Math.floor(S.T); $('#a-clock').textContent = `T+${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  let sideAcc = 0;
+  function renderSide() {
+    const al = alive(), ur = under().length;
+    const memT = al.reduce((s, p) => s + p.mem, 0), coresT = al.reduce((s, p) => s + p.cores, 0);
+    let memU = 0, nC = 0; for (const p of al) { const u = usage(p); memU += u.mem; nC += u.n; }
+    const dnLive = S.pcs.filter(inHdfs).length + 1, dnDead = S.pcs.filter(p => p.state === 'down' && p.nnDead).length;
+    let hubT = 0; for (const v of S.flows.values()) hubT += v;
+    const K = [['DataNodes vivos', dnLive, dnDead ? `${dnDead} muerto${dnDead > 1 ? 's' : ''}` : 'muertos 0', dnDead], ['Memoria para trabajos', fmt(memT / 1024, 1) + ' GB', `${fmt(memU / 1024, 1)} GB en uso`], ['Cores para trabajos', coresT, `${nC} contenedores`], ['Bloques en HDFS', S.blocks.length, 'réplica 2'], ['Sub-replicados', ur, S.copies.filter(c => c.rr).length ? `${S.copies.filter(c => c.rr).length} copiando` : 'ninguno copiando', ur], ['Por el hub', fmt(hubT, 0), 'Mbit/s']];
+    $('#a-kpis').innerHTML = K.map(([a, b, c, bad]) => `<div class="kp${bad ? ' bad' : ''}"><small>${a}</small><b>${b}</b><i>${c}</i></div>`).join('');
+    const allM = S.blocks.every(b => b.locs.includes('maestro')) && !S.loads.length;
+    const ap = $('#a-apagar'); ap.className = 'apagar ' + (allM ? 'si' : 'no'); ap.textContent = allM ? '● Ya pueden apagar: el maestro tiene una copia de cada bloque' : '● Todavía no apaguen las PCs: hay bloques cargándose';
+    // top tráfico (últimos ~5 s)
+    const arr = [...S.ema].filter(([k, v]) => v > .5 && !k.endsWith('ctl')).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const mx = Math.max(50, ...arr.map(x => x[1]));
+    $('#a-top').innerHTML = arr.length ? arr.map(([k, v]) => { const [a, b, t] = k.split('>'); return `<div class="tr"><i style="background:${TYPE[t]}"></i><span>${a} → ${b} <span class="muted">${t === 'blk' ? 'bloques' : 'shuffle'}</span></span><span class="v">${fmt(v, 1)} Mbit/s</span><div class="bar"><i style="width:${v / mx * 100}%;background:${TYPE[t]}"></i></div></div>`; }).join('') : '<div class="muted" style="font-size:12.5px">Sin tráfico de datos: lanzá un trabajo o cargá el dataset.</div>';
+    const per = new Map(); for (const [k, v] of S.flows) { const [a, b] = k.split('>'); for (const n of [a, b]) if (n !== 'maestro') per.set(n, (per.get(n) || 0) + v); }
+    const top = [...per].sort((a, b) => b[1] - a[1])[0];
+    $('#a-hubtxt').innerHTML = top ? `más cargada: <b>${top[0]}</b> ${fmt(top[1], 0)}/50 Mbit/s` : '';
+    // YARN
+    const run = S.apps.filter(a => a.state === 'RUNNING');
+    $('#a-yarntxt').textContent = `${run.length} corriendo · cola default`;
+    $('#a-apps').innerHTML = S.apps.length ? S.apps.map(a => { const p = Math.min(1, a.done / a.work); const hosts = new Set(a.cs.map(c => c.pc)).size; return `<div class="app${a.state === 'FINISHED' ? ' fin' : ''}"><div class="h"><i style="width:10px;height:10px;border-radius:3px;background:${a.color}"></i><b>${a.name}</b><span class="x">${a.state === 'RUNNING' ? Math.round(p * 100) + ' %' : 'terminó · ' + Math.round(a.t1 - a.t0) + ' s'}</span></div>
+      <div class="bar"><i style="width:${p * 100}%;background:${a.color}"></i></div>
+      <div class="muted" style="font-size:11.5px;display:flex;gap:8px;flex-wrap:wrap"><span class="mono">${a.id}</span>${engChip(a.e)}<span>${a.state === 'RUNNING' ? `${a.cs.length} contenedores en ${hosts} PCs` : ''}${a.retries ? ` · <b class="warn">${a.retries} reintentos</b>` : ''}</span><span>${a.state === 'RUNNING' ? (p < .45 ? 'leyendo (localidad)' : p < .8 ? 'shuffle' : 'escribiendo') : ''}</span></div></div>`; }).join('') : '<div class="muted">Sin trabajos.</div>';
+    // resumen de la caída
+    const f = S.fail;
+    if (f) {
+      const pc = byId(f.pc), d = S.T - f.t0;
+      $('#a-tltxt').textContent = `${f.pc} · ${Math.round(d)} s`;
+      if (f.done) {
+        const job = S.apps.find(a => a.id === f.jobId);
+        const extra = job && job.t1 ? Math.max(0, Math.round((job.t1 - job.t0) - job.work / Math.max(1, job.want * .9))) : null;
+        $('#a-res').innerHTML = `<b>${f.pc}</b>: se perdieron <b>${f.lost}</b> contenedores, se re-copiaron <b>${f.copied}</b> bloques (<b>${fmt(f.mb)} MB</b>) en <b>${Math.round(f.tRec - f.t0 - 40)} s</b> desde que el NameNode la dio por caída${extra !== null ? `; el trabajo tardó <b>${extra} s</b> más` : job ? '; el trabajo sigue' : ''}. <span class="muted">Este resumen va al portafolio.</span>`;
+      } else {
+        $('#a-res').innerHTML = f.ev.map(e => `<div><span class="mono muted">+${String(Math.round(e.t - f.t0)).padStart(3, ' ')} s</span> ${e.l}</div>`).join('') + (pc && pc.state === 'down' && !pc.nnDead ? `<div class="muted">El NameNode la da por caída a los 40 s (faltan ${Math.max(0, Math.ceil(40 - d))} s).</div>` : '');
+      }
+    }
+  }
+  function drawTraffic() {
+    const c = $('#a-traf'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+    const w = c.clientWidth, h = 110; if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const Hh = S.hist, n = 120, mx = Math.max(60, ...Hh.map(x => x.blk + x.shf + x.ctl)) * 1.1;
+    ctx.strokeStyle = '#EBEBEB'; ctx.lineWidth = 1; ctx.font = '10px system-ui'; ctx.fillStyle = '#8F8F8F';
+    for (const v of [50, 100, 200, 400]) if (v < mx) { const y = h - 14 - v / mx * (h - 22); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); ctx.fillText(v + ' Mbit/s', 4, y - 3); }
+    const X = i => (i + n - Hh.length) / (n - 1) * w, Y = v => h - 14 - v / mx * (h - 22);
+    const stack = [['ctl', '#C7C7C7'], ['blk', '#0A7EA4'], ['shf', '#BF3989']];
+    let prev = Hh.map(() => 0);
+    for (const [k, col] of stack) {
+      const cur = Hh.map((x, i) => prev[i] + x[k]);
+      ctx.beginPath(); Hh.forEach((x, i) => i ? ctx.lineTo(X(i), Y(cur[i])) : ctx.moveTo(X(i), Y(cur[i]))); for (let i = Hh.length - 1; i >= 0; i--) ctx.lineTo(X(i), Y(prev[i])); ctx.closePath();
+      ctx.fillStyle = col + '55'; ctx.fill();
+      ctx.beginPath(); Hh.forEach((x, i) => i ? ctx.lineTo(X(i), Y(cur[i])) : ctx.moveTo(X(i), Y(cur[i]))); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+      prev = cur;
+    }
+    ctx.fillStyle = '#8F8F8F'; ctx.fillText('últimos 2 min (simulados) · apilado por tipo', 4, h - 2);
+  }
+  function drawTimeline() {
+    const c = $('#a-tl'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+    const w = c.clientWidth, h = 150; if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const f = S.fail, L = S.tl; const span = Math.max(120, L.length ? L[L.length - 1].t + 10 : 120);
+    const X = t => 8 + t / span * (w - 16), mxU = Math.max(4, ...L.map(x => x.u)) * 1.15, Y = v => h - 28 - v / mxU * (h - 50);
+    // franjas de estado de la lámpara
+    const band = (t0, t1, col) => { ctx.fillStyle = col; ctx.fillRect(X(t0), h - 18, Math.max(0, X(Math.min(t1, span)) - X(t0)), 8); };
+    ctx.font = '10px system-ui';
+    if (f) {
+      const pc = byId(f.pc); const now = S.T - f.t0; const end = pc && pc.state === 'down' ? now : (f.ev.find(e => e.l.includes('vuelve')) || { t: S.T }).t - f.t0;
+      band(0, Math.min(10, now), '#1A7F37'); if (now > 10) band(10, Math.min(40, now), '#9A6700'); if (now > 40) band(40, now, '#CF222E');
+      for (const [t, l] of [[10, 'sin respuesta'], [40, 'caída'], [60, 'LOST']]) { ctx.strokeStyle = '#D9D9D9'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(t), 8); ctx.lineTo(X(t), h - 20); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#8F8F8F'; ctx.fillText(l, X(t) + 3, t === 40 ? 28 : 16); }
+      if (f.done) { const t = f.tRec - f.t0; ctx.strokeStyle = '#1A7F37'; ctx.beginPath(); ctx.moveTo(X(t), 8); ctx.lineTo(X(t), h - 20); ctx.stroke(); ctx.fillStyle = '#1A7F37'; ctx.fillText('0 sub-replicados', X(t) + 3, 40); }
+    } else { ctx.fillStyle = '#B0B0B0'; ctx.fillText('lámpara · sub-replicados · copiando', 8, h / 2); }
+    const line = (key, col, fill) => { if (!L.length) return; ctx.beginPath(); L.forEach((p, i) => i ? ctx.lineTo(X(p.t), Y(p[key])) : ctx.moveTo(X(p.t), Y(p[key]))); if (fill) { ctx.lineTo(X(L[L.length - 1].t), Y(0)); ctx.lineTo(X(L[0].t), Y(0)); ctx.closePath(); ctx.fillStyle = col + '22'; ctx.fill(); ctx.beginPath(); L.forEach((p, i) => i ? ctx.lineTo(X(p.t), Y(p[key])) : ctx.moveTo(X(p.t), Y(p[key]))); } ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke(); };
+    line('u', '#CF222E', 1); line('pend', '#0A7EA4');
+    ctx.fillStyle = '#CF222E'; ctx.fillText('sub-replicados', w - 150, h - 32); ctx.fillStyle = '#0A7EA4'; ctx.fillText('copiando', w - 62, h - 32);
+  }
+
+  // ---------- plano: guardar / exportar / importar ----------
+  function plano() { return { version: 1, pcs_por_fila: PCS_POR_FILA, filas: ROWS.length, lugares: S.pcs.map(p => ({ pc: p.id, fila: p.row < 0 ? null : p.row + 1, lugar: p.row < 0 ? null : p.seat + 1 })) }; }
+  function savePlano() { try { localStorage.setItem('plano-aula', JSON.stringify(plano())); } catch (e) { } }
+  function applyPlano(j) {
+    if (!j || !Array.isArray(j.lugares)) throw new Error('no es un plano-aula.json');
+    for (const l of j.lugares) { const pc = byId(l.pc); if (!pc) continue; if (l.fila) { pc.row = l.fila - 1; pc.seat = l.lugar - 1; } else { pc.row = -1; } checkRack(pc); }
+  }
+  $('#a-exp').onclick = () => { const b = new Blob([JSON.stringify(plano(), null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'plano-aula.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast('plano-aula.json: dejalo en el pendrive o en la carpeta compartida (el reset borra todo)'); };
+  $('#a-imp').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(t => { applyPlano(JSON.parse(t)); toast('Plano importado'); }).catch(err => toast('No se pudo leer: ' + err.message)); };
+
+  // ---------- controles ----------
+  $('#a-spark').onclick = () => launch('spark');
+  $('#a-hive').onclick = () => launch('hive');
+  $('#a-load').onclick = loadDataset;
+  $('#a-add').onclick = addPc;
+  $('#a-demo').onclick = startDemo;
+  $$('#a-speed button').forEach(b => b.onclick = () => { S.speed = +b.dataset.s; $$('#a-speed button').forEach(x => x.classList.toggle('on', x === b)); });
+  $$('#a-legend button').forEach(b => b.onclick = () => { const f = b.dataset.f; S.filters[f] = !S.filters[f]; b.classList.toggle('off', !S.filters[f]); });
+
+  init();
+  return {
+    tick(rdt) {
+      const sim = Math.min(rdt, .1) * S.speed;
+      const n = Math.ceil(sim / .25); for (let i = 0; i < n; i++) step(sim / n);
+      if (!$('#tab-aula').classList.contains('on')) return;
+      render(Math.min(rdt, .1));
+      sideAcc += rdt; if (sideAcc > .25) { sideAcc = 0; renderSide(); drawTraffic(); drawTimeline(); if (S.sel) renderPop(); }
+    },
+    resize() { sideAcc = 1; },
+    S,
+  };
+})();
+
+// ---------- bucle ----------
+renderSide();
+go('inicio');
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if ($('#tab-full').classList.contains('on') && pageTick) { try { pageTick(dt); } catch (e) { console.error(e); pageTick = null; } }
+  Aula.tick(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+if (location.hash === '#aula') $('.tabs button[data-tab=aula]').click();
+</script>
+</body>
+</html>
