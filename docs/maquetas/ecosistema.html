@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El ecosistema Big Data del sandbox, todo junto</title>
+<meta name="description" content="Mapa de las herramientas de bigdata-sandbox: qué hace cada una, dónde vive y en qué se diferencia de las parecidas.">
+<style>
+/* ==========================================================================
+   Página autocontenida: sin CDN, sin fetch. Todo el contenido (fichas,
+   conexiones, recorridos) está en el <script> del final, en DATOS.
+   ========================================================================== */
+:root {
+  --bg: #0c0f14;
+  --bg-2: #10141a;
+  --surface: #141920;
+  --surface-2: #1a2029;
+  --surface-3: #212833;
+  --line: #232a34;
+  --line-2: #2e3642;
+  --text: #e8ebef;
+  --text-2: #c3c9d2;
+  --muted: #8f99a7;
+  --faint: #636d7b;
+
+  /* Una familia de color por capa. Saturación baja a propósito. */
+  --c-puertas: #a7b0bd;
+  --c-lenguajes: #b597e4;
+  --c-motores: #81a1f0;
+  --c-recursos: #d3aa62;
+  --c-datos: #5fbaa7;
+  --c-puente: #d88fb2;
+  --c-maquina: #e0907a;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -12px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(129,161,240,.07), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(95,186,167,.05), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font: 400 16px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: inherit; }
+code, pre, kbd { font-family: var(--mono); }
+:not(pre) > code {
+  font-size: .86em;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  padding: .08em .38em;
+  border-radius: 6px;
+  color: var(--text);
+  white-space: nowrap;
+}
+::selection { background: rgba(129,161,240,.35); }
+:focus-visible { outline: 2px solid var(--c-motores); outline-offset: 2px; border-radius: 6px; }
+
+.wrap { width: min(1180px, 100% - 40px); margin-inline: auto; }
+.wrap-wide { width: min(1420px, 100% - 40px); margin-inline: auto; }
+
+/* ---------- barra superior ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(12,15,20,.78);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .wrap-wide { display: flex; align-items: center; gap: 24px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; font-size: 15px; }
+.brand-mark { width: 22px; height: 22px; display: grid; grid-template-rows: repeat(4, 1fr); gap: 2px; }
+.brand-mark i { display: block; border-radius: 2px; }
+.brand-mark i:nth-child(1) { background: var(--c-lenguajes); margin: 0 4px; }
+.brand-mark i:nth-child(2) { background: var(--c-motores); margin: 0 2px; }
+.brand-mark i:nth-child(3) { background: var(--c-recursos); margin: 0 1px; }
+.brand-mark i:nth-child(4) { background: var(--c-datos); }
+.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-left: auto; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a {
+  text-decoration: none; color: var(--muted); font-size: 14px; padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  transition: color .15s, background .15s;
+}
+.nav a:hover { color: var(--text); background: var(--surface-2); }
+
+/* ---------- portada ---------- */
+.hero { padding: 72px 0 40px; }
+.eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 {
+  font-size: clamp(34px, 5.4vw, 60px); line-height: 1.04; letter-spacing: -.035em; font-weight: 720;
+  margin: 14px 0 18px; max-width: 16ch;
+}
+h1 span { color: var(--muted); font-weight: 600; }
+.lead { font-size: clamp(17px, 1.6vw, 19px); color: var(--text-2); max-width: 64ch; margin: 0; }
+
+.capas {
+  margin-top: 44px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+.capa { background: var(--surface); padding: 22px 22px 20px; position: relative; }
+.capa::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--c); opacity: .9; }
+.capa .num { font: 600 12px/1 var(--mono); color: var(--c); letter-spacing: .04em; }
+.capa h3 { margin: 10px 0 6px; font-size: 17px; letter-spacing: -.01em; }
+.capa p { margin: 0 0 12px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.capa .ej { font-size: 13px; color: var(--text-2); }
+.capa .ej b { font-weight: 600; color: var(--text); }
+
+.idea {
+  margin-top: 20px; display: flex; gap: 18px; align-items: flex-start;
+  padding: 20px 22px; border-radius: var(--radius); border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+}
+.idea .ico { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(181,151,228,.12); color: var(--c-lenguajes); }
+.idea p { margin: 0; color: var(--text-2); }
+.idea strong { color: var(--text); font-weight: 650; }
+
+.versiones { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13.5px; color: var(--muted); }
+.versiones b { color: var(--text-2); font-weight: 600; font-family: var(--mono); font-size: 12.5px; margin-right: 6px; }
+
+.cta-row { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px; }
+.btn {
+  appearance: none; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text);
+  font: 550 14px/1 var(--sans); padding: 11px 16px; border-radius: 10px; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px; transition: background .15s, border-color .15s, transform .15s;
+}
+.btn:hover { background: var(--surface-3); border-color: #3a4351; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--text); color: #0c0f14; border-color: var(--text); }
+.btn.primary:hover { background: #fff; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.btn .k { font-size: 12px; opacity: .6; }
+
+/* ---------- secciones ---------- */
+section { padding: 56px 0; }
+.sec-head { margin-bottom: 26px; max-width: 72ch; }
+.sec-head h2 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.025em; line-height: 1.15; margin: 8px 0 10px; font-weight: 700; }
+.sec-head p { margin: 0; color: var(--muted); }
+
+/* ---------- explorador (mapa + panel) ---------- */
+.explorer { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.map-card { padding: 14px 14px 10px; }
+.map-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px 12px; flex-wrap: wrap; }
+.seg { display: inline-flex; padding: 3px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 11px; gap: 2px; flex-wrap: wrap; }
+.seg button {
+  appearance: none; border: 0; background: transparent; color: var(--muted); font: 550 13.5px/1 var(--sans);
+  padding: 9px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: color .15s, background .15s;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; }
+.map-hint { font-size: 13px; color: var(--faint); }
+
+#mapa { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+#mapa text { font-family: var(--sans); }
+.frame rect { fill: rgba(255,255,255,.012); stroke: var(--line-2); stroke-dasharray: 3 5; }
+.frame .ftitle-bg { fill: var(--surface); stroke: none; }
+.frame text { fill: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: .09em; }
+.rowlab .t { fill: var(--text-2); font-size: 13px; font-weight: 650; }
+.rowlab .s { fill: var(--faint); font-size: 11px; }
+.rowlab .n { font: 600 10.5px var(--mono); paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+.note { fill: var(--faint); font-size: 11.5px; font-style: italic; }
+
+.node { cursor: pointer; transition: opacity .28s ease; outline: none; }
+.node .bg { fill: var(--surface-2); }
+.node .tint { fill: currentColor; fill-opacity: .085; stroke: currentColor; stroke-opacity: .42; stroke-width: 1; transition: fill-opacity .2s, stroke-opacity .2s, stroke-width .2s; }
+.node .bar { fill: currentColor; opacity: .85; }
+.node .lab { fill: var(--text); font-weight: 650; letter-spacing: -.01em; }
+.node .sub { fill: var(--muted); }
+.node .deco { fill: currentColor; }
+.node:hover .tint, .node:focus-visible .tint { fill-opacity: .14; stroke-opacity: .8; }
+.node.sel .tint { fill-opacity: .17; stroke-opacity: 1; stroke-width: 1.6; }
+.node.sel { filter: drop-shadow(0 0 14px rgba(255,255,255,.07)); }
+svg.dim .node:not(.on) { opacity: .22; }
+svg.dim .frame, svg.dim .rowlab, svg.dim .note { opacity: .55; transition: opacity .28s; }
+
+.edge path.ln { fill: none; stroke: #3b4452; stroke-width: 1.35; transition: opacity .28s, stroke .2s; }
+.edge.read path.ln { stroke-dasharray: 4 4; }
+.edge.puerta path.ln { stroke-dasharray: 1.5 4; stroke-linecap: round; }
+.edge.hidden { opacity: 0; pointer-events: none; }
+svg.dim .edge:not(.on) { opacity: .12; }
+svg.dim .edge.hidden:not(.on) { opacity: 0; }
+.edge.on { opacity: 1; }
+.edge.on path.ln { stroke: var(--ec, #dfe4ea); stroke-width: 1.9; }
+.edge.on path.flow { fill: none; stroke: var(--ec, #fff); stroke-width: 1.9; stroke-dasharray: 2 16; stroke-linecap: round; opacity: .9; animation: flow 1.1s linear infinite; }
+.edge:not(.on) path.flow { display: none; }
+@keyframes flow { to { stroke-dashoffset: -18; } }
+.elabel { opacity: 0; transition: opacity .25s; pointer-events: none; }
+.edge.on .elabel { opacity: 1; }
+.elabel rect { fill: var(--bg); stroke: var(--line-2); }
+.elabel text { fill: var(--text-2); font-size: 11px; font-weight: 550; }
+.arrow { fill: #3b4452; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 6px 4px; border-top: 1px solid var(--line); margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i.dot { width: 9px; height: 9px; border-radius: 3px; background: var(--c); display: inline-block; }
+.legend svg { width: 26px; height: 8px; }
+
+/* panel */
+.panel { position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.panel-in { padding: 22px 22px 24px; }
+.panel-in.enter { animation: enter .32s ease both; }
+@keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--c, var(--muted)); }
+.kicker i { width: 8px; height: 8px; border-radius: 3px; background: currentColor; }
+.panel h3 { font-size: 26px; letter-spacing: -.025em; margin: 8px 0 8px; line-height: 1.15; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.pill { font: 550 12px/1 var(--sans); padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); background: var(--bg-2); }
+.pill.mono { font-family: var(--mono); font-size: 11.5px; }
+.frase { font-size: 16.5px; color: var(--text); margin: 0 0 18px; line-height: 1.55; }
+.blk { padding: 14px 0; border-top: 1px solid var(--line); }
+.blk h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 650; }
+.blk p { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.55; }
+.blk p + p { margin-top: 8px; }
+.analogia { position: relative; padding-left: 14px; }
+.analogia::before { content: ""; position: absolute; left: 0; top: 3px; bottom: 3px; width: 2px; border-radius: 2px; background: var(--c, var(--line-2)); opacity: .7; }
+.confunde { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 8px; }
+.confunde + .confunde { margin-top: 8px; }
+.confunde .con { font-weight: 650; color: var(--text); font-size: 14.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.confunde .con .vs { font: 600 10.5px var(--mono); color: var(--faint); border: 1px solid var(--line-2); padding: 2px 5px; border-radius: 5px; }
+.confunde p { font-size: 14.5px; }
+.code { position: relative; margin-top: 8px; }
+.code pre {
+  margin: 0; background: #0a0d11; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 13px 14px; overflow-x: auto; font-size: 12.8px; line-height: 1.6; color: #d7dde5; white-space: pre;
+}
+.code .copy {
+  position: absolute; top: 7px; right: 7px; appearance: none; border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--muted); font: 550 11.5px/1 var(--sans); padding: 6px 8px; border-radius: 7px; cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.code:hover .copy, .code .copy:focus-visible { opacity: 1; }
+@media (hover: none) { .code .copy { opacity: 1; } }
+.ports { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ports li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text-2); }
+.ports li b { font: 550 12.5px var(--mono); color: var(--text); white-space: nowrap; }
+.links { display: grid; gap: 4px; }
+.links button {
+  appearance: none; border: 0; background: transparent; color: var(--text-2); text-align: left; padding: 7px 8px; margin: 0 -8px;
+  border-radius: 8px; cursor: pointer; font: 400 14px/1.35 var(--sans); display: flex; gap: 10px; align-items: baseline;
+}
+.links button:hover { background: var(--surface-2); color: var(--text); }
+.links button b { font-weight: 650; color: var(--text); white-space: nowrap; }
+.links button i { width: 8px; height: 8px; border-radius: 3px; background: var(--c); flex: none; transform: translateY(-1px); }
+.links .dir { color: var(--faint); font-size: 12px; font-family: var(--mono); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  appearance: none; display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); background: var(--bg-2);
+  color: var(--text-2); font: 550 13px/1 var(--sans); padding: 7px 10px; border-radius: 999px; cursor: pointer; transition: border-color .15s, color .15s;
+}
+.chip:hover { color: var(--text); border-color: var(--c); }
+.chip i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); }
+.leer { display: grid; gap: 12px; margin: 16px 0 20px; padding: 0; list-style: none; counter-reset: c; }
+.leer li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; font-size: 14.5px; color: var(--text-2); line-height: 1.5; }
+.leer li i { width: 10px; height: 10px; margin-top: 6px; border-radius: 3px; background: var(--c); }
+.leer li b { color: var(--text); font-weight: 650; }
+
+/* recorrido */
+.tour-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.steps { display: flex; gap: 5px; margin: 14px 0 4px; }
+.steps button { appearance: none; border: 0; padding: 0; height: 4px; flex: 1; border-radius: 4px; background: var(--line-2); cursor: pointer; transition: background .2s; }
+.steps button.done { background: #5b6575; }
+.steps button.now { background: var(--text); }
+.tour-nav { display: flex; gap: 8px; margin-top: 20px; }
+.tour-nav .btn { flex: 1; justify-content: center; }
+.paso-n { font: 600 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.panel .steps + h3 { margin-top: 18px; }
+.tour-mini { display: none; align-items: center; gap: 10px; padding: 10px 6px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+.tour-mini .tm-t { flex: 1; min-width: 0; font-size: 14px; color: var(--text-2); line-height: 1.35; }
+.tour-mini .tm-t b { display: block; color: var(--text); font-weight: 650; }
+.tour-mini .tm-t span { font: 600 11.5px var(--mono); color: var(--muted); }
+.tour-mini .btn { padding: 10px 13px; }
+@media (max-width: 1120px) { .touring .tour-mini { display: flex; } .touring .legend { display: none; } }
+.seg .s { display: none; }
+.tour-text p { margin: 0 0 10px; color: var(--text-2); font-size: 15px; }
+.tour-text p b { color: var(--text); font-weight: 650; }
+.tip { margin-top: 10px; font-size: 13.5px; color: var(--muted); padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-2); border: 1px dashed var(--line-2); }
+.tip b { color: var(--text-2); }
+
+/* ---------- comparativas ---------- */
+.cmp-grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+.cmp { padding: 22px 22px 8px; }
+.cmp h3 { margin: 0 0 4px; font-size: 19px; letter-spacing: -.015em; }
+.cmp .q { margin: 0 0 16px; color: var(--muted); font-size: 14.5px; }
+.tbl-wrap { overflow-x: auto; margin: 0 -22px; padding: 0 22px 14px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 720px; font-size: 14.2px; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--line); line-height: 1.5; }
+thead th { font-size: 14px; font-weight: 650; color: var(--text); border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+thead th i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: var(--c); margin-right: 8px; transform: translateY(-1px); }
+tbody th { font-weight: 600; color: var(--muted); font-size: 13px; width: 150px; position: sticky; left: 0; background: var(--surface); }
+thead th:first-child { position: sticky; left: 0; background: var(--surface); }
+td { color: var(--text-2); }
+tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.clave { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--bg-2); border: 1px solid var(--line); font-size: 14.5px; color: var(--text-2); }
+.clave b { color: var(--text); }
+
+/* ---------- fichas ---------- */
+.fichas-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.grupo { margin-top: 30px; }
+.grupo-t { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--c); margin-bottom: 12px; }
+.grupo-t::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+details.ficha { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; transition: border-color .2s; }
+details.ficha[open] { border-color: var(--line-2); }
+details.ficha summary { list-style: none; cursor: pointer; padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+details.ficha summary::-webkit-details-marker { display: none; }
+details.ficha summary .nm { font-weight: 680; font-size: 16.5px; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+details.ficha summary .nm i { width: 8px; height: 8px; border-radius: 3px; background: var(--c); }
+details.ficha summary .vr { font: 500 12px var(--mono); color: var(--faint); align-self: center; }
+details.ficha summary .fr { grid-column: 1 / -1; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+details.ficha summary::after { content: ""; }
+details.ficha .body { padding: 0 18px 16px; }
+details.ficha .body .blk:first-child { border-top: 1px solid var(--line); }
+.ver-mapa { margin-top: 12px; }
+
+/* ---------- glosario ---------- */
+.glos { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+.glos div { background: var(--surface); padding: 16px 18px; }
+.glos dt { font-weight: 650; margin-bottom: 4px; letter-spacing: -.005em; }
+.glos dd { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+
+footer { padding: 40px 0 60px; color: var(--faint); font-size: 13.5px; border-top: 1px solid var(--line); margin-top: 30px; }
+footer p { margin: 0 0 6px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1120px) {
+  .explorer { grid-template-columns: minmax(0, 1fr); }
+  .panel { position: static; max-height: none; }
+  .capas { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .wrap, .wrap-wide { width: calc(100% - 24px); }
+  .topbar .wrap-wide { gap: 12px; }
+  .brand span { display: none; }
+  .hero { padding: 40px 0 24px; }
+  .capas { grid-template-columns: 1fr; }
+  .capa { padding: 18px; }
+  section { padding: 40px 0; }
+  .map-card { padding: 8px 6px 8px; border-radius: 12px; }
+  .map-tools { padding: 4px 4px 10px; }
+  .seg { width: 100%; }
+  .seg button { flex: 1; padding: 9px 8px; font-size: 13px; }
+  .seg .l { display: none; }
+  .seg .s { display: inline; }
+  .seg { flex-wrap: nowrap; }
+  .map-hint { display: none; }
+  .panel-in { padding: 18px 16px 20px; }
+  .panel h3 { font-size: 23px; }
+  .cmp { padding: 18px 16px 4px; }
+  .tbl-wrap { margin: 0 -16px; padding: 0 16px 12px; }
+  tbody th { width: 112px; }
+  .fgrid { grid-template-columns: 1fr; }
+  .idea { padding: 16px; gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media print {
+  .topbar, .map-tools, .cta-row { display: none; }
+  body { background: #fff; color: #000; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap-wide">
+    <div class="brand"><div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div><span>Ecosistema Big Data</span></div>
+    <nav class="nav" aria-label="Secciones">
+      <a href="#mapa-sec">Mapa</a>
+      <a href="#mapa-sec" data-tour="csv">Recorridos</a>
+      <a href="#comparar">Parecidas pero distintas</a>
+      <a href="#fichas">Fichas</a>
+      <a href="#glosario">Glosario</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="eyebrow">bigdata-sandbox · guía visual</div>
+    <h1>Todo el ecosistema, <span>en un solo mapa.</span></h1>
+    <p class="lead">Hadoop, HDFS, YARN, Hive, Tez, Pig, Spark, Sqoop, MongoDB… Son muchas herramientas, pero no están todas al mismo nivel. Se apilan en cuatro capas, y cada una le resuelve un problema distinto a la de arriba. Entendiendo las capas, cada herramienta cae sola en su lugar.</p>
+
+    <div class="capas" aria-label="Las cuatro capas, de abajo hacia arriba">
+      <div class="capa" style="--c: var(--c-datos)">
+        <div class="num">CAPA 1 · ABAJO DE TODO</div>
+        <h3>Dónde quedan los datos</h3>
+        <p>Un disco repartido en varias máquinas. No entiende de filas ni columnas: guarda archivos.</p>
+        <div class="ej"><b>HDFS</b> · y el catálogo de tablas, el <b>Metastore</b></div>
+      </div>
+      <div class="capa" style="--c: var(--c-recursos)">
+        <div class="num">CAPA 2</div>
+        <h3>Quién reparte la máquina</h3>
+        <p>Decide cuánta memoria y cuántos procesadores le toca a cada trabajo. No calcula nada.</p>
+        <div class="ej"><b>YARN</b> · y <b>ZooKeeper</b>, que coordina otra cosa</div>
+      </div>
+      <div class="capa" style="--c: var(--c-motores)">
+        <div class="num">CAPA 3</div>
+        <h3>Quién hace el trabajo</h3>
+        <p>Los motores: leen los bloques, filtran, agrupan, ordenan. Cada uno con su estrategia.</p>
+        <div class="ej"><b>MapReduce</b> · <b>Tez</b> · <b>Spark</b></div>
+      </div>
+      <div class="capa" style="--c: var(--c-lenguajes)">
+        <div class="num">CAPA 4 · ARRIBA</div>
+        <h3>Cómo se lo pedís</h3>
+        <p>Los lenguajes. Vos escribís en uno de estos y se traduce al motor de abajo.</p>
+        <div class="ej"><b>HiveQL</b> · <b>Pig Latin</b> · <b>Spark SQL</b> · <b>PySpark</b></div>
+      </div>
+    </div>
+
+    <div class="idea">
+      <div class="ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg></div>
+      <p><strong>La confusión más común: Hive, Pig, Spark SQL y PySpark no son motores.</strong> Son formas de pedir. Hive traduce tu SQL a un trabajo de Tez; Pig traduce su receta a trabajos de MapReduce; Spark SQL y PySpark le hablan a Spark. Y los tres motores le piden lugar a YARN y leen de HDFS. Por eso la misma consulta se puede escribir de cuatro maneras y da el mismo resultado.</p>
+    </div>
+
+    <div class="versiones" aria-label="Versiones de la imagen">
+      <span><b>:base</b>Hadoop, Hive, Spark, Pig, Sqoop, ZooKeeper, MariaDB, MongoDB</span>
+      <span><b>:ml</b>base + pandas, scikit-learn, XGBoost y JupyterLab</span>
+      <span><b>:full</b>ml + la interfaz web en el puerto 8080</span>
+    </div>
+
+    <div class="cta-row">
+      <a class="btn primary" href="#mapa-sec" data-tour="csv">Empezar el recorrido guiado <span class="k">→</span></a>
+      <a class="btn" href="#mapa-sec">Explorar el mapa</a>
+      <a class="btn" href="#comparar">Ver las comparaciones</a>
+    </div>
+  </div>
+
+  <section id="mapa-sec">
+    <div class="wrap-wide">
+      <div class="sec-head">
+        <div class="eyebrow">El mapa</div>
+        <h2>Quién corre sobre quién</h2>
+        <p>Leelo de abajo hacia arriba. Pasá el mouse o tocá una herramienta: se iluminan sus conexiones y a la derecha aparece su ficha. Las líneas continuas son "corre sobre"; las punteadas, "lee de" o "consulta".</p>
+      </div>
+      <div class="explorer">
+        <div class="card map-card">
+          <div class="map-tools">
+            <div class="seg" role="group" aria-label="Modo">
+              <button type="button" data-mode="explorar" aria-pressed="true">Explorar</button>
+              <button type="button" data-mode="csv" aria-pressed="false"><span class="l">De un CSV a un tablero</span><span class="s">CSV → tablero</span></button>
+              <button type="button" data-mode="tres" aria-pressed="false"><span class="l">Una consulta, tres motores</span><span class="s">Tres motores</span></button>
+            </div>
+            <div class="map-hint" id="map-hint">Tocá una herramienta</div>
+          </div>
+          <svg id="mapa" role="img" aria-label="Diagrama del ecosistema: capas de datos, recursos, motores y lenguajes, y las herramientas fuera del cluster"></svg>
+          <div class="legend" id="legend"></div>
+          <div class="tour-mini" id="tour-mini"></div>
+        </div>
+        <aside class="card panel" id="panel" aria-live="polite"></aside>
+      </div>
+    </div>
+  </section>
+
+  <section id="comparar">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow">Parecidas pero distintas</div>
+        <h2>Las que se confunden, lado a lado</h2>
+        <p>Cada tabla responde una pregunta concreta. La primera fila de cada una es la diferencia que más importa.</p>
+      </div>
+      <div class="cmp-grid" id="cmp"></div>
+    </div>
+  </section>
+
+  <section id="fichas">
+    <div class="wrap">
+      <div class="fichas-head">
+        <div class="sec-head" style="margin-bottom:0">
+          <div class="eyebrow">Fichas</div>
+          <h2>Todas las herramientas, una por una</h2>
+          <p>Las mismas fichas del mapa, ordenadas por capa. Para estudiar: abrilas todas y recorrelas de arriba abajo.</p>
+        </div>
+        <button class="btn" type="button" id="abrir-todas">Abrir todas</button>
+      </div>
+      <div id="fichas-grid"></div>
+    </div>
+  </section>
+
+  <section id="glosario">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow">Glosario</div>
+        <h2>Las palabras que aparecen todo el tiempo</h2>
+      </div>
+      <dl class="glos" id="glos"></dl>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Versiones tomadas del <code>Dockerfile</code> y de <code>conf/requirements-ml.txt</code> del repositorio bigdata-sandbox. Puertos según <code>docker-compose.yml</code>.</p>
+    <p>Página autocontenida: funciona sin internet. Los ejemplos se corren adentro del contenedor, parados en <code>/datos</code>.</p>
+  </div>
+</footer>
+
+<script>
+"use strict";
+/* ==========================================================================
+   DATOS: capas, herramientas (fichas), conexiones y recorridos.
+   Para agregar una herramienta: sumarla a TOOLS, ubicarla en LAYOUTS
+   (wide = PC, narrow = celu) y conectarla en EDGES.
+   ========================================================================== */
+const LAYERS = {
+  puertas:   { name: "Desde dónde trabajás", color: "var(--c-puertas)",   hex: "#a7b0bd" },
+  lenguajes: { name: "Cómo lo pedís",        color: "var(--c-lenguajes)", hex: "#b597e4" },
+  motores:   { name: "Quién hace el trabajo", color: "var(--c-motores)",  hex: "#81a1f0" },
+  recursos:  { name: "Quién reparte",         color: "var(--c-recursos)", hex: "#d3aa62" },
+  datos:     { name: "Dónde quedan los datos", color: "var(--c-datos)",   hex: "#5fbaa7" },
+  puente:    { name: "Puente entre mundos",   color: "var(--c-puente)",   hex: "#d88fb2" },
+  maquina:   { name: "Fuera del cluster: una sola máquina", color: "var(--c-maquina)", hex: "#e0907a" }
+};
+
+const ALL = ["base", "ml", "full"], ML = ["ml", "full"];
+
+const TOOLS = {
+  hdfs: {
+    name: "HDFS", layer: "datos", version: "Hadoop 3.3.6", img: ALL,
+    sub: "archivos en bloques, con copias", subN: "bloques replicados",
+    frase: "El disco del cluster. Guarda archivos grandes cortados en bloques y reparte copias de cada bloque en varias máquinas, para que no se pierdan si una se cae.",
+    analogia: "Un depósito con muchas estanterías. El encargado (el NameNode) tiene el cuaderno que dice en qué estante está cada caja; las estanterías (los DataNodes) guardan las cajas. Si se rompe una estantería, hay copias de sus cajas en otras.",
+    cursada: "Subir el CSV de ventas, ver en cuántos bloques se partió y en qué DataNodes quedó cada copia, y probar qué pasa cuando se apaga un DataNode. En el sandbox el bloque se puede achicar a 1 MB para que se vean muchos.",
+    confunde: [
+      { con: "MariaDB y MongoDB", dif: "HDFS no sabe qué hay adentro de los archivos: no tiene filas, columnas ni SELECT. No se edita una fila: un archivo se escribe una vez y se lee muchas. El que \"entiende\" los datos es un motor que corre encima (Hive, Pig, Spark). Las bases, en cambio, guardan y consultan en el mismo programa." },
+      { con: "La carpeta datos/ de tu compu", dif: "La carpeta compartida (/datos adentro del contenedor) es un disco común. HDFS es otro sistema de archivos, aparte: por eso hay que subir con hdfs dfs -put." }
+    ],
+    ejemplo: "hdfs dfs -mkdir -p /user/root/ventas\nhdfs dfs -put ejemplos/ventas.csv /user/root/ventas/\nhdfs fsck /user/root/ventas -files -blocks -locations",
+    ui: [["NameNode (web)", "localhost:9870"], ["DataNode N", "localhost:990N"], ["Secondary NameNode", "localhost:9868"]]
+  },
+  metastore: {
+    name: "Metastore", layer: "datos", version: "Hive 4.0.0 · Derby", img: ALL,
+    sub: "catálogo de tablas", subN: "catálogo",
+    frase: "El catálogo de las tablas de Hive. Por cada tabla guarda su nombre, sus columnas, el formato y la carpeta de HDFS donde están los archivos. Los datos no: esos siguen en HDFS.",
+    analogia: "El fichero de una biblioteca: te dice en qué estante está el libro y de qué trata, pero no es el libro.",
+    cursada: "Entender por qué una tabla externa no copia nada y por qué un DROP TABLE no borra los archivos. Y por qué Spark SQL ve las mismas tablas que creaste en Hive: los dos leen este catálogo.",
+    confunde: [
+      { con: "HDFS", dif: "HDFS tiene los datos; el Metastore tiene la descripción. Si borrás la descripción de una tabla externa, los archivos quedan." },
+      { con: "MariaDB", dif: "El Metastore también usa una base de datos por dentro, pero acá es Derby, una base chiquita embebida en /hadoop/metastore_db. No es la MariaDB de la base tienda." }
+    ],
+    ejemplo: "-- adentro de beeline\nDESCRIBE FORMATTED ventas;\n-- buscá la línea Location: hdfs://.../user/root/ventas",
+    ui: [["Metastore (thrift, sin web)", "localhost:9083"]]
+  },
+  yarn: {
+    name: "YARN", layer: "recursos", version: "Hadoop 3.3.6", img: ALL,
+    sub: "presta memoria y CPU a cada trabajo", subN: "reparte recursos",
+    frase: "El administrador de recursos del cluster. Recibe los trabajos y les asigna contenedores: pedazos de memoria y procesador en alguna máquina. No sabe hacer un GROUP BY: sólo presta lugar.",
+    analogia: "El maître de un restaurante. No cocina: decide qué mesa le toca a cada grupo y cuándo. Si están todas ocupadas, el grupo espera en la puerta (el trabajo queda en ACCEPTED).",
+    cursada: "Mirar en localhost:8088 cada trabajo que lanzan Hive, Pig, Sqoop o Spark: su tipo (MAPREDUCE, TEZ, SPARK), sus contenedores y sus logs. Entender por qué un trabajo no arranca si no hay memoria libre.",
+    confunde: [
+      { con: "Los motores (MapReduce, Tez, Spark)", dif: "Los motores hacen el cálculo; YARN les da dónde hacerlo. Un motor le pide contenedores a YARN y adentro de esos contenedores corre su código." },
+      { con: "ZooKeeper", dif: "Los dos \"coordinan\", pero cosas distintas: YARN reparte memoria y CPU para trabajos; ZooKeeper sólo lleva un registro chiquito para que los NameNodes se pongan de acuerdo en quién manda." }
+    ],
+    ejemplo: "yarn node -list\nyarn application -list -appStates ALL\nyarn logs -applicationId application_XXXX_0001",
+    ui: [["ResourceManager: todos los trabajos", "localhost:8088"], ["NodeManager: contenedores", "localhost:8042"]]
+  },
+  zookeeper: {
+    name: "ZooKeeper", layer: "recursos", version: "3.8.7", img: ALL,
+    sub: "árbitro de NameNodes", subN: "árbitro (HA)",
+    frase: "Un servicio de coordinación: un registro chiquito y muy confiable que varios procesos consultan para ponerse de acuerdo. Acá lo usa HDFS para saber cuál NameNode es el activo.",
+    analogia: "El árbitro que dice quién es el capitán del equipo. Si el capitán se lesiona, el árbitro nombra a otro en segundos (eso es el failover).",
+    cursada: "Sólo arranca con NAMENODES=2 o 3, la alta disponibilidad. Se usa para ver un failover: apagar el NameNode activo y mirar cómo el que estaba en espera toma el mando. Con un solo NameNode ni se prende.",
+    confunde: [
+      { con: "YARN", dif: "ZooKeeper no corre trabajos ni reparte memoria, y no guarda datos tuyos. Sólo guarda quién es el líder y unos pocos datos de coordinación." },
+      { con: "El Secondary NameNode", dif: "El Secondary no es un respaldo que toma el mando: sólo compacta el registro del NameNode. El que sí toma el mando es el NameNode en espera, y lo elige ZooKeeper." }
+    ],
+    ejemplo: "# con NAMENODES=2 o 3\nhdfs haadmin -getAllServiceState",
+    ui: [["Cliente (sin web)", "localhost:2181"]]
+  },
+  mapreduce: {
+    name: "MapReduce", layer: "motores", version: "Hadoop 3.3.6", img: ALL,
+    sub: "map → reduce, con disco", subN: "map → reduce",
+    frase: "El motor original de Hadoop. Todo trabajo tiene dos fases: map (cada pedazo de datos se procesa por separado) y reduce (se junta todo lo que tiene la misma clave). Entre las dos, y al final, escribe a disco.",
+    analogia: "Un escrutinio: en cada mesa cuentan sus votos (map), las actas viajan a la central ordenadas por candidato (shuffle) y ahí se suman (reduce).",
+    cursada: "El wordcount, y mapper.py con reducer.py vía Streaming para ver las fases a mano. Además es el motor que usan por debajo Pig y Sqoop, así que sus trabajos también aparecen como MAPREDUCE.",
+    confunde: [
+      { con: "Tez", dif: "MapReduce siempre es map → reduce, y una consulta de varios pasos se convierte en varios trabajos encadenados que se pasan resultados por HDFS. Tez arma un solo grafo con todas las etapas y pasa los datos directo de una a otra." },
+      { con: "Spark", dif: "Spark también encadena etapas, y además intenta tenerlas en memoria. Para algo iterativo (como entrenar un modelo, que pasa muchas veces por los mismos datos) la diferencia es enorme." }
+    ],
+    ejemplo: "hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.6.jar \\\n  wordcount /user/root/texto /user/root/resultados/wordcount",
+    ui: [["En vivo: ResourceManager", "localhost:8088"], ["Terminados: JobHistory", "localhost:19888"]]
+  },
+  tez: {
+    name: "Tez", layer: "motores", version: "0.10.3", img: ALL,
+    sub: "DAG de etapas", subN: "DAG",
+    frase: "El motor que usa Hive en esta imagen. Arma la consulta entera como un grafo de etapas (un DAG) y la corre de una vez, sin guardar en HDFS entre etapa y etapa.",
+    analogia: "Una línea de montaje: cada pieza pasa directo a la estación siguiente. MapReduce sería llevar la pieza al depósito después de cada estación y volver a buscarla.",
+    cursada: "No le escribís nada a Tez. Lo ves aparecer cuando Hive tiene que juntar filas de muchos bloques (GROUP BY, ORDER BY, JOIN): en localhost:8088 surge una aplicación de tipo TEZ.",
+    confunde: [
+      { con: "Hive", dif: "Hive es el que entiende el SQL y lo traduce; Tez es el que ejecuta lo traducido. Si Hive fuera el traductor, Tez es el que hace el trabajo." },
+      { con: "Spark", dif: "Los dos encadenan etapas en un DAG, pero Tez no tiene un lenguaje propio para vos: es un motor \"de servicio\" para Hive. A Spark sí le programás directo con PySpark." }
+    ],
+    ejemplo: "-- adentro de beeline\nSET hive.execution.engine;\n-- responde: hive.execution.engine=tez",
+    ui: [["Sin web propia: se ve en", "localhost:8088"]]
+  },
+  spark: {
+    name: "Spark", layer: "motores", version: "3.5.9", img: ALL,
+    sub: "etapas en memoria", subN: "en memoria",
+    frase: "Un motor de procesamiento que reparte los datos entre varios procesos (los executors) y encadena las etapas en memoria. En el sandbox corre siempre sobre YARN y lee de HDFS.",
+    analogia: "Una cocina con varios cocineros que tienen todo a mano en la mesada (la memoria), en vez de ir al freezer (el disco) entre un paso y el otro.",
+    cursada: "El ETL de las ventas sucias, el mismo SQL que en Hive pero con Spark SQL, y modelos de MLlib. Todo se lanza con spark-submit o pyspark y se mira en 4040 mientras corre y en 18080 cuando terminó.",
+    confunde: [
+      { con: "PySpark y Spark SQL", dif: "Esas son dos formas de hablarle a Spark. El motor es uno solo: lo que escribas en Python o en SQL termina en el mismo plan de ejecución." },
+      { con: "Hadoop", dif: "Spark no reemplaza todo Hadoop: no trae disco propio ni administrador de recursos. Acá usa HDFS para los datos y YARN para los executors; reemplaza a MapReduce como motor." }
+    ],
+    ejemplo: "spark-submit --master yarn ejemplos/ventas.py",
+    ui: [["Trabajo activo", "localhost:4040"], ["Historial (terminados)", "localhost:18080"]]
+  },
+  hive: {
+    name: "Hive", layer: "lenguajes", version: "4.0.0", img: ALL,
+    sub: "SQL sobre HDFS", subN: "HiveQL",
+    frase: "SQL sobre archivos de HDFS. Escribís HiveQL (casi SQL estándar) y Hive lo traduce a un trabajo de Tez. Las tablas son una descripción en el Metastore que apunta a carpetas de HDFS.",
+    analogia: "Un traductor: vos hablás SQL, que ya conocés, y él se lo explica al motor en su idioma.",
+    cursada: "Crear la tabla externa ventas sobre /user/root/ventas, agrupar por producto, mirar el plan con EXPLAIN y ver cuál consulta lanza un trabajo y cuál no: un SELECT * ... LIMIT 5 lo resuelve HiveServer2 solo, leyendo el archivo.",
+    confunde: [
+      { con: "MariaDB", dif: "Los dos hablan SQL, pero Hive no tiene datos propios (lee archivos de HDFS), tarda segundos aun para pocas filas porque lanza un trabajo, y no está pensado para cambiar una fila. MariaDB contesta en milisegundos y actualiza filas al instante, pero en una sola máquina." },
+      { con: "Spark SQL", dif: "Mismo SQL y mismas tablas (comparten el Metastore). Cambia quién ejecuta: Hive lo manda a Tez, Spark SQL lo corre en Spark." },
+      { con: "Tez", dif: "Hive traduce; Tez ejecuta." }
+    ],
+    ejemplo: "beeline -u jdbc:hive2://localhost:10000 -e \\\n  \"SELECT producto, COUNT(*) AS n FROM ventas GROUP BY producto\"",
+    ui: [["HiveServer2 JDBC (beeline, DBeaver)", "localhost:10000"], ["HiveServer2 web", "localhost:10002"]]
+  },
+  pig: {
+    name: "Pig", layer: "lenguajes", version: "0.18.0", img: ALL,
+    sub: "paso a paso", subN: "Pig Latin",
+    frase: "Un lenguaje de flujo de datos, Pig Latin. Describís paso a paso qué hacer (LOAD, FILTER, GROUP, STORE) y Pig lo convierte en uno o más trabajos de MapReduce.",
+    analogia: "Una receta paso a paso (\"cortá, mezclá, horneá\"), en vez de pedir el plato terminado como en SQL.",
+    cursada: "wordcount.pig y ventas.pig. Con pig -x local se prueba sin cluster, leyendo archivos comunes; sin esa opción corre en YARN sobre HDFS.",
+    confunde: [
+      { con: "Hive", dif: "Hive es declarativo: decís qué querés y él decide cómo. Pig es procedural: decís cómo, paso por paso. Pig no tiene catálogo de tablas: el esquema lo escribís en cada LOAD." },
+      { con: "Un script común", dif: "Pig es perezoso: las primeras líneas no ejecutan nada. Recién con DUMP o STORE arma el plan completo y lanza los trabajos." }
+    ],
+    ejemplo: "ventas = LOAD '/user/root/ventas' USING PigStorage(',')\n  AS (fecha:chararray, sucursal:chararray, producto:chararray,\n      cantidad:int, precio:int);\npor_prod = GROUP ventas BY producto;\nDUMP por_prod;",
+    ui: [["Sin web: sus trabajos en", "localhost:8088"], ["Terminados", "localhost:19888"]]
+  },
+  sparksql: {
+    name: "Spark SQL", layer: "lenguajes", version: "Spark 3.5.9", img: ALL,
+    sub: "SQL en Spark", subN: "SQL",
+    frase: "SQL que ejecuta Spark. Ve las mismas tablas que Hive porque se conecta al mismo Metastore.",
+    analogia: "El mismo menú, preparado en otra cocina.",
+    cursada: "Correr la misma consulta en Hive y en Spark SQL y comparar tiempos y lo que aparece en YARN. Y mezclar SQL con Python dentro de un mismo programa, con spark.sql(\"...\").",
+    confunde: [
+      { con: "Hive", dif: "El SQL es casi igual y las tablas son las mismas. La diferencia es el motor (Spark en vez de Tez) y que, en un programa de PySpark, el resultado de la consulta es un DataFrame con el que podés seguir trabajando." }
+    ],
+    ejemplo: "spark-sql -e \"SELECT producto, SUM(cantidad) AS unidades\n              FROM ventas GROUP BY producto\"",
+    ui: [["Mientras corre", "localhost:4040"], ["Después", "localhost:18080"]]
+  },
+  pyspark: {
+    name: "PySpark", layer: "lenguajes", version: "Spark 3.5.9 · MLlib", img: ALL,
+    sub: "Python + MLlib", subN: "Python",
+    frase: "Python para manejar Spark: DataFrames repartidos en el cluster y, con MLlib, modelos de machine learning que se entrenan en los executors.",
+    analogia: "El control remoto de Spark, con los botones escritos en Python.",
+    cursada: "ventas.py y etl_spark.py, y los modelos de MLlib de la imagen ml. Desde la terminal con spark-submit o en un notebook de JupyterLab.",
+    confunde: [
+      { con: "pandas", dif: "Se escriben parecido (DataFrame, groupBy), pero pandas vive en la memoria de una sola máquina y ejecuta al instante. PySpark reparte el trabajo y es perezoso: no hace nada hasta una acción (show, count, write). Con 4,5 MB gana pandas; con decenas de GB, sólo Spark." },
+      { con: "Hadoop Streaming", dif: "Los dos son Python en el cluster, pero Streaming es MapReduce puro (un script para map y otro para reduce, línea por línea) y PySpark es Spark con DataFrames." }
+    ],
+    ejemplo: "ventas = spark.read.csv(\"hdfs:///user/root/ventas\",\n                        header=True, inferSchema=True)\nventas.groupBy(\"producto\").sum(\"cantidad\").show()",
+    ui: [["Sesión activa", "localhost:4040"], ["Historial", "localhost:18080"]]
+  },
+  streaming: {
+    name: "Streaming", layer: "lenguajes", version: "Hadoop 3.3.6", img: ALL,
+    sub: "scripts Python", subN: "mapper.py",
+    frase: "Hadoop Streaming: la forma de escribir el map y el reduce en cualquier lenguaje (acá, Python). Hadoop les pasa las líneas por la entrada estándar y lee lo que imprimen.",
+    analogia: "Tercerizar una tarea: MapReduce le pasa el texto a tu script y recibe lo que el script le devuelve escrito.",
+    cursada: "mapper.py y reducer.py de la guía 4: ver las fases map → shuffle → reduce sin que nada las esconda. Es lo más cerca de MapReduce \"a mano\".",
+    confunde: [
+      { con: "Streaming de datos en tiempo real", dif: "El nombre engaña: no tiene nada que ver con procesar datos que llegan en vivo. Es un trabajo por lotes común; \"streaming\" se refiere a que los datos pasan por la entrada y la salida estándar." },
+      { con: "PySpark", dif: "Ver la ficha de PySpark: Streaming es MapReduce con scripts; PySpark es otro motor." }
+    ],
+    ejemplo: "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \\\n  -files ejemplos/mapper.py,ejemplos/reducer.py \\\n  -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" \\\n  -input /user/root/ventas -output /user/root/resultados/mr_por_producto",
+    ui: [["Como todo MapReduce", "localhost:8088"]]
+  },
+  sqoop: {
+    name: "Sqoop", layer: "puente", version: "1.4.7", img: ALL,
+    sub: "copia base ⇄ HDFS", subN: "base ⇄ HDFS",
+    frase: "Copia tablas entre una base relacional (acá, MariaDB) y HDFS, en las dos direcciones. Para hacerlo lanza un trabajo de MapReduce que sólo tiene map: varios mappers leen la tabla por rangos en paralelo.",
+    analogia: "Un camión de mudanza con varios ayudantes: cada uno carga una parte de la tabla al mismo tiempo.",
+    cursada: "sqoop import de tienda.ventas con 4 mappers (quedan 4 archivos part-m-0000N en HDFS) y sqoop export de un resumen hacia una tabla de MariaDB.",
+    confunde: [
+      { con: "hdfs dfs -put", dif: "put copia un archivo que ya tenés. Sqoop lee una base de datos por JDBC y la convierte en archivos. Si el dato ya es un CSV, put; si vive en una base, Sqoop." },
+      { con: "Una herramienta de hoy", dif: "El proyecto se retiró en 2021 y la 1.4.7 es la última versión. Se sigue enseñando porque muestra muy claro la idea; en la industria hoy se hace con Spark (lectura JDBC) u otras herramientas de ingesta." }
+    ],
+    ejemplo: "sqoop import --connect jdbc:mysql://localhost/tienda \\\n  --username alumno --password alumno \\\n  --table ventas --target-dir /user/root/tienda/ventas \\\n  --delete-target-dir -m 4",
+    ui: [["Sin web: el trabajo en", "localhost:8088"]]
+  },
+  mariadb: {
+    name: "MariaDB", layer: "maquina", version: "de Ubuntu 24.04", img: ALL,
+    sub: "tablas SQL", subN: "tablas SQL",
+    frase: "Una base de datos relacional clásica, compatible con MySQL: tablas con filas y columnas, en una sola máquina, pensadas para consultas puntuales y cambios rápidos.",
+    analogia: "Una planilla con reglas estrictas y un índice: encontrás o cambiás una fila al instante, pero toda la planilla está en un solo escritorio.",
+    cursada: "La base tienda (tienda.sql): origen del sqoop import y destino del sqoop export. Se entra con el cliente mysql, con DBeaver o con Workbench, usuario alumno.",
+    confunde: [
+      { con: "MySQL", dif: "Las guías dicen MySQL porque así se la conoce: el servidor instalado es MariaDB, que nació como copia de MySQL y habla el mismo SQL y el mismo protocolo. Por eso Sqoop se conecta con jdbc:mysql://." },
+      { con: "Hive", dif: "Ver la ficha de Hive: mismo idioma (SQL), mundos distintos. MariaDB es una máquina y milisegundos; Hive es el cluster y segundos, pero escala a muchísimo más volumen." }
+    ],
+    ejemplo: "mysql -u alumno -palumno tienda \\\n  -e \"SELECT producto, precio FROM productos LIMIT 5\"",
+    ui: [["MySQL / MariaDB (DBeaver, Workbench)", "localhost:3306"]]
+  },
+  mongodb: {
+    name: "MongoDB", layer: "maquina", version: "8.0", img: ALL,
+    sub: "documentos", subN: "documentos",
+    frase: "Una base de datos de documentos: cada registro es un documento parecido a un JSON, que puede traer listas y otros documentos adentro, sin un esquema fijo de columnas.",
+    analogia: "Un fichero de carpetas: la carpeta del termo trae adentro sus colores y sus reseñas, en vez de tenerlos en otras planillas que hay que cruzar.",
+    cursada: "tienda_mongo.js y consultas_mongo.js, que muestran al lado de cada consulta cómo sería en SQL. Desde Python, con pymongo y pandas. Se prende con MONGODB=si.",
+    confunde: [
+      { con: "MariaDB", dif: "En MariaDB, las reseñas van en otra tabla y se cruzan con JOIN. En MongoDB van adentro del documento del producto. Cada documento puede tener campos que otros no tienen." },
+      { con: "HDFS", dif: "Acá MongoDB es una sola instancia en una máquina. Puede repartirse en varias (sharding), pero eso es aparte de Hadoop: no usa HDFS ni YARN." }
+    ],
+    ejemplo: "mongosh tienda\ndb.productos.findOne({ _id: \"termo\" })\ndb.productos.find({ categoria: \"accesorios\" }, { precio: 1 })",
+    ui: [["mongosh, Compass", "localhost:27017"]]
+  },
+  pandas: {
+    name: "pandas", layer: "maquina", version: "2.3.3 · numpy 1.26", img: ML,
+    sub: "tablas en RAM", subN: "tablas en memoria",
+    frase: "Tablas (DataFrames) en la memoria de una sola máquina, con Python. Inmediato y cómodo mientras los datos entren en la RAM. Viene con numpy, pyarrow (Parquet) y matplotlib (gráficos).",
+    analogia: "Una planilla de cálculo con superpoderes, que manejás escribiendo en vez de con el mouse.",
+    cursada: "Limpiar ventas_sucias.csv con etl_pandas.py (fechas en tres formatos, precios con coma, duplicados), resumir con groupby y graficar. En el pipeline es la opción sugerida: 4,5 MB se limpian en un par de segundos.",
+    confunde: [
+      { con: "PySpark", dif: "Ver la ficha de PySpark. La regla práctica: si entra en la memoria de una máquina, pandas; si no, Spark." }
+    ],
+    ejemplo: "import pandas as pd\ndf = pd.read_csv(\"ejemplos/ventas.csv\")\ndf.groupby(\"producto\")[\"cantidad\"].sum()",
+    ui: [["Se usa desde JupyterLab", "localhost:8888"]]
+  },
+  sklearn: {
+    name: "scikit-learn", layer: "maquina", version: "1.9.1 · XGBoost 3.1", img: ML,
+    sub: "+ XGBoost", subN: "+ XGBoost",
+    frase: "Modelos de machine learning en una sola máquina: regresión (cuánto), clasificación (si o no, cuál) y agrupamiento (qué grupos hay). XGBoost suma el gradient boosting.",
+    analogia: "Una caja de herramientas de modelos listos: elegís uno, lo entrenás con fit y le pedís predicciones con predict.",
+    cursada: "modelos_sklearn.py con clientes_senal.csv (20.000 filas): entrenar, medir el error y comparar con el mismo modelo en Spark MLlib.",
+    confunde: [
+      { con: "Spark MLlib", dif: "Mismos tipos de modelo; MLlib reparte el entrenamiento en executors de YARN. Con 20.000 filas scikit-learn entrena en milisegundos y MLlib pide 3 GB a YARN y tarda mucho más: el cluster sólo conviene cuando los datos no entran en una máquina." }
+    ],
+    ejemplo: "from sklearn.linear_model import LinearRegression\nmodelo = LinearRegression().fit(X_train, y_train)\nmodelo.predict(X_test)",
+    ui: [["Se usa desde JupyterLab", "localhost:8888"]]
+  },
+  jupyter: {
+    name: "JupyterLab", layer: "puertas", version: "4.6.4", img: ML,
+    sub: "notebooks · :8888", subN: ":8888",
+    frase: "Cuadernos (notebooks) en el navegador: escribís código en celdas y abajo de cada una ves el resultado, la tabla o el gráfico.",
+    analogia: "Un cuaderno de laboratorio que ejecuta lo que escribís.",
+    cursada: "Las guías de la imagen ml: ETL con pandas y con Spark, modelos con scikit-learn y MLlib, MongoDB desde pandas.",
+    confunde: [
+      { con: "Un motor", dif: "Jupyter no procesa nada por su cuenta. Lo que corrés ahí se ejecuta en pandas (una máquina) o en Spark (el cluster) según lo que llames en la celda." }
+    ],
+    ejemplo: "# en una celda\nfrom pyspark.sql import SparkSession\nspark = SparkSession.builder.getOrCreate()",
+    ui: [["JupyterLab (imagen ml y full)", "localhost:8888"]]
+  },
+  terminal: {
+    name: "Terminal", layer: "puertas", version: "bash del contenedor", img: ALL,
+    sub: "hdfs · beeline · pig · spark-submit · sqoop · mysql", subN: "bash",
+    frase: "La consola adentro del contenedor. Desde ahí corrés todos los clientes: hdfs, yarn, beeline, pig, spark-submit, spark-sql, sqoop, mysql y mongosh.",
+    analogia: "La puerta de servicio: entra a todos lados, pero hay que saber qué decir.",
+    cursada: "Todas las guías de base. Se entra con docker exec y se trabaja parado en /datos, que es tu carpeta datos/ compartida.",
+    confunde: [
+      { con: "beeline y hive", dif: "beeline es el cliente que se conecta a HiveServer2 por JDBC (el puerto 10000). Es la forma recomendada en Hive 4." }
+    ],
+    ejemplo: "docker exec -it bigdata bash\ncd /datos",
+    ui: [["Sin puerto: docker exec", "—"]]
+  },
+  interfaz: {
+    name: "Interfaz web", layer: "puertas", version: "imagen full", img: ["full"],
+    sub: "el panel del sandbox, en :8080 (imagen full)", subN: ":8080",
+    frase: "El panel de la versión full. Prende y apaga el cluster y muestra HDFS con sus bloques, los trabajos de YARN, consultas a Hive, MariaDB, MongoDB y Pig, el pipeline y los modelos. Cada botón muestra el comando que corre.",
+    analogia: "La terminal con ventanas: mismos comandos, pero viendo qué pasa en el cluster mientras corren.",
+    cursada: "Para ver lo que en la terminal no se ve: en qué DataNode quedó cada bloque, cuántos contenedores pidió un trabajo, qué plan armó Hive. Y las prácticas guiadas que preguntan el comando antes de correrlo.",
+    confunde: [
+      { con: "Un motor nuevo", dif: "No tiene motor propio: llama a los mismos clientes de la terminal (beeline, mysql, mongosh, pig). Lo que hacés en la terminal aparece en la interfaz, y al revés." }
+    ],
+    ejemplo: "# con la imagen full prendida\n# abrir http://localhost:8080 y tocar Iniciar",
+    ui: [["Interfaz (imagen full)", "localhost:8080"]]
+  }
+};
+
+/* Posiciones. wide: PC (viewBox 1136 x 600). narrow: celu (360 x 688). */
+const LAYOUTS = {
+  wide: {
+    w: 1136, h: 600, lab: 15.5, labSm: 14.5, sub: 12.2,
+    frames: [
+      { x: 124, y: 96, w: 734, h: 474, t: "CLUSTER HADOOP · un contenedor, muchos procesos" },
+      { x: 864, y: 96, w: 256, h: 474, t: "UNA SOLA MÁQUINA" }
+    ],
+    rows: [
+      { y: 46,  n: "",  t: "Desde dónde", s: "trabajás", layer: "puertas" },
+      { y: 150, n: "4", t: "Cómo lo pedís", s: "lenguajes", layer: "lenguajes" },
+      { y: 272, n: "3", t: "Quién lo hace", s: "motores", layer: "motores" },
+      { y: 392, n: "2", t: "Quién reparte", s: "recursos", layer: "recursos" },
+      { y: 514, n: "1", t: "Dónde queda", s: "datos", layer: "datos" }
+    ],
+    notes: [{ x: 992, y: 266, lines: ["acá no hay motor aparte:", "calcula el propio proceso"] }],
+    nodes: {
+      terminal: [140, 24, 340, 44], interfaz: [500, 24, 340, 44], jupyter: [880, 24, 224, 44],
+      streaming: [140, 120, 128, 60], pig: [283, 120, 128, 60], hive: [426, 120, 128, 60], sparksql: [569, 120, 128, 60], pyspark: [712, 120, 128, 60],
+      pandas: [880, 120, 108, 60], sklearn: [996, 120, 108, 60],
+      mapreduce: [150, 240, 250, 64], tez: [420, 240, 140, 64], spark: [585, 240, 240, 64],
+      yarn: [140, 364, 536, 56], zookeeper: [692, 364, 148, 56], sqoop: [880, 364, 224, 56],
+      hdfs: [140, 480, 536, 68], metastore: [692, 480, 148, 68], mongodb: [880, 480, 108, 68], mariadb: [996, 480, 108, 68]
+    },
+    routes: {
+      e_hive_meta: [[530, 180], [530, 198], [848, 198], [848, 500], [840, 500]],
+      e_sparksql_meta: [[680, 180], [680, 198], [848, 198], [848, 500], [840, 500]],
+      e_sqoop_hdfs: [[880, 404], [868, 404], [868, 560], [600, 560], [600, 548]],
+      e_sqoop_mr: [[910, 364], [910, 334], [380, 334], [380, 304]],
+      e_term_hdfs: [[140, 46], [131, 46], [131, 530], [140, 530]],
+      e_pandas_mongo: [[905, 180], [905, 480]],
+      e_jup_pyspark: [[892, 68], [892, 94], [800, 94], [800, 120]],
+      e_zk_hdfs: [[720, 420], [720, 450], [660, 450], [660, 480]]
+    },
+    labelAt: { e_sparksql_meta: [848, 334], e_hive_meta: [700, 198] }
+  },
+  narrow: {
+    w: 360, h: 688, lab: 12, labSm: 10.5, sub: 9.5,
+    frames: [
+      { x: 2, y: 68, w: 356, h: 352, t: "CLUSTER HADOOP" },
+      { x: 2, y: 492, w: 356, h: 190, t: "UNA SOLA MÁQUINA" }
+    ],
+    rowsIn: [
+      { x: 10, y: 92,  t: "4 · CÓMO LO PEDÍS", layer: "lenguajes" },
+      { x: 10, y: 176, t: "3 · QUIÉN LO HACE", layer: "motores" },
+      { x: 10, y: 264, t: "2 · QUIÉN REPARTE", layer: "recursos" },
+      { x: 10, y: 346, t: "1 · DÓNDE QUEDA", layer: "datos" },
+      { x: 10, y: 516, t: "BASES DE DATOS", layer: "maquina" },
+      { x: 10, y: 598, t: "PYTHON EN UNA MÁQUINA", layer: "maquina" }
+    ],
+    notes: [],
+    nodes: {
+      terminal: [10, 12, 108, 42], interfaz: [126, 12, 108, 42], jupyter: [242, 12, 108, 42],
+      streaming: [10, 100, 64, 50], pig: [79, 100, 64, 50], hive: [148, 100, 64, 50], sparksql: [217, 100, 64, 50], pyspark: [286, 100, 64, 50],
+      mapreduce: [10, 184, 126, 52], tez: [148, 184, 64, 52], spark: [224, 184, 126, 52],
+      yarn: [10, 272, 230, 48], zookeeper: [250, 272, 100, 48],
+      hdfs: [10, 354, 230, 54], metastore: [250, 354, 100, 54],
+      sqoop: [176, 434, 174, 44],
+      mongodb: [10, 524, 165, 52], mariadb: [185, 524, 165, 52],
+      pandas: [10, 606, 165, 52], sklearn: [185, 606, 165, 52]
+    },
+    routes: {
+      e_sqoop_hdfs: [[200, 434], [200, 408]],
+      e_pandas_mongo: [[92, 606], [92, 576]],
+      e_zk_hdfs: [[262, 320], [262, 337], [228, 337], [228, 354]]
+    }
+  }
+};
+
+/* Conexiones. tipo: run = corre sobre · read = lee / consulta · bridge = copia · puerta = desde dónde se usa.
+   Las "run" y "bridge" se ven siempre; las demás aparecen al seleccionar. */
+const EDGES = [
+  ["e_streaming_mr", "streaming", "mapreduce", "run", "corre como MapReduce"],
+  ["e_pig_mr", "pig", "mapreduce", "run", "se traduce a MapReduce"],
+  ["e_hive_tez", "hive", "tez", "run", "se traduce a un DAG"],
+  ["e_sparksql_spark", "sparksql", "spark", "run", "lo ejecuta Spark"],
+  ["e_pyspark_spark", "pyspark", "spark", "run", "lo ejecuta Spark"],
+  ["e_mr_yarn", "mapreduce", "yarn", "run", "pide contenedores"],
+  ["e_tez_yarn", "tez", "yarn", "run", "pide contenedores"],
+  ["e_spark_yarn", "spark", "yarn", "run", "pide executors"],
+  ["e_yarn_hdfs", "yarn", "hdfs", "run", "leen y escriben bloques"],
+  ["e_meta_hdfs", "metastore", "hdfs", "read", "apunta a carpetas", { from: "l", to: "r", base: true }],
+  ["e_zk_hdfs", "zookeeper", "hdfs", "read", "elige el NameNode activo", { base: true }],
+  ["e_sqoop_maria", "sqoop", "mariadb", "bridge", "lee y escribe por JDBC"],
+  ["e_sqoop_hdfs", "sqoop", "hdfs", "bridge", "deja archivos part-m", { baseNarrow: true }],
+  ["e_sqoop_mr", "sqoop", "mapreduce", "run", "usa MapReduce (sólo map)", { hide: true }],
+  ["e_hive_meta", "hive", "metastore", "read", "busca columnas y carpeta"],
+  ["e_sparksql_meta", "sparksql", "metastore", "read", "usa las tablas de Hive"],
+  ["e_pandas_mongo", "pandas", "mongodb", "read", "pymongo", { baseNarrow: true }],
+  ["e_jup_pandas", "jupyter", "pandas", "puerta", "celdas de Python"],
+  ["e_jup_sklearn", "jupyter", "sklearn", "puerta", "celdas de Python"],
+  ["e_jup_pyspark", "jupyter", "pyspark", "puerta", "abre una sesión de Spark"],
+  ["e_term_streaming", "terminal", "streaming", "puerta", "hadoop jar"],
+  ["e_term_pig", "terminal", "pig", "puerta", "pig"],
+  ["e_term_hive", "terminal", "hive", "puerta", "beeline"],
+  ["e_term_sparksql", "terminal", "sparksql", "puerta", "spark-sql"],
+  ["e_term_pyspark", "terminal", "pyspark", "puerta", "spark-submit"],
+  ["e_term_hdfs", "terminal", "hdfs", "puerta", "hdfs dfs -put"],
+  ["e_int_hive", "interfaz", "hive", "puerta", "corre beeline"],
+  ["e_int_pig", "interfaz", "pig", "puerta", "corre pig"]
+].map(([id, from, to, kind, label, o]) => Object.assign({ id, from, to, kind, label }, o || {}));
+
+/* Recorridos guiados. nodes/edges: lo que se ilumina en cada paso. */
+const TOURS = {
+  csv: {
+    name: "De un CSV a un tablero",
+    intro: "El camino de un archivo sucio hasta un resumen que puede mostrar un tablero. Es el pipeline de la imagen full, paso por paso.",
+    steps: [
+      { t: "El punto de partida", nodes: ["terminal"], edges: [],
+        x: "<p>Tenés <b>ventas_sucias.csv</b> en tu carpeta <code>datos/</code>: 103.000 ventas con fechas en tres formatos, precios con coma y filas repetidas. Adentro del contenedor esa carpeta es <code>/datos</code>.</p><p>Todavía <b>no está en el cluster</b>: está en un disco común. Nada de Hadoop lo puede leer hasta que lo subas.</p>",
+        code: "python3 ejemplos/ml/generar_sucios.py" },
+      { t: "Ingesta: subirlo a HDFS", nodes: ["terminal", "hdfs"], edges: ["e_term_hdfs"],
+        x: "<p><code>hdfs dfs -put</code> copia el archivo a HDFS. En el camino lo <b>corta en bloques</b> (128 MB en un cluster real; en el aula se achica a 1 MB para que se vean) y guarda tantas copias de cada bloque como diga <code>REPLICATION</code>.</p><p>Si el dato hubiera estado en una base de datos, en vez de <code>put</code> se usaría Sqoop.</p>",
+        code: "hdfs dfs -mkdir -p /user/root/ml\nhdfs dfs -put -f ventas_sucias.csv /user/root/ml/" },
+      { t: "ETL: limpiarlo con PySpark", nodes: ["pyspark", "spark", "yarn", "hdfs"], edges: ["e_pyspark_spark", "e_spark_yarn", "e_yarn_hdfs"],
+        x: "<p>El script de PySpark describe la limpieza; <b>Spark</b> la ejecuta en executors que le pide a <b>YARN</b>, y cada executor lee sus bloques de HDFS. El resultado se escribe en HDFS en formato <b>Parquet</b>.</p>",
+        code: "spark-submit --master yarn ejemplos/ml/etl_spark.py",
+        tip: "<b>Ojo:</b> con 4,5 MB pandas hace exactamente lo mismo en un par de segundos (<code>etl_pandas.py</code>), y Spark tarda más sólo en arrancar. Spark se justifica cuando el archivo no entra en una máquina." },
+      { t: "Dejarlo consultable", nodes: ["hive", "metastore", "hdfs"], edges: ["e_hive_meta", "e_meta_hdfs"],
+        x: "<p>\"Almacenar\" acá no es copiar a una base: los datos <b>ya están</b> en HDFS. Lo que se agrega es la descripción.</p><p>Con <code>CREATE EXTERNAL TABLE ... LOCATION</code>, Hive anota en el <b>Metastore</b> qué columnas tiene y en qué carpeta están los archivos. No mueve nada.</p>",
+        code: "CREATE EXTERNAL TABLE ventas_limpias (...)\nSTORED AS PARQUET\nLOCATION '/user/root/ml/ventas_limpias';" },
+      { t: "Análisis: resumir con Hive", nodes: ["terminal", "hive", "tez", "yarn", "hdfs", "metastore"], edges: ["e_term_hive", "e_hive_meta", "e_hive_tez", "e_tez_yarn", "e_yarn_hdfs"],
+        x: "<p>Escribís un <code>GROUP BY</code> en beeline. Hive busca la tabla en el Metastore, arma un <b>DAG de Tez</b> y lo manda a YARN, que le da contenedores. En <code>localhost:8088</code> aparece una aplicación de tipo <b>TEZ</b>.</p><p>El resultado queda en HDFS como varios archivos (uno por tarea).</p>",
+        code: "beeline -u jdbc:hive2://localhost:10000 -e \"\n  SELECT producto,\n         SUM(importe) AS facturado\n  FROM ventas_limpias\n  GROUP BY producto\n  ORDER BY facturado DESC\"" },
+      { t: "Resultado: llevarlo al tablero", nodes: ["hdfs", "sqoop", "mapreduce", "mariadb"], edges: ["e_sqoop_hdfs", "e_sqoop_mr", "e_sqoop_maria"],
+        x: "<p>Dos salidas, según quién lo use:</p><p><b>Un CSV</b> para una planilla: <code>hdfs dfs -getmerge</code> junta las partes en un solo archivo en tu carpeta <code>datos/</code>.</p><p><b>Una tabla en MariaDB</b> para un tablero: <code>sqoop export</code> (un MapReduce de sólo map) copia el resumen a una tabla que después lee la herramienta de tableros.</p>",
+        code: "hdfs dfs -getmerge /user/root/resultados/por_producto por_producto.csv\n\n# o, a una tabla que ya existe en MariaDB:\nsqoop export --connect jdbc:mysql://localhost/tienda \\\n  --username alumno --password alumno \\\n  --table resumen_producto \\\n  --export-dir /user/root/resultados/por_producto -m 1",
+        tip: "El sandbox no trae una herramienta de tableros (Power BI, Metabase, Looker Studio…): el tablero es el <b>destino</b>, afuera. Lo que se aprende acá es dejarle el dato listo, en una base o en un CSV." },
+      { t: "Rama aparte: un modelo", nodes: ["jupyter", "pandas", "sklearn"], edges: ["e_jup_pandas", "e_jup_sklearn"],
+        x: "<p>El machine learning va por otro lado: usa <code>clientes_senal.csv</code> (20.000 filas), porque las ventas generadas no tienen nada que un modelo pueda aprender.</p><p>En JupyterLab, pandas carga los datos y <b>scikit-learn</b> entrena en milisegundos, en una sola máquina, sin YARN.</p>",
+        code: "python3 ejemplos/ml/modelos_sklearn.py",
+        tip: "El mismo modelo con Spark MLlib pide 3 GB a YARN y tarda mucho más. Mismo criterio que en el ETL: el cluster es para cuando no entra en una máquina." }
+    ]
+  },
+  tres: {
+    name: "Una consulta, tres motores",
+    intro: "Ventas por producto: cuántas unidades y cuánto se facturó. El repo trae la misma cuenta escrita cuatro veces, y las cuatro tienen que dar igual.",
+    steps: [
+      { t: "El dato, una sola vez", nodes: ["hdfs"], edges: [],
+        x: "<p>Los archivos de ventas están <b>una sola vez</b> en <code>/user/root/ventas</code>. Ninguna de las cuatro versiones los copia: todas leen de ahí.</p><p>Lo que cambia es <b>cómo se escribe</b> el pedido y <b>qué motor</b> lo ejecuta.</p>",
+        code: "hdfs dfs -ls /user/root/ventas" },
+      { t: "MapReduce a mano, con Streaming", nodes: ["terminal", "streaming", "mapreduce", "yarn", "hdfs"], edges: ["e_term_streaming", "e_streaming_mr", "e_mr_yarn", "e_yarn_hdfs"],
+        x: "<p>Escribís vos el map (<code>mapper.py</code>: de cada línea saca producto, cantidad e importe) y el reduce (<code>reducer.py</code>: suma por producto). Hadoop ordena y agrupa en el medio: el <b>shuffle</b>.</p><p>En <code>8088</code> aparece un trabajo de tipo <b>MAPREDUCE</b>.</p>",
+        code: "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \\\n  -files ejemplos/mapper.py,ejemplos/reducer.py \\\n  -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" \\\n  -input /user/root/ventas -output /user/root/resultados/mr_por_producto" },
+      { t: "Pig Latin: mismo motor, menos trabajo", nodes: ["terminal", "pig", "mapreduce", "yarn", "hdfs"], edges: ["e_term_pig", "e_pig_mr", "e_mr_yarn", "e_yarn_hdfs"],
+        x: "<p>Con Pig describís los pasos (LOAD, GROUP, FOREACH, STORE) y Pig <b>escribe el map y el reduce por vos</b>. El motor es el mismo del paso anterior: vuelve a aparecer un trabajo <b>MAPREDUCE</b>.</p><p>Nada corre hasta el <code>STORE</code>: ahí Pig arma el plan entero.</p>",
+        code: "pig ejemplos/ventas.pig" },
+      { t: "HiveQL: otro motor, Tez", nodes: ["terminal", "hive", "metastore", "tez", "yarn", "hdfs"], edges: ["e_term_hive", "e_hive_meta", "e_hive_tez", "e_tez_yarn", "e_yarn_hdfs"],
+        x: "<p>Ahora es SQL: un <code>GROUP BY</code>. Hive busca en el Metastore dónde está la tabla <code>ventas</code> y arma <b>un solo DAG de Tez</b> con todas las etapas, sin pasar por HDFS entre una y otra.</p><p>En <code>8088</code>: tipo <b>TEZ</b>.</p>",
+        code: "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql" },
+      { t: "PySpark y Spark SQL: Spark", nodes: ["terminal", "pyspark", "sparksql", "spark", "yarn", "hdfs", "metastore"], edges: ["e_term_pyspark", "e_pyspark_spark", "e_sparksql_spark", "e_sparksql_meta", "e_spark_yarn", "e_yarn_hdfs"],
+        x: "<p><code>ventas.py</code> hace la cuenta con DataFrames; con <code>spark-sql</code> se puede escribir el mismo SQL que en Hive, sobre la misma tabla. En los dos casos el motor es <b>Spark</b>: executors en YARN que trabajan en memoria.</p><p>En <code>8088</code>: tipo <b>SPARK</b>. El detalle, en <code>4040</code> y <code>18080</code>.</p>",
+        code: "spark-submit ejemplos/ventas.py" },
+      { t: "Qué cambió y qué no", nodes: ["mapreduce", "tez", "spark", "yarn", "hdfs"], edges: ["e_mr_yarn", "e_tez_yarn", "e_spark_yarn", "e_yarn_hdfs"],
+        x: "<p><b>No cambió:</b> los datos (HDFS), quién reparte (YARN) y el resultado.</p><p><b>Cambió el motor:</b> MapReduce escribe a disco entre fases; Tez encadena etapas en un DAG; Spark las encadena en memoria. Con estos datos chicos lo que más tarda es <b>arrancar</b> cada trabajo, no el cálculo: las diferencias de velocidad se notan con volumen grande o con muchos pasos.</p>",
+        tip: "Para mostrarlo en clase: corré las cuatro versiones y abrí <code>localhost:8088</code>. La columna <b>Application Type</b> dice MAPREDUCE, MAPREDUCE, TEZ y SPARK." }
+    ]
+  }
+};
+
+/* Comparativas: columnas = herramientas, filas = aspectos. */
+const COMPARE = [
+  { t: "¿Cómo lo pido? Hive, Spark SQL, Pig y PySpark", q: "Las cuatro sirven para la misma cuenta. La diferencia es el estilo y el motor que hay abajo.",
+    cols: [["HiveQL (Hive)", "lenguajes"], ["Spark SQL", "lenguajes"], ["Pig Latin", "lenguajes"], ["PySpark", "lenguajes"]],
+    rows: [
+      ["Motor que lo ejecuta", "Tez", "Spark", "MapReduce", "Spark"],
+      ["Estilo", "Declarativo: decís qué querés (SQL)", "Declarativo: el mismo SQL", "Procedural: decís cómo, paso a paso", "Código Python que encadena operaciones"],
+      ["Las tablas", "En el Metastore", "El mismo Metastore que Hive", "No tiene catálogo: el esquema va en cada LOAD", "Lee archivos o tablas del Metastore"],
+      ["Cuándo ejecuta", "Al mandar la consulta", "Al mandar la consulta", "Recién en DUMP o STORE", "Recién en una acción: show, count, write"],
+      ["Conviene para", "Reportes en SQL sobre HDFS", "SQL y seguir con Spark en el mismo programa", "Transformaciones por pasos (clásico de la cursada)", "ETL y machine learning en código"],
+      ["Se corre con", "<code>beeline</code>", "<code>spark-sql</code>", "<code>pig</code>", "<code>spark-submit</code>, <code>pyspark</code>"]
+    ] },
+  { t: "¿Quién hace el trabajo? MapReduce, Tez y Spark", q: "Los tres corren sobre YARN y leen de HDFS. Cambia cómo encadenan los pasos.",
+    cols: [["MapReduce", "motores"], ["Tez", "motores"], ["Spark", "motores"]],
+    rows: [
+      ["Entre un paso y otro", "Escribe a disco (y entre trabajos, a HDFS)", "Pasa los datos directo de una etapa a la siguiente", "Los tiene en memoria; si no entran, usa el disco local"],
+      ["Forma del trabajo", "Siempre map → reduce; varios pasos = varios trabajos", "Un grafo de etapas (DAG) por consulta", "Un grafo de etapas (DAG), reusando executors"],
+      ["Lo usan", "Streaming, Pig, Sqoop", "Hive", "PySpark, Spark SQL, MLlib"],
+      ["Le programás directo", "Sí: Java o Streaming", "No, casi nunca", "Sí: PySpark"],
+      ["Fuerte en", "Lotes enormes y simples; muy robusto", "Consultas SQL de varias etapas", "Muchos pasos sobre los mismos datos: ETL largos, ML"],
+      ["En localhost:8088", "Tipo MAPREDUCE (y en 19888)", "Tipo TEZ", "Tipo SPARK (y en 4040 / 18080)"]
+    ] },
+  { t: "¿Dónde quedan los datos? HDFS, MariaDB y MongoDB", q: "Los tres guardan datos, pero no son intercambiables.",
+    cols: [["HDFS", "datos"], ["MariaDB", "maquina"], ["MongoDB", "maquina"]],
+    rows: [
+      ["Qué guarda", "Archivos: CSV, Parquet, lo que sea", "Tablas con columnas fijas", "Documentos tipo JSON, con listas y subdocumentos"],
+      ["Sabe consultar", "No: lo leen Hive, Pig o Spark", "Sí, SQL", "Sí: find, aggregate"],
+      ["Repartido en varias máquinas", "Sí: bloques con réplicas en varios DataNodes", "No: una sola máquina", "Acá no (puede, con sharding, pero aparte de Hadoop)"],
+      ["Cambiar un dato", "No se edita: se reescribe el archivo", "UPDATE de una fila, al instante", "updateOne de un documento"],
+      ["Fuerte en", "Mucho volumen, leído de corrido", "Consultas puntuales rápidas, transacciones", "Datos con forma variable"],
+      ["Puerto", "<code>9870</code> (web)", "<code>3306</code>", "<code>27017</code>"]
+    ] },
+  { t: "¿Una máquina o el cluster? pandas y scikit-learn contra PySpark y MLlib", q: "Se escriben parecido. La pregunta que decide es si los datos entran en la memoria de una máquina.",
+    cols: [["pandas · scikit-learn", "maquina"], ["PySpark · MLlib", "lenguajes"]],
+    rows: [
+      ["Dónde corre", "En el proceso de Python, en una máquina", "En executors repartidos por YARN"],
+      ["Cuándo ejecuta", "Al instante, línea por línea", "Perezoso: arma un plan y corre en una acción"],
+      ["Límite", "La RAM de esa máquina", "La suma de todo el cluster"],
+      ["Arranque", "Inmediato", "La sesión de Spark lleva unos 15 segundos"],
+      ["En el pipeline del sandbox", "4,5 MB y 20.000 filas: gana claramente", "Mismo resultado, más lento con datos chicos; escala a decenas de GB"]
+    ] },
+  { t: "¿Quién coordina qué? YARN, ZooKeeper y el NameNode", q: "Los tres \"administran\" algo, y por eso se mezclan.",
+    cols: [["YARN", "recursos"], ["ZooKeeper", "recursos"], ["NameNode (HDFS)", "datos"]],
+    rows: [
+      ["Lleva la cuenta de", "Memoria y CPU: qué contenedor corre dónde", "Quién es el NameNode activo", "Qué bloques forman cada archivo y en qué DataNodes están"],
+      ["Si se cae", "No arrancan trabajos nuevos", "No hay cambio automático de NameNode", "Sin alta disponibilidad, HDFS deja de responder"],
+      ["En el sandbox", "Siempre", "Sólo con NAMENODES = 2 o 3", "Siempre (1 a 3)"],
+      ["Se mira en", "<code>8088</code>", "Sin web: <code>hdfs haadmin</code>", "<code>9870</code>"]
+    ] },
+  { t: "¿Cómo entran los datos? put, Sqoop y pandas", q: "Depende de dónde está el dato y a dónde tiene que ir.",
+    cols: [["hdfs dfs -put", "datos"], ["sqoop import", "puente"], ["pd.read_csv", "maquina"]],
+    rows: [
+      ["Desde", "Un archivo que ya tenés", "Una tabla de una base (JDBC)", "Un archivo local"],
+      ["Hacia", "HDFS, cortado en bloques", "HDFS, como archivos part-m-0000N", "La memoria de Python"],
+      ["Motor", "Ninguno: el cliente de HDFS copia", "MapReduce con N mappers en paralelo", "Ninguno: el propio Python"],
+      ["Lo ves en", "<code>9870</code> (el archivo y sus bloques)", "<code>8088</code> (un trabajo MAPREDUCE)", "Tu notebook"]
+    ] }
+];
+
+const GLOSARIO = [
+  ["Bloque", "El pedazo en que HDFS corta un archivo: 128 MB por defecto. Cada bloque se guarda y se copia por separado."],
+  ["Réplica", "Cada copia de un bloque, en un DataNode distinto. Con REPLICATION=2, cada bloque está en dos máquinas."],
+  ["NameNode", "El proceso de HDFS que sabe qué bloques forman cada archivo y dónde está cada uno. No guarda los datos."],
+  ["DataNode", "El proceso de HDFS que guarda los bloques en disco. Cuantos más DataNodes, más espacio y más copias posibles."],
+  ["Contenedor", "En YARN, un pedazo de memoria y CPU en una máquina, prestado a un trabajo. No es un contenedor de Docker."],
+  ["Executor", "En Spark, cada proceso que trabaja en paralelo. En el sandbox, cada executor vive en un contenedor de YARN."],
+  ["Map, shuffle y reduce", "Map procesa cada pedazo por separado; shuffle junta todo lo que tiene la misma clave; reduce lo resume."],
+  ["DAG", "Grafo de etapas sin vueltas atrás: el plan que arman Tez y Spark para correr una consulta de una sola vez."],
+  ["Perezoso (lazy)", "Que no ejecuta hasta el final. Pig espera al STORE o DUMP; Spark, a una acción como show o write."],
+  ["Tabla externa", "Una tabla de Hive que sólo describe archivos que ya están en HDFS. Si la borrás, los archivos quedan."],
+  ["Esquema", "La lista de columnas y sus tipos. En Hive vive en el Metastore; en Pig se escribe en cada LOAD."],
+  ["Parquet", "Formato de archivo por columnas y comprimido. Spark y pandas leen sólo las columnas que usan."],
+  ["JDBC", "La forma estándar de conectarse a una base de datos. beeline, DBeaver y Sqoop la usan."],
+  ["Fetch task", "Cuando Hive resuelve una consulta simple (un SELECT con LIMIT) leyendo el archivo directo, sin lanzar un trabajo."],
+  ["part-00000", "El resultado de un trabajo distribuido son varios archivos, uno por tarea. getmerge los junta en uno."],
+  ["Alta disponibilidad (HA)", "Tener más de un NameNode, uno activo y otros en espera, para que HDFS siga si se cae el activo."],
+  ["Modo local", "Correr sin cluster, en una sola máquina y con archivos comunes. Por ejemplo, pig -x local."],
+  ["Localidad de datos", "La idea de mandar el cálculo a la máquina donde está el bloque, en vez de mover los datos por la red."]
+];
+
+/* ==========================================================================
+   Lógica
+   ========================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+const svg = $("#mapa");
+const panel = $("#panel");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const state = { layout: null, mode: "explorar", sel: null, hover: null, step: 0 };
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function layerOf(id) { return LAYERS[TOOLS[id].layer]; }
+
+/* --- geometría de las conexiones --- */
+function box(id) { const b = LAYOUTS[state.layout].nodes[id]; return { x: b[0], y: b[1], w: b[2], h: b[3], cx: b[0] + b[2] / 2, cy: b[1] + b[3] / 2 }; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function edgePoints(e) {
+  const L = LAYOUTS[state.layout];
+  if (L.routes && L.routes[e.id]) return L.routes[e.id];
+  const A = box(e.from), B = box(e.to);
+  if (e.from_ === "l" || e.from === "metastore" && e.to === "hdfs") {
+    const y = (Math.max(A.y, B.y) + Math.min(A.y + A.h, B.y + B.h)) / 2;
+    return [[A.x, y], [B.x + B.w, y]];
+  }
+  // por defecto: de abajo del origen a arriba del destino
+  const top = B.y >= A.y + A.h;
+  const ay = top ? A.y + A.h : A.y, by = top ? B.y : B.y + B.h;
+  const lo = Math.max(A.x, B.x), hi = Math.min(A.x + A.w, B.x + B.w);
+  if (hi - lo >= 12) { const x = (lo + hi) / 2; return [[x, ay], [x, by]]; }
+  const ax = clamp(B.cx, A.x + 14, A.x + A.w - 14), bx = clamp(A.cx, B.x + 14, B.x + B.w - 14);
+  const my = (ay + by) / 2;
+  return [[ax, ay], [ax, my], [bx, my], [bx, by]];
+}
+
+function roundedPath(pts, r = 9) {
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const d1 = Math.hypot(x1 - x0, y1 - y0), d2 = Math.hypot(x2 - x1, y2 - y1);
+    const rr = Math.min(r, d1 / 2, d2 / 2);
+    const ax = x1 - (x1 - x0) / d1 * rr, ay = y1 - (y1 - y0) / d1 * rr;
+    const bx = x1 + (x2 - x1) / d2 * rr, by = y1 + (y2 - y1) / d2 * rr;
+    d += ` L${ax},${ay} Q${x1},${y1} ${bx},${by}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + ` L${last[0]},${last[1]}`;
+}
+function labelPos(pts) {
+  let best = 0, bi = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const len = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+    if (len > best) { best = len; bi = i; }
+  }
+  return { x: (pts[bi][0] + pts[bi + 1][0]) / 2, y: (pts[bi][1] + pts[bi + 1][1]) / 2, len: best };
+}
+
+/* --- dibujo del mapa --- */
+function render() {
+  const L = LAYOUTS[state.layout];
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", `0 0 ${L.w} ${L.h}`);
+  const defs = el("defs", {}, svg);
+  const mk = (id, fill) => {
+    const m = el("marker", { id, viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "6.5", markerHeight: "6.5", orient: "auto-start-reverse" }, defs);
+    el("path", { d: "M0,1 L9,5 L0,9 z", fill }, m);
+  };
+  mk("ar", "#3b4452");
+  Object.keys(LAYERS).forEach(k => mk("ar-" + k, LAYERS[k].hex));
+
+  // marcos
+  const gF = el("g", { class: "frame" }, svg);
+  L.frames.forEach(f => {
+    el("rect", { x: f.x, y: f.y, width: f.w, height: f.h, rx: 14 }, gF);
+    const tw = f.t.length * 6.6 + 14;
+    el("rect", { class: "ftitle-bg", x: f.x + 12, y: f.y - 7, width: tw, height: 14 }, gF);
+    const t = el("text", { x: f.x + 19, y: f.y + 4 }, gF); t.textContent = f.t;
+  });
+
+  // rótulos de fila
+  const gR = el("g", { class: "rowlab" }, svg);
+  (L.rows || []).forEach(r => {
+    const c = LAYERS[r.layer].hex;
+    if (r.n) { const n = el("text", { class: "n", x: 110, y: r.y - 12, "text-anchor": "end", fill: c }, gR); n.textContent = "CAPA " + r.n; }
+    const t = el("text", { class: "t", x: 110, y: r.y + 4, "text-anchor": "end" }, gR); t.textContent = r.t;
+    const s = el("text", { class: "s", x: 110, y: r.y + 19, "text-anchor": "end" }, gR); s.textContent = r.s;
+  });
+  (L.rowsIn || []).forEach(r => {
+    const t = el("text", { class: "n", x: r.x, y: r.y, fill: LAYERS[r.layer].hex, "font-size": "9.5", "letter-spacing": ".06em" }, gR); t.textContent = r.t;
+  });
+  (L.notes || []).forEach(nt => {
+    nt.lines.forEach((ln, i) => { const t = el("text", { class: "note", x: nt.x, y: nt.y + i * 15, "text-anchor": "middle" }, svg); t.textContent = ln; });
+  });
+
+  // nodos
+  gR.remove(); // se vuelve a agregar al final, arriba de las líneas
+  const gN = el("g", {}, svg);
+  for (const id in L.nodes) {
+    const t = TOOLS[id], b = box(id), lay = layerOf(id);
+    const g = el("g", { class: "node", "data-id": id, tabindex: "0", role: "button", "aria-label": `${t.name}: ${t.sub}`, style: `color:${lay.hex}` }, gN);
+    el("rect", { class: "bg", x: b.x, y: b.y, width: b.w, height: b.h, rx: 10 }, g);
+    el("rect", { class: "tint", x: b.x + .5, y: b.y + .5, width: b.w - 1, height: b.h - 1, rx: 9.5 }, g);
+    const narrow = state.layout === "narrow";
+    const small = b.w < 90;
+    const big = b.w > 300 && !narrow;
+    const lab = el("text", { class: "lab", "font-size": small ? L.labSm : (big ? L.lab + 1.5 : L.lab) }, g);
+    const sub = el("text", { class: "sub", "font-size": L.sub }, g);
+    lab.textContent = t.name === "Interfaz web" && narrow ? "Interfaz" : t.name;
+    sub.textContent = narrow ? t.subN : t.sub;
+    if (big) {
+      lab.setAttribute("x", b.x + 18); sub.setAttribute("x", b.x + 18);
+      lab.setAttribute("y", b.cy - 3); sub.setAttribute("y", b.cy + 15);
+    } else {
+      lab.setAttribute("x", b.cx); sub.setAttribute("x", b.cx);
+      lab.setAttribute("text-anchor", "middle"); sub.setAttribute("text-anchor", "middle");
+      lab.setAttribute("y", b.cy - (b.h > 46 ? 2 : 1)); sub.setAttribute("y", b.cy + (small ? 12 : 14));
+    }
+    if (!narrow) decorate(id, b, g);
+    g.addEventListener("mouseenter", () => { state.hover = id; paint(); });
+    g.addEventListener("mouseleave", () => { state.hover = null; paint(); });
+    g.addEventListener("focus", () => { state.hover = id; paint(); });
+    g.addEventListener("blur", () => { state.hover = null; paint(); });
+    g.addEventListener("click", () => select(id));
+    g.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(id); } });
+  }
+
+  // conexiones (arriba de los nodos: las visibles van por los huecos)
+  const gE = el("g", {}, svg);
+  EDGES.forEach(e => {
+    if (!L.nodes[e.from] || !L.nodes[e.to]) return;
+    const pts = edgePoints(e);
+    const visible = (e.kind === "run" || e.kind === "bridge" || e.base || (state.layout === "narrow" && e.baseNarrow)) && !e.hide;
+    const g = el("g", { class: `edge ${e.kind}${visible ? "" : " hidden"}`, "data-id": e.id, style: `--ec:${layerOf(e.from).hex}` }, gE);
+    const d = roundedPath(pts);
+    el("path", { class: "ln", d, "marker-end": "url(#ar)", "data-m": "ar-" + TOOLS[e.from].layer }, g);
+    el("path", { class: "flow", d }, g);
+    if (state.layout === "wide") {
+      const p = (L.labelAt && L.labelAt[e.id]) ? { x: L.labelAt[e.id][0], y: L.labelAt[e.id][1], len: 99 } : labelPos(pts);
+      if (p.len >= 40) {
+        const lg = el("g", { class: "elabel" }, g);
+        const w = e.label.length * 5.9 + 14;
+        el("rect", { x: p.x - w / 2, y: p.y - 10, width: w, height: 20, rx: 6 }, lg);
+        const t = el("text", { x: p.x, y: p.y + 4, "text-anchor": "middle" }, lg); t.textContent = e.label;
+      }
+    }
+  });
+  svg.appendChild(gR);
+  paint();
+}
+
+/* Detalles chicos que ayudan a leer: bloques en HDFS, contenedores en YARN. */
+function decorate(id, b, g) {
+  if (id === "hdfs") {
+    const dn = 3, bw = 9, gap = 4, x0 = b.x + b.w - 18 - dn * (4 * (bw + gap) + 14) + 14;
+    for (let d = 0; d < dn; d++) {
+      const gx = x0 + d * (4 * (bw + gap) + 14);
+      const t = el("text", { class: "sub", x: gx, y: b.y + 22, "font-size": 9.5 }, g); t.textContent = "DataNode " + (d + 1);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+        const on = (i + j * 2 + d) % 3 !== 0;
+        el("rect", { class: "deco", x: gx + i * (bw + gap), y: b.y + 31 + j * (bw + gap), width: bw, height: bw, rx: 2, opacity: on ? .55 : .14 }, g);
+      }
+    }
+  }
+  if (id === "yarn") {
+    const x0 = b.x + b.w - 18 - 3 * 64;
+    for (let k = 0; k < 3; k++) {
+      const gx = x0 + k * 64;
+      el("rect", { class: "deco", x: gx, y: b.y + 14, width: 56, height: 28, rx: 5, opacity: .08 }, g);
+      for (let i = 0; i < 3; i++) el("rect", { class: "deco", x: gx + 6 + i * 16, y: b.y + 21, width: 12, height: 14, rx: 2.5, opacity: (i + k) % 3 === 2 ? .15 : .5 }, g);
+    }
+  }
+}
+
+/* Qué se ilumina: el nodo, todo lo que tiene debajo por "corre sobre",
+   y sus vecinos directos (quién lo usa, qué consulta). */
+function relatedOf(id) {
+  const nodes = new Set([id]), edges = new Set();
+  const down = n => EDGES.forEach(e => {
+    if (e.from === n && e.kind === "run" && !e.hide && !edges.has(e.id)) { edges.add(e.id); nodes.add(e.to); down(e.to); }
+  });
+  down(id);
+  EDGES.forEach(e => {
+    if (e.from === id) { edges.add(e.id); nodes.add(e.to); }
+    if (e.to === id) { edges.add(e.id); nodes.add(e.from); }
+  });
+  return { nodes, edges };
+}
+
+function currentHighlight() {
+  if (state.hover) return relatedOf(state.hover);
+  if (state.mode !== "explorar") {
+    const s = TOURS[state.mode].steps[state.step];
+    return { nodes: new Set(s.nodes), edges: new Set(s.edges) };
+  }
+  if (state.sel) return relatedOf(state.sel);
+  return null;
+}
+
+function paint() {
+  const h = currentHighlight();
+  svg.classList.toggle("dim", !!h);
+  $$(".node", svg).forEach(n => {
+    const id = n.dataset.id;
+    n.classList.toggle("on", !!h && h.nodes.has(id));
+    n.classList.toggle("sel", id === (state.hover || state.sel) && state.mode === "explorar" || (!!state.hover && id === state.hover));
+  });
+  $$(".edge", svg).forEach(g => {
+    const on = !!h && h.edges.has(g.dataset.id);
+    g.classList.toggle("on", on);
+    const ln = $("path.ln", g);
+    ln.setAttribute("marker-end", on ? `url(#${ln.dataset.m})` : "url(#ar)");
+  });
+}
+
+/* --- panel --- */
+function linksHTML(id) {
+  const out = EDGES.filter(e => e.from === id), inn = EDGES.filter(e => e.to === id);
+  const item = (other, label, dir) => {
+    const t = TOOLS[other];
+    return `<button type="button" data-go="${other}" style="--c:${layerOf(other).hex}"><i></i><span><b>${esc(t.name)}</b> <span style="color:var(--muted)">· ${esc(label)}</span></span><span class="dir" style="margin-left:auto">${dir}</span></button>`;
+  };
+  return out.map(e => item(e.to, e.label, "→")).concat(inn.map(e => item(e.from, e.label, "←"))).join("");
+}
+
+function fichaHTML(id, inPanel) {
+  const t = TOOLS[id], lay = layerOf(id);
+  const conf = t.confunde.map(c => `<div class="confunde"><div class="con"><span class="vs">VS</span>${esc(c.con)}</div><p>${esc(c.dif)}</p></div>`).join("");
+  const ports = t.ui.map(([a, b]) => `<li><span>${esc(a)}</span><b>${esc(b)}</b></li>`).join("");
+  return `
+    <div class="blk"><h4>Es como…</h4><p class="analogia" style="--c:${lay.hex}">${esc(t.analogia)}</p></div>
+    <div class="blk"><h4>En la cursada</h4><p>${esc(t.cursada)}</p></div>
+    <div class="blk"><h4>Se confunde con</h4>${conf}</div>
+    <div class="blk"><h4>Probalo</h4><div class="code"><pre><code>${esc(t.ejemplo)}</code></pre><button class="copy" type="button">Copiar</button></div></div>
+    <div class="blk"><h4>Dónde mirarlo</h4><ul class="ports">${ports}</ul></div>
+    ${inPanel ? `<div class="blk"><h4>Se conecta con</h4><div class="links">${linksHTML(id)}</div></div>` : ""}`;
+}
+
+function panelTool(id) {
+  const t = TOOLS[id], lay = layerOf(id);
+  return `<div class="panel-in enter">
+    <div class="kicker" style="--c:${lay.hex}"><i></i>${esc(lay.name)}</div>
+    <h3>${esc(t.name)}</h3>
+    <div class="pills"><span class="pill mono">${esc(t.version)}</span>${t.img.map(i => `<span class="pill">imagen ${i}</span>`).join("")}</div>
+    <p class="frase">${esc(t.frase)}</p>
+    ${fichaHTML(id, true)}
+    <div class="tour-nav"><button class="btn" type="button" data-clear>← Volver al mapa</button></div>
+  </div>`;
+}
+
+function panelIntro() {
+  const order = ["datos", "recursos", "motores", "lenguajes"];
+  const desc = {
+    datos: "<b>Abajo, los datos.</b> HDFS guarda archivos repartidos; el Metastore anota qué tablas hay encima.",
+    recursos: "<b>Después, quién reparte.</b> YARN presta memoria y CPU a cada trabajo.",
+    motores: "<b>Arriba, los motores.</b> MapReduce, Tez y Spark hacen la cuenta, cada uno a su manera.",
+    lenguajes: "<b>Y arriba de todo, cómo pedís.</b> Cada lenguaje se traduce a un motor."
+  };
+  const chips = Object.keys(LAYERS).map(k => {
+    const ids = Object.keys(TOOLS).filter(id => TOOLS[id].layer === k);
+    return ids.map(id => `<button class="chip" type="button" data-go="${id}" style="--c:${LAYERS[k].hex}"><i></i>${esc(TOOLS[id].name)}</button>`).join("");
+  }).join("");
+  return `<div class="panel-in enter">
+    <div class="kicker">Cómo leer el mapa</div>
+    <h3>De abajo hacia arriba</h3>
+    <ul class="leer">${order.map(k => `<li style="--c:${LAYERS[k].hex}"><i></i><span>${desc[k]}</span></li>`).join("")}
+      <li style="--c:${LAYERS.maquina.hex}"><i></i><span><b>A la derecha, lo que no es Hadoop.</b> Bases de datos y Python que corren en una sola máquina. Sqoop es el puente.</span></li></ul>
+    <div class="blk"><h4>Elegí una herramienta</h4><div class="chips">${chips}</div></div>
+  </div>`;
+}
+
+function panelTour() {
+  const T = TOURS[state.mode], s = T.steps[state.step], n = T.steps.length;
+  const dots = T.steps.map((_, i) => `<button type="button" data-step="${i}" class="${i < state.step ? "done" : i === state.step ? "now" : ""}" aria-label="Paso ${i + 1}"></button>`).join("");
+  return `<div class="panel-in enter">
+    <div class="tour-top"><div class="kicker">Recorrido · ${esc(T.name)}</div><span class="paso-n">${state.step + 1} / ${n}</span></div>
+    <div class="steps">${dots}</div>
+    <h3>${esc(s.t)}</h3>
+    ${state.step === 0 ? `<p class="frase" style="color:var(--muted);font-size:15px">${esc(T.intro)}</p>` : ""}
+    <div class="tour-text">${s.x}</div>
+    ${s.code ? `<div class="code"><pre><code>${esc(s.code)}</code></pre><button class="copy" type="button">Copiar</button></div>` : ""}
+    ${s.tip ? `<div class="tip">${s.tip}</div>` : ""}
+    <div class="tour-nav">
+      <button class="btn" type="button" data-prev ${state.step === 0 ? "disabled" : ""}>← Anterior</button>
+      ${state.step < n - 1 ? `<button class="btn primary" type="button" data-next>Siguiente →</button>` : `<button class="btn primary" type="button" data-clear>Terminar</button>`}
+    </div>
+  </div>`;
+}
+
+function renderPanel() {
+  panel.innerHTML = state.mode !== "explorar" ? panelTour() : state.sel ? panelTool(state.sel) : panelIntro();
+  panel.scrollTop = 0;
+  $("#map-hint").textContent = state.mode !== "explorar" ? "← → para avanzar" : "Tocá una herramienta";
+  const card = $(".map-card"), mini = $("#tour-mini");
+  card.classList.toggle("touring", state.mode !== "explorar");
+  if (state.mode !== "explorar") {
+    const T = TOURS[state.mode], n = T.steps.length;
+    mini.innerHTML = `<div class="tm-t"><span>PASO ${state.step + 1} DE ${n}</span><b>${esc(T.steps[state.step].t)}</b></div>
+      <button class="btn" type="button" data-prev ${state.step === 0 ? "disabled" : ""} aria-label="Paso anterior">←</button>
+      <button class="btn primary" type="button" ${state.step < n - 1 ? "data-next" : "data-clear"} aria-label="Paso siguiente">${state.step < n - 1 ? "→" : "Fin"}</button>`;
+  } else mini.innerHTML = "";
+}
+
+function setMode(m) {
+  state.mode = m; state.step = 0; state.hover = null;
+  if (m !== "explorar") state.sel = null;
+  $$(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  renderPanel(); paint();
+}
+function select(id) {
+  if (state.mode !== "explorar") setMode("explorar");
+  state.sel = id; state.hover = null;
+  renderPanel(); paint();
+  if (window.matchMedia("(max-width: 1120px)").matches) panel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+}
+function go(step) {
+  const n = TOURS[state.mode].steps.length;
+  state.step = clamp(step, 0, n - 1);
+  renderPanel(); paint();
+}
+
+/* eventos del panel y de la barra de pasos del celu (delegados) */
+function onPanelClick(ev) {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.go) return select(b.dataset.go);
+  if (b.hasAttribute("data-next")) return go(state.step + 1);
+  if (b.hasAttribute("data-prev")) return go(state.step - 1);
+  if (b.dataset.step) return go(+b.dataset.step);
+  if (b.hasAttribute("data-clear")) { state.sel = null; return setMode("explorar"); }
+}
+panel.addEventListener("click", onPanelClick);
+$("#tour-mini").addEventListener("click", onPanelClick);
+panel.addEventListener("mouseover", ev => {
+  const b = ev.target.closest("[data-go]");
+  const id = b ? b.dataset.go : null;
+  if (id !== state.hover) { state.hover = id; paint(); }
+});
+panel.addEventListener("mouseleave", () => { if (state.hover) { state.hover = null; paint(); } });
+
+document.addEventListener("click", ev => {
+  const b = ev.target.closest(".copy"); if (!b) return;
+  const txt = b.parentElement.querySelector("code").textContent;
+  const done = () => { b.textContent = "Copiado"; setTimeout(() => (b.textContent = "Copiar"), 1400); };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, () => {});
+  else {
+    const ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} ta.remove();
+  }
+});
+document.addEventListener("keydown", ev => {
+  if (state.mode === "explorar" || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (ev.key === "ArrowRight") go(state.step + 1);
+  if (ev.key === "ArrowLeft") go(state.step - 1);
+  if (ev.key === "Escape") setMode("explorar");
+});
+$$(".seg button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+$$("[data-tour]").forEach(a => a.addEventListener("click", () => setMode(a.dataset.tour)));
+
+/* leyenda */
+$("#legend").innerHTML = ["datos", "recursos", "motores", "lenguajes", "puente", "maquina", "puertas"]
+  .map(k => `<span style="--c:${LAYERS[k].hex}"><i class="dot"></i>${esc(k === "maquina" ? "Una sola máquina" : k === "puertas" ? "Desde dónde trabajás" : LAYERS[k].name)}</span>`).join("") +
+  `<span><svg viewBox="0 0 26 8"><path d="M1 4H25" stroke="#7b8594" stroke-width="1.6"/></svg>corre sobre</span>` +
+  `<span><svg viewBox="0 0 26 8"><path d="M1 4H25" stroke="#7b8594" stroke-width="1.6" stroke-dasharray="4 4"/></svg>lee o consulta</span>`;
+
+/* comparativas */
+$("#cmp").innerHTML = COMPARE.map(c => `
+  <div class="card cmp">
+    <h3>${esc(c.t)}</h3>
+    <p class="q">${esc(c.q)}</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th></th>${c.cols.map(([n, l]) => `<th style="--c:${LAYERS[l].hex}"><i></i>${esc(n)}</th>`).join("")}</tr></thead>
+      <tbody>${c.rows.map(r => `<tr><th scope="row">${esc(r[0])}</th>${r.slice(1).map(v => `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table></div>
+  </div>`).join("");
+
+/* fichas completas */
+const ORDER = ["lenguajes", "motores", "recursos", "datos", "puente", "maquina", "puertas"];
+$("#fichas-grid").innerHTML = ORDER.map(k => {
+  const ids = Object.keys(TOOLS).filter(id => TOOLS[id].layer === k);
+  return `<div class="grupo"><div class="grupo-t" style="--c:${LAYERS[k].hex}">${esc(LAYERS[k].name)}</div><div class="fgrid">${ids.map(id => {
+    const t = TOOLS[id];
+    return `<details class="ficha" id="ficha-${id}" style="--c:${LAYERS[k].hex}">
+      <summary><span class="nm"><i></i>${esc(t.name)}</span><span class="vr">${esc(t.version)}</span><span class="fr">${esc(t.frase)}</span></summary>
+      <div class="body">${fichaHTML(id, false)}<button class="btn ver-mapa" type="button" data-map="${id}">Verla en el mapa ↑</button></div>
+    </details>`;
+  }).join("")}</div></div>`;
+}).join("");
+$("#fichas-grid").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-map]"); if (!b) return;
+  select(b.dataset.map);
+  $("#mapa-sec").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+});
+$("#abrir-todas").addEventListener("click", ev => {
+  const all = $$("details.ficha"), open = all.some(d => !d.open);
+  all.forEach(d => (d.open = open));
+  ev.currentTarget.textContent = open ? "Cerrar todas" : "Abrir todas";
+});
+
+/* glosario */
+$("#glos").innerHTML = GLOSARIO.map(([t, d]) => `<div><dt>${esc(t)}</dt><dd>${esc(d)}</dd></div>`).join("");
+
+/* layout según el ancho real del mapa */
+function pickLayout() {
+  const w = svg.parentElement.clientWidth;
+  const want = w < 620 ? "narrow" : "wide";
+  if (want !== state.layout) { state.layout = want; render(); }
+}
+new ResizeObserver(pickLayout).observe(svg.parentElement);
+pickLayout();
+renderPanel();
+</script>
+</body>
+</html>
