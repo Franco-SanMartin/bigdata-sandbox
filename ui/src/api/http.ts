@@ -73,6 +73,7 @@ export function createHttpApi(): SandboxApi {
     jobTemplates: () => req('GET', '/yarn/templates'),
     submitJob: async r => (await req<{ id: string }>('POST', '/yarn/apps', r)).id,
     yarnCluster: () => req('GET', '/yarn/cluster'),
+    aula: () => req('GET', '/aula'),
     app: id => req('GET', `/yarn/apps/${encodeURIComponent(id)}`),
     appLogs: (id, container) => req('GET', `/yarn/apps/${encodeURIComponent(id)}/logs?${q({ container })}`),
     pipelineCatalog: () => req('GET', '/pipeline/catalog'),

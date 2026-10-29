@@ -58,6 +58,16 @@ Con 3 a 5 PCs alcanza para decidir; con todas, mejor.
 
    En cada PC se abre una ventana negra: carga la imagen (si hace falta), junta los datos de la PC y
    hace las pruebas. Tarda de 1 a 5 minutos (las mediciones de ancho de banda van de a una).
+
+   **Sin la prueba B** (sin que aparezca el cartel del firewall en las PCs): agregar `sin-b` al final,
+
+   ```
+   cmd /c ""%USERPROFILE%\sonda-alumno.cmd" 192.168.0.10 sin-b"
+   ```
+
+   Así la PC no publica el puerto 8098 y no se mide la red directa (`tcp_entrante` queda
+   `no medido (sin prueba B)`); el veredicto sale del túnel, que es lo que importa con A. Es
+   compatible con todo lo demás: se pueden mezclar PCs con y sin `sin-b` en la misma clase.
 5. **Mirar el resultado.** En tu ventana van apareciendo las PCs que se inscriben y mandan resultados,
    y la línea `-> VEREDICTO por ahora: ...`. Cuando terminaron todas, cortá con **Ctrl+C**.
    El resumen también se ve en el navegador de tu PC: <http://localhost:8099/cgi-bin/resumen>.
@@ -136,12 +146,13 @@ Columnas de la planilla:
   `busybox httpd`). No está en Docker Hub: solo en el release.
 - PC del profe: publica UDP **51820** (hub WireGuard), UDP **51821** (eco) y TCP **8099** (inscripción y
   resultados). Contenedor con `--cap-add NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1`.
-- PC de alumno: publica TCP **8098** (prueba de entrada). Contenedor con `--cap-add NET_ADMIN` y, si
+- PC de alumno: publica TCP **8098** (prueba de entrada), salvo con `sin-b`. Contenedor con `--cap-add NET_ADMIN` y, si
   Docker lo deja, `--device /dev/net/tun`. Red del túnel `10.13.0.0/24` (profe `.1`, alumnos `.11` en
   adelante).
 - Los contenedores se borran solos al terminar (`--rm`). La PC de alumno se queda 2 minutos más
   atendiendo a los compañeros (iperf y TCP) y después se va.
 - Todo se prueba en GitHub Actions (`.github/workflows/sonda.yml`) simulando PCs aisladas en redes de
-  Docker separadas: con túnel del kernel, con wireguard-go, sin `/dev/net/tun` y sin puertos.
+  Docker separadas: con túnel del kernel, con wireguard-go, sin `/dev/net/tun`, sin puertos y sin la
+  prueba B (`sin-b`).
   Lo que el CI **no** puede simular: el firewall de Windows, Docker Desktop/WSL2, Veyon y el reset diario.
   Para eso es esta clase.

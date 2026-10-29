@@ -7,7 +7,7 @@ name: Servidor
 
 on:
   push:
-    branches: [full, main, ui2, 'ui2-*']
+    branches: [full, main, ui2, 'ui2-*', 'empresa-*']
     paths:
       - "server/**"
       - "ml/**"
