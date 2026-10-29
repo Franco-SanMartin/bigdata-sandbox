@@ -19,6 +19,11 @@ COLS = {"antiguedad_meses": "numerica", "visitas_mes": "numerica", "ticket_prome
 DATOS = {"origen": "local", "ruta": "/datos/clientes_senal.csv"}
 
 
+# ALS: quién califica, qué se califica y la calificación (con las columnas de clientes_senal.csv)
+RECOMENDACION = {"objetivo": "visitas_mes", "columnas": {**{c: "ignorar" for c in COLS}, "antiguedad_meses": "usuario",
+                                                         "edad": "item"}}
+
+
 def receta(**kw):
     base = {"datos": DATOS, "tarea": "clasificacion", "objetivo": "vuelve", "columnas": dict(COLS),
             "modelo": {"id": "arbol_clf"}}
@@ -95,7 +100,7 @@ def test_parametros_existen_en_spark(mid):
     for p in m["params"]:
         assert isinstance(getattr(est, p["nombre"], None), Param), f"{mid}: {p['nombre']} no es un parámetro de {clase}"
     if m.get("semilla"):
-        assert isinstance(getattr(est, "seed", None), Param)
+        assert isinstance(getattr(est, m["semilla"], None), Param), f"{mid}: {m['semilla']} no es un parámetro de {clase}"
 
 
 def test_catalogo_es_el_del_modo_demo():
@@ -218,6 +223,8 @@ def recetas_de_todos():
         kw = {"modelo": {"id": m["id"]}, "tarea": t}
         if t == "regresion":
             kw["objetivo"] = "gasto_mes_siguiente"
+        elif t == "recomendacion":
+            kw.update(RECOMENDACION)
         elif t != "clasificacion":
             kw["objetivo"] = None
         if m["motor"] == "spark" and t in ("regresion", "clasificacion"):

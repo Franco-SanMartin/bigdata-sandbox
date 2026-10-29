@@ -2,8 +2,8 @@
    (server/sandbox_server/ml_estudio.py). Los nombres de los campos son los de sandbox_ml (ml/sandbox_ml),
    en castellano, tal cual: la receta que arma la pantalla es la misma que lee el código generado. */
 
-export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion';
-export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar';
+export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion' | 'recomendacion';
+export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar' | 'usuario' | 'item';
 export type MlMotor = 'sklearn' | 'spark';
 export type MlValor = string | number | boolean | null;
 
@@ -51,6 +51,10 @@ export interface MlModelo {
   predice?: boolean;
   max_filas?: number;
   extra?: string;
+  /** La librería de Python que necesita (xgboost) */
+  requiere?: string;
+  /** Por qué no se puede usar en esta instalación (lo agrega el servidor si falta la librería) */
+  deshabilitado?: string;
 }
 
 export interface MlMetrica {
@@ -75,7 +79,7 @@ export interface MlPreproceso {
   escalar: 'estandar' | 'minmax' | 'robusto' | 'ninguno';
   outliers: 'ninguno' | 'recortar_iqr' | 'recortar_pct' | 'eliminar_iqr';
   factor_iqr: number;
-  codificar: 'onehot' | 'ordinal';
+  codificar: 'onehot' | 'ordinal' | 'hashing';
   max_categorias: number;
   fecha: boolean;
   texto_max: number;
@@ -83,6 +87,8 @@ export interface MlPreproceso {
   k: number;
   umbral_varianza: number;
   pca: number | null;
+  /** FeatureHasher (solo Spark): en cuántas columnas caen las categorías */
+  hash_columnas: number;
 }
 
 export interface MlValidacion {
@@ -95,7 +101,14 @@ export interface MlValidacion {
   repeticiones: number;
   semilla: number;
   metrica: string;
+  /** Clasificación con Spark: el umbral de decisión se elige en la validación (f1, youden) o queda el del modelo */
+  umbral: MlCriterioUmbral;
 }
+
+export type MlCriterioUmbral = 'fijo' | 'f1' | 'youden';
+
+/** Lo que se le pide a YARN (spark-submit --num-executors, --executor-memory, --executor-cores, --driver-memory) */
+export interface MlRecursos { executors: number; memoria_executor_mb: number; cores: number; memoria_driver_mb: number }
 
 export type MlRango = { min: number; max: number; log?: boolean };
 
@@ -131,6 +144,8 @@ export interface MlCatalogo {
   particiones: Record<string, { etiqueta: string; ayuda: string }>;
   cv: Record<string, { etiqueta: string; ayuda: string }>;
   busquedas: Record<MlMotor, Record<string, { etiqueta: string; ayuda: string }>>;
+  recursos: Record<keyof MlRecursos, { etiqueta: string; flag: string; min: number; max: number; defecto: number; ayuda: string }>;
+  umbrales: Record<MlCriterioUmbral, { etiqueta: string; ayuda: string }>;
   limites: { max_ajustes: number; max_combinaciones: number; max_minutos: number; min_minutos: number; max_n_jobs: number };
   /** Los formatos que lee el estudio (sandbox_ml/fuentes.py) */
   formatos: Record<MlFormato, { etiqueta: string; ayuda: string }>;
