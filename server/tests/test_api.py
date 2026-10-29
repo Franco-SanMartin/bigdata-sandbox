@@ -33,7 +33,8 @@ def test_status_es_json_y_tiene_el_contrato(client):
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/json")
     s = r.json()
     assert set(s) == {"phase", "config", "volumeNameNodes", "startedAt", "now", "memory", "processes", "hdfs",
-                      "yarn", "boot", "image"}
+                      "yarn", "boot", "image", "aula"}
+    assert s["aula"] is None   # ROL=solo: la full de siempre
     assert s["phase"] == "stopped" and s["boot"] is None
     assert s["image"]["name"] == "franki678/bigdata-sandbox"
     assert {p["state"] for p in s["processes"] if p["id"] != "ui"} == {"off"}

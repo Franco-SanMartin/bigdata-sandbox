@@ -15,6 +15,7 @@ from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, R
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from . import aula as aula_mod
 from . import config as cfg
 from . import datos as datos_mod
 from . import hdfs as hdfs_mod
@@ -160,6 +161,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     ml = ml_mod.Ml(cluster, runner, bus, hdfs)
     pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)
     terminal = terminal_mod.Terminal()
+    aula = aula_mod.Aula(cluster)
 
     api = [
         Route("/api/status", status),
@@ -181,6 +183,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         *datos.routes(),
         *ml.routes(),
         *terminal.routes(),
+        *aula.routes(),
         Route("/api/{rest:path}", api_not_found, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     if ui.is_dir():
@@ -228,5 +231,6 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     app.state.ml = ml
     app.state.pipeline = pipeline
     app.state.terminal = terminal
+    app.state.aula = aula
     return app
 
