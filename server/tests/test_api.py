@@ -54,8 +54,11 @@ def test_config(client):
 
 
 def test_errores_en_json(client):
-    r = client.post("/api/config/validate", content=b"no es json")
+    r = client.post("/api/config/validate", content=b"no es json", headers={"Content-Type": "application/json"})
     assert r.status_code == 400 and r.json() == {"error": "el cuerpo tiene que ser JSON", "code": "invalid"}
+    # Sin Content-Type: application/json ni siquiera llega a leerse (seguridad.py, test_seguridad.py)
+    r = client.post("/api/config/validate", content=b"no es json")
+    assert r.status_code == 415 and r.json()["code"] == "invalid"
     assert client.post("/api/config/validate", json={}).json() == {"error": "falta { config }", "code": "invalid"}
     r = client.post("/api/cluster/start", json={"config": {**BASE, "blockSize": "x"}})
     assert r.status_code == 400 and r.json()["issues"][0]["field"] == "blockSize"

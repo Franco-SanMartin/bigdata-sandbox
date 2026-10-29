@@ -2,7 +2,7 @@
 import type { ApiErrorCode } from './types';
 
 const STATUS: Record<ApiErrorCode, number> = {
-  cluster_stopped: 409, service_down: 503, not_found: 404, invalid: 400, busy: 409, unsupported: 501, failed: 500,
+  cluster_stopped: 409, service_down: 503, not_found: 404, forbidden: 403, invalid: 400, busy: 409, unsupported: 501, failed: 500,
 };
 
 export class ApiFailure extends Error {

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
@@ -27,6 +28,7 @@ from .actions import ActionRunner
 from .cluster import Cluster, Conflict, Invalid, Settings
 from .errors import ApiError, code_for_status
 from .events import EventBus, sse_stream
+from .seguridad import SoloLaInterfaz
 
 
 def _error(status: int, message: str, code: str, **extra: object) -> JSONResponse:
@@ -220,7 +222,9 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
         await ml.wait_all()
         await pipeline.wait_all()
 
+    # Solo la propia interfaz: host confiable, origen y cuerpos JSON (seguridad.py)
     app = Starlette(routes=api, lifespan=lifespan,
+                    middleware=[Middleware(SoloLaInterfaz)],
                     exception_handlers={ApiError: on_api_error, HTTPException: on_http})
     app.state.cluster = cluster
     app.state.bus = bus

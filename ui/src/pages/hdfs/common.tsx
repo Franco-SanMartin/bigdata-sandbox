@@ -51,6 +51,7 @@ const CODE_HINT: Record<ApiErrorCode, string> = {
   cluster_stopped: 'el cluster no está en marcha',
   service_down: 'el servicio que hace falta está apagado',
   not_found: 'no existe',
+  forbidden: 'el pedido no vino de la propia interfaz',
   invalid: 'pedido inválido',
   busy: 'hay algo corriendo que lo impide',
   unsupported: 'no está en esta imagen',

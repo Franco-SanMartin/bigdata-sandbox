@@ -7,8 +7,9 @@ Por eso solo atiende a la interfaz servida en la misma compu:
   afuera que haga apuntar su dominio a 127.0.0.1 llega con su propio Host);
 - el Origin tiene que ser el mismo sitio (un websocket no tiene CORS: sin esto, cualquier
   página abierta en el navegador podría conectarse a localhost:8080).
-TERMINAL=0 la apaga; TERMINAL_HOSTS="aula-pc1,10.0.0.5" suma nombres permitidos (ej. el
-servidor de `empresa` visto desde otra PC: ahí cualquiera que llegue a ese nombre tiene root).
+TERMINAL=0 la apaga; TERMINAL_HOSTS="aula-pc1,10.0.0.5" (o SANDBOX_HOSTS) suma nombres permitidos
+(ej. el servidor de `empresa` visto desde otra PC: ahí cualquiera que llegue a ese nombre tiene
+root). Es la misma lista de hosts que el resto de la API (seguridad.py).
 
 Protocolo: el servidor manda la salida como texto; el navegador manda JSON:
 {"t": "i", "d": "ls\\r"} lo que se tipea, {"t": "r", "c": 120, "r": 30} el tamaño.
@@ -30,8 +31,10 @@ from urllib.parse import urlsplit
 from starlette.routing import WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .seguridad import host_sin_puerto as _host
+from .seguridad import hosts_permitidos
+
 RCFILE = Path(__file__).with_name("terminal.bashrc")
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 MAX_SESSIONS = 4
 # Close codes propios (4000-4999): la interfaz muestra el motivo
 CLOSE_FORBIDDEN = 4403
@@ -39,25 +42,12 @@ CLOSE_OFF = 4404
 CLOSE_BUSY = 4429
 
 
-def _host(value: str) -> str:
-    """'localhost:8080' → 'localhost'; '[::1]:8080' → '::1'"""
-    value = value.strip().lower()
-    if value.startswith("["):
-        return value[1:value.find("]")] if "]" in value else value
-    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
-
-
-def allowed_hosts() -> set[str]:
-    extra = {h.strip().lower() for h in os.environ.get("TERMINAL_HOSTS", "").split(",") if h.strip()}
-    return LOCAL_HOSTS | extra
-
-
 def check(headers) -> str | None:
     """Por qué no se puede abrir (o None si se puede)"""
     if os.environ.get("TERMINAL", "1").strip().lower() in ("0", "no", "false"):
         return "La terminal está apagada en este contenedor (TERMINAL=0)"
     host = headers.get("host", "")
-    if _host(host) not in allowed_hosts():
+    if _host(host) not in hosts_permitidos():
         return f"La terminal solo se abre desde esta compu (localhost), no desde {_host(host) or 'otro nombre'}"
     origin = headers.get("origin")
     if not origin:
@@ -70,7 +60,7 @@ def check(headers) -> str | None:
 
 def _shell_env() -> dict[str, str]:
     env = dict(os.environ)
-    for k in ("UI_DIR", "AUTOSTART", "PORT", "HOST", "LOG_LEVEL", "TERMINAL", "TERMINAL_HOSTS"):
+    for k in ("UI_DIR", "AUTOSTART", "PORT", "HOST", "LOG_LEVEL", "TERMINAL", "TERMINAL_HOSTS", "SANDBOX_HOSTS"):
         env.pop(k, None)
     env.update(TERM="xterm-256color", COLORTERM="truecolor", HOME=os.environ.get("HOME", "/root"),
                SANDBOX_TERMINAL="1")
