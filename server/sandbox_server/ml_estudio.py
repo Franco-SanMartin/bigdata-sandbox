@@ -6,6 +6,7 @@ Este módulo solo pone el servidor en el medio:
 
     GET  /api/ml/catalog                 modelos con sus hiperparámetros, métricas, validaciones y búsquedas
     GET  /api/ml/sources                 CSV y Parquet de /datos y de HDFS, y tablas de Hive
+    POST /api/ml/sources/example         {ejemplo: senal | sucias} → genera el dataset de ejemplo en /datos
     POST /api/ml/profile                 {datos, objetivo?} → perfil de columnas (python3 -m sandbox_ml.perfil)
     POST /api/ml/check                   {receta} → receta completa, errores y avisos (fuga, id, desbalance)
     POST /api/ml/code                    {receta} → el script que la reproduce
@@ -67,6 +68,9 @@ EXP_ID = re.compile(r"^exp-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 MAX_CODIGO = 400_000
 MAX_CORRIDAS = 30
 SUFIJOS = (".csv", ".parquet", ".tsv", ".txt")
+# Datasets de ejemplo que se pueden generar desde el estudio (los mismos generadores de ejemplos/ml)
+EJEMPLOS = {"senal": ("clientes_senal.csv", "ejemplos/ml/generar_senal.py"),
+            "sucias": ("ventas_sucias.csv", "ejemplos/ml/generar_sucios.py")}
 
 
 def _ruta_local(raw: object, base: Path) -> Path:
@@ -193,6 +197,19 @@ class Estudio:
         else:
             out["avisos"].append("HiveServer2 no está arriba: sin tablas de Hive")
         return out
+
+    async def ejemplo(self, nombre: object) -> dict:
+        if nombre not in EJEMPLOS:
+            raise ApiError(f"El ejemplo es {' o '.join(EJEMPLOS)}", "invalid")
+        archivo, script = EJEMPLOS[nombre]
+        base = self.c.s.datos_dir
+        if not (base / script).is_file():
+            raise ApiError(f"No está {script} en {base}: arrancá el cluster una vez (copia los ejemplos)", "not_found")
+        run = await self.runner.run(Action(f"Generar {archivo}", [self.python, script], display=f"python3 {script}",
+                                           action=f"Genera {archivo} en {base}", source="ML", timeout=300, cwd=str(base)))
+        if run.state != "done":
+            raise ApiError(run.error or f"No se pudo generar {archivo}", "failed")
+        return {"origen": "local", "ruta": str(base / archivo), "formato": "csv"}
 
     # ------------------------------------------------------------ perfil
 
@@ -478,8 +495,10 @@ class Estudio:
                 or f"terminó con código {run.exitCode}"
             exp.update(estado="falló", error=err[:500], terminado=time.strftime("%Y-%m-%dT%H:%M:%S"))
             c.update(estado="falló", error=err[:500], mensaje=err[:200])
-        if c.get("memoriaPicoMb") and not exp.get("memoria_pico_mb"):
-            exp["memoria_pico_mb"] = c["memoriaPicoMb"]
+        # El script mide su propio pico (getrusage); el servidor, el de todo el grupo de procesos (con la JVM
+        # del driver en Spark y los procesos de joblib): queda el mayor
+        if c.get("memoriaPicoMb"):
+            exp["memoria_pico_mb"] = max(exp.get("memoria_pico_mb") or 0, c["memoriaPicoMb"])
         if c.get("appId"):
             exp.setdefault("yarn", {})["app_id"] = c["appId"]
             mb = await self.yarn_mb(c["appId"])
@@ -697,6 +716,10 @@ class Estudio:
         async def sources(_: Request) -> JSONResponse:
             return JSONResponse(await self.fuentes())
 
+        async def example(request: Request) -> JSONResponse:
+            b = await hdfs_mod._json(request)
+            return JSONResponse(await self.ejemplo(b.get("ejemplo")))
+
         async def profile(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
             return JSONResponse(await self.perfil(b.get("datos"), b.get("objetivo")))
@@ -749,6 +772,7 @@ class Estudio:
         return [
             Route("/api/ml/catalog", catalog, methods=["GET"]),
             Route("/api/ml/sources", sources, methods=["GET"]),
+            Route("/api/ml/sources/example", example, methods=["POST"]),
             Route("/api/ml/profile", profile, methods=["POST"]),
             Route("/api/ml/check", check, methods=["POST"]),
             Route("/api/ml/code", code, methods=["POST"]),

@@ -1,6 +1,6 @@
 /* Modo demo: la misma interfaz que el backend real, respondida por el cluster simulado. */
 import type { SandboxApi } from '../types';
-import { ApiFailure } from '../errors';
+import { ApiFailure, fail } from '../errors';
 import { composeYaml, estimateRam, validate } from '../../lib/cluster';
 import { DemoEngine, SPEED } from './engine';
 import { DemoHdfs } from './hdfs';
@@ -8,6 +8,7 @@ import { DemoYarn } from './yarn';
 import { DemoData } from './datos';
 import { DemoMl } from './ml';
 import { DemoPipeline } from './pipeline';
+import { DemoEstudio } from './estudio';
 
 export { SPEED as DEMO_SPEED };
 
@@ -18,6 +19,7 @@ export function createDemoApi(): SandboxApi {
   const data = new DemoData(e);
   const ml = new DemoMl(e);
   const pipe = new DemoPipeline(e, ml, data);
+  const est = new DemoEstudio(e);
   const ok = <T>(v: T) => Promise.resolve(v);
   /** Los módulos nuevos tiran ApiFailure al validar: así llega como promesa rechazada, igual que del backend */
   const call = <T>(fn: () => T | Promise<T>) => Promise.resolve().then(fn);
@@ -81,5 +83,23 @@ export function createDemoApi(): SandboxApi {
     train: r => call(() => ml.train(r)),
     models: () => call(() => copy(ml.runs)),
     modelViz: id => call(() => ml.viz(id)),
+
+    mlCatalog: () => call(() => est.catalog()),
+    mlSources: () => call(() => est.sources()),
+    mlExample: () => call(() => est.example()),
+    mlProfile: (d, o) => call(() => est.profile(d, o)),
+    mlCheck: r => call(() => est.check(r)),
+    mlCode: r => call(() => est.code(r)),
+    mlTrain: r => call(() => est.train(r)),
+    mlRunCode: () => call(() => est.runCode()),
+    mlRuns: () => call(() => est.runs()),
+    mlRun: (id, desde) => call(() => est.run(id, desde)),
+    mlCancel: id => call(() => est.cancel(id)),
+    mlExperiments: () => call(() => est.experiments()),
+    mlExperiment: id => call(() => est.experiment(id)),
+    mlDeleteExperiment: id => call(() => est.remove(id)),
+    mlDownload: (id, f) => call(() => est.download(id, f)),
+    mlToJupyter: () => call(() => fail('unsupported', 'En el modo demo no hay JupyterLab: con la imagen ml o full, el notebook se abre en el puerto 8888')),
+    mlPredict: () => call(() => fail('unsupported', 'En el modo demo no hay modelos guardados para predecir: probalo con la imagen full')),
   };
 }
