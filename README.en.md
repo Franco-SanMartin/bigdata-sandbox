@@ -62,7 +62,7 @@ You choose the version with the *tag*, what goes after the colon:
 | `latest` = `base` | **Published. The one used in class** | Ubuntu 24.04 + Hadoop, Hive, Spark, Pig, Sqoop, MySQL, ZooKeeper and MongoDB. The one the guides use |
 | `ml` | Published | `base` + Python for data (pandas, numpy, scikit-learn, matplotlib, pymongo) and JupyterLab, for ETL and machine learning |
 | `full` | Published | `ml` + a web interface on port 8080 to start, configure and watch the cluster from the browser ([below](#the-full-version)) |
-| `empresa` | Beta | `full` + several computers build a single cluster: the teacher's is the master and each PC adds a DataNode and a NodeManager, with one rack per row. Today the simulated classroom runs on a single computer; the network between real PCs comes later ([guides](guias/empresa/README.md)) |
+| `empresa` | Beta | `full` + several computers build a single cluster: the teacher's is the master and each PC adds a DataNode and a NodeManager, with one rack per row. It runs on a single computer (simulated classroom) and with the lab PCs over a WireGuard tunnel, with a small image for the PCs (`trabajador`) and the Classroom view; not yet tried in a real class ([guides](guias/empresa/README.md)) |
 
 - Each version has its full documentation in [`guias/`](guias/README.md):
   step by step, reference, theory and assessment. Everything for `base`

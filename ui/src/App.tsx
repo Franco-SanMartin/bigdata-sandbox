@@ -26,6 +26,7 @@ const PAGE: Record<PageId, ComponentType> = {
   pipeline: page(() => import('./pages/pipeline/PipelinePage'), 'PipelinePage'),
   datos: page(() => import('./pages/datos/DatosPage'), 'DatosPage'),
   ml: page(() => import('./pages/ml/MlPage'), 'MlPage'),
+  aula: page(() => import('./pages/aula/AulaPage'), 'AulaPage'),
   consola: page(() => import('./pages/OtherPages'), 'ConsolePage'),
   config: page(() => import('./pages/ConfigPage'), 'ConfigPage'),
 };

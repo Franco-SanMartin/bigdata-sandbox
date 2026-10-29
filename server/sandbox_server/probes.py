@@ -91,16 +91,22 @@ def _json_field(v: object) -> dict:
 
 
 def datanodes_from_jmx(doc: dict | None, now_ms: int, expected: int, running: set[int],
-                       heartbeat_s: float = 3, dead_after_s: float = 40) -> list[dict]:
+                       heartbeat_s: float = 3, dead_after_s: float = 40,
+                       hosts: dict[str, int] | None = None) -> list[dict]:
     """DataNode[] según lo que ve el NameNode (NameNodeInfo LiveNodes/DeadNodes).
 
     stale: el NameNode lo tiene como vivo pero hace más de 3 latidos que no
-    contesta; 'deadAt' es cuándo lo va a dar por muerto (~40 s, ver lib.sh)."""
+    contesta; 'deadAt' es cuándo lo va a dar por muerto (~40 s, ver lib.sh).
+    hosts: los DataNodes con los puertos de fábrica (los nodos del aula), por
+    nombre: {"maestro": 1}. Los demás (las PCs) se ven en la vista Aula."""
     info = _bean(jmx_beans(doc or {}), "NameNodeInfo")
     seen: dict[int, dict] = {}
     for kind in ("LiveNodes", "DeadNodes"):
         for name, n in _json_field(info.get(kind)).items():
-            dn = _xfer_to_dn(n.get("xferaddr") or name)
+            if hosts is not None:
+                dn = hosts.get(name.rsplit(":", 1)[0].split(".")[0])
+            else:
+                dn = _xfer_to_dn(n.get("xferaddr") or name)
             if dn is None:
                 continue
             last_s = float(n.get("lastContact", 0))

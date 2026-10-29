@@ -9,20 +9,24 @@
 #   go       alumnos con /dev/net/tun; sin modulo (simulado)    -> A con wireguard-go
 #   sin-tun  alumnos sin /dev/net/tun ni modulo; puertos publicados -> B
 #   aislado  sin /dev/net/tun ni modulo y sin puertos publicados    -> simulado
+#   sin-b    como tun, pero las PCs sin la prueba B (sonda-alumno.cmd IP sin-b:
+#            no publican el 8098, asi no aparece el cartel del firewall) -> A
 set -euo pipefail
 
-caso=${1:?caso: tun, go, sin-tun o aislado}
+caso=${1:?caso: tun, go, sin-tun, aislado o sin-b}
 IMAGEN=${IMAGEN:-bigdata-sandbox-sonda:v1}
 PCS=${PCS:-3}
 base=${RUNNER_TEMP:-/tmp}/sonda-$caso
 rm -rf "$base"; mkdir -p "$base/datos"
 resumen_ci=${GITHUB_STEP_SUMMARY:-/dev/null}
 
+sinb=no
 case $caso in
     tun)     tun=si; kernel=si; publicar=si; esperado='A ';         modo_esperado=kernel ;;
     go)      tun=si; kernel=no; publicar=si; esperado='A ';         modo_esperado=go ;;
     sin-tun) tun=no; kernel=no; publicar=si; esperado='B ';         modo_esperado=- ;;
     aislado) tun=no; kernel=no; publicar=no; esperado='SIMULADO ';  modo_esperado=- ;;
+    sin-b)   tun=si; kernel=si; publicar=no; esperado='A ';         modo_esperado=kernel; sinb=si ;;
     *) echo "caso desconocido: $caso" >&2; exit 2 ;;
 esac
 
@@ -74,6 +78,7 @@ for i in $(seq 1 "$PCS"); do
     [ "$tun" = si ] && extra+=(--device /dev/net/tun)
     [ "$kernel" = no ] && extra+=(-e SIMULAR_SIN_KERNEL=1)
     [ "$publicar" = si ] && extra+=(-p "$puerto:$puerto")
+    [ "$sinb" = si ] && puerto=0
     docker run -d --name "$pc" --network "red-$pc" --cap-add NET_ADMIN "${extra[@]}" \
         -v "$base/$pc:/salida" -e ROL=alumno -e MAESTRO="$HOST" -e PUERTO_PRUEBA="$puerto" \
         -e ESPERA_FINAL=60 "$IMAGEN" > /dev/null
@@ -154,7 +159,12 @@ for i in $(seq 1 "$PCS"); do
         [ "$(val tunel_motivo "$r")" = "sin modulo WireGuard y sin /dev/net/tun" ] \
             || fallar "$pc: motivo '$(val tunel_motivo "$r")'"
     fi
-    if [ "$publicar" = si ]; then
+    if [ "$sinb" = si ]; then
+        [ "$tcp" = "no medido (sin prueba B)" ] || fallar "$pc: tcp_entrante '$tcp', se esperaba 'no medido'"
+        [ "$(val prueba_b "$r")" = no ] || fallar "$pc: no anoto prueba_b=no"
+        [ -z "$(val tcp_companeros "$r")" ] || fallar "$pc: probo TCP directo a companeros sin la prueba B"
+        [ "$(docker inspect -f '{{json .HostConfig.PortBindings}}' "$pc")" = "{}" ] || fallar "$pc: publica puertos sin la prueba B"
+    elif [ "$publicar" = si ]; then
         [ "$tcp" = si ] || fallar "$pc: el profe no entro a su puerto ($tcp)"
     else
         case $tcp in no*) ;; *) fallar "$pc: tcp_entrante '$tcp', se esperaba no" ;; esac
@@ -162,5 +172,8 @@ for i in $(seq 1 "$PCS"); do
 done
 if [ "$caso" = tun ]; then
     grep -q 'La imagen seguía cargada en 0 de 1' "$base/datos/resumen.txt" || fallar "falta el dia siguiente en el resumen"
+fi
+if [ "$sinb" = si ]; then
+    grep -q 'no se midió la red directa' "$base/datos/resumen.txt" || fallar "el resumen no dice que no se midio la opcion B"
 fi
 echo "OK: caso $caso -> $(grep '^VEREDICTO' "$base/datos/resumen.txt")"
