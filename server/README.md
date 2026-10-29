@@ -364,7 +364,12 @@ en una carpeta (HDFS, tablas de Hive y de MySQL, colecciones de MongoDB). Con
 eso el pipeline completo corre de punta a punta. Los errores tienen el formato
 de cada motor, y con `FALSO_FALLA=<comando>` ese comando falla. Los jobs
 reales de entrenamiento se prueban con scikit-learn de verdad solo si está
-instalado (`test_job_real_confusion_y_predicciones`; en el CI se saltea).
+instalado (`test_job_real_confusion_y_predicciones`; en el CI se saltea). Lo
+del estudio que necesita Spark (leer cada formato, el perfil, la vista previa de
+la limpieza y un modelo con la limpieza adentro) está en
+`tests/test_estudio_spark.py`: se saltea sin `pyspark` y corre adentro de la
+imagen, con el repo montado en `/repo` y `pip install pytest`
+(`cd /repo/server && python3 -m pytest tests/test_estudio_spark.py`).
 
 `tests/fixtures/ui_cluster.json` tiene casos calculados con el `cluster.ts` de
 la interfaz. Así la validación, la estimación de memoria y el compose del
@@ -385,8 +390,11 @@ fsck, replicación, DataNodes apagados y prendidos, "put terminado" contra el
 archivo real), YARN (apps, submit, kill, logs), el pipeline de seis etapas con
 sus eventos `step` y las variantes (sqoop con `SANDBOX_SQOOP_*`, pandas,
 sparksql, getmerge, mllib), Datos (catálogo, esquemas, consultas con Tez,
-explain y un error de cada motor) y ML (scikit-learn con la matriz de
-`ejemplos/ml/modelos_sklearn.py`, MLlib con su `appId`). Después prueba
+explain y un error de cada motor), ML (scikit-learn con la matriz de
+`ejemplos/ml/modelos_sklearn.py`, MLlib con su `appId`) y el estudio de ML con
+datos de HDFS (`ml/preparar_demo_hdfs.py` deja Parquet particionado, CSV con
+gzip, ORC, JSON con bz2 y Avro: perfil con Spark en YARN, vista previa de la
+limpieza y un entrenamiento con la limpieza adentro del modelo). Después prueba
 `AUTOSTART=1` y que `docker stop` apague en orden. No publica nada: deja el
 resumen, los tiempos, las respuestas de la API y las salidas crudas en el
 artifact `humo-full-<arq>`.
