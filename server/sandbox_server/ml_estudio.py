@@ -5,11 +5,20 @@ la imagen): el catálogo, la receta, el código y el registro de experimentos.
 Este módulo solo pone el servidor en el medio:
 
     GET  /api/ml/catalog                 modelos con sus hiperparámetros, métricas, validaciones y búsquedas
-    GET  /api/ml/sources                 CSV y Parquet de /datos y de HDFS, y tablas de Hive
+    GET  /api/ml/sources                 archivos de /datos y de HDFS (Parquet, ORC, Avro, JSON, CSV, texto,
+                                         comprimidos, carpetas particionadas) y tablas de Hive
     POST /api/ml/sources/example         {ejemplo: senal | sucias} → genera el dataset de ejemplo en /datos
-    POST /api/ml/profile                 {datos, objetivo?} → perfil de columnas (python3 -m sandbox_ml.perfil)
+    POST /api/ml/profile                 {datos, objetivo?, motor?: pandas | spark, modo?: muestra | completo, filas?}
+                                         → perfil de columnas (sandbox_ml.perfil con pandas, o perfil_spark.py
+                                         con spark-submit en YARN)
+    POST /api/ml/cleaning/preview        {datos, limpieza, objetivo?, filas?} → la receta de limpieza sobre una
+                                         muestra, en Spark local: filas afectadas y antes/después de cada paso
+    GET  /api/ml/cleaning                las recetas de limpieza guardadas, con sus versiones
+    GET  /api/ml/cleaning/{nombre}       una receta de limpieza con todas sus versiones
+    POST /api/ml/cleaning                {nombre, limpieza, nota?} → la guarda como versión nueva
     POST /api/ml/check                   {receta} → receta completa, errores y avisos (fuga, id, desbalance)
-    POST /api/ml/code                    {receta} → el script que la reproduce
+    POST /api/ml/code                    {receta, parte?: entrenamiento | perfil | limpieza} → el script de PySpark
+                                         (o scikit-learn) que reproduce ese paso
     POST /api/ml/experiments             {receta} → 202 {id, run}: corre ese script como trabajo
     POST /api/ml/runs                    {codigo, motor, receta?, minutos?, memoriaMb?} → 202: corre código editado
     GET  /api/ml/runs                    corridas recientes
@@ -48,6 +57,9 @@ from starlette.routing import Route
 import sandbox_ml
 from sandbox_ml import catalogo as cat
 from sandbox_ml import codigo as gen
+from sandbox_ml import fuentes
+from sandbox_ml import limpieza as lz
+from sandbox_ml import perfil_spark
 from sandbox_ml import receta as rec
 from sandbox_ml.estudio import nuevo_id
 
@@ -63,11 +75,16 @@ PASO = re.compile(r"^\[\s*(\d{1,3})%\] (.*)$")
 AJUSTES = re.compile(r"Fitting (\d+) folds for each of (\d+) candidates, totalling (\d+) fits")
 AJUSTE_HECHO = re.compile(r"^\[CV[^\]]*\] END ")
 PERFIL = "@@perfil@@ "
+LIMPIEZA = "@@limpieza@@ "
+ERROR_SPARK = "@@error@@ "
 PREDICCION = "@@prediccion@@ "
 EXP_ID = re.compile(r"^exp-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 MAX_CODIGO = 400_000
 MAX_CORRIDAS = 30
-SUFIJOS = (".csv", ".parquet", ".tsv", ".txt")
+SUFIJOS = fuentes.SUFIJOS + tuple(e + c for e in fuentes.SUFIJOS for c in (".gz", ".bz2"))
+# Cuánto puede tardar el perfil con Spark (la pasada completa de un dataset grande tarda)
+PERFIL_SEGUNDOS = {"muestra": 900, "completo": 3600}
+VERSIONES_MAX = 50
 # Datasets de ejemplo que se pueden generar desde el estudio (los mismos generadores de ejemplos/ml)
 EJEMPLOS = {"senal": ("clientes_senal.csv", "ejemplos/ml/generar_senal.py"),
             "sucias": ("ventas_sucias.csv", "ejemplos/ml/generar_sucios.py")}
@@ -154,33 +171,17 @@ class Estudio:
                             tam = p.stat().st_size
                         except OSError:
                             continue
-                        local.append({"origen": "local", "ruta": str(p), "nombre": str(p.relative_to(base)),
-                                      "formato": "parquet" if a.endswith(".parquet") else "csv", "bytes": tam})
+                        det = {k: v for k, v in fuentes.detectar(a).items() if v is not None}
+                        local.append({"origen": "local", "ruta": str(p), "nombre": str(p.relative_to(base)), "bytes": tam,
+                                      **det, "formato": det.get("formato") or "csv"})
                 if len(local) > 300:
                     break
         out: dict = {"local": local, "hdfs": [], "hive": [], "avisos": []}
         if self.c.phase == "running" and self.c.hdfs.get("available"):
             try:
-                carpetas: dict[str, int] = {}
-                for f in await self.hdfs.files():
-                    path = f["path"]
-                    nombre = path.rsplit("/", 1)[-1]
-                    bytes_ = int(round(float(f.get("sizeMb") or 0) * 1024 * 1024))
-                    if nombre.startswith("part-") or nombre.startswith("_"):
-                        padre = path.rsplit("/", 1)[0]
-                        if nombre.startswith("part-"):
-                            carpetas[padre] = carpetas.get(padre, 0) + bytes_
-                        continue
-                    if nombre.lower().endswith(SUFIJOS) and not path.startswith(("/tmp/", "/user/root/.sparkStaging")):
-                        out["hdfs"].append({"origen": "hdfs", "ruta": path, "nombre": path, "bytes": bytes_,
-                                            "formato": "parquet" if nombre.endswith(".parquet") else "csv"})
-                for d, tam in sorted(carpetas.items()):
-                    if "/warehouse/" in d or d.startswith("/tmp/"):
-                        continue
-                    partes = [f["path"] for f in await self.hdfs.files() if f["path"].startswith(d + "/part-")]
-                    fmt = "parquet" if any(p.endswith(".parquet") for p in partes) else "csv"
-                    out["hdfs"].append({"origen": "hdfs", "ruta": d, "nombre": d + "/", "bytes": tam, "formato": fmt,
-                                        "partes": len(partes)})
+                archivos = [{"path": f["path"], "bytes": int(round(float(f.get("sizeMb") or 0) * 1024 * 1024))}
+                            for f in await self.hdfs.files()]
+                out["hdfs"] = fuentes.agrupar(archivos)
             except ApiError as e:
                 out["avisos"].append(f"HDFS: {e}")
         else:
@@ -215,12 +216,9 @@ class Estudio:
 
     def _datos_ok(self, d: object) -> dict:
         """Los datos de una receta o de un pedido de perfil, validados (y adentro de /datos si son locales)."""
-        r = {"datos": d, "tarea": "clustering", "modelo": {"id": "kmeans"}, "columnas": {"x": "numerica"}}
-        out, errores, _ = rec.normalizar(r)
-        err = [e for e in errores if e["campo"].startswith("datos")]
+        datos, err = fuentes.normalizar(d)
         if err:
             raise ApiError(err[0]["mensaje"], "invalid", field=err[0]["campo"])
-        datos = out["datos"]
         if datos["origen"] == "local":
             p = _ruta_local(datos["ruta"], self.c.s.datos_dir)
             if not p.exists():
@@ -228,7 +226,8 @@ class Estudio:
             datos["ruta"] = str(p)
         return datos
 
-    def _clave(self, datos: dict, objetivo: str | None) -> str:
+    def _clave(self, datos: dict, objetivo: str | None, motor: str = "pandas", modo: str = "muestra",
+               filas: int = 0) -> str:
         sello = ""
         if datos["origen"] == "local":
             try:
@@ -236,43 +235,183 @@ class Estudio:
                 sello = f"{st.st_size}:{st.st_mtime_ns}"
             except OSError:
                 pass
-        return json.dumps([datos, objetivo, sello], sort_keys=True)
+        return json.dumps([datos, objetivo, sello, motor, modo, filas], sort_keys=True)
 
     def perfil_guardado(self, datos: dict) -> dict | None:
-        """El último perfil de esos datos (con o sin objetivo), para validar la receta."""
+        """El último perfil de esos datos (con o sin objetivo, de pandas o de Spark), para validar la receta."""
         for k in reversed(self.perfiles):
             if json.loads(k)[0] == datos:
                 return self.perfiles[k]
         return None
 
-    async def perfil(self, d: object, objetivo: object = None) -> dict:
-        datos = self._datos_ok(d)
-        if objetivo is not None and (not isinstance(objetivo, str) or len(objetivo) > 200):
-            raise ApiError("objetivo es el nombre de una columna", "invalid")
+    def _necesita(self, datos: dict, spark: bool) -> None:
         if datos["origen"] == "hdfs":
             self.c.need_hdfs()
         elif datos["origen"] == "hive":
             self.c.need_proc("metastore", "El metastore de Hive")
-        clave = self._clave(datos, objetivo)
+        if spark and datos["origen"] != "local":
+            self.c.need_proc("rm", "YARN (ResourceManager)")
+
+    @staticmethod
+    def _error_spark(run, que: str) -> ApiError:
+        """El error de un trabajo de Spark, explicado: la línea @@error@@ que imprime el script, o lo que se
+        pueda sacar de la salida de error (la excepción de Java o de Python)."""
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(ERROR_SPARK)), None)
+        if linea:
+            e = json.loads(linea[len(ERROR_SPARK):])
+        else:
+            err = "\n".join(l["text"] for l in run.lines[-200:] if l["stream"] == "err")
+            e = fuentes.explicar_error(err) if err.strip() else {"mensaje": run.error or "terminó sin resultado", "detalle": None}
+            if run.error and "tardó" in run.error:
+                e = {"mensaje": f"tardó más que el límite ({run.error})", "detalle": e.get("detalle")}
+        return ApiError(f"No se pudo {que}: {e['mensaje']}", "failed", detalle=e.get("detalle"), motor="spark")
+
+    async def perfil(self, d: object, objetivo: object = None, motor: object = None, modo: object = "muestra",
+                     filas: object = None) -> dict:
+        datos = self._datos_ok(d)
+        if objetivo is not None and (not isinstance(objetivo, str) or len(objetivo) > 200):
+            raise ApiError("objetivo es el nombre de una columna", "invalid")
+        if motor is None:
+            # pandas para lo chico de /datos (y con la asociación de cada columna con el objetivo); Spark para el resto
+            motor = "pandas" if datos["origen"] == "local" and not fuentes.solo_spark(datos) else "spark"
+        if motor not in ("pandas", "spark"):
+            raise ApiError("motor es pandas (una máquina, hasta 200.000 filas) o spark (en YARN, a escala)", "invalid")
+        if motor == "pandas" and fuentes.solo_spark(datos):
+            raise ApiError(f"Con pandas no: {fuentes.solo_spark(datos)}. Perfilalo con Spark", "invalid", field="motor")
+        if modo not in ("muestra", "completo"):
+            raise ApiError("modo es muestra o completo", "invalid")
+        n = hdfs_mod.bounded_int(filas, "filas", 1000, 5_000_000, cat.LIMITES["max_filas_perfil"])
+        self._necesita(datos, motor == "spark")
+        clave = self._clave(datos, objetivo, motor, modo if motor == "spark" else "muestra", n if motor == "spark" else 0)
         if clave in self.perfiles:
             self.perfiles.move_to_end(clave)
             return self.perfiles[clave]
-        run = await self.runner.run(Action(
-            "Perfil de los datos (estudio de ML)",
-            [self.python, "-m", "sandbox_ml.perfil", json.dumps(datos, ensure_ascii=False), objetivo or ""],
-            display=f"python3 -m sandbox_ml.perfil {shlex.quote(datos.get('ruta') or datos.get('tabla'))}",
-            input=datos.get("ruta") or datos.get("tabla"), action="Tipos, nulos, distintos y distribución de cada columna",
-            source="ML", timeout=300, env=self.env(), cwd=str(self.c.s.datos_dir) if self.c.s.datos_dir.is_dir() else None))
-        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PERFIL)), None)
-        if run.state != "done" or linea is None:
-            err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()),
-                                    "no se pudo leer")
-            raise ApiError(f"No se pudo perfilar: {err}", "failed")
+        nombre = datos.get("ruta") or datos.get("tabla")
+        cwd = str(self.c.s.datos_dir) if self.c.s.datos_dir.is_dir() else None
+        if motor == "spark":
+            master = "local[2]" if datos["origen"] == "local" else "yarn"
+            script = str(Path(perfil_spark.__file__).resolve())
+            que = f" sobre una muestra de hasta {n:,} filas".replace(",", ".") if modo == "muestra" else ", pasada completa"
+            run = await self.runner.run(Action(
+                "Perfil con Spark (estudio de ML)",
+                ["spark-submit", "--master", master, "--name", "estudio-ml: perfil", "--conf",
+                 "spark.ui.showConsoleProgress=false", script, json.dumps(datos, ensure_ascii=False), objetivo or "", modo,
+                 str(n)],
+                display=f"spark-submit --master {master} perfil_spark.py {shlex.quote(nombre)} ({modo})",
+                input=nombre, source="ML", timeout=PERFIL_SEGUNDOS[modo], env=self.env(), cwd=cwd,
+                action="Nulos, distintos, cuantiles, histogramas y categorías de cada columna con Spark" + que))
+            linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PERFIL)), None)
+            if run.state != "done" or linea is None:
+                raise self._error_spark(run, "perfilar con Spark")
+        else:
+            run = await self.runner.run(Action(
+                "Perfil de los datos (estudio de ML)",
+                [self.python, "-m", "sandbox_ml.perfil", json.dumps(datos, ensure_ascii=False), objetivo or ""],
+                display=f"python3 -m sandbox_ml.perfil {shlex.quote(nombre)}",
+                input=nombre, action="Tipos, nulos, distintos y distribución de cada columna",
+                source="ML", timeout=300, env=self.env(), cwd=cwd))
+            linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PERFIL)), None)
+            if run.state != "done" or linea is None:
+                err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()),
+                                        "no se pudo leer")
+                raise ApiError(f"No se pudo perfilar: {err}", "failed")
         perfil = json.loads(linea[len(PERFIL):])
+        perfil.setdefault("motor", motor)
+        perfil["datos"] = datos
         self.perfiles[clave] = perfil
         while len(self.perfiles) > 20:
             self.perfiles.popitem(last=False)
         return perfil
+
+    # ------------------------------------------------------------ receta de limpieza
+
+    def _limpieza_ok(self, lim: object, objetivo: object, datos: dict) -> dict:
+        perfil = self.perfil_guardado(datos)
+        conocidas = [c["nombre"] for c in perfil["columnas"]] if perfil else None
+        out, errores, _, _ = lz.normalizar(lim, objetivo if isinstance(objetivo, str) else None, conocidas)
+        if errores:
+            e = errores[0]
+            raise ApiError(f"{e['campo']}: {e['mensaje']}", "invalid", errors=errores)
+        return out
+
+    async def vista_limpieza(self, b: dict) -> dict:
+        datos = self._datos_ok(b.get("datos"))
+        objetivo = b.get("objetivo") if isinstance(b.get("objetivo"), str) else None
+        lim = self._limpieza_ok(b.get("limpieza"), objetivo, datos)
+        filas = hdfs_mod.bounded_int(b.get("filas"), "filas", 100, 50_000, lz.VISTA_FILAS)
+        self._necesita(datos, False)
+        pedido = {"datos": datos, "limpieza": lim, "objetivo": objetivo, "filas": filas}
+        run = await self.runner.run(Action(
+            "Vista previa de la limpieza (estudio de ML)",
+            [self.python, "-m", "sandbox_ml.limpieza", json.dumps(pedido, ensure_ascii=False)],
+            display=f"python3 -m sandbox_ml.limpieza ({len(lim['pasos'])} pasos, {filas} filas)",
+            input=datos.get("ruta") or datos.get("tabla"), source="ML", timeout=600, env=self.env(),
+            action=f"Los {len(lim['pasos'])} pasos de la limpieza sobre una muestra de {filas} filas, en Spark local",
+            cwd=str(self.c.s.datos_dir) if self.c.s.datos_dir.is_dir() else None))
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(LIMPIEZA)), None)
+        if run.state != "done" or linea is None:
+            raise self._error_spark(run, "correr la vista previa")
+        out = json.loads(linea[len(LIMPIEZA):])
+        out["huella"] = rec.huella({"limpieza": {"pasos": lim["pasos"]}})
+        return out
+
+    @property
+    def dir_limpiezas(self) -> Path:
+        return self.c.s.hadoop_dir / "ml" / "limpiezas"
+
+    def _archivo_limpieza(self, nombre: object) -> Path:
+        if not isinstance(nombre, str) or not lz.NOMBRE_RECETA.match(nombre):
+            raise ApiError("El nombre de la receta de limpieza: letras, números, espacios, punto y guiones (hasta 60)",
+                           "invalid", field="nombre")
+        return self.dir_limpiezas / (re.sub(r"[^A-Za-z0-9_.\-]+", "_", nombre) + ".json")
+
+    def limpiezas(self) -> list[dict]:
+        out = []
+        if self.dir_limpiezas.is_dir():
+            for a in sorted(self.dir_limpiezas.glob("*.json")):
+                try:
+                    doc = json.loads(a.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                v = doc["versiones"][-1]
+                out.append({"nombre": doc["nombre"], "versiones": len(doc["versiones"]), "version": v["version"],
+                            "creado": v["creado"], "pasos": len(v["limpieza"]["pasos"]), "huella": v["huella"]})
+        return sorted(out, key=lambda x: x["creado"], reverse=True)
+
+    def limpieza_guardada(self, nombre: object) -> dict:
+        a = self._archivo_limpieza(nombre)
+        if not a.is_file():
+            raise ApiError(f"No hay una receta de limpieza que se llame {nombre}", "not_found")
+        return json.loads(a.read_text(encoding="utf-8"))
+
+    def guardar_limpieza(self, b: dict) -> dict:
+        nombre = b.get("nombre")
+        a = self._archivo_limpieza(nombre)
+        objetivo = b.get("objetivo") if isinstance(b.get("objetivo"), str) else None
+        lim, errores, _, _ = lz.normalizar(b.get("limpieza"), objetivo)
+        if errores:
+            e = errores[0]
+            raise ApiError(f"{e['campo']}: {e['mensaje']}", "invalid", errors=errores)
+        if not lim["pasos"]:
+            raise ApiError("La receta de limpieza no tiene pasos", "invalid")
+        nota = b.get("nota")
+        if nota is not None and (not isinstance(nota, str) or len(nota) > 300):
+            raise ApiError("La nota es un texto de hasta 300 caracteres", "invalid", field="nota")
+        doc = json.loads(a.read_text(encoding="utf-8")) if a.is_file() else {"nombre": nombre, "versiones": []}
+        pasos = {"pasos": lim["pasos"]}
+        huella = rec.huella({"limpieza": pasos})
+        if doc["versiones"] and doc["versiones"][-1]["huella"] == huella:
+            v = doc["versiones"][-1]
+            return {"nombre": nombre, "version": v["version"], "huella": huella, "creado": v["creado"], "nueva": False}
+        n = (doc["versiones"][-1]["version"] if doc["versiones"] else 0) + 1
+        v = {"version": n, "creado": time.strftime("%Y-%m-%dT%H:%M:%S"), "huella": huella, "nota": nota or None,
+             "limpieza": {"nombre": nombre, "version": n, **pasos}}
+        doc["versiones"] = (doc["versiones"] + [v])[-VERSIONES_MAX:]
+        a.parent.mkdir(parents=True, exist_ok=True)
+        tmp = a.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(a)
+        return {"nombre": nombre, "version": n, "huella": huella, "creado": v["creado"], "nueva": True}
 
     # ------------------------------------------------------------ receta y código
 
@@ -300,10 +439,41 @@ class Estudio:
             raise ApiError(f"{e['campo']}: {e['mensaje']}", "invalid", errors=r["errores"])
         return r["receta"]
 
-    def codigo(self, receta: object, exp_id: str | None = None) -> dict:
+    def codigo(self, receta: object, exp_id: str | None = None, parte: object = "entrenamiento",
+               opciones: object = None) -> dict:
+        if parte in ("perfil", "limpieza"):
+            return self.codigo_parte(receta, parte, opciones)
+        if parte not in (None, "entrenamiento"):
+            raise ApiError("parte es entrenamiento, perfil o limpieza", "invalid")
         r = self.receta_valida(receta)
         return {"codigo": gen.generar(r, exp_id), "archivo": gen.nombre_archivo(r, exp_id), "motor": r["motor"],
                 "huella": rec.huella(r), "comando": self.comando_texto(r["motor"], gen.nombre_archivo(r, exp_id))}
+
+    def codigo_parte(self, receta: object, parte: str, opciones: object) -> dict:
+        """El PySpark del perfil o de la limpieza: alcanza con los datos (y la limpieza), sin modelo elegido."""
+        if not isinstance(receta, dict):
+            raise ApiError("Falta la receta", "invalid")
+        datos = self._datos_ok(receta.get("datos"))
+        objetivo = receta.get("objetivo") if isinstance(receta.get("objetivo"), str) else None
+        fecha = time.strftime("%Y-%m-%d %H:%M")
+        nombre = (datos.get("ruta") or datos.get("tabla") or "datos").rstrip("/").rsplit("/", 1)[-1].split(".")[0]
+        master = "local[2]" if datos["origen"] == "local" else "yarn"
+        if parte == "perfil":
+            o = opciones if isinstance(opciones, dict) else {}
+            modo = o.get("modo") if o.get("modo") in ("muestra", "completo") else "muestra"
+            n = hdfs_mod.bounded_int(o.get("filas"), "filas", 1000, 5_000_000, cat.LIMITES["max_filas_perfil"])
+            codigo = perfil_spark.script(datos, objetivo, modo, n, fecha)
+            archivo = f"perfil_{nombre}.py"
+            huella = rec.huella({"datos": datos, "objetivo": objetivo, "modo": modo, "filas": n})
+        else:
+            lim = self._limpieza_ok(receta.get("limpieza"), objetivo, datos)
+            if not lim["pasos"]:
+                raise ApiError("La receta de limpieza no tiene pasos todavía", "invalid", field="limpieza")
+            codigo = lz.script(datos, lim, objetivo, fecha)
+            archivo = re.search(r"limpieza_[\w\-]+\.py", codigo).group(0)
+            huella = rec.huella({"datos": datos, "objetivo": objetivo, "limpieza": lim})
+        return {"codigo": codigo, "archivo": archivo, "motor": "spark", "parte": parte, "huella": huella,
+                "comando": f"spark-submit --master {master} {archivo}"}
 
     @staticmethod
     def comando_texto(motor: str, archivo: str) -> str:
@@ -722,7 +892,20 @@ class Estudio:
 
         async def profile(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
-            return JSONResponse(await self.perfil(b.get("datos"), b.get("objetivo")))
+            return JSONResponse(await self.perfil(b.get("datos"), b.get("objetivo"), b.get("motor"), b.get("modo", "muestra"),
+                                                  b.get("filas")))
+
+        async def cleaning_preview(request: Request) -> JSONResponse:
+            return JSONResponse(await self.vista_limpieza(await hdfs_mod._json(request)))
+
+        async def cleaning_get(_: Request) -> JSONResponse:
+            return JSONResponse(self.limpiezas())
+
+        async def cleaning_one(request: Request) -> JSONResponse:
+            return JSONResponse(self.limpieza_guardada(request.path_params["nombre"]))
+
+        async def cleaning_post(request: Request) -> JSONResponse:
+            return JSONResponse(self.guardar_limpieza(await hdfs_mod._json(request)), status_code=201)
 
         async def check(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
@@ -730,7 +913,7 @@ class Estudio:
 
         async def code(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
-            return JSONResponse(self.codigo(b.get("receta")))
+            return JSONResponse(self.codigo(b.get("receta"), parte=b.get("parte", "entrenamiento"), opciones=b.get("opciones")))
 
         async def experiments_post(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
@@ -774,6 +957,10 @@ class Estudio:
             Route("/api/ml/sources", sources, methods=["GET"]),
             Route("/api/ml/sources/example", example, methods=["POST"]),
             Route("/api/ml/profile", profile, methods=["POST"]),
+            Route("/api/ml/cleaning/preview", cleaning_preview, methods=["POST"]),
+            Route("/api/ml/cleaning", cleaning_get, methods=["GET"]),
+            Route("/api/ml/cleaning", cleaning_post, methods=["POST"]),
+            Route("/api/ml/cleaning/{nombre}", cleaning_one, methods=["GET"]),
             Route("/api/ml/check", check, methods=["POST"]),
             Route("/api/ml/code", code, methods=["POST"]),
             Route("/api/ml/experiments", experiments_post, methods=["POST"]),
