@@ -317,12 +317,15 @@ if con_hive_spark && ! es_trabajador; then
   # Librerias de Tez y Spark en HDFS, la primera vez. Van con bloque de 128m
   # aunque BLOCK_SIZE sea chico: con 1m serian cientos de bloques que solo
   # ensucian lo que se quiere mirar.
-  if [ ! -f /hadoop/.libs-hdfs ]; then
+  # La marca guarda la lista de jars de Spark: si una imagen nueva suma alguno
+  # (spark-avro en ml y full), spark-libs.jar se vuelve a armar una vez.
+  firma_spark=$(ls "${SPARK_HOME}/jars" | md5sum | cut -c1-12)
+  if [ "$(cat /hadoop/.libs-hdfs 2>/dev/null)" != "$firma_spark" ]; then
     if ! hdfs dfs -test -e /apps/tez/tez.tar.gz; then
       log "Subiendo librerias de Tez a HDFS..."
       hdfs dfs -D dfs.blocksize=128m -put "${TEZ_HOME}/share/tez.tar.gz" /apps/tez/tez.tar.gz
     fi
-    if ! hdfs dfs -test -e /apps/spark/spark-libs.jar; then
+    if ! hdfs dfs -test -e /apps/spark/spark-libs.jar || [ -f /hadoop/.libs-hdfs ]; then
       log "Subiendo librerias de Spark a HDFS..."
       # Todos los jars en un solo archivo
       python3 -c 'import glob, os, sys, zipfile
@@ -330,10 +333,10 @@ z = zipfile.ZipFile(sys.argv[2], "w")
 for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.jar"))):
     z.write(f, os.path.basename(f))
 z.close()' "${SPARK_HOME}/jars" /tmp/spark-libs.jar
-      hdfs dfs -D dfs.blocksize=128m -put /tmp/spark-libs.jar /apps/spark/spark-libs.jar
+      hdfs dfs -D dfs.blocksize=128m -put -f /tmp/spark-libs.jar /apps/spark/spark-libs.jar
       rm -f /tmp/spark-libs.jar
     fi
-    touch /hadoop/.libs-hdfs
+    echo "$firma_spark" > /hadoop/.libs-hdfs
   fi
 
   # Metastore de Hive: inicializar el schema la primera vez. Si un primer

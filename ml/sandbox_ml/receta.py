@@ -30,6 +30,8 @@ import math
 import re
 
 from . import catalogo as cat
+from . import fuentes
+from . import limpieza as lz
 
 RECETA_VERSION = 1
 CAPAS = re.compile(r"^\s*\d{1,4}(\s*,\s*\d{1,4}){0,4}\s*$")
@@ -157,40 +159,9 @@ def params_modelo(mid: str, dados, rev: _Rev, campo: str = "modelo.params") -> d
 # ---------------------------------------------------------------- partes de la receta
 
 def _datos(d, rev: _Rev) -> dict:
-    if not isinstance(d, dict):
-        rev.error("datos", "faltan los datos: {origen, ruta} o {origen: hive, tabla}")
-        return {"origen": "local", "ruta": ""}
-    origen = d.get("origen", "local")
-    out = {"origen": origen}
-    if origen not in ("local", "hdfs", "hive"):
-        rev.error("datos.origen", "es local (/datos), hdfs o hive")
-    elif origen == "hive":
-        t = d.get("tabla")
-        if not isinstance(t, str) or not TABLA.match(t):
-            rev.error("datos.tabla", "tiene que ser una tabla de Hive: nombre o base.nombre")
-        out["tabla"] = t if isinstance(t, str) else ""
-    else:
-        r = d.get("ruta")
-        # (también C:\... para correr los scripts en Windows)
-        absoluta = isinstance(r, str) and (r.startswith("/") or bool(re.match(r"^[A-Za-z]:[\\/]", r)))
-        if not absoluta or ".." in re.split(r"[\\/]", r) or "\x00" in r:
-            rev.error("datos.ruta", "tiene que ser una ruta absoluta (/datos/... o /user/...)")
-            r = r if isinstance(r, str) else ""
-        out["ruta"] = r
-        fmt = d.get("formato") or ("parquet" if r.endswith(".parquet") or (origen == "hdfs" and "." not in r.rsplit("/", 1)[-1])
-                                   else "csv")
-        if fmt not in ("csv", "parquet"):
-            rev.error("datos.formato", "es csv o parquet")
-        out["formato"] = fmt
-        if fmt == "csv":
-            sep = d.get("separador", ",")
-            if sep not in (",", ";", "\t", "|"):
-                rev.error("datos.separador", "es coma, punto y coma, tabulación o barra")
-            out["separador"] = sep
-    lim = d.get("limite")
-    if lim is not None and (not isinstance(lim, int) or isinstance(lim, bool) or not 100 <= lim <= 50_000_000):
-        rev.error("datos.limite", "es un número de filas entre 100 y 50.000.000 (o vacío para todas)")
-    out["limite"] = lim if isinstance(lim, int) and not isinstance(lim, bool) else None
+    out, errores = fuentes.normalizar(d)
+    for e in errores:
+        rev.error(e["campo"], e["mensaje"])
     return out
 
 
@@ -525,6 +496,12 @@ def normalizar(receta, perfil: dict | None = None) -> tuple[dict, list[dict], li
     if obj and obj in variables:
         rev.error("objetivo", "el objetivo no puede ser también una variable")
 
+    conocidas = [c["nombre"] for c in perfil.get("columnas", [])] if perfil else None
+    lim, errores, avisos, _ = lz.normalizar(receta.get("limpieza"), obj, conocidas)
+    rev.errores += errores
+    rev.avisos += avisos
+    if lim.get("pasos") or lim.get("nombre"):
+        out["limpieza"] = lim
     out["preproceso"] = _preproceso(receta.get("preproceso"), rev)
     out["validacion"] = _validacion(receta.get("validacion"), tarea, motor, rev)
     ct = out["validacion"].get("columna_tiempo")
@@ -556,6 +533,13 @@ def _por_modelo(r: dict, mod: dict, rev: _Rev) -> None:
         rev.error("modelo.params.metric", "ward solo funciona con distancia euclídea")
     if pre["pca"] is not None and r["tarea"] == "reduccion":
         rev.error("preproceso.pca", "la tarea ya es PCA: sacá el PCA del preprocesamiento")
+    if r["motor"] == "sklearn":
+        if (r.get("limpieza") or {}).get("pasos"):
+            rev.error("limpieza", "la limpieza columna por columna corre en Spark: elegí un modelo de Spark MLlib "
+                                  "(o sacá los pasos)")
+        motivo = fuentes.solo_spark(r["datos"])
+        if motivo:
+            rev.error("datos.formato", f"{motivo}: elegí un modelo de Spark MLlib")
     if r["motor"] == "spark":
         if pre["outliers"] == "eliminar_iqr":
             rev.aviso("preproceso.outliers", "en Spark se recortan los extremos en lugar de sacar filas", "info")
@@ -566,8 +550,11 @@ def _por_modelo(r: dict, mod: dict, rev: _Rev) -> None:
 def _con_perfil(r: dict, perfil: dict, rev: _Rev) -> None:
     info = {c["nombre"]: c for c in perfil.get("columnas", [])}
     filas = perfil.get("filas") or 0
+    # Lo que crea o cambia la limpieza: el perfil (de los datos crudos) no dice cómo queda
+    _, _, _, nuevas = lz.normalizar(r.get("limpieza"), r["objetivo"])
+    cambiadas = {c for _, p in lz.activos(r.get("limpieza")) for c in lz.toca(p)}
     for c in r["columnas"]:
-        if c not in info:
+        if c not in info and c not in nuevas:
             rev.error(f"columnas.{c}", f"{c} no está en los datos")
     obj = r["objetivo"]
     if obj:
@@ -577,7 +564,7 @@ def _con_perfil(r: dict, perfil: dict, rev: _Rev) -> None:
             o = info[obj]
             num = o.get("tipo") in ("int", "float")
             unicos = o.get("unicos") or 0
-            if r["tarea"] == "regresion" and not num:
+            if r["tarea"] == "regresion" and not num and obj not in cambiadas:
                 rev.error("objetivo", f"{obj} no es numérica: para predecir una categoría elegí clasificación")
             if r["tarea"] == "clasificacion":
                 if unicos > 200:
@@ -609,7 +596,7 @@ def _con_perfil(r: dict, perfil: dict, rev: _Rev) -> None:
                 rev.aviso("objetivo", f"{obj} tiene {o['nulos']} filas sin valor: se descartan", "info")
     for c, rol in r["columnas"].items():
         i = info.get(c)
-        if not i or rol in ("ignorar",):
+        if not i or rol in ("ignorar",) or c in cambiadas:
             continue
         if rol == "id":
             continue

@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 
 from . import catalogo as cat
+from . import fuentes
+from . import limpieza as lz
 from .codigo import lit, nombre_archivo, titulo
 from .receta import huella, variables
 
@@ -38,6 +40,8 @@ class _Spark:
         self.sup = r["tarea"] in ("regresion", "clasificacion")
         self.clasif = r["tarea"] == "clasificacion"
         self.pre, self.val, self.bus = r["preproceso"], r["validacion"], r["busqueda"]
+        # La limpieza: lo que es solo del entrenamiento (antes de partir) y lo que va adentro del modelo
+        self.lim_ent, self.lim_mod = lz.por_fase(r.get("limpieza"), r.get("objetivo"))
         self.ml: dict[str, set[str]] = {}
         self.out: list[str] = []
 
@@ -106,6 +110,11 @@ class _Spark:
             '    print(f"[{avance:3d}%] {mensaje}", flush=True)',
             "",
             "",
+        ]
+        if self.lim_ent or self.lim_mod:
+            self.out += [""] + lz.cabecera(usa_modelo=bool(self.lim_mod)) + [""]
+        self.out += [
+            "",
             f"RECETA = json.loads(r'''{json.dumps(r, ensure_ascii=False, indent=1)}''')",
             "",
             'paso(3, "Arrancando Spark en YARN")',
@@ -118,28 +127,24 @@ class _Spark:
         d = self.r["datos"]
         self.celda("1. Datos", "## 1. Datos")
         self.l('paso(10, "Leyendo los datos")')
-        sep = d.get("separador", ",")
-        if d["origen"] == "hive":
-            self.l(f"datos = spark.table({lit(d['tabla'])})")
-        else:
-            ruta = d["ruta"]
-            if d["origen"] == "local":
-                nombre = ruta.rsplit("/", 1)[-1]
-                self.l("# Los executors de YARN leen de HDFS: el archivo de /datos se sube primero",
-                       f"EN_HDFS = {lit('/user/root/ml/estudio/' + nombre)}",
-                       'subprocess.run(["hdfs", "dfs", "-mkdir", "-p", "/user/root/ml/estudio"], check=True)',
-                       f'subprocess.run(["hdfs", "dfs", "-put", "-f", {lit(ruta)}, EN_HDFS], check=True)')
-                ruta_expr = "EN_HDFS"
-            else:
-                ruta_expr = lit(ruta)
-            if d["formato"] == "parquet":
-                self.l(f"datos = spark.read.parquet({ruta_expr})")
-            else:
-                s = "" if sep == "," else f", sep={lit(sep)}"
-                self.l(f"datos = spark.read.csv({ruta_expr}, header=True, inferSchema=True{s})")
+        if d["origen"] == "local":
+            nombre = d["ruta"].rsplit("/", 1)[-1]
+            self.l("# Los executors de YARN leen de HDFS: el archivo de /datos se sube primero",
+                   f"EN_HDFS = {lit('/user/root/ml/estudio/' + nombre)}",
+                   'subprocess.run(["hdfs", "dfs", "-mkdir", "-p", "/user/root/ml/estudio"], check=True)',
+                   f'subprocess.run(["hdfs", "dfs", "-put", "-f", {lit(d["ruta"])}, EN_HDFS], check=True)')
+        self.l(*fuentes.codigo_lector(d, "EN_HDFS" if d["origen"] == "local" else None))
         if d.get("limite"):
             self.l(f"datos = datos.limit({d['limite']})")
+        if self.lim_ent:
+            self.l("", "# Limpieza solo de entrenamiento: duplicados, filtros y filas que se sacan, antes de partir.",
+                   "# Los datos nuevos (al predecir) no pasan por acá.", "filas_crudas = datos.count()")
+            for i, p in self.lim_ent:
+                self.l(*lz.bloque_entrenamiento(i, p))
         self.l("datos = datos.cache()", "n_filas = datos.count()", 'print(f"{n_filas:,} filas y {len(datos.columns)} columnas")')
+        if self.lim_ent:
+            self.l('print(f"Limpieza de entrenamiento: {filas_crudas:,} → {n_filas:,} filas")',
+                   'resultado["filas_limpieza"] = {"antes": filas_crudas, "despues": n_filas}')
 
     def variables_(self):
         r, v = self.r, self.vars
@@ -150,16 +155,18 @@ class _Spark:
             self.l(f"{nombre} = {lit(v[rol])}")
         if self.sup:
             self.l("datos = datos.dropna(subset=[OBJETIVO])")
-        if v["numerica"]:
+        if self.lim_mod:
+            self.l("# Los tipos de cada rol se ponen adentro del modelo, después de la limpieza (paso 4)")
+        if v["numerica"] and not self.lim_mod:
             self.l("for c in NUMERICAS:",
                    '    datos = datos.withColumn(c, F.col(c).cast("double"))')
             if self.pre["imputar_num"] == "cero":
                 self.l("datos = datos.fillna(0.0, subset=NUMERICAS)")
-        if v["categorica"]:
+        if v["categorica"] and not self.lim_mod:
             self.l("# Spark no imputa categorías: los nulos pasan a ser la categoría '(vacío)'",
                    "for c in CATEGORICAS:",
                    '    datos = datos.withColumn(c, F.coalesce(F.col(c).cast("string"), F.lit("(vacío)")))')
-        if v["texto"]:
+        if v["texto"] and not self.lim_mod:
             self.l('datos = datos.fillna("", subset=TEXTOS)')
         if self.clasif:
             self.imp("pyspark.ml.feature", "StringIndexer")
@@ -204,7 +211,29 @@ class _Spark:
         pre, v = self.pre, self.vars
         self.celda("4. Preprocesamiento", "## 4. Preprocesamiento\nLas etapas del Pipeline de Spark ML: aprenden solo con "
                                            "el entrenamiento (salvo los bordes de los extremos, que se calculan acá).")
-        self.l("etapas = []", "numericas = list(NUMERICAS)")
+        base = "ent"
+        if self.lim_mod:
+            self.l("# Limpieza adentro del modelo: cada paso es una expresión de Spark SQL del paso Limpiar del Pipeline.",
+                   "# Lo que aprende (medianas, bordes, categorías) sale del entrenamiento y queda escrito en la expresión.",
+                   "limpieza = PasosLimpieza()")
+            for i, p in self.lim_mod:
+                self.l(*lz.bloque_modelo(i, p))
+            self.l("# Los tipos de cada rol, también adentro del modelo: los datos nuevos llegan igual que el entrenamiento")
+            if v["numerica"]:
+                self.l("for c in NUMERICAS:", '    limpieza.poner(c, f"CAST({q(c)} AS DOUBLE)")')
+                if pre["imputar_num"] == "cero":
+                    self.l("    limpieza.poner(c, f\"coalesce({q(c)}, 0.0D)\")")
+            if v["categorica"]:
+                self.l("for c in CATEGORICAS:   # Spark no imputa categorías: los nulos pasan a ser '(vacío)'",
+                       """    limpieza.poner(c, f"coalesce(CAST({q(c)} AS STRING), '(vacío)')")""")
+            if v["texto"]:
+                self.l("for c in TEXTOS:", """    limpieza.poner(c, f"coalesce(CAST({q(c)} AS STRING), '')")""")
+            self.l('print("Lo que aprendió la limpieza:", APRENDIDO)',
+                   "etapas = [limpieza.etapa()]", "base = limpieza.aplicar(ent)   # el entrenamiento limpio, para los bordes",
+                   "numericas = list(NUMERICAS)")
+            base = "base"
+        else:
+            self.l("etapas = []", "numericas = list(NUMERICAS)")
         if v["fecha"] and pre["fecha"]:
             self.imp("pyspark.ml.feature", "SQLTransformer")
             self.l("# Cada fecha → año, mes, día, día de la semana (0 = lunes) y hora",
@@ -218,15 +247,17 @@ class _Spark:
                 self.imp("pyspark.ml.feature", "SQLTransformer")
                 if pre["outliers"] == "recortar_pct":
                     self.l("# Extremos: bordes en los percentiles 1 y 99 del ENTRENAMIENTO",
-                           "bordes = {c: ent.approxQuantile(c, [0.01, 0.99], 0.001) for c in NUMERICAS}")
+                           f"bordes = {{c: {base}.approxQuantile(c, [0.01, 0.99], 0.001) for c in NUMERICAS}}")
                 else:
                     k = lit(float(pre["factor_iqr"]))
                     self.l(f"# Extremos: bordes en Q1 − {pre['factor_iqr']}·IQR y Q3 + {pre['factor_iqr']}·IQR del ENTRENAMIENTO",
                            "bordes = {}",
                            "for c in NUMERICAS:",
-                           "    q1, q3 = ent.approxQuantile(c, [0.25, 0.75], 0.001)",
+                           f"    q1, q3 = {base}.approxQuantile(c, [0.25, 0.75], 0.001)",
                            f"    bordes[c] = [q1 - {k} * (q3 - q1), q3 + {k} * (q3 - q1)]")
-                self.l('recortes = ", ".join(f"least(greatest(`{c}`, {lo}), {hi}) AS `{c}_rec`" for c, (lo, hi) in bordes.items())',
+                self.l("# CASE y no least/greatest: esas se saltean los nulos (un nulo quedaría en el borde de abajo)",
+                       'recortes = ", ".join(f"CASE WHEN `{c}` < {lo} THEN {lo} WHEN `{c}` > {hi} THEN {hi} ELSE `{c}` END AS `{c}_rec`"',
+                       '                     for c, (lo, hi) in bordes.items())',
                        'etapas.append(SQLTransformer(statement=f"SELECT *, {recortes} FROM __THIS__"))',
                        'numericas = [f"{c}_rec" if c in NUMERICAS else c for c in numericas]')
             if pre["imputar_num"] in ("mediana", "media"):

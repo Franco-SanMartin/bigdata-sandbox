@@ -923,4 +923,11 @@ def como_json() -> dict:
     return {"version": VERSION, "tareas": TAREAS, "roles": ROLES, "modelos": SKLEARN + SPARK, "equivalente": EQUIVALENTE,
             "metricas": METRICAS, "metricaDefecto": {"sklearn": METRICA_DEFECTO, "spark": METRICA_DEFECTO_SPARK},
             "preproceso": PREPROCESO, "preprocesoDefecto": PREPROCESO_DEFECTO, "particiones": PARTICIONES, "cv": CV,
-            "busquedas": BUSQUEDAS, "limites": LIMITES}
+            "busquedas": BUSQUEDAS, "limites": LIMITES, **_datos_y_limpieza()}
+
+
+def _datos_y_limpieza() -> dict:
+    """Los formatos que lee el estudio y los pasos de la receta de limpieza (fuentes.py y limpieza.py)."""
+    from . import fuentes, limpieza
+    return {"formatos": {k: {"etiqueta": f["etiqueta"], "ayuda": f["ayuda"]} for k, f in fuentes.FORMATOS.items()},
+            "tiposEsquema": list(fuentes.TIPOS_ESQUEMA), "limpieza": limpieza.como_json()}
