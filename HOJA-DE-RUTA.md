@@ -118,9 +118,16 @@ pruebas de humo.
       (catálogo, receta, código scikit-learn y PySpark, perfil y registro),
       las rutas `/api/ml/*` y las pantallas: fuentes de `/datos`, HDFS y Hive,
       perfil, receta revisada, código generado, experimentos y corridas.*
-- [ ] **(b)** Formatos de HDFS (Parquet, ORC, Avro, JSON, comprimidos,
-      particiones y Hive) con esquema editable, perfil calculado con Spark a
-      escala y la receta de limpieza columna por columna (puntos 1 a 3).
+- [x] **(b) Datos en HDFS, perfil y limpieza (puntos 1 a 3, con el 9).** *Hecho
+      (PR abierto, sin mergear; trae los de (a) y la seguridad): `fuentes`
+      lee Parquet, ORC, Avro (con `spark-avro`), JSON, CSV/TSV y texto,
+      comprimidos y particionados, y tablas de Hive. El esquema es editable y
+      hay filtro de particiones. `perfil_spark` perfila en YARN (con muestra o
+      pasada completa) y `limpieza` arma la receta versionada: lo de
+      entrenamiento va antes de partir y el resto, en el paso `Limpiar` del
+      Pipeline. Tiene vista previa antes/después, y el PySpark del perfil y de
+      la limpieza se puede correr con `spark-submit`. Lo prueban
+      `test_estudio_spark.py` (Spark real, en la imagen) y el humo de `full`.*
 - [ ] **(c)** Modelos, búsqueda y evaluación distribuida (puntos 4 a 6).
 - [ ] **(d)** Biblioteca de modelos, predicción y deriva (puntos 7 y 8).
 - [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).

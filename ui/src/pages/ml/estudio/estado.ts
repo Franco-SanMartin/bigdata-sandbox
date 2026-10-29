@@ -3,12 +3,15 @@
    valida (POST /api/ml/check) y genera el código con ella (POST /api/ml/code). Se guarda en el navegador
    para que no se pierda al recargar. */
 import { useSyncExternalStore } from 'react';
-import type { MlCatalogo, MlModelo, MlParam, MlPerfil, MlReceta, MlRol, MlTarea, MlValor } from '../../../api/types';
+import type {
+  MlCatalogo, MlColumnaPerfil, MlFase, MlLimpieza, MlModelo, MlParam, MlParteCodigo, MlPaso, MlPerfil, MlPerfilOpciones, MlReceta, MlRol,
+  MlTarea, MlValor,
+} from '../../../api/types';
 
-export const PASOS = ['datos', 'objetivo', 'preproceso', 'modelo', 'validacion', 'entrenar', 'resultados', 'codigo'] as const;
+export const PASOS = ['datos', 'limpieza', 'objetivo', 'preproceso', 'modelo', 'validacion', 'entrenar', 'resultados', 'codigo'] as const;
 export type Paso = typeof PASOS[number];
 export const PASO_LABEL: Record<Paso, string> = {
-  datos: 'Datos', objetivo: 'Objetivo y variables', preproceso: 'Preprocesamiento', modelo: 'Modelo e hiperparámetros',
+  datos: 'Datos', limpieza: 'Limpieza', objetivo: 'Objetivo y variables', preproceso: 'Preprocesamiento', modelo: 'Modelo e hiperparámetros',
   validacion: 'Validación y búsqueda', entrenar: 'Entrenar', resultados: 'Resultados', codigo: 'Código',
 };
 
@@ -20,7 +23,14 @@ export interface EstudioEstado {
   experimento: string | null;
   /** Código editado a mano (null = el generado de la receta) */
   codigo: string | null;
+  /** Cómo se calcula el perfil: auto (pandas para lo chico de /datos, Spark para HDFS y Hive), muestra o pasada completa */
+  perfil: PerfilOpciones;
+  /** Qué código muestra el paso Código: el del entrenamiento, el del perfil o el de la limpieza */
+  parteCodigo: MlParteCodigo;
 }
+
+export type PerfilOpciones = Required<Pick<MlPerfilOpciones, 'modo' | 'filas'>> & { motor: 'auto' | 'pandas' | 'spark' };
+export const PERFIL_INICIAL: PerfilOpciones = { motor: 'auto', modo: 'muestra', filas: 200000 };
 
 const CLAVE = 'bds.ml.estudio.v1';
 
@@ -37,12 +47,12 @@ export const RECETA_INICIAL: MlReceta = {
 };
 
 function cargar(): EstudioEstado {
-  const base: EstudioEstado = { paso: 'datos', receta: RECETA_INICIAL, corrida: null, experimento: null, codigo: null };
+  const base: EstudioEstado = { paso: 'datos', receta: RECETA_INICIAL, corrida: null, experimento: null, codigo: null, perfil: PERFIL_INICIAL, parteCodigo: 'entrenamiento' };
   try {
     const raw = localStorage.getItem(CLAVE);
     if (!raw) return base;
     const v = JSON.parse(raw) as Partial<EstudioEstado>;
-    return { ...base, ...v, paso: PASOS.includes(v.paso as Paso) ? v.paso as Paso : 'datos' };
+    return { ...base, ...v, paso: PASOS.includes(v.paso as Paso) ? v.paso as Paso : 'datos', perfil: { ...PERFIL_INICIAL, ...v.perfil } };
   } catch { return base; }
 }
 
@@ -138,3 +148,39 @@ export function fmtMetrica(v: number | null | undefined, digits = 4): string {
 export const fmtSeg = (s?: number | null) => (s == null ? '—' : s < 1 ? `${Math.round(s * 1000)} ms` : s < 120 ? `${s.toFixed(1).replace('.', ',')} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`);
 export const fmtBytes = (b?: number | null) => (b == null ? '—' : b < 1024 ? `${b} B` : b < 1024 ** 2 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 ** 2).toFixed(1).replace('.', ',')} MB`);
 export const fmtMb = (mb?: number | null) => (mb == null ? '—' : mb >= 1024 ? `${(mb / 1024).toFixed(1).replace('.', ',')} GB` : `${Math.round(mb)} MB`);
+
+/* ---------- receta de limpieza (sandbox_ml/limpieza.py: fase, creadas) ---------- */
+
+/** entrenamiento (antes de partir, los datos nuevos no pasan) o modelo (adentro del Pipeline) */
+export function faseDe(p: MlPaso, objetivo: string | null): MlFase {
+  if (p.tipo === 'duplicados' || p.tipo === 'filtro') return 'entrenamiento';
+  if (p.tipo === 'nulos' && p.estrategia === 'eliminar') return 'entrenamiento';
+  if (p.tipo === 'outliers' && p.accion === 'eliminar') return 'entrenamiento';
+  if (objetivo && p.columna === objetivo) return 'entrenamiento';
+  return 'modelo';
+}
+
+/** Las columnas nuevas que agrega el paso y su rol sugerido */
+export function creadasPor(p: MlPaso): Record<string, MlRol> {
+  const c = p.columna ?? '';
+  if (p.activo === false) return {};
+  if (p.tipo === 'nulos' && p.indicador && p.estrategia !== 'eliminar') return { [`${c}_nulo`]: 'numerica' };
+  if (p.tipo === 'fecha') return Object.fromEntries((p.partes ?? []).map(x => [`${c}_${x}`, 'numerica' as MlRol]));
+  if (p.tipo === 'regex' && p.destino && p.destino !== c) return { [p.destino]: 'categorica' };
+  if (p.tipo === 'derivada' && p.nombre) return { [p.nombre]: p.rol ?? 'numerica' };
+  return {};
+}
+
+export function creadasPorLimpieza(lim: MlLimpieza | undefined): Record<string, MlRol> {
+  return Object.assign({}, ...(lim?.pasos ?? []).map(creadasPor));
+}
+
+/** El perfil con las columnas que crea la limpieza al final (para elegirles el rol) */
+export function conLimpieza(p: MlPerfil, lim: MlLimpieza | undefined): MlPerfil {
+  const hay = new Set(p.columnas.map(c => c.nombre));
+  const extra: MlColumnaPerfil[] = Object.entries(creadasPorLimpieza(lim)).filter(([c]) => !hay.has(c)).map(([nombre, rol]) => ({
+    nombre, tipo: rol === 'numerica' ? 'float' : 'str', dtype: 'limpieza', nulos: 0, nulos_pct: 0, unicos: 0, unicos_pct: 0,
+    rol, por_que: 'la crea la receta de limpieza', ejemplos: [],
+  }));
+  return extra.length ? { ...p, columnas: [...p.columnas, ...extra] } : p;
+}

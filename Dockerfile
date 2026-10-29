@@ -322,9 +322,19 @@ RUN find /opt/sandbox/ejemplos/ml -type f -exec sed -i 's/\r$//' {} +
 # de datos y registro de experimentos en /hadoop/ml/experimentos. Lo usan los
 # scripts que arma la pantalla de ML de la full, y desde JupyterLab:
 # "from sandbox_ml import receta, codigo, estudio". Python puro, ~150 KB.
+# Tambien lee cualquier formato de HDFS (fuentes), perfila con Spark a escala
+# (perfil_spark) y arma la receta de limpieza columna por columna (limpieza,
+# con el paso Limpiar del Pipeline en transformadores_spark).
 COPY ml/sandbox_ml/ /opt/sandbox/ml/sandbox_ml/
 RUN find /opt/sandbox/ml -name '*.py' -exec sed -i 's/\r$//' {} + \
- && python3 -c "import sandbox_ml.catalogo, sandbox_ml.receta, sandbox_ml.codigo, sandbox_ml.estudio, sandbox_ml.perfil"
+ && python3 -c "import sandbox_ml.catalogo, sandbox_ml.receta, sandbox_ml.codigo, sandbox_ml.estudio, sandbox_ml.perfil, sandbox_ml.fuentes, sandbox_ml.limpieza, sandbox_ml.perfil_spark, sandbox_ml.transformadores_spark"
+
+# spark-avro: Spark lee y escribe Avro (spark.read.format("avro")) con este
+# modulo, que no viene en el paquete de Spark. 200 KB, de Maven Central; entra
+# en spark-libs.jar (lo que los trabajos de YARN bajan de HDFS) al arrancar.
+ARG SPARK_VERSION
+RUN curl -fsSL --retry 3 "https://repo1.maven.org/maven2/org/apache/spark/spark-avro_2.12/${SPARK_VERSION}/spark-avro_2.12-${SPARK_VERSION}.jar" \
+      -o "/opt/spark/jars/spark-avro_2.12-${SPARK_VERSION}.jar"
 
 EXPOSE 8888
 

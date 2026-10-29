@@ -6,8 +6,12 @@ const STATUS: Record<ApiErrorCode, number> = {
 };
 
 export class ApiFailure extends Error {
-  constructor(message: string, public code?: ApiErrorCode, public status = code ? STATUS[code] : 500) { super(message); }
+  /** extra: el resto del cuerpo del error (p. ej. detalle, la línea original de Spark, y errors) */
+  constructor(message: string, public code?: ApiErrorCode, public status = code ? STATUS[code] : 500, public extra?: Record<string, unknown>) { super(message); }
 }
+
+/** La línea original de Spark o de Java que vino con el error (para mostrarla abajo del mensaje) */
+export const detalleDe = (e: unknown): string | null => (e instanceof ApiFailure && typeof e.extra?.detalle === 'string' ? e.extra.detalle : null);
 
 export function fail(code: ApiErrorCode, message: string): never { throw new ApiFailure(message, code); }
 

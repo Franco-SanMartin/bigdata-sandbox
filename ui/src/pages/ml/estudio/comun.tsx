@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, Info, ShieldAlert, XCircle } from 'lucide-react';
 import { api } from '../../../api';
 import type { MlCatalogo, MlCorrida, MlDatos, MlIssue, MlLinea, MlPerfil, MlReceta, MlRevision } from '../../../api/types';
+import { detalleDe } from '../../../api/errors';
+import { getEstudio, useEstudio, type PerfilOpciones } from './estado';
 import { HelpTip } from '../../../components/base';
 import { onEvent } from '../../../state/store';
 import { useApi } from '../../../state/useApi';
@@ -15,14 +17,20 @@ export function useCatalogo() {
   return useApi(a => (catalogo ??= a.mlCatalog().catch(e => { catalogo = null; throw e; })), []);
 }
 
-/* ---------- perfil de los datos (caché por datos + objetivo) ---------- */
+/* ---------- perfil de los datos (caché por datos + objetivo + cómo se calcula) ---------- */
 
 const perfiles = new Map<string, Promise<MlPerfil>>();
-export function pedirPerfil(datos: MlDatos, objetivo: string | null): Promise<MlPerfil> {
-  const k = JSON.stringify([datos.origen, datos.ruta ?? datos.tabla, datos.formato ?? null, datos.separador ?? ',', objetivo]);
+/** El último error de cada perfil, con la línea original de Spark (para mostrarla abajo del mensaje) */
+const detalles = new Map<string, string | null>();
+const clavePerfil = (datos: MlDatos, objetivo: string | null, op: PerfilOpciones) =>
+  JSON.stringify([{ ...datos, limite: null }, objetivo, op.motor, op.motor === 'pandas' ? null : op.modo, op.motor === 'pandas' ? null : op.filas]);
+
+export function pedirPerfil(datos: MlDatos, objetivo: string | null, op: PerfilOpciones = getEstudio().perfil): Promise<MlPerfil> {
+  const k = clavePerfil(datos, objetivo, op);
   let p = perfiles.get(k);
   if (!p) {
-    p = api().mlProfile(datos, objetivo).catch(e => { perfiles.delete(k); throw e; });
+    p = api().mlProfile(datos, objetivo, { ...(op.motor === 'auto' ? {} : { motor: op.motor }), modo: op.modo, filas: op.filas })
+      .catch(e => { perfiles.delete(k); detalles.set(k, detalleDe(e)); throw e; });
     perfiles.set(k, p);
   }
   return p;
@@ -30,8 +38,10 @@ export function pedirPerfil(datos: MlDatos, objetivo: string | null): Promise<Ml
 export const olvidarPerfiles = () => perfiles.clear();
 
 export function usePerfil(datos: MlDatos | null, objetivo: string | null) {
-  const k = datos ? JSON.stringify([datos, objetivo]) : '';
-  return useApi(() => (datos ? pedirPerfil(datos, objetivo) : Promise.resolve(null)), [k]);
+  const { perfil: op } = useEstudio();
+  const k = datos ? clavePerfil(datos, objetivo, op) : '';
+  const r = useApi(() => (datos ? pedirPerfil(datos, objetivo, op) : Promise.resolve(null)), [k]);
+  return { ...r, detalle: r.error ? detalles.get(k) ?? null : null };
 }
 
 /* ---------- revisión de la receta: el servidor la completa y avisa (con 350 ms de espera) ---------- */

@@ -22,7 +22,9 @@ Hace dos arranques:
   1. Solo HDFS, 2 DataNodes: YARN tiene que dar service_down; subida, put
      terminado, fsck, replicación y DataNodes apagados y prendidos.
   2. Todo (YARN, Hive, MySQL, MongoDB): trabajos de YARN, el pipeline completo
-     y sus variantes, Datos y Machine Learning.
+     y sus variantes, Datos, Machine Learning y el estudio de ML con datos de
+     HDFS (Parquet particionado, CSV con gzip, ORC, JSON con bz2 y Avro: perfil
+     con Spark, vista previa de la limpieza y un entrenamiento con ella adentro).
 """
 import json
 import math
@@ -1159,6 +1161,124 @@ def terminal() -> None:
         c.detalle = f"{ws.cerro[0]} {ws.cerro[1]}"
 
 
+# ---------------------------------------------------------------- estudio de ML: datos de HDFS (etapa b)
+
+REPO = Path(__file__).resolve().parents[3]
+FECHA_VENTAS = "coalesce(to_date(fecha, 'yyyyMMdd'), to_date(fecha, 'dd/MM/yyyy'), to_date(fecha, 'yyyy-MM-dd'))"
+
+
+def estudio_datos() -> None:
+    """El estudio de ML con datos de HDFS en varios formatos: ml/preparar_demo_hdfs.py los escribe con Spark
+    (Parquet particionado, CSV con gzip, ORC, JSON con bz2, Avro) y la API los lista, los perfila con Spark
+    en YARN, corre la vista previa de la limpieza y entrena con la limpieza adentro del modelo."""
+    with Chequeo("estudio ML: datos de ejemplo en HDFS (Parquet, CSV gzip, ORC, JSON bz2, Avro)") as c:
+        for ej in ("sucias", "senal"):
+            codigo, r = pedir("POST", "/api/ml/sources/example", {"ejemplo": ej}, timeout=300)
+            assert codigo == 200, (codigo, r)
+        p = subprocess.run(["docker", "cp", str(REPO / "ml" / "preparar_demo_hdfs.py"), f"{CONT}:/tmp/preparar_demo_hdfs.py"],
+                           capture_output=True, text=True)
+        assert p.returncode == 0, p.stderr
+        rc, out, err = en_contenedor("cd /tmp && spark-submit --master local[2] /tmp/preparar_demo_hdfs.py", 900)
+        (SALIDAS / "crudas").mkdir(parents=True, exist_ok=True)
+        (SALIDAS / "crudas" / "preparar_demo_hdfs.txt").write_text(out + err)
+        assert rc == 0 and "listo:" in out, (out + err)[-1500:]
+        codigo, f = pedir("GET", "/api/ml/sources", timeout=60)
+        guardar("estudio_fuentes", f)
+        hdfs = {x["ruta"]: x for x in f["hdfs"]}
+        ventas, gz = hdfs.get("/user/root/ml/ventas"), hdfs.get("/user/root/ml/crudo/ventas_sucias.csv.gz")
+        assert ventas and ventas["formato"] == "parquet" and ventas["particiones"]["columnas"] == ["anio", "mes"], ventas
+        assert gz and (gz["formato"], gz["compresion"]) == ("csv", "gzip"), gz
+        assert hdfs["/user/root/ml/clientes_orc"]["formato"] == "orc", hdfs.keys()
+        assert (hdfs["/user/root/ml/clientes_json"]["formato"], hdfs["/user/root/ml/clientes_json"]["compresion"]) == ("json", "bz2")
+        assert hdfs["/user/root/ml/clientes_avro"]["formato"] == "avro"
+        c.detalle = ", ".join(f"{r} ({x['formato']}{', ' + x['compresion'] if x.get('compresion') else ''})" for r, x in hdfs.items())
+
+    perfiles = {}
+    for nombre, datos, modo in (("Parquet particionado", {"origen": "hdfs", "ruta": "/user/root/ml/ventas", "formato": "parquet"}, "muestra"),
+                                ("CSV con gzip", {"origen": "hdfs", "ruta": "/user/root/ml/crudo/ventas_sucias.csv.gz", "formato": "csv"}, "completo"),
+                                ("ORC", {"origen": "hdfs", "ruta": "/user/root/ml/clientes_orc", "formato": "orc"}, "completo"),
+                                ("Avro", {"origen": "hdfs", "ruta": "/user/root/ml/clientes_avro", "formato": "avro"}, "completo")):
+        with Chequeo(f"estudio ML: perfil con Spark en YARN de {nombre}") as c:
+            t0 = time.time()
+            codigo, pf = pedir("POST", "/api/ml/profile", {"datos": datos, "motor": "spark", "modo": modo, "filas": 20000}, timeout=900)
+            TIEMPOS[f"perfil Spark {nombre}"] = round(time.time() - t0, 1)
+            guardar(f"estudio_perfil_{datos['formato']}", pf)
+            assert codigo == 200, (codigo, pf)
+            cols = {x["nombre"]: x for x in pf["columnas"]}
+            assert pf["motor"] == "spark" and pf["master"] == "yarn" and pf["app_id"].startswith("application_"), pf.get("master")
+            assert pf["fuente"]["bytes"] > 0 and pf["filas_total"] > 0, pf["fuente"]
+            if datos["formato"] == "parquet":
+                assert pf["fuente"]["particiones"]["columnas"] == ["anio", "mes"] and pf["filas"] <= 20000 and pf["recortado"]
+            if datos["formato"] == "csv":
+                assert pf["fuente"]["compresion"] == "gzip" and cols["precio"]["nulos"] > 0 and not pf["recortado"]
+            perfiles[datos["formato"]] = pf
+            c.detalle = (f"{pf['filas']:,} de {pf['filas_total']:,} filas, {len(cols)} columnas, {pf['segundos']} s de Spark; "
+                         f"{pf['fuente'].get('archivos')} archivos, {pf['fuente'].get('bytes')} bytes; {pf['app_id']}")
+
+    with Chequeo("estudio ML: el error de Spark se explica (ruta que no existe)") as c:
+        codigo, r = pedir("POST", "/api/ml/profile", {"datos": {"origen": "hdfs", "ruta": "/user/root/ml/no_esta", "formato": "parquet"},
+                                                      "motor": "spark"}, timeout=600)
+        guardar("estudio_perfil_error", r)
+        assert codigo == 500 and "No existe" in r["error"] and r.get("detalle"), (codigo, r)
+        c.detalle = r["error"]
+
+    limpieza = {"nombre": "humo", "pasos": [
+        {"tipo": "texto", "columna": "sucursal", "ops": ["recortar", "sin_acentos", "minusculas"]},
+        {"tipo": "regex", "columna": "precio", "patron": "[.]", "reemplazo": ""},
+        {"tipo": "regex", "columna": "precio", "patron": ",", "reemplazo": "."},
+        {"tipo": "tipo", "columna": "precio", "a": "double"},
+        {"tipo": "derivada", "nombre": "fecha_ok", "expresion": FECHA_VENTAS, "rol": "fecha"},
+        {"tipo": "nulos", "columna": "precio", "estrategia": "mediana", "indicador": True},
+        {"tipo": "raras", "columna": "sucursal", "min_pct": 0.05},
+        {"tipo": "duplicados", "columnas": []},
+        {"tipo": "filtro", "condicion": "cantidad > 0 AND cantidad < 100"},
+    ]}
+    with Chequeo("estudio ML: vista previa de la limpieza (CSV con gzip de HDFS)") as c:
+        gz = {"origen": "hdfs", "ruta": "/user/root/ml/crudo/ventas_sucias.csv.gz", "formato": "csv"}
+        codigo, v = pedir("POST", "/api/ml/cleaning/preview", {"datos": gz, "limpieza": limpieza, "filas": 5000}, timeout=900)
+        guardar("estudio_limpieza", v)
+        assert codigo == 200, (codigo, v)
+        assert all(p_["ok"] for p_ in v["pasos"]), [p_ for p_ in v["pasos"] if not p_["ok"]]
+        por = {p_["paso"]: p_ for p_ in v["pasos"]}
+        assert por[7]["fase"] == "entrenamiento" and por[7]["afectadas"] > 0           # filas repetidas a propósito
+        assert por[5]["aprendido"]["mediana"] > 0 and "precio_nulo" in v["final"]["columnas"]
+        assert v["filas"]["entrenamiento"] < v["filas"]["leidas"]
+        codigo, g = pedir("POST", "/api/ml/cleaning", {"nombre": "humo", "limpieza": limpieza})
+        assert codigo == 201 and g["version"] >= 1, g
+        c.detalle = (f"{v['filas']['leidas']} → {v['filas']['entrenamiento']} filas en {v['segundos']} s; "
+                     + "; ".join(f"{p_['paso'] + 1} {p_['tipo']} {p_['afectadas']}" for p_ in v["pasos"]))
+
+    with Chequeo("estudio ML: entrenar en YARN con la limpieza adentro del modelo (datos en ORC)") as c:
+        receta = {"nombre": "humo: limpieza adentro", "datos": {"origen": "hdfs", "ruta": "/user/root/ml/clientes_orc", "formato": "orc"},
+                  "tarea": "clasificacion", "objetivo": "vuelve",
+                  "columnas": {"antiguedad_meses": "numerica", "visitas_mes": "numerica", "ticket_promedio": "numerica",
+                               "reclamos": "numerica", "edad": "numerica", "edad_nulo": "numerica", "segmento_real": "categorica",
+                               "gasto_mes_siguiente": "ignorar", "visitas_x_ticket": "numerica"},
+                  "modelo": {"id": "bosque_clf_spark", "params": {"numTrees": 20}},
+                  "validacion": {"particion": "aleatoria", "cv": "ninguna", "metrica": "exactitud"},
+                  "limpieza": {"pasos": [{"tipo": "nulos", "columna": "edad", "estrategia": "mediana", "indicador": True},
+                                         {"tipo": "texto", "columna": "segmento_real", "ops": ["recortar", "minusculas"]},
+                                         {"tipo": "derivada", "nombre": "visitas_x_ticket", "expresion": "visitas_mes * ticket_promedio"},
+                                         {"tipo": "duplicados", "columnas": []}]}}
+        codigo, r = pedir("POST", "/api/ml/check", {"receta": receta})
+        assert codigo == 200 and not r["errores"], r.get("errores")
+        t0 = time.time()
+        codigo, r = pedir("POST", "/api/ml/experiments", {"receta": receta})
+        assert codigo == 202, (codigo, r)
+        corrida = esperar(lambda: (lambda x: x if x["estado"] != "corriendo" else None)(pedir("GET", f"/api/ml/runs/{r['run']}")[1]),
+                          1800, "la corrida con limpieza", 3)
+        TIEMPOS["ML estudio con limpieza (Spark)"] = round(time.time() - t0, 1)
+        codigo, exp = pedir("GET", f"/api/ml/experiments/{r['id']}")
+        guardar("estudio_experimento_limpieza", exp)
+        assert corrida["estado"] == "listo", (corrida, exp.get("error"))
+        assert exp["receta"]["limpieza"]["pasos"][0]["tipo"] == "nulos" and exp["metricas"], exp.get("metricas")
+        # La primera etapa del PipelineModel guardado (stages/0_<uid> o 00_<uid>, según cuántas haya)
+        rc, out, _ = en_contenedor(f"d=$(hdfs dfs -ls -C {exp['modelo_hdfs']}/stages | sort | head -1); "
+                                   "hdfs dfs -cat $d/metadata/part-00000", 120)
+        assert "transformadores_spark.Limpiar" in out, out[:500]
+        c.detalle = f"{TIEMPOS['ML estudio con limpieza (Spark)']} s; exactitud {exp['metricas'].get('exactitud')}; primer paso del modelo: Limpiar"
+
+
 # ---------------------------------------------------------------- resumen
 
 def resumen() -> int:
@@ -1194,6 +1314,7 @@ def main() -> int:
         pipeline()
         datos()
         ml()
+        estudio_datos()
         with Chequeo("actividad: sin errores inesperados") as c:
             _, acts = pedir("GET", "/api/activity?limit=500")
             guardar("activity", acts)
