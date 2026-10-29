@@ -5,7 +5,7 @@ import { Brain, ExternalLink, FileCode2, Play, Plus, Power, RotateCcw, Rows3, Sq
 import { composeOpen, consoleOpen, helpOpen, navigate, paletteOpen } from '../state/ui';
 import { useStatus } from '../state/store';
 import { addDataNode, applyConfig, pipelineReset, processAction, putExample, startCluster, stopCluster, submitExample, trainModel } from '../state/actions';
-import { NAV } from './nav';
+import { navVisible } from './nav';
 
 export function CommandPalette() {
   const open = paletteOpen.use();
@@ -26,7 +26,7 @@ export function CommandPalette() {
             <Command.List>
               <Command.Empty>No hay nada con ese nombre.</Command.Empty>
               <Command.Group heading="Ir a">
-                {NAV.map(n => <Command.Item key={n.id} value={`ir a ${n.label}`} onSelect={run(() => navigate(n.id))}><n.icon size={15} />{n.label}<span className="end"><kbd>G</kbd><kbd>{n.key.toUpperCase()}</kbd></span></Command.Item>)}
+                {navVisible(!!s?.aula).map(n => <Command.Item key={n.id} value={`ir a ${n.label}`} onSelect={run(() => navigate(n.id))}><n.icon size={15} />{n.label}<span className="end"><kbd>G</kbd><kbd>{n.key.toUpperCase()}</kbd></span></Command.Item>)}
               </Command.Group>
               <Command.Group heading="Cluster">
                 {s?.phase === 'stopped' && <Command.Item value="iniciar el cluster arrancar" onSelect={run(() => startCluster())}><Play size={15} />Iniciar el cluster</Command.Item>}

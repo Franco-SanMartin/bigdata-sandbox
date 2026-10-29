@@ -155,13 +155,17 @@ cambiarlas alcanza con recrear el contenedor.
 | Variable | De fábrica | Qué hace | Quién la usa |
 |---|---|---|---|
 | `ROL` | `solo` | `solo`, `maestro` o `trabajador` | Todos |
-| `RED` | `docker` | Cómo se ven los nodos. Hoy solo `docker` (todos en una red de Docker); otro valor corta el arranque | Maestro y trabajadores |
-| `MAESTRO` | `maestro` | Nombre (o IP) del maestro | Trabajadores (y el maestro, para su propia configuración) |
-| `NODO` | el `hostname` del contenedor | Nombre con el que el nodo se anuncia (DataNode y NodeManager) | Todos |
+| `RED` | `docker` | Cómo se ven los nodos: `docker` (todos en una red de Docker) o `wireguard` (las PCs del laboratorio por un túnel con hub en el maestro, ver [la red del aula](#la-red-del-aula-redwireguard)) | Maestro y trabajadores |
+| `MAESTRO` | `maestro` | Con `RED=docker`: nombre (o IP) del maestro. Con `RED=wireguard`, en las PCs: la IP de la PC del profe en la red del aula (adentro del cluster el maestro igual se llama `maestro`) | Trabajadores (y el maestro, para su propia configuración) |
+| `NODO` | el `hostname` del contenedor (con `RED=wireguard`: el `pcNN` que le tocó) | Nombre con el que el nodo se anuncia (DataNode y NodeManager) | Todos |
+| `CODIGO` | uno de 4 letras al azar | El código de la clase: el maestro lo pide a cada PC que se inscribe | Maestro y trabajadores, con `RED=wireguard` |
+| `TRABAJADOR_CORES` | los cores de Docker con `RED=wireguard`; los de fábrica de YARN con `RED=docker` | Cores que cada NodeManager presta (1 a 256). YARN reparte por memoria y por cores | NodeManagers |
+| `WG_MTU` | `1380` | MTU del túnel (si en una PC no pasan paquetes de ese tamaño, esa PC baja a 1280 sola) | Con `RED=wireguard` |
+| `INTERFAZ` | `si` | En el maestro: la interfaz web en `:8080` con la vista Aula, que arranca sola el cluster. `no`: el arranque directo | Maestro |
 | `PCS_POR_FILA` | `5` (`2` en `aula-simulada.yml`) | Cuántas PCs por fila (rack). Número de 1 en adelante | El maestro (lo usa el script de racks) |
-| `TRABAJADOR_RAM` | `2048` | MB que cada NodeManager presta para trabajos (1024 a 65536). En el maestro: el contenedor más grande que acepta YARN | NodeManagers y ResourceManager |
+| `TRABAJADOR_RAM` | `2048`; con `RED=wireguard`, dos tercios de la RAM de Docker en esa PC, redondeado al GB (3863 MB → 2048, 7828 MB → 5120) | MB que cada NodeManager presta para trabajos (1024 a 65536). El contenedor más grande que acepta YARN es el de la PC más grande | NodeManagers |
 | `MAESTRO_NM` | `no` | `si`: el maestro también corre trabajos | Maestro |
-| `REPLICATION` | `3` en el aula (`1` con `ROL=solo`) | Copias de cada bloque nuevo, de 1 a 9 | Quien escribe el archivo |
+| `REPLICATION` | `3` en el aula simulada, `2` con `RED=wireguard` (`1` con `ROL=solo`) | Copias de cada bloque nuevo, de 1 a 9. Con `RED=wireguard` la decide el maestro para toda la clase | Quien escribe el archivo |
 | `BLOCK_SIZE` | `128m` | Tamaño de bloque de los archivos nuevos | Quien escribe el archivo |
 | `SERVICIOS` | `todo` | `hdfs`, `mapreduce` (YARN + MapReduce) o `todo` (más Hive y Spark) | Todos |
 | `MONGODB` | `no` | `si`: prende MongoDB en ese nodo | Cualquiera |
@@ -173,7 +177,10 @@ Mensajes con los que se corta el arranque si una variable no va:
 
 | Caso | Mensaje |
 |---|---|
-| `RED` distinto de `docker` | `RED=...: por ahora solo docker (los nodos en una red de Docker)` |
+| `RED` que no es `docker` ni `wireguard` | `RED=...: tiene que ser docker (los nodos en una red de Docker) o wireguard (las PCs del aula)` |
+| Una PC con el código equivocado | `el maestro no te sumo: el codigo 'XXXX' no es el de esta clase: revisalo en la PC del profe` |
+| Una PC sin `--hostname pcNN` | `este contenedor se tiene que llamar pcNN (docker run --hostname pcNN)` |
+| Sin `NET_ADMIN` | `no se puede crear el tunel: al contenedor le falta --cap-add NET_ADMIN` |
 | `NAMENODES` distinto de 1 | `NAMENODES=...: con ROL=... hay un solo NameNode (la alta disponibilidad se ve con ROL=solo)` |
 | `PCS_POR_FILA` no es un número de 1 en adelante | `PCS_POR_FILA=...: tiene que ser un numero de 1 en adelante` |
 | `TRABAJADOR_RAM` fuera de rango | `TRABAJADOR_RAM=...: MB, de 1024 a 65536` |
@@ -294,6 +301,50 @@ Interfaces web (con los puertos que publica `aula-simulada.yml`):
 | JobHistory: trabajos de MapReduce terminados, en qué nodo corrió cada tarea | <http://localhost:19888> |
 | Spark History | <http://localhost:18080> |
 
+## La red del aula (`RED=wireguard`)
+
+Lo arman `empresa/aula/red.sh` (en cada nodo, antes de arrancar Hadoop) y
+`empresa/aula/inscripcion.py` (en el maestro).
+
+| Qué | Dónde | Detalle |
+|---|---|---|
+| Hub WireGuard | Maestro, UDP **51820** (publicado) | `wg0` con `10.13.0.1/24`, reenvía entre PCs (`net.ipv4.ip_forward=1`) |
+| Inscripción | Maestro, TCP **8099** (publicado) | `POST /reservar` (nombre y código → `pcNN`), `POST /unirse` (más la clave pública → IP del túnel y clave del hub), `GET /ping`, `GET /pcs` |
+| Túnel de cada PC | Saliente, hacia el maestro | `wg0` con `10.13.0.(10+NN)/24`, `persistent-keepalive 25`; ningún puerto publicado |
+| Nombres | `/etc/hosts` de cada nodo | `maestro` = `10.13.0.1` y `pc01` a `pc240` = `10.13.0.11` a `.250`, fijos: nadie reparte nombres |
+| Nombre de la máquina | Cada PC | `--hostname pcNN`: Tez (y lo que pregunte "cómo me llamo") se anuncia con ese nombre |
+| Lo que queda | `/hadoop/aula` | En el maestro: clave, código, id de la clase, PCs inscriptas y `eventos.log`. En cada PC: su clave y `nodo.env` (su nombre y lo que decidió el maestro) |
+
+El túnel sale con el módulo del kernel (Docker Desktop lo trae) o con
+`wireguard-go` (necesita `--device /dev/net/tun`). El maestro necesita
+`--cap-add NET_ADMIN --sysctl net.ipv4.ip_forward=1`; las PCs, `--cap-add
+NET_ADMIN`.
+
+## La imagen trabajador
+
+`franki678/bigdata-sandbox:trabajador`, target `trabajador` del Dockerfile:
+Java 8 (runtime), Hadoop recortado al DataNode y al NodeManager (101 MB),
+Python 3.12 con numpy (el mismo que el maestro), `wireguard-tools` y
+`wireguard-go`. Pesa unos 192 MB comprimida (la `empresa`, 1,6 GB). Spark y
+Tez les llegan a los contenedores de YARN desde HDFS (`spark.yarn.archive` y
+`tez.lib.uris`).
+
+## La vista Aula
+
+En la interfaz del maestro (`#aula`), `GET /api/aula`. Junta la inscripción,
+el NameNode (`NameNodeInfo`), el ResourceManager (`/ws/v1/cluster/nodes`) y
+el túnel (`wg show wg0 dump`):
+
+| Lámpara | Cuándo |
+|---|---|
+| Ámbar, *Sumándose* | Reservó su número o se inscribió, y todavía no están su DataNode y su NodeManager |
+| Verde, *Arriba* | DataNode vivo y NodeManager `RUNNING` |
+| Ámbar, *Sin respuesta* | El DataNode no manda latidos hace más de 9 s, o el túnel no saluda hace más de 3 min |
+| Roja, *Caída* | El NameNode la dio por muerta (40 s) o YARN la ve `LOST` (60 s) |
+
+**Ya pueden apagar** cuando el DataNode del maestro tiene tantos bloques
+como HDFS y no falta ninguno.
+
 ## La sonda del laboratorio
 
 Un programa aparte (release `sonda-v1`, imagen `bigdata-sandbox-sonda:v1`,
@@ -309,7 +360,7 @@ paso a paso está en el [LEEME de la sonda](../../sonda/LEEME.md) y en la
 | Profe | UDP 51820 | Hub del túnel WireGuard |
 | Profe | UDP 51821 | Eco: ¿llega un paquete UDP y vuelve? |
 | Profe | TCP 8099 | Inscripción de las PCs y resultados (y el resumen web) |
-| Alumno | TCP 8098 | Prueba de entrada: ¿el profe puede abrir una conexión hacia la PC? |
+| Alumno | TCP 8098 | Prueba de entrada: ¿el profe puede abrir una conexión hacia la PC? (no se publica con `sonda-alumno.cmd IP sin-b`: así no aparece el cartel del firewall) |
 
 El túnel usa la red `10.13.0.0/24` (profe `.1`, alumnos `.11` en
 adelante).

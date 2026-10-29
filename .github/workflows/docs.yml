@@ -14,7 +14,7 @@ name: Documentacion
 
 on:
   push:
-    branches: [main, ui2, 'ui2-*']
+    branches: [main, ui2, 'ui2-*', 'empresa-*']
     paths:
       - '**.md'
       - 'guias/**'

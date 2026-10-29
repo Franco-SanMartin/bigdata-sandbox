@@ -43,6 +43,12 @@ def from_env(env: dict[str, str] | None = None) -> dict:
     """La configuración que dicen las variables de entorno del contenedor."""
     env = os.environ if env is None else env
     c = dict(IMAGE_DEFAULTS)
+    if (env.get("ROL") or "solo").strip().lower() != "solo":
+        # Versión empresa, un nodo del aula: los de fábrica de sandbox/lib.sh
+        # (un DataNode por nodo, sin JupyterLab, replicación 3 en la red de
+        # Docker y 2 en la del aula)
+        tunel = (env.get("RED") or "").strip().lower() == "wireguard"
+        c.update(datanodes=1, replication=2 if tunel else 3, jupyter=False)
 
     def entero(nombre: str, campo: str) -> None:
         v = env.get(nombre)

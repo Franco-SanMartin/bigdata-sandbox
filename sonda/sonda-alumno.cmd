@@ -2,6 +2,7 @@
 @echo off
 rem Uso:
 rem   sonda-alumno.cmd IP_DEL_PROFE          la prueba de la clase
+rem   sonda-alumno.cmd IP_DEL_PROFE sin-b    lo mismo sin la prueba B: no publica el puerto 8098 (no aparece el cartel del firewall)
 rem   sonda-alumno.cmd dia2 [IP_DEL_PROFE]   al dia siguiente: solo anota si la imagen sigue cargada
 rem   sonda-alumno.cmd hardware              solo junta los datos de la PC (sin Docker)
 rem No pide permisos de administrador. Deja todo en %USERPROFILE%\sonda-resultados.
@@ -21,9 +22,9 @@ $imagen = 'bigdata-sandbox-sonda:v1'
 $archivoImagen = 'bigdata-sandbox-sonda.tar.gz'
 $puerto = 8098
 
-$modo = 'clase'; $profe = ''
+$modo = 'clase'; $profe = ''; $sinB = $false
 foreach ($a in @(("$env:SONDA_ARGS" -split '\s+') | Where-Object { $_ })) {
-    if ($a -match '^(dia2|hardware)$') { $modo = $a } else { $profe = $a }
+    if ($a -match '^(dia2|hardware)$') { $modo = $a } elseif ($a -match '^sin-?b$') { $sinB = $true } else { $profe = $a }
 }
 $salida = Join-Path $env:USERPROFILE 'sonda-resultados'
 $carpetaYaEstaba = Test-Path $salida
@@ -195,8 +196,11 @@ if ($LASTEXITCODE -eq 0) { $d.tun_docker = 'si'; $tun = @('--device', '/dev/net/
 Guardar $d $pcTxt
 docker rm -f sonda-alumno *> $null
 Decir "Arranca la prueba contra el profe ($profe). Tarda de 1 a 5 minutos."
-$dargs = @('run', '--rm', '--name', 'sonda-alumno', '--cap-add', 'NET_ADMIN') + $tun + @(
-    '-p', "$($puerto):$($puerto)", '-v', "$($salida):/salida",
+# Sin la prueba B no se publica nada: es lo que dispara el cartel del firewall de Windows
+$publicar = @('-p', "$($puerto):$($puerto)")
+if ($sinB) { $puerto = 0; $publicar = @(); Decir 'Sin la prueba B: esta PC no publica ningun puerto.' }
+$dargs = @('run', '--rm', '--name', 'sonda-alumno', '--cap-add', 'NET_ADMIN') + $tun + $publicar + @(
+    '-v', "$($salida):/salida",
     '-e', 'ROL=alumno', '-e', "MAESTRO=$profe", '-e', "PC_NOMBRE=$($d.nombre)",
     '-e', "IP_PC=$($d.ip_pc)", '-e', "PUERTO_PRUEBA=$puerto", $imagen)
 & docker @dargs

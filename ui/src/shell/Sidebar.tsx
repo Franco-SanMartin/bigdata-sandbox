@@ -2,7 +2,7 @@ import { route, navigate } from '../state/ui';
 import { useSnapshot } from '../state/store';
 import { api } from '../api';
 import { SPEED as DEMO_SPEED } from '../api/demo/speed';
-import { NAV, NAV_GROUPS } from './nav';
+import { NAV_GROUPS, navVisible } from './nav';
 import { Dot, Tip } from '../components/ui';
 import { clusterHealth } from '../lib/cluster';
 
@@ -40,7 +40,7 @@ export function Sidebar() {
         {NAV_GROUPS.map(g => (
           <div className="nav-group" key={g} role="group" aria-label={g}>
             <span className="nav-label">{g}</span>
-            {NAV.filter(n => n.group === g).map(n => (
+            {navVisible(!!st?.aula).filter(n => n.group === g).map(n => (
               <Tip key={n.id} content={<>{n.label} <span style={{ opacity: .6 }}>· G {n.key.toUpperCase()}</span></>} side="right">
                 <a href={`#${n.id}`} className="nav-item" aria-current={cur === n.id ? 'page' : undefined} onClick={e => { e.preventDefault(); navigate(n.id); }}>
                   <n.icon size={16} strokeWidth={1.75} aria-hidden="true" />

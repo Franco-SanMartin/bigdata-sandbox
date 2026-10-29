@@ -79,6 +79,7 @@ END {
         if (g("tunel", r) == "si") { tun++; if (g("tunel_modo", r) == "kernel") tk++; else tg++ }
         else if (g("tunel_motivo", r) != "") { mot = g("tunel_motivo", r); if (!(mot in motc)) motl = motl SUBSEP mot; motc[mot]++; motn[mot] = motn[mot] " " nom[r] }
         if (g("tcp_entrante", r) ~ /^si/) tcp++
+        else if (g("tcp_entrante", r) ~ /medido/) sinb++
         else if (g("tcp_entrante", r) ~ /^no/) tcpno = tcpno " " nom[r] " " substr(g("tcp_entrante", r), 4)
         x = g("iperf_profe_mbps", r); if (x != "") ip_a[++ip_n] = x + 0
         x = g("iperf_par_mbps", r);   if (x != "") pp_a[++pp_n] = x + 0
@@ -132,6 +133,7 @@ END {
         m = split(substr(motl, 2), mo, SUBSEP)
         for (i = 1; i <= m; i++) porque[++np] = "Sin túnel por \"" mo[i] "\": " motc[mo[i]] " PC(s):" motn[mo[i]] "."
     }
+    if (sinb) porque[++np] = "En " sinb " PC(s) no se midió la red directa (opción B): la sonda corrió con sin-b, sin publicar puertos."
     if (p["hub"] == "no") porque[++np] = "El hub WireGuard del profe no levantó (sin módulo ni /dev/net/tun en su Docker): el túnel no se pudo probar."
     if (dno) porque[++np] = "En " dno " PC(s) Docker no anduvo:" nombres_si("docker", "^no", 0) "."
 
