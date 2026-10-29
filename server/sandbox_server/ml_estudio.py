@@ -20,7 +20,8 @@ Este módulo solo pone el servidor en el medio:
     POST /api/ml/code                    {receta, parte?: entrenamiento | perfil | limpieza} → el script de PySpark
                                          (o scikit-learn) que reproduce ese paso
     POST /api/ml/experiments             {receta} → 202 {id, run}: corre ese script como trabajo
-    POST /api/ml/runs                    {codigo, motor, receta?, minutos?, memoriaMb?} → 202: corre código editado
+    POST /api/ml/runs                    {codigo, motor, receta?, minutos?, memoriaMb?, recursos?} → 202: corre
+                                         código editado (recursos: executors, memoria y cores para YARN)
     GET  /api/ml/runs                    corridas recientes
     GET  /api/ml/runs/{id}?desde=N       estado, avance, ajustes de la búsqueda y las líneas de salida desde la N
     POST /api/ml/runs/{id}/cancel
@@ -32,8 +33,10 @@ Este módulo solo pone el servidor en el medio:
     POST /api/ml/experiments/{id}/predict   {filas: [...]} o {archivo: "/datos/..."}
 
 Cada corrida es el script generado (o el editado), corrido con python3
-(scikit-learn, en una máquina) o con spark-submit en YARN (Spark MLlib), con
-límite de tiempo y de memoria y una a la vez. El avance sale de las líneas
+(scikit-learn, en una máquina) o con spark-submit en YARN (Spark MLlib, con los
+executors, la memoria y los cores de la receta), con límite de tiempo y de
+memoria y una a la vez. Si un trabajo de Spark falla, el error de Spark o de
+YARN se explica en castellano (fuentes.explicar_error) y queda la línea original. El avance sale de las líneas
 '[ 40%] mensaje' que imprime el script y, en las búsquedas, de las líneas
 '[CV ...] END' de scikit-learn (cada entrenamiento de la búsqueda).
 """
@@ -153,7 +156,7 @@ class Estudio:
     # ------------------------------------------------------------ catálogo y fuentes
 
     def catalogo(self) -> dict:
-        return cat.como_json()
+        return cat.como_json(instalacion=True)
 
     async def fuentes(self) -> dict:
         base = self.c.s.datos_dir
@@ -447,7 +450,8 @@ class Estudio:
             raise ApiError("parte es entrenamiento, perfil o limpieza", "invalid")
         r = self.receta_valida(receta)
         return {"codigo": gen.generar(r, exp_id), "archivo": gen.nombre_archivo(r, exp_id), "motor": r["motor"],
-                "huella": rec.huella(r), "comando": self.comando_texto(r["motor"], gen.nombre_archivo(r, exp_id))}
+                "huella": rec.huella(r), "recursos": r.get("recursos"),
+                "comando": self.comando_texto(r["motor"], gen.nombre_archivo(r, exp_id), r.get("recursos"))}
 
     def codigo_parte(self, receta: object, parte: str, opciones: object) -> dict:
         """El PySpark del perfil o de la limpieza: alcanza con los datos (y la limpieza), sin modelo elegido."""
@@ -476,8 +480,10 @@ class Estudio:
                 "comando": f"spark-submit --master {master} {archivo}"}
 
     @staticmethod
-    def comando_texto(motor: str, archivo: str) -> str:
-        return f"spark-submit --master yarn {archivo}" if motor == "spark" else f"python3 {archivo}"
+    def comando_texto(motor: str, archivo: str, recursos: dict | None = None) -> str:
+        if motor != "spark":
+            return f"python3 {archivo}"
+        return " ".join(["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), archivo])
 
     # ------------------------------------------------------------ corridas
 
@@ -489,7 +495,15 @@ class Estudio:
         exp_id = nuevo_id()
         codigo = gen.generar(r, exp_id)
         return await self.lanzar(codigo, r["motor"], r, origen, minutos=r["busqueda"]["max_minutos"],
-                                 memoria_mb=4096, exp_id=exp_id, editado=False)
+                                 memoria_mb=self._memoria_driver(r.get("recursos")), exp_id=exp_id, editado=False,
+                                 recursos=r.get("recursos"))
+
+    @staticmethod
+    def _memoria_driver(recursos: dict | None) -> int:
+        """El límite de memoria del grupo de procesos de la corrida: el driver de Spark (JVM + Python) con margen."""
+        if not recursos:
+            return 4096
+        return max(4096, int(recursos.get("memoria_driver_mb", 1024)) + 2048)
 
     async def correr_codigo(self, b: dict) -> dict:
         codigo, motor = b.get("codigo"), b.get("motor", "sklearn")
@@ -506,11 +520,18 @@ class Estudio:
             r, errores, _ = rec.normalizar(b["receta"])
             if errores:
                 r = None
+        recursos = None
+        if motor == "spark":
+            recursos, errores = rec.recursos(b.get("recursos", (r or {}).get("recursos")))
+            if errores:
+                e = errores[0]
+                raise ApiError(f"{e['campo']}: {e['mensaje']}", "invalid", field=e["campo"])
+            memoria = max(memoria, self._memoria_driver(recursos))
         return await self.lanzar(codigo, motor, r, "código editado", minutos=minutos, memoria_mb=memoria,
-                                 exp_id=nuevo_id(), editado=True)
+                                 exp_id=nuevo_id(), editado=True, recursos=recursos)
 
     async def lanzar(self, codigo: str, motor: str, r: dict | None, origen: str, *, minutos: int, memoria_mb: int,
-                     exp_id: str, editado: bool) -> dict:
+                     exp_id: str, editado: bool, recursos: dict | None = None) -> dict:
         self.need_ml()
         if motor == "spark":
             self.c.need_proc("rm", "YARN (ResourceManager)")
@@ -529,22 +550,23 @@ class Estudio:
                   "nombre": (r or {}).get("nombre"),
                   "modelo": {"id": m["id"], "etiqueta": m["etiqueta"], "clase": m["clase"],
                              "params": r["modelo"]["params"]} if m else None,
-                  "datos": (r or {}).get("datos"), "metricas": {}, "artefactos": ["codigo.py"]}
+                  "datos": (r or {}).get("datos"), "metricas": {}, "artefactos": ["codigo.py"], "recursos": recursos}
         (d / "experimento.json").write_text(json.dumps(previo, ensure_ascii=False, indent=1), encoding="utf-8")
         archivo = gen.nombre_archivo(r or {}, exp_id) if r else f"{exp_id}.py"
         if motor == "spark":
-            argv = ["spark-submit", "--master", "yarn", "--name", f"estudio-ml: {exp_id}", "codigo.py"]
+            argv = ["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), "--name", f"estudio-ml: {exp_id}",
+                    "codigo.py"]
         else:
             argv = [self.python, "codigo.py"]
         titulo = f"{m['etiqueta'] if m else 'Código editado'} ({'Spark MLlib' if motor == 'spark' else 'scikit-learn'})"
         run = self.runner.start(Action(
-            f"Estudio de ML: {titulo}", argv, display=self.comando_texto(motor, archivo),
+            f"Estudio de ML: {titulo}", argv, display=self.comando_texto(motor, archivo, recursos),
             input=(r or {}).get("datos", {}).get("ruta") or (r or {}).get("datos", {}).get("tabla") or "código editado",
             action=f"{titulo}, con un límite de {minutos} min y {memoria_mb} MB", source="ML",
             timeout=minutos * 60 + 30, env=self.env(d, origen), cwd=str(d)))
         c = {"id": run.id, "experimento": exp_id, "estado": "corriendo", "progreso": 0.0, "mensaje": "Arrancando",
              "motor": motor, "titulo": titulo, "origen": origen, "inicio": now_ms(), "ajustes": None,
-             "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None}
+             "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None, "recursos": recursos}
         self.corridas[run.id] = c
         while len(self.corridas) > MAX_CORRIDAS:
             self.corridas.popitem(last=False)
@@ -663,8 +685,15 @@ class Estudio:
             err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()
                                      and not l["text"].startswith(("WARNING", "Warning", "  warnings.warn"))), None) \
                 or f"terminó con código {run.exitCode}"
-            exp.update(estado="falló", error=err[:500], terminado=time.strftime("%Y-%m-%dT%H:%M:%S"))
-            c.update(estado="falló", error=err[:500], mensaje=err[:200])
+            detalle = None
+            if c["motor"] == "spark" and not (run.error and run.error.startswith("cortado")):
+                # El error de Spark o de YARN, explicado (la excepción de Java o de Python, no la última línea del log)
+                e = self._explicar(run)
+                if e:
+                    err, detalle = e["mensaje"], e.get("detalle")
+            exp.update(estado="falló", error=err[:500], error_detalle=(detalle or "")[:800] or None,
+                       terminado=time.strftime("%Y-%m-%dT%H:%M:%S"))
+            c.update(estado="falló", error=err[:500], errorDetalle=(detalle or "")[:800] or None, mensaje=err[:200])
         # El script mide su propio pico (getrusage); el servidor, el de todo el grupo de procesos (con la JVM
         # del driver en Spark y los procesos de joblib): queda el mayor
         if c.get("memoriaPicoMb"):
@@ -683,6 +712,17 @@ class Estudio:
         level = "ok" if c["estado"] == "listo" else "error"
         self.bus.log("ML", level, f"{c['titulo']}: {c['mensaje']}", appId=c.get("appId"))
         self.emit(c)
+
+    @staticmethod
+    def _explicar(run) -> dict | None:
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(ERROR_SPARK)), None)
+        if linea:
+            try:
+                return json.loads(linea[len(ERROR_SPARK):])
+            except ValueError:
+                pass
+        err = "\n".join(l["text"] for l in run.lines[-400:] if l["stream"] == "err" and " INFO " not in l["text"])
+        return fuentes.explicar_error(err) if err.strip() else None
 
     async def yarn_mb(self, app_id: str) -> float | None:
         try:
