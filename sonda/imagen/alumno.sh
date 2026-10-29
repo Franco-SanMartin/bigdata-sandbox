@@ -4,8 +4,9 @@
 # sonda-resultados del usuario, en Windows).
 #
 # Variables: MAESTRO (IP de la PC del profe, obligatoria), PC_NOMBRE, IP_PC,
-# PUERTO_PRUEBA (TCP publicado para la prueba de entrada, 8098), ESPERA_FINAL
-# (segundos que se queda atendiendo a los companeros al final, 120).
+# PUERTO_PRUEBA (TCP publicado para la prueba de entrada, 8098; 0 = sin la
+# prueba B: no se publica nada, asi no aparece el cartel del firewall),
+# ESPERA_FINAL (segundos que se queda atendiendo a los companeros al final, 120).
 # shellcheck source=comun.sh
 . /sonda/comun.sh
 set -u
@@ -44,7 +45,14 @@ anotar version_sonda "$VERSION_SONDA"
 anotar fecha_prueba "$(ahora)"
 
 # 1. Escuchar en el puerto publicado: el profe y los companeros intentan entrar
-socat TCP-LISTEN:"$PUERTO",fork,reuseaddr SYSTEM:"echo sonda-ok $NOMBRE" 2>/dev/null &
+#    (sin la prueba B, PUERTO_PRUEBA=0, no se escucha ni se publica nada)
+if [ "$PUERTO" != 0 ]; then
+    socat TCP-LISTEN:"$PUERTO",fork,reuseaddr SYSTEM:"echo sonda-ok $NOMBRE" 2>/dev/null &
+    anotar prueba_b si
+else
+    anotar prueba_b no
+    decir "sin la prueba B: esta PC no publica ningun puerto"
+fi
 
 # 2. UDP al profe (independiente del tunel)
 udp=no
@@ -169,8 +177,8 @@ fi
 
 # 7. TCP directo a puertos publicados de dos companeros (lo que necesitaria la red directa)
 companeros=
-if [ -n "$mi_ip" ]; then
-    otros=$(http /cgi-bin/lista | awk -v yo="$NOMBRE" 'NF >= 4 && $1 != yo { print $1, $3, $4 }' | head -n 2)
+if [ -n "$mi_ip" ] && [ "$PUERTO" != 0 ]; then
+    otros=$(http /cgi-bin/lista | awk -v yo="$NOMBRE" 'NF >= 4 && $1 != yo && $4 != 0 { print $1, $3, $4 }' | head -n 2)
     while read -r nom ip puerto; do
         if [ -z "$nom" ] || [ "$ip" = - ]; then continue; fi
         if socat -t3 -T3 - "TCP:$ip:$puerto,connect-timeout=3" < /dev/null 2>/dev/null | grep -q sonda-ok; then

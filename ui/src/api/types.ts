@@ -125,6 +125,62 @@ export interface ClusterStatus {
   yarn: YarnSummary;
   boot: BootProgress | null;
   image: { name: string; tag: string; hadoop: string; hive: string; spark: string };
+  /** Versión empresa con ROL=maestro: este contenedor es la PC del profe del cluster del aula
+      (aparece la vista Aula). null o ausente en la full de siempre */
+  aula?: { rol: 'maestro'; red: 'docker' | 'wireguard' } | null;
+}
+
+/* ---------- El aula (versión empresa, GET /api/aula en el maestro) ---------- */
+
+/** La lámpara de cada PC: ámbar mientras se suma, verde arriba, ámbar con aviso si dejó de
+    contestar (el NameNode la da por muerta a los 40 s) y roja caída */
+export type AulaLampara = 'sumandose' | 'arriba' | 'sin-respuesta' | 'caida';
+
+export interface AulaPc {
+  /** pc03: el nombre en el cluster (el número de inscripción) */
+  nodo: string;
+  numero: number | null;
+  estado: AulaLampara;
+  /** Por qué no está verde */
+  motivo?: string;
+  /** Rack: /fila1, /fila2... */
+  fila: string | null;
+  /** Nombre de la PC en Windows (PC121) y lo que tiene */
+  nombre?: string;
+  ipTunel?: string;
+  cpu?: string | null;
+  dockerRamMb?: number | null;
+  cores?: number | null;
+  ramPcGb?: number | null;
+  inscriptaEn?: number;
+  datanode?: { estado: 'vivo' | 'sin-latidos' | 'muerto'; bloques: number; usadoMb: number; ultimoS: number };
+  nodemanager?: { estado: string; mb: number; mbUsados: number; vcores: number; vcoresUsados: number; contenedores: number };
+  /** Lo que dijo que presta al inscribirse (antes de que su NodeManager se anote) */
+  prestaMb?: number | null;
+  prestaVcores?: number | null;
+  tunel?: { saludoHaceS: number | null; rxMb: number; txMb: number };
+}
+
+export interface AulaStatus {
+  red: 'docker' | 'wireguard';
+  codigo: string | null;
+  ipAula: string | null;
+  /** La línea para Veyon > Ejecutar programa */
+  lineaVeyon: string | null;
+  /** WireGuard del kernel o wireguard-go */
+  tunel: 'kernel' | 'go' | null;
+  mtu: number | null;
+  replicacion: number | null;
+  maestro: { estado: 'vivo' | 'sin-latidos' | 'muerto' | 'no'; bloques: number; usadoMb: number };
+  hdfs: { disponible: boolean; bloques: number; subReplicados: number; perdidos: number };
+  yarn: { mb: number; mbUsados: number; vcores: number; vcoresUsados: number; contenedores: number };
+  pcs: AulaPc[];
+  resumen: Record<AulaLampara, number>;
+  /** "Ya pueden apagar": el maestro tiene una copia de cada bloque */
+  apagar: { listo: boolean; bloquesEnMaestro: number; bloques: number; porque: string };
+  /** Lo último que pasó en la inscripción ("21:03:10 PC107 se sumó como pc01...") */
+  eventos: string[];
+  ahora: number;
 }
 
 /* ---------- Arranque ---------- */
@@ -998,6 +1054,8 @@ export interface SandboxApi {
 
   /** GET /api/yarn/cluster → memoria y vcores por NodeManager, contenedores y colas */
   yarnCluster(): Promise<YarnCluster>;
+  /** GET /api/aula → el laboratorio visto desde el maestro (solo con ROL=maestro de la versión empresa) */
+  aula(): Promise<AulaStatus>;
   /** GET /api/yarn/apps/:id → detalle con el DAG (Tez, Spark o MapReduce), contadores y comando */
   app(id: string): Promise<YarnAppDetail>;
   /** GET /api/yarn/apps/:id/logs?container=… → stdout, stderr y syslog de un contenedor */

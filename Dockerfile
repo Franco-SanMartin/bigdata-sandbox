@@ -16,6 +16,10 @@
 #   empresa  full + el cluster del aula: con ROL=maestro / ROL=trabajador cada
 #            contenedor es un nodo de un cluster de varias PCs
 #            docker build --target empresa -t franki678/bigdata-sandbox:empresa .
+#   trabajador  la imagen chica de las PCs del aula (empresa con RED=wireguard):
+#            solo Java, el DataNode y el NodeManager, Python con numpy y el
+#            tunel. Spark y Tez le llegan desde HDFS (los sube el maestro)
+#            docker build --target trabajador -t franki678/bigdata-sandbox:trabajador .
 # Sin --target se arma la base.
 
 ARG HADOOP_VERSION=3.3.6
@@ -26,6 +30,8 @@ ARG ZOOKEEPER_VERSION=3.8.7
 ARG PIG_VERSION=0.18.0
 ARG SQOOP_VERSION=1.4.7
 ARG MONGODB_VERSION=8.0
+# wireguard-go 0.0.20250522 (el respaldo del tunel sin el modulo del kernel)
+ARG WIREGUARD_GO_VERSION=v0.0.0-20250521234502-f333402bd9cb
 
 # ===========================================================================
 # Etapa 1: bajar y desarmar los paquetes de Apache.
@@ -33,8 +39,10 @@ ARG MONGODB_VERSION=8.0
 # procesador de la maquina que buildea ($BUILDPLATFORM), asi al armar la
 # imagen para las dos arquitecturas se bajan una sola vez y no se desarman
 # emulando el otro procesador (lo que mas tarda).
+# Hadoop va en una etapa propia (hadoop-dist) para que la imagen trabajador lo
+# tome sin bajar todo lo demas.
 # ===========================================================================
-FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-noble AS descargas
+FROM --platform=$BUILDPLATFORM eclipse-temurin:8-jre-noble AS hadoop-dist
 ARG HADOOP_VERSION
 ARG HIVE_VERSION
 ARG TEZ_VERSION
@@ -48,8 +56,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Baja de la CDN de Apache (rapida); si esa version ya no esta ahi (la CDN solo
-# tiene las ultimas), del archivo historico (lento pero tiene todas).
-RUN printf '#!/bin/sh\ncurl -fSL "https://dlcdn.apache.org/$1" -o "$2" || curl -fSL "https://archive.apache.org/dist/$1" -o "$2"\n' \
+# tiene las ultimas), del archivo historico (lento pero tiene todas). El
+# archivo historico a veces no contesta desde GitHub Actions: se reintenta.
+RUN printf '#!/bin/sh\ncurl -fSL "https://dlcdn.apache.org/$1" -o "$2" || curl -fSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 30 "https://archive.apache.org/dist/$1" -o "$2"\n' \
       > /usr/local/bin/apache-dl \
  && chmod +x /usr/local/bin/apache-dl
 
@@ -67,6 +76,15 @@ RUN apache-dl "hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.t
           /opt/hadoop/lib/native/*.a /opt/hadoop/lib/native/libhdfspp* \
           /opt/hadoop/share/hadoop/yarn/hadoop-yarn-applications-catalog-webapp-*.war \
           /opt/hadoop/share/hadoop/client/hadoop-client-minicluster-*.jar
+
+FROM hadoop-dist AS descargas
+ARG HADOOP_VERSION
+ARG HIVE_VERSION
+ARG TEZ_VERSION
+ARG SPARK_VERSION
+ARG ZOOKEEPER_VERSION
+ARG PIG_VERSION
+ARG SQOOP_VERSION
 
 # --- Hive ---
 # Sin el driver JDBC suelto (es para clientes de afuera), sin los conectores a
@@ -126,7 +144,7 @@ RUN apache-dl "pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" /tmp/pig.tgz \
 # sistemas no estan y no hacen falta.
 # (directo del archivo historico: la CDN redirige los proyectos retirados a
 # una pagina web)
-RUN curl -fSL "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0.tar.gz" -o /tmp/sqoop.tgz \
+RUN curl -fSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 30 "https://archive.apache.org/dist/sqoop/${SQOOP_VERSION}/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0.tar.gz" -o /tmp/sqoop.tgz \
  && tar -xzf /tmp/sqoop.tgz -C /opt \
  && mv /opt/sqoop-${SQOOP_VERSION}.bin__hadoop-2.6.0 /opt/sqoop \
  && rm /tmp/sqoop.tgz \
@@ -359,16 +377,122 @@ ENTRYPOINT ["/usr/bin/tini", "--", "python3", "-m", "sandbox_server"]
 # History y un DataNode que guarda una copia de todo); con ROL=trabajador es
 # una PC del aula (un DataNode y un NodeManager) que se suma al maestro.
 # ===========================================================================
+# wireguard-go: WireGuard en espacio de usuario, por si el kernel de Docker no
+# trae el modulo (Docker Desktop lo trae: la sonda lo encontro en 11 de 11
+# PCs). Es Go puro: se compila una vez, en el procesador de la maquina que
+# buildea, para la arquitectura de la imagen (sin C, asi no depende de libc).
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS wireguard-go
+ARG TARGETARCH
+ARG WIREGUARD_GO_VERSION
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH \
+      go install -trimpath -ldflags='-s -w' "golang.zx2c4.com/wireguard@${WIREGUARD_GO_VERSION}" \
+ && find /go/bin -name wireguard -type f -exec mv {} /usr/local/bin/wireguard-go \; \
+ && test -x /usr/local/bin/wireguard-go
+
 FROM full AS empresa
+ARG DEBIAN_FRONTEND=noninteractive
+
+# El tunel del aula (RED=wireguard): wg para el hub e ip para la interfaz
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wireguard-tools iproute2 \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=wireguard-go /usr/local/bin/wireguard-go /usr/local/bin/wireguard-go
 
 COPY empresa/arranque.sh /opt/sandbox/arranque-empresa.sh
-RUN sed -i 's/\r$//' /opt/sandbox/arranque-empresa.sh \
- && chmod +x /opt/sandbox/arranque-empresa.sh
+COPY empresa/aula/ /opt/sandbox/aula/
+RUN find /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula -type f -exec sed -i 's/\r$//' {} + \
+ && chmod +x /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula/*.sh
 ENV SANDBOX_VERSION=empresa
 
 # DataNode 9866/9867, NodeManager 8041/8031 (RPC entre nodos del aula)
-EXPOSE 9864 9866 9867 8031 8041 10020
+# Con RED=wireguard, en el maestro: UDP 51820 (el hub) y TCP 8099 (inscripcion)
+EXPOSE 9864 9866 9867 8031 8041 10020 51820/udp 8099
 
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/sandbox/arranque-empresa.sh"]
+
+# ===========================================================================
+# Version "trabajador" (franki678/bigdata-sandbox:trabajador): la imagen
+# chica de las PCs del aula. El reset del laboratorio borra todo cada dia y
+# la red es lenta (unos 50 Mbit/s hacia la PC del profe, medido el 27/10): la
+# empresa entera (1,6 GB comprimida) tardaria mas de una hora en llegar a 20
+# PCs. Esta trae solo lo que corre en una PC: Java 8 (el runtime, sin JDK),
+# Hadoop recortado al DataNode y al NodeManager (con lo que necesitan las
+# tareas de MapReduce y Tez), Python con numpy para los executors de PySpark
+# y el tunel (wireguard-tools y wireguard-go). Spark y Tez le llegan desde
+# HDFS (spark.yarn.archive y tez.lib.uris, que sube el maestro).
+# ===========================================================================
+# Hadoop sin lo que no usan el DataNode ni el NodeManager: los clientes
+# empaquetados (client), las herramientas (tools: S3, Azure, distcp...), el
+# Timeline Service v2 (con HBase adentro), la interfaz nueva de YARN (ui2),
+# los tests, los fuentes y la documentacion de la API (jdiff, sources), los
+# routers de HDFS y YARN, y los jars de hdfs/lib que ya estan en common/lib.
+FROM --platform=$BUILDPLATFORM hadoop-dist AS hadoop-trabajador
+RUN cd /opt/hadoop/share/hadoop \
+ && rm -rf client tools yarn/timelineservice yarn/csi yarn/webapps yarn/test yarn/yarn-service-examples \
+           */jdiff */sources mapreduce/lib-examples \
+ && rm -f */*-tests.jar hdfs/hadoop-hdfs-rbf-*.jar hdfs/hadoop-hdfs-httpfs-*.jar hdfs/hadoop-hdfs-nfs-*.jar \
+          common/hadoop-nfs-*.jar common/hadoop-kms-*.jar yarn/hadoop-yarn-server-router-*.jar \
+          mapreduce/hadoop-mapreduce-client-nativetask-*.jar mapreduce/hadoop-mapreduce-client-uploader-*.jar \
+ && for j in hdfs/lib/*.jar; do if [ -e "common/lib/${j##*/}" ]; then rm "$j"; fi; done \
+ && du -sh /opt/hadoop
+
+FROM ubuntu:24.04 AS trabajador
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV SANDBOX_VERSION=trabajador \
+    ROL=trabajador \
+    JAVA_HOME=/opt/java/openjdk \
+    HADOOP_HOME=/opt/hadoop \
+    HADOOP_COMMON_HOME=/opt/hadoop \
+    HADOOP_MAPRED_HOME=/opt/hadoop \
+    HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop \
+    YARN_CONF_DIR=/opt/hadoop/etc/hadoop \
+    PYSPARK_PYTHON=python3 \
+    HDFS_DATANODE_USER=root \
+    YARN_NODEMANAGER_USER=root \
+    HADOOP_CLIENT_OPTS="-XX:+UseSerialGC -XX:TieredStopAtLevel=1" \
+    LANG=C.UTF-8
+ENV PATH=/opt/sandbox/bin:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
+
+# tini (PID 1), ps/pgrep, netstat, ip, ping, curl, wg, y Python con numpy
+# para los executors de PySpark. El numpy de Ubuntu es la misma version que el
+# del maestro (la de conf/requirements-ml.txt: se verifica abajo, porque los
+# dos lados se pasan arrays con pickle) y usa el BLAS de referencia en vez del
+# openblas de 37 MB de la rueda de pip: lo pesado de MLlib corre en Java.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tini procps net-tools iproute2 iputils-ping curl \
+      wireguard-tools python3 python3-numpy \
+ && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man /usr/share/locale \
+ && find /usr/lib/python3/dist-packages/numpy -depth -type d -name tests -exec rm -rf {} +
+
+COPY --from=eclipse-temurin:8-jre-noble /opt/java/openjdk /opt/java/openjdk
+COPY --from=hadoop-trabajador /opt/hadoop /opt/hadoop
+COPY --from=wireguard-go /usr/local/bin/wireguard-go /usr/local/bin/wireguard-go
+RUN echo "export JAVA_HOME=${JAVA_HOME}" >> ${HADOOP_CONF_DIR}/hadoop-env.sh
+
+COPY conf/core-site.xml        /opt/sandbox/templates/core-site.xml
+COPY conf/yarn-site.xml        ${HADOOP_CONF_DIR}/yarn-site.xml
+COPY conf/mapred-site.xml      ${HADOOP_CONF_DIR}/mapred-site.xml
+COPY sandbox/                  /opt/sandbox/
+COPY entrypoint.sh             /opt/entrypoint.sh
+COPY empresa/arranque.sh       /opt/sandbox/arranque-empresa.sh
+COPY empresa/aula/             /opt/sandbox/aula/
+COPY conf/requirements-ml.txt  /tmp/requirements-ml.txt
+RUN find /opt/entrypoint.sh /opt/sandbox -type f -exec sed -i 's/\r$//' {} + \
+ && for c in ls df du; do \
+      printf '#!/bin/sh\nunset BLOCK_SIZE\nexec /usr/bin/%s "$@"\n' "$c" > /opt/sandbox/bin/$c; \
+    done \
+ && chmod +x /opt/entrypoint.sh /opt/sandbox/bin/* /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula/*.sh \
+ && mkdir -p /datos \
+ && maestro=$(sed -n 's/^numpy==//Ip' /tmp/requirements-ml.txt) \
+ && python3 -c "import numpy; print('numpy', numpy.__version__)" \
+ && python3 -c "import numpy, sys; sys.exit(numpy.__version__ != sys.argv[1])" "$maestro" \
+ && rm /tmp/requirements-ml.txt \
+ && java -version 2>&1 | head -1 && hadoop version | head -1 && wireguard-go --version
+
+# Nada que publicar: la PC solo hace conexiones salientes (por el tunel)
+VOLUME ["/hadoop"]
+WORKDIR /datos
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/sandbox/arranque-empresa.sh"]
 
 # ===========================================================================
