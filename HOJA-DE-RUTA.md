@@ -2,7 +2,7 @@
 
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
-actualización: 2026-10-27 (versión 1.3.0).
+actualización: 2026-10-28 (versión 1.3.0).
 
 ## Dónde estamos
 
@@ -63,6 +63,18 @@ Etapas (un PR cada una): **(a)** seguridad de la API + motor base, **(b)** datos
 en HDFS, formatos, perfil y limpieza, **(c)** modelos, búsqueda y evaluación,
 **(d)** biblioteca, predicción y deriva, **(e)** generador a escala, guías y
 pruebas de humo.
+
+- [x] **(a) Seguridad de la API + motor base.** *Hecho (PR abierto, sin
+      mergear): la API cerrada a la propia interfaz (PR #4), `sandbox_ml`
+      (catálogo, receta, código scikit-learn y PySpark, perfil y registro),
+      las rutas `/api/ml/*` y las pantallas: fuentes de `/datos`, HDFS y Hive,
+      perfil, receta revisada, código generado, experimentos y corridas.*
+- [ ] **(b)** Formatos de HDFS (Parquet, ORC, Avro, JSON, comprimidos,
+      particiones y Hive) con esquema editable, perfil calculado con Spark a
+      escala y la receta de limpieza columna por columna (puntos 1 a 3).
+- [ ] **(c)** Modelos, búsqueda y evaluación distribuida (puntos 4 a 6).
+- [ ] **(d)** Biblioteca de modelos, predicción y deriva (puntos 7 y 8).
+- [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).
 
 ## Pendientes de la revisión (2026-10-26 y 27)
 
@@ -128,8 +140,10 @@ pruebas de humo.
       puede prender después desde la interfaz).*
 - [ ] El compose que genera la interfaz usa el volumen `bigdata_hadoop` (el de
       `base`), no `bigdata_full` como el `docker run`: decidir si se unifican.
-- [ ] Seguridad de la API: `TrustedHostMiddleware`, rechazar POST/PUT/PATCH/DELETE
-      de otro origen y exigir `application/json` (en curso en la etapa a).
+- [x] Seguridad de la API: `TrustedHostMiddleware`, rechazar POST/PUT/PATCH/DELETE
+      de otro origen y exigir `application/json`. *Hecho en el PR #4 (rama
+      `ui2-seguridad`), que la etapa (a) del ML trae adentro: mismo criterio de
+      hosts que la terminal, 403 `forbidden` y 415 si el cuerpo no es JSON.*
 
 **Mantenimiento:**
 
