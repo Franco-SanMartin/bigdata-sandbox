@@ -7,7 +7,10 @@
  *   - HttpApi (api/http.ts): habla con el backend real en :8080 (rutas /api/...).
  * La correspondencia con las rutas HTTP está al lado de cada método.
  */
-import type { MlCatalogo, MlCodigo, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes, MlPerfil, MlPrediccion, MlReceta, MlRevision } from './estudio';
+import type {
+  MlCatalogo, MlCodigo, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes, MlLimpieza, MlLimpiezaFila,
+  MlLimpiezaGuardada, MlParteCodigo, MlPerfil, MlPerfilOpciones, MlPrediccion, MlReceta, MlRevision, MlVistaLimpieza,
+} from './estudio';
 export type * from './estudio';
 
 /* ---------- Configuración (las variables de entorno del contenedor) ---------- */
@@ -1039,16 +1042,25 @@ export interface SandboxApi {
   /* Estudio de ML (server/sandbox_server/ml_estudio.py, tipos en estudio.ts) */
   /** GET /api/ml/catalog → modelos con sus hiperparámetros, métricas, validaciones y búsquedas */
   mlCatalog(): Promise<MlCatalogo>;
-  /** GET /api/ml/sources → CSV y Parquet de /datos y de HDFS, tablas de Hive */
+  /** GET /api/ml/sources → archivos de /datos y de HDFS en cualquier formato (comprimidos, particionados) y tablas de Hive */
   mlSources(): Promise<MlFuentes>;
   /** POST /api/ml/sources/example { ejemplo: senal | sucias } → genera el dataset de ejemplo en /datos y devuelve sus datos */
   mlExample(ejemplo: 'senal' | 'sucias'): Promise<MlDatos>;
-  /** POST /api/ml/profile { datos, objetivo? } → perfil de columnas (con el objetivo: balance y asociación de cada columna) */
-  mlProfile(datos: MlDatos, objetivo?: string | null): Promise<MlPerfil>;
+  /** POST /api/ml/profile { datos, objetivo?, motor?, modo?, filas? } → perfil de columnas con pandas o con Spark en YARN
+   *  (con el objetivo: balance y, con pandas, la asociación de cada columna) */
+  mlProfile(datos: MlDatos, objetivo?: string | null, opciones?: MlPerfilOpciones): Promise<MlPerfil>;
+  /** POST /api/ml/cleaning/preview { datos, limpieza, objetivo?, filas? } → cada paso sobre una muestra, en Spark local */
+  mlCleaningPreview(datos: MlDatos, limpieza: MlLimpieza, objetivo?: string | null, filas?: number): Promise<MlVistaLimpieza>;
+  /** GET /api/ml/cleaning → las recetas de limpieza guardadas */
+  mlCleanings(): Promise<MlLimpiezaFila[]>;
+  /** GET /api/ml/cleaning/{nombre} → una receta de limpieza con todas sus versiones */
+  mlCleaning(nombre: string): Promise<MlLimpiezaGuardada>;
+  /** POST /api/ml/cleaning { nombre, limpieza, nota? } → la guarda como versión nueva (si cambió) */
+  mlSaveCleaning(nombre: string, limpieza: MlLimpieza, nota?: string | null): Promise<{ nombre: string; version: number; huella: string; creado: string; nueva: boolean }>;
   /** POST /api/ml/check { receta } → receta completa, errores y avisos */
   mlCheck(receta: MlReceta): Promise<MlRevision>;
-  /** POST /api/ml/code { receta } → el script que reproduce la corrida */
-  mlCode(receta: MlReceta): Promise<MlCodigo>;
+  /** POST /api/ml/code { receta, parte?, opciones? } → el script que reproduce el entrenamiento, el perfil o la limpieza */
+  mlCode(receta: MlReceta, parte?: MlParteCodigo, opciones?: MlPerfilOpciones): Promise<MlCodigo>;
   /** POST /api/ml/experiments { receta } → 202 { id (experimento), run (corrida) }; avanza por SSE mlrun */
   mlTrain(receta: MlReceta): Promise<{ id: string; run: string }>;
   /** POST /api/ml/runs { codigo, motor, receta?, minutos?, memoriaMb? } → 202: corre código editado */
