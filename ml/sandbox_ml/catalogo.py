@@ -28,6 +28,8 @@ TAREAS = {
     "clasificacion": {"etiqueta": "Clasificación", "que": "Predecir una categoría (vuelve o no, el tipo de cliente)"},
     "clustering": {"etiqueta": "Agrupamiento", "que": "Encontrar grupos parecidos sin una columna objetivo"},
     "reduccion": {"etiqueta": "Reducción de dimensión", "que": "Resumir muchas columnas en pocas (PCA)"},
+    "recomendacion": {"etiqueta": "Recomendación",
+                      "que": "Predecir cuánto le va a gustar un ítem a un usuario (ALS, solo Spark)"},
 }
 
 ROLES = {
@@ -37,7 +39,11 @@ ROLES = {
     "texto": "Texto libre: se pasa a TF-IDF (palabras más informativas)",
     "id": "Identificador: no se usa para entrenar (memorizarlo no generaliza)",
     "ignorar": "No se usa",
+    "usuario": "Recomendación: quién califica (el id del usuario o cliente)",
+    "item": "Recomendación: qué se califica (el id del producto, la película...)",
 }
+# Los roles que solo tienen sentido en recomendación (ALS)
+ROLES_RECOMENDACION = ("usuario", "item")
 
 
 def _p(nombre, tipo, defecto, que, efecto, rango, **kw):
@@ -597,6 +603,19 @@ SKLEARN = [
 
 # ---------------------------------------------------------------- Spark MLlib
 
+def _xgb_spark(clasif):
+    """XGBoost distribuido (xgboost.spark): los hiperparámetros de XGBClassifier/XGBRegressor y cuántas tareas de
+    Spark entrenan a la vez."""
+    ps = [dict(p) for p in _xgb(clasif) if p["nombre"] != "scale_pos_weight"]
+    for p in ps:
+        if p["nombre"] == "n_estimators":
+            p.update(defecto=100, buscar=[50, 100, 200])
+    ps.append(entero("num_workers", 1, 1, 64, "Cuántas tareas de Spark entrenan juntas (cada una con su parte de "
+                     "los datos).", "Más = más paralelo, pero todas necesitan un core libre en YARN a la vez.",
+                     "Executors × cores pedidos.", grupo="Recursos"))
+    return ps
+
+
 def _sp_arbol(clasif):
     return [
         entero("maxDepth", 5, 0, 30, "Profundidad máxima (Spark no acepta sin límite: máximo 30).",
@@ -611,6 +630,16 @@ def _sp_arbol(clasif):
         opcion("impurity", "gini" if clasif else "variance",
                [("gini", "Gini"), ("entropy", "entropía")] if clasif else [("variance", "varianza")],
                "Cómo mide la calidad de una división.", "Cambia poco.", "El de por defecto.", grupo="Árbol"),
+        real("minWeightFractionPerNode", 0.0, 0.0, 0.5, "Fracción mínima del peso total (≈ filas) en cada hijo.",
+             "Como minInstancesPerNode pero relativo al tamaño de los datos.", "0 a 0,05.", grupo="Regularización"),
+        entero("maxMemoryInMB", 256, 16, 8192, "Memoria de cada executor para juntar los histogramas de un nivel.",
+               "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.", "256 a 1024.",
+               grupo="Recursos"),
+        booleano("cacheNodeIds", False, "Guarda en caché a qué nodo cae cada fila entre niveles.",
+                 "Acelera árboles profundos a costa de memoria.", "Apagado; prendelo con maxDepth alto.", grupo="Recursos"),
+        entero("checkpointInterval", 10, -1, 1000, "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+               "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.", "10.",
+               grupo="Recursos"),
     ]
 
 
@@ -626,7 +655,45 @@ SPARK = [
                "Cómo resuelve.", "normal es exacto con pocas columnas; l-bfgs escala.", "auto.", grupo="Optimizador"),
         booleano("standardization", True, "Estandariza las columnas por dentro antes de regularizar.",
                  "Los coeficientes vuelven en la escala original.", "Prendido.", grupo="Avanzado"),
-        booleano("fitIntercept", True, "Término constante.", "Dejalo prendido.", "Prendido.")],
+        booleano("fitIntercept", True, "Término constante.", "Dejalo prendido.", "Prendido."),
+        opcion("loss", "squaredError", [("squaredError", "cuadrática"), ("huber", "Huber (resiste outliers)")],
+               "Qué error minimiza.", "huber trata los errores grandes como lineales: los outliers pesan menos.",
+               "squaredError; huber si hay extremos.", grupo="Pérdida"),
+        real("epsilon", 1.35, 1.0, 10.0, "Desde qué tamaño (en desvíos) un error se considera outlier en Huber.",
+             "Más chico = más robusto; más grande = más parecido a la cuadrática.", "1,35 (el clásico).",
+             grupo="Pérdida", si={"loss": ["huber"]}),
+        real("tol", 1e-6, 0.0, 0.1, "Tolerancia de convergencia.", "Más alto = corta antes.", "1e-6.", log=True,
+             grupo="Optimizador"),
+        entero("aggregationDepth", 2, 2, 10, "Profundidad del treeAggregate que junta los gradientes de los executors.",
+               "Subilo con muchas particiones o muchas columnas: alivia al driver.", "2 a 4.", grupo="Recursos")],
+       escala=False, importancia="coef", costo="arranque de Spark + bajo"),
+    _m("glm_spark", "spark", "regresion", "pyspark.ml.regression.GeneralizedLinearRegression",
+       "Lineal generalizado (GLM)", "Lineal",
+       "La familia dice cómo se distribuye el objetivo (conteos con Poisson, montos positivos con Gamma, 0/1 con "
+       "binomial) y el link cómo se conecta con la combinación lineal de las variables.",
+       [opcion("family", "gaussian", [("gaussian", "gaussiana (normal)"), ("binomial", "binomial (0/1)"),
+                                      ("poisson", "Poisson (conteos)"), ("gamma", "Gamma (montos > 0)"),
+                                      ("tweedie", "Tweedie (ceros y montos)")],
+               "La distribución del objetivo.", "gaussian es la regresión lineal de siempre; poisson para conteos; "
+               "gamma para montos positivos sesgados.", "Según el objetivo.", grupo="Modelo"),
+        opcion("link", None, [(None, "el de la familia"), ("identity", "identidad"), ("log", "log"),
+                              ("inverse", "inversa"), ("logit", "logit"), ("probit", "probit"),
+                              ("cloglog", "cloglog"), ("sqrt", "raíz")],
+               "Cómo se transforma la media antes de igualarla a la combinación lineal.",
+               "log vuelve multiplicativos los efectos; cada familia acepta solo algunos.",
+               "El de la familia (gaussian: identidad, poisson: log, gamma: inversa).", grupo="Modelo",
+               si={"family": ["gaussian", "binomial", "poisson", "gamma"]}),
+        real("variancePower", 1.5, 0.0, 10.0, "Tweedie: la potencia de la varianza (0 normal, 1 Poisson, 2 Gamma).",
+             "Entre 1 y 2 modela montos con muchos ceros.", "1,2 a 1,8.", grupo="Modelo", si={"family": ["tweedie"]}),
+        real("linkPower", 0.0, -10.0, 10.0, "Tweedie: la potencia del link (0 = log, 1 = identidad).",
+             "0 (log) es lo habitual con montos.", "0.", grupo="Modelo", si={"family": ["tweedie"]}),
+        real("regParam", 0.0, 0.0, 1000.0, "Regularización L2.", "Más alto = coeficientes más chicos.", "0 a 1.",
+             grupo="Regularización", buscar=[0.0, 0.01, 0.1]),
+        entero("maxIter", 25, 1, 1000, "Iteraciones máximas de IRLS (mínimos cuadrados reponderados).",
+               "Subilo si no converge.", "25 a 100.", grupo="Optimizador"),
+        real("tol", 1e-6, 0.0, 0.1, "Tolerancia de convergencia.", "Más alto = corta antes.", "1e-6.", log=True,
+             grupo="Optimizador"),
+        booleano("fitIntercept", True, "Término constante.", "Dejalo prendido.", "Prendido.", grupo="Avanzado")],
        escala=False, importancia="coef", costo="arranque de Spark + bajo"),
     _m("arbol_reg_spark", "spark", "regresion", "pyspark.ml.regression.DecisionTreeRegressor", "Árbol de decisión",
        "Árboles", "El árbol de MLlib: busca cortes con histogramas repartidos en los executors.",
@@ -638,7 +705,9 @@ SPARK = [
         opcion("featureSubsetStrategy", "auto", ["auto", "all", "onethird", "sqrt", "log2"],
                "Columnas al azar por división.", "auto = onethird en regresión.", "auto.", grupo="Árbol"),
         real("subsamplingRate", 1.0, 0.01, 1.0, "Fracción de filas para cada árbol.", "Menos = más azar y más rápido.",
-             "0,6 a 1.", grupo="Ensamble")] + _sp_arbol(False),
+             "0,6 a 1.", grupo="Ensamble"),
+        booleano("bootstrap", True, "Cada árbol entrena con una muestra con reposición.",
+                 "Apagado, todos ven las mismas filas (menos variedad entre árboles).", "Prendido.", grupo="Ensamble")] + _sp_arbol(False),
        escala=False, importancia="arbol", costo="arranque de Spark + medio", semilla="seed"),
     _m("gbt_reg_spark", "spark", "regresion", "pyspark.ml.regression.GBTRegressor", "Gradient boosting (GBT)", "Ensambles",
        "Boosting de árboles en MLlib: secuencial entre árboles, repartido dentro de cada uno.",
@@ -648,10 +717,17 @@ SPARK = [
              log=True, grupo="Optimizador", buscar=[0.05, 0.1, 0.2]),
         real("subsamplingRate", 1.0, 0.01, 1.0, "Fracción de filas por árbol.", "Menos = más azar.", "0,6 a 1.",
              grupo="Ensamble"),
+        opcion("featureSubsetStrategy", "all", ["all", "auto", "onethird", "sqrt", "log2"],
+               "Columnas al azar que mira cada división.", "all = todas (el boosting clásico); menos agrega azar.",
+               "all.", grupo="Árbol"),
         opcion("lossType", "squared", [("squared", "cuadrática"), ("absolute", "absoluta")], "La pérdida.",
                "absolute resiste outliers.", "squared.", grupo="Pérdida")] +
        [p for p in _sp_arbol(False) if p["nombre"] != "impurity"],
        escala=False, importancia="arbol", costo="arranque de Spark + medio-alto", semilla="seed"),
+    _m("xgb_reg_spark", "spark", "regresion", "xgboost.spark.SparkXGBRegressor", "XGBoost distribuido", "Ensambles",
+       "XGBoost repartido en los executors con xgboost.spark.",
+       _xgb_spark(False), escala=False, importancia="arbol", costo="arranque de Spark + medio", semilla="random_state",
+       extra="xgboost", requiere="xgboost"),
 
     _m("logistica_spark", "spark", "clasificacion", "pyspark.ml.classification.LogisticRegression", "Regresión logística",
        "Lineal", "Logística binaria o multinomial en MLlib.",
@@ -664,7 +740,12 @@ SPARK = [
              "Más bajo = más positivos (sube recall, baja precisión).", "0,5.", grupo="Decisión"),
         opcion("family", "auto", ["auto", "binomial", "multinomial"], "Binaria o multiclase.", "auto decide por las clases.",
                "auto.", grupo="Avanzado"),
-        booleano("standardization", True, "Estandariza por dentro.", "Dejalo prendido.", "Prendido.", grupo="Avanzado")],
+        booleano("standardization", True, "Estandariza por dentro.", "Dejalo prendido.", "Prendido.", grupo="Avanzado"),
+        booleano("fitIntercept", True, "Término constante.", "Dejalo prendido.", "Prendido.", grupo="Avanzado"),
+        real("tol", 1e-6, 0.0, 0.1, "Tolerancia de convergencia.", "Más alto = corta antes.", "1e-6.", log=True,
+             grupo="Optimizador"),
+        entero("aggregationDepth", 2, 2, 10, "Profundidad del treeAggregate que junta los gradientes de los executors.",
+               "Subilo con muchas particiones o muchas columnas: alivia al driver.", "2 a 4.", grupo="Recursos")],
        escala=False, importancia="coef", costo="arranque de Spark + bajo", proba=True),
     _m("arbol_clf_spark", "spark", "clasificacion", "pyspark.ml.classification.DecisionTreeClassifier",
        "Árbol de decisión", "Árboles", "El árbol de MLlib.", _sp_arbol(True), escala=False, importancia="arbol",
@@ -676,7 +757,9 @@ SPARK = [
         opcion("featureSubsetStrategy", "auto", ["auto", "all", "onethird", "sqrt", "log2"],
                "Columnas al azar por división.", "auto = sqrt en clasificación.", "auto.", grupo="Árbol"),
         real("subsamplingRate", 1.0, 0.01, 1.0, "Fracción de filas por árbol.", "Menos = más azar.", "0,6 a 1.",
-             grupo="Ensamble")] + _sp_arbol(True),
+             grupo="Ensamble"),
+        booleano("bootstrap", True, "Cada árbol entrena con una muestra con reposición.",
+                 "Apagado, todos ven las mismas filas (menos variedad entre árboles).", "Prendido.", grupo="Ensamble")] + _sp_arbol(True),
        escala=False, importancia="arbol", costo="arranque de Spark + medio", semilla="seed", proba=True),
     _m("gbt_clf_spark", "spark", "clasificacion", "pyspark.ml.classification.GBTClassifier", "Gradient boosting (GBT)",
        "Ensambles", "Boosting de árboles en MLlib. Solo clasificación binaria.",
@@ -685,8 +768,15 @@ SPARK = [
         real("stepSize", 0.1, 0.001, 1.0, "Tasa de aprendizaje.", "Más chico = más estable.", "0,05 a 0,2.", log=True,
              grupo="Optimizador"),
         real("subsamplingRate", 1.0, 0.01, 1.0, "Fracción de filas por árbol.", "Menos = más azar.", "0,6 a 1.",
-             grupo="Ensamble")] + [p for p in _sp_arbol(True) if p["nombre"] != "impurity"],
+             grupo="Ensamble"),
+        opcion("featureSubsetStrategy", "all", ["all", "auto", "onethird", "sqrt", "log2"],
+               "Columnas al azar que mira cada división.", "all = todas (el boosting clásico); menos agrega azar.",
+               "all.", grupo="Árbol")] + [p for p in _sp_arbol(True) if p["nombre"] != "impurity"],
        escala=False, importancia="arbol", costo="arranque de Spark + medio-alto", semilla="seed", proba=True, binaria=True),
+    _m("xgb_clf_spark", "spark", "clasificacion", "xgboost.spark.SparkXGBClassifier", "XGBoost distribuido", "Ensambles",
+       "XGBoost repartido en los executors con xgboost.spark (binario y multiclase).",
+       _xgb_spark(True), escala=False, importancia="arbol", costo="arranque de Spark + medio", semilla="random_state",
+       proba=True, extra="xgboost", requiere="xgboost"),
     _m("naive_bayes_spark", "spark", "clasificacion", "pyspark.ml.classification.NaiveBayes", "Naive Bayes", "Probabilístico",
        "Naive Bayes de MLlib (gaussiano o multinomial: el multinomial pide columnas no negativas).",
        [real("smoothing", 1.0, 0.0, 100.0, "Suavizado de Laplace (multinomial).", "Más alto = probabilidades más parejas.",
@@ -701,7 +791,14 @@ SPARK = [
        [real("regParam", 0.0, 0.0, 1000.0, "Fuerza de la regularización.", "Más alto = margen más ancho.", "0 a 1.",
              grupo="Regularización", buscar=[0.0, 0.01, 0.1]),
         entero("maxIter", 100, 1, 10000, "Iteraciones máximas.", "Subilo si no converge.", "100.", grupo="Optimizador"),
-        booleano("standardization", True, "Estandariza por dentro.", "Dejalo prendido.", "Prendido.", grupo="Avanzado")],
+        real("threshold", 0.0, -100.0, 100.0, "Umbral sobre el puntaje (no es una probabilidad) para decir 'positivo'.",
+             "Más bajo = más positivos.", "0.", grupo="Decisión"),
+        real("tol", 1e-6, 0.0, 0.1, "Tolerancia de convergencia.", "Más alto = corta antes.", "1e-6.", log=True,
+             grupo="Optimizador"),
+        booleano("standardization", True, "Estandariza por dentro.", "Dejalo prendido.", "Prendido.", grupo="Avanzado"),
+        booleano("fitIntercept", True, "Término constante.", "Dejalo prendido.", "Prendido.", grupo="Avanzado"),
+        entero("aggregationDepth", 2, 2, 10, "Profundidad del treeAggregate que junta los gradientes.",
+               "Subilo con muchas particiones.", "2 a 4.", grupo="Recursos")],
        escala=False, importancia="coef", costo="arranque de Spark + bajo", binaria=True),
     _m("mlp_spark", "spark", "clasificacion", "pyspark.ml.classification.MultilayerPerceptronClassifier",
        "Red neuronal (MLP)", "Redes neuronales",
@@ -724,8 +821,13 @@ SPARK = [
     _m("kmeans_spark", "spark", "clustering", "pyspark.ml.clustering.KMeans", "KMeans", "Centroides",
        "KMeans de MLlib con k-means|| (la versión paralela de k-means++).",
        [entero("k", 3, 2, 50, "Cuántos grupos.", "Elegilo con silhouette.", "2 a 10.", grupo="Grupos", buscar=[2, 3, 4, 5]),
+        opcion("distanceMeasure", "euclidean", [("euclidean", "euclídea"), ("cosine", "coseno")],
+               "Cómo mide la distancia entre filas.", "cosine mira la dirección y no el tamaño (texto, perfiles).",
+               "euclidean.", grupo="Grupos"),
         opcion("initMode", "k-means||", [("k-means||", "k-means||"), ("random", "al azar")], "Cómo elige los centros.",
                "k-means|| es k-means++ en paralelo.", "k-means||.", grupo="Inicio"),
+        entero("initSteps", 2, 1, 20, "Pasadas de k-means|| para elegir los centros iniciales.",
+               "Más = mejores centros iniciales y más lento.", "2 a 5.", grupo="Inicio", si={"initMode": ["k-means||"]}),
         entero("maxIter", 20, 1, 1000, "Iteraciones máximas.", "Subilo si no converge.", "20 a 100.", grupo="Inicio"),
         real("tol", 1e-4, 0.0, 1.0, "Movimiento mínimo de los centros para seguir.", "Más alto = corta antes.", "1e-4.",
              log=True, grupo="Inicio")],
@@ -736,15 +838,52 @@ SPARK = [
                buscar=[2, 3, 4, 5]),
         entero("maxIter", 20, 1, 1000, "Iteraciones por partición.", "Más = mejor convergencia.", "20.", grupo="Inicio"),
         real("minDivisibleClusterSize", 1.0, 0.0, 100000.0, "Tamaño mínimo para seguir partiendo un grupo (≥1: filas; <1: fracción).",
-             "Más alto = no parte grupos chicos.", "1.", grupo="Grupos")],
+             "Más alto = no parte grupos chicos.", "1.", grupo="Grupos"),
+        opcion("distanceMeasure", "euclidean", [("euclidean", "euclídea"), ("cosine", "coseno")],
+               "Cómo mide la distancia entre filas.", "cosine mira la dirección y no el tamaño (texto, perfiles).",
+               "euclidean.", grupo="Grupos")],
        escala=True, costo="arranque de Spark + bajo", semilla="seed", centros=True),
     _m("gmm_spark", "spark", "clustering", "pyspark.ml.clustering.GaussianMixture", "Mezcla gaussiana (GMM)",
        "Probabilístico", "Mezcla de gaussianas de MLlib (covarianza completa).",
        [entero("k", 3, 2, 50, "Cuántas campanas.", "Elegilo con silhouette.", "2 a 10.", grupo="Grupos"),
         entero("maxIter", 100, 1, 10000, "Iteraciones máximas.", "Subilo si no converge.", "100.", grupo="Inicio"),
         real("tol", 0.01, 0.0, 1.0, "Tolerancia de convergencia.", "Más alto = corta antes.", "0,01.", log=True,
-             grupo="Inicio")],
+             grupo="Inicio"),
+        entero("aggregationDepth", 2, 2, 10, "Profundidad del treeAggregate que junta las estadísticas.",
+               "Subilo con muchas particiones.", "2 a 4.", grupo="Recursos")],
        escala=True, costo="arranque de Spark + medio", semilla="seed", proba=True),
+
+    _m("als_spark", "spark", "recomendacion", "pyspark.ml.recommendation.ALS", "ALS (filtrado colaborativo)",
+       "Factorización",
+       "Factoriza la matriz usuario × ítem en dos de rango chico, alternando mínimos cuadrados en los executors: "
+       "recomienda por lo que calificaron usuarios parecidos.",
+       [entero("rank", 10, 1, 500, "Cuántos factores latentes por usuario e ítem.",
+               "Más = capta gustos más finos; demasiado sobreajusta y pesa más.", "10 a 50.", grupo="Modelo",
+               buscar=[5, 10, 20]),
+        entero("maxIter", 10, 1, 200, "Rondas de mínimos cuadrados alternados.", "Más = converge mejor (y tarda).",
+               "10 a 20.", grupo="Optimizador"),
+        real("regParam", 0.1, 0.0, 10.0, "Regularización L2 de los factores.",
+             "Más alto = factores más chicos, menos sobreajuste.", "0,01 a 0,2.", grupo="Regularización",
+             buscar=[0.01, 0.1, 0.2]),
+        booleano("implicitPrefs", False, "Las calificaciones son implícitas (clics, compras, minutos) y no estrellas.",
+                 "Prendido, aprende la preferencia y la confianza en lugar del puntaje.", "Apagado con estrellas.",
+                 grupo="Modelo"),
+        real("alpha", 1.0, 0.0, 1000.0, "Implícito: cuánto crece la confianza con la cantidad observada.",
+             "Más alto = los usuarios muy activos pesan más.", "1 a 40.", grupo="Modelo", si={"implicitPrefs": [True]}),
+        booleano("nonnegative", False, "Factores no negativos.", "Más interpretables; a veces un poco peores.",
+                 "Apagado.", grupo="Modelo"),
+        opcion("coldStartStrategy", "drop", [("drop", "sacarlos"), ("nan", "dejar NaN")],
+               "Qué hace con usuarios o ítems que no vio al entrenar.",
+               "drop los saca de la evaluación (con nan, el RMSE sale NaN).", "drop.", grupo="Decisión"),
+        entero("numUserBlocks", 10, 1, 1000, "En cuántos bloques reparte a los usuarios entre los executors.",
+               "Más bloques = más paralelismo y más mezcla de datos.", "10, o cerca de las particiones.",
+               grupo="Recursos"),
+        entero("numItemBlocks", 10, 1, 1000, "En cuántos bloques reparte a los ítems.", "Igual que numUserBlocks.",
+               "10.", grupo="Recursos"),
+        entero("checkpointInterval", 10, -1, 1000, "Cada cuántas iteraciones corta el linaje (-1 = nunca).",
+               "Con maxIter alto evita un StackOverflowError; necesita directorio de checkpoint.", "10.",
+               grupo="Recursos")],
+       escala=False, costo="arranque de Spark + medio", semilla="seed"),
 
     _m("pca_spark", "spark", "reduccion", "pyspark.ml.feature.PCA", "PCA (componentes principales)", "Reducción",
        "PCA de MLlib: la matriz de covarianza se arma repartida en los executors.",
@@ -822,9 +961,14 @@ METRICAS = {
 }
 
 METRICA_DEFECTO = {"regresion": "r2", "clasificacion": "f1_macro", "clustering": "silhouette",
-                   "reduccion": "varianza_acumulada"}
+                   "reduccion": "varianza_acumulada", "recomendacion": "rmse"}
 METRICA_DEFECTO_SPARK = {"regresion": "r2", "clasificacion": "f1_ponderado", "clustering": "silhouette",
-                         "reduccion": "varianza_acumulada"}
+                         "reduccion": "varianza_acumulada", "recomendacion": "rmse"}
+
+
+def tarea_metrica(tarea: str) -> str:
+    """Recomendación se mide como una regresión (RMSE, MAE y R² sobre la calificación)."""
+    return "regresion" if tarea == "recomendacion" else tarea
 
 # ---------------------------------------------------------------- preprocesamiento, particiones, validación, búsqueda
 
@@ -851,7 +995,9 @@ PREPROCESO = {
         {"valor": "eliminar_iqr", "etiqueta": "sacar filas (IQR)", "ayuda": "Saca del entrenamiento las filas con algún valor fuera de Q1 − k·IQR / Q3 + k·IQR. La prueba no se toca."}]},
     "codificar": {"etiqueta": "Codificación de categóricas", "opciones": [
         {"valor": "onehot", "etiqueta": "one-hot", "ayuda": "Una columna 0/1 por categoría. Lo correcto para modelos lineales, redes y distancias."},
-        {"valor": "ordinal", "etiqueta": "ordinal", "ayuda": "Un número por categoría. Alcanza para árboles y no multiplica columnas."}]},
+        {"valor": "ordinal", "etiqueta": "ordinal", "ayuda": "Un número por categoría. Alcanza para árboles y no multiplica columnas."},
+        {"valor": "hashing", "etiqueta": "hashing (solo Spark)", "ayuda": "FeatureHasher: cada categoría cae en una de N columnas por su hash. "
+                                                                         "No guarda un diccionario: sirve con millones de categorías y con categorías nuevas al predecir; a cambio, dos categorías pueden chocar en la misma columna."}]},
     "fecha": {"etiqueta": "Fechas", "ayuda": "Cada fecha se separa en año, mes, día, día de la semana y hora."},
     "texto": {"etiqueta": "Texto", "ayuda": "TF-IDF: una columna por palabra frecuente, pesada por cuánto distingue."},
     "seleccion": {"etiqueta": "Selección de variables", "opciones": [
@@ -865,7 +1011,51 @@ PREPROCESO = {
 PREPROCESO_DEFECTO = {"imputar_num": "mediana", "indicador_nulos": False, "imputar_cat": "mas_frecuente",
                       "escalar": "estandar", "outliers": "ninguno", "factor_iqr": 1.5, "codificar": "onehot",
                       "max_categorias": 20, "fecha": True, "texto_max": 200, "seleccion": "ninguna", "k": 10,
-                      "umbral_varianza": 0.0, "pca": None}
+                      "umbral_varianza": 0.0, "pca": None, "hash_columnas": 256}
+
+# ---------------------------------------------------------------- Spark: recursos de YARN y umbral
+
+RECURSOS = {
+    "executors": {"etiqueta": "Executors", "flag": "--num-executors", "min": 1, "max": 64, "defecto": 2,
+                  "ayuda": "Cuántos procesos de trabajo pide a YARN. Cada uno es un contenedor en un NodeManager: más "
+                           "executors = más tareas a la vez, si el cluster tiene lugar."},
+    "memoria_executor_mb": {"etiqueta": "Memoria por executor (MB)", "flag": "--executor-memory", "min": 512, "max": 16384,
+                            "defecto": 1024,
+                            "ayuda": "El heap de cada executor. YARN le suma ~10 % (mínimo 384 MB) de overhead: si el "
+                                     "contenedor no entra en un NodeManager, la aplicación queda esperando."},
+    "cores": {"etiqueta": "Cores por executor", "flag": "--executor-cores", "min": 1, "max": 8, "defecto": 1,
+              "ayuda": "Cuántas tareas corre cada executor a la vez. Con CrossValidator en paralelo conviene más de 1."},
+    "memoria_driver_mb": {"etiqueta": "Memoria del driver (MB)", "flag": "--driver-memory", "min": 512, "max": 8192,
+                          "defecto": 1024,
+                          "ayuda": "El proceso que arma el plan y junta los resultados (las curvas, los mejores "
+                                   "parámetros). Subilo con modelos grandes o muchas columnas."},
+}
+RECURSOS_DEFECTO = {k: v["defecto"] for k, v in RECURSOS.items()}
+
+UMBRALES = {
+    "fijo": {"etiqueta": "el del modelo", "ayuda": "Usa el umbral del modelo (0,5 en probabilidad, o el parámetro threshold)."},
+    "f1": {"etiqueta": "el de mejor F1 en validación",
+           "ayuda": "Recorre los umbrales en la validación y se queda con el de mejor F1 de la clase positiva. La prueba "
+                    "no se mira para elegirlo."},
+    "youden": {"etiqueta": "el de Youden en validación",
+               "ayuda": "El umbral con más TPR − FPR en la validación: equilibra los dos errores aunque las clases estén "
+                        "desbalanceadas."},
+}
+
+
+def requisito_faltante(m: dict) -> str | None:
+    """Por qué no se puede usar un modelo en esta instalación (la librería que pide no está), o None."""
+    lib = m.get("requiere")
+    if not lib:
+        return None
+    import importlib.util
+    try:
+        if importlib.util.find_spec(lib) is not None:
+            return None
+    except (ImportError, ValueError):
+        pass
+    return (f"{m['etiqueta']} necesita la librería {lib}, que esta imagen no trae (falta en requirements-ml.txt; en "
+            "empresa, también en la imagen trabajador). Mientras tanto, usá Gradient boosting (GBT) de MLlib.")
 
 PARTICIONES = {
     "aleatoria": {"etiqueta": "aleatoria", "ayuda": "Separa filas al azar (con la semilla)."},
@@ -892,7 +1082,7 @@ BUSQUEDAS = {
     "spark": {
         "ninguna": {"etiqueta": "sin búsqueda", "ayuda": "Entrena con los hiperparámetros elegidos."},
         "cv": {"etiqueta": "CrossValidator", "ayuda": "Grilla con validación cruzada de k partes: k entrenamientos por combinación."},
-        "tvs": {"etiqueta": "TrainValidationSplit", "ayuda": "Grilla con una sola partición entrenamiento/validación: k veces más barato que CrossValidator."},
+        "tvs": {"etiqueta": "TrainValidationSplit", "ayuda": "Grilla con una sola partición interna del entrenamiento (80 % / 20 %): k veces más barato que CrossValidator."},
     },
 }
 
@@ -918,9 +1108,15 @@ def modelos(tarea: str | None = None, motor: str | None = None) -> list[dict]:
     return [m for m in MODELOS.values() if (tarea is None or m["tarea"] == tarea) and (motor is None or m["motor"] == motor)]
 
 
-def como_json() -> dict:
-    """Todo el catálogo, para GET /api/ml/catalog (y para el modo demo de la interfaz)."""
-    return {"version": VERSION, "tareas": TAREAS, "roles": ROLES, "modelos": SKLEARN + SPARK, "equivalente": EQUIVALENTE,
+def como_json(instalacion: bool = False) -> dict:
+    """Todo el catálogo, para GET /api/ml/catalog (y para el modo demo de la interfaz). Con instalacion=True, cada
+    modelo cuya librería falta en esta máquina viene con 'deshabilitado' y el motivo (lo agrega el servidor; la demo
+    muestra la imagen completa)."""
+    modelos = list(SKLEARN + SPARK)
+    if instalacion:
+        modelos = [{**m, "deshabilitado": f} if (f := requisito_faltante(m)) else m for m in modelos]
+    return {"version": VERSION, "tareas": TAREAS, "roles": ROLES, "modelos": modelos, "equivalente": EQUIVALENTE,
+            "recursos": RECURSOS, "umbrales": UMBRALES,
             "metricas": METRICAS, "metricaDefecto": {"sklearn": METRICA_DEFECTO, "spark": METRICA_DEFECTO_SPARK},
             "preproceso": PREPROCESO, "preprocesoDefecto": PREPROCESO_DEFECTO, "particiones": PARTICIONES, "cv": CV,
             "busquedas": BUSQUEDAS, "limites": LIMITES, **_datos_y_limpieza()}

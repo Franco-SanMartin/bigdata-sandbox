@@ -351,6 +351,27 @@ _ERRORES = [
     (r"DATATYPE_MISMATCH[^\n]*?(due to data type mismatch[^\n]*)", "Tipos que no cierran: {0}"),
     (r"CAST_INVALID_INPUT[^\n]*?value '([^']*)'", "No se pudo convertir el valor «{0}» al tipo pedido"),
     (r"Permission denied: (user=\S+, access=\S+, inode=\S+)", "Sin permiso en HDFS: {0}"),
+    # Recursos de YARN (los que se piden en el paso Validación y búsqueda → Recursos de Spark)
+    (r"Required executor memory \((\d+) MB\).*?overhead \((\d+) MB\).*?above the max threshold \((\d+) MB\)",
+     "Cada executor pide {0} MB + {1} MB de overhead y YARN da como máximo {2} MB por contenedor: bajá la memoria por "
+     "executor"),
+    (r"Required AM memory \((\d+)\+(\d+) MB\) is above the max threshold \((\d+) MB\)",
+     "El ApplicationMaster pide {0} + {1} MB y YARN da como máximo {2} MB por contenedor: bajá spark.yarn.am.memory"),
+    (r"Required executor cores?.*?\((\d+)\).*?max(?:imum)? .*?\((\d+)\)",
+     "Cada executor pide {0} cores y YARN da como máximo {1}: bajá los cores por executor"),
+    (r"Container killed by YARN for exceeding (?:physical )?memory limits\.? *([\d.]+ [GM]B of [\d.]+ [GM]B physical memory used)",
+     "YARN mató un executor por pasarse de memoria ({0}): subí la memoria por executor o achicá los datos"),
+    (r"Container \S+ is running beyond (?:physical|virtual) memory limits",
+     "YARN mató un contenedor por pasarse de memoria: subí la memoria por executor"),
+    (r"ExecutorLostFailure|Lost executor \d+ on|Slave lost|exited with a non-zero exit code 143",
+     "Se perdió un executor en medio del trabajo (YARN lo cortó o el NodeManager se cayó): mirá los logs del contenedor"),
+    (r"Application (application_\d+_\d+) failed \d+ times",
+     "La aplicación de YARN {0} no pudo arrancar: yarn logs -applicationId {0} tiene el motivo"),
+    (r"Initial job has not accepted any resources",
+     "YARN no le da lugar al trabajo: los executors pedidos no entran en los NodeManagers (pedí menos o esperá a que "
+     "termine otro trabajo)"),
+    (r"No module named '(\w+)'", "Falta la librería de Python {0} (en el driver o en los executors)"),
+    (r"requirement failed: ([^\n]+)", "Spark rechazó un parámetro: {0}"),
 ]
 
 

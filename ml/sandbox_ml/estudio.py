@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import secrets
 import shutil
 import sys
@@ -475,7 +476,53 @@ def _nombres_vector(df, col: str) -> list[str] | None:
     return [n for _, n in sorted(pares)]
 
 
-def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, clases=None) -> Path:
+def _nombres_legibles(modelo_final, nombres: list[str] | None) -> list[str] | None:
+    """num_esc_3 → la columna de verdad: el escalador no guarda los nombres, pero el VectorAssembler que arma num_vec sí
+    sabe cuáles entraron (sin los sufijos _imp y _rec que agregan el Imputer y el recorte de extremos)."""
+    if not nombres:
+        return nombres
+    entradas = None
+    for etapa in getattr(modelo_final, "stages", []):
+        try:
+            if etapa.getOutputCol() == "num_vec":
+                entradas = list(etapa.getInputCols())
+        except Exception:  # noqa: BLE001 (etapas sin outputCol)
+            continue
+    if not entradas:
+        return nombres
+    out = []
+    for n in nombres:
+        m = re.fullmatch(r"num_(?:esc|vec)_(\d+)", n)
+        if m and int(m.group(1)) < len(entradas):
+            n = re.sub(r"(_imp|_rec)+$", "", entradas[int(m.group(1))])
+        out.append(n)
+    return out
+
+
+def _importancia_spark(est, nombres_cols) -> dict | None:
+    """featureImportances (árboles), |coeficientes| (lineales) o la ganancia de XGBoost, con el nombre de cada columna."""
+    import numpy as np
+    if hasattr(est, "featureImportances"):
+        v, tipo = est.featureImportances.toArray(), "impureza"
+    elif hasattr(est, "coefficients"):
+        v, tipo = np.abs(est.coefficients.toArray()), "coeficientes"
+    elif hasattr(est, "coefficientMatrix"):
+        v, tipo = np.abs(est.coefficientMatrix.toArray()).mean(axis=0), "coeficientes"
+    elif hasattr(est, "get_feature_importances"):   # xgboost.spark
+        g = est.get_feature_importances(importance_type="gain")
+        n = len(nombres_cols) if nombres_cols else 1 + max((int(k[1:]) for k in g if k[1:].isdigit()), default=-1)
+        v, tipo = np.array([float(g.get(f"f{i}", 0.0)) for i in range(n)]), "ganancia"
+    else:
+        return None
+    if not len(v):
+        return None
+    nombres_cols = nombres_cols if nombres_cols and len(nombres_cols) == len(v) else [f"x{i}" for i in range(len(v))]
+    orden = np.argsort(-v)[:30]
+    return {"tipo": tipo, "columnas": [nombres_cols[i] for i in orden], "valores": _py(v[orden])}
+
+
+def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, clases=None,
+                    recursos: dict | None = None) -> Path:
     import numpy as np
     dest = carpeta()
     tarea = receta["tarea"]
@@ -486,8 +533,9 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
     metricas = {}
     for nombre, v in (resultado.get("prueba") or {}).items():
         metricas[nombre] = {"prueba": v}
-        if nombre in (resultado.get("entrenamiento") or {}):
-            metricas[nombre]["entrenamiento"] = resultado["entrenamiento"][nombre]
+        for parte in ("entrenamiento", "validacion"):
+            if nombre in (resultado.get(parte) or {}):
+                metricas[nombre][parte] = resultado[parte][nombre]
     busq = None
     if resultado.get("busqueda_spark"):
         filas = resultado["busqueda_spark"]
@@ -505,7 +553,18 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         out = etapa.getOutputCol() if hasattr(etapa, "getOutputCol") else None
         if out in ("sel", "pca"):
             col = out
-    if pred is not None and tarea in ("regresion", "clasificacion"):
+    supervisada = tarea in ("regresion", "clasificacion", "recomendacion")
+    if supervisada and resultado.get("informe"):
+        # Lo contó el script en los executors (curvas por cubetas, residuos y error por rango): no hace falta muestrear
+        informe.update(resultado["informe"])
+        auc = (resultado.get("prueba") or {}).get("roc_auc")
+        if auc is not None and len(informe.get("roc") or []) == 1:
+            informe["roc"][0]["auc_cubetas"], informe["roc"][0]["auc"] = informe["roc"][0]["auc"], auc
+        if pred is not None and tarea != "recomendacion":
+            imp = _importancia_spark(est, _nombres_legibles(modelo_final, _nombres_vector(pred, col)))
+            if imp:
+                informe["importancia"] = imp
+    elif pred is not None and tarea in ("regresion", "clasificacion"):
         cols = ["label", "prediction"] + (["probability"] if "probability" in pred.columns else []) + \
                (["rawPrediction"] if "rawPrediction" in pred.columns else [])
         muestra = pred.select(*cols)
@@ -533,19 +592,9 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
             if "positiva" in inf:
                 inf["positiva"] = nombres[1]
             informe.update(inf)
-        nombres_cols = _nombres_vector(pred, col)
-        if hasattr(est, "featureImportances"):
-            v, tipo = est.featureImportances.toArray(), "impureza"
-        elif hasattr(est, "coefficients"):
-            v, tipo = np.abs(est.coefficients.toArray()), "coeficientes"
-        elif hasattr(est, "coefficientMatrix"):
-            v, tipo = np.abs(est.coefficientMatrix.toArray()).mean(axis=0), "coeficientes"
-        else:
-            v = None
-        if v is not None:
-            nombres_cols = nombres_cols if nombres_cols and len(nombres_cols) == len(v) else [f"x{i}" for i in range(len(v))]
-            orden = np.argsort(-v)[:30]
-            informe["importancia"] = {"tipo": tipo, "columnas": [nombres_cols[i] for i in orden], "valores": _py(v[orden])}
+        imp = _importancia_spark(est, _nombres_legibles(modelo_final, _nombres_vector(pred, col)))
+        if imp:
+            informe["importancia"] = imp
     elif pred is not None and tarea == "clustering":
         from pyspark.ml.functions import vector_to_array
         pdf = pred.select(vector_to_array(col).alias("x"), "prediction").limit(MAX_PUNTOS * 5).toPandas()
@@ -562,6 +611,10 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         informe["proyeccion"] = {"x": _py(comp[:, 0]), "y": _py(comp[:, 1]) if comp.shape[1] > 1 else [0.0] * len(comp)}
     if resultado.get("curva_validacion"):
         informe["curva_validacion"] = resultado["curva_validacion"]
+    if resultado.get("recomendaciones"):
+        informe["recomendaciones"] = resultado["recomendaciones"]
+    if resultado.get("umbral"):
+        informe["umbral_elegido"] = resultado["umbral"]
     if hasattr(est, "summary") and hasattr(est.summary, "objectiveHistory"):
         try:
             informe["perdida"] = {"perdida": _py(est.summary.objectiveHistory), "validacion": [],
@@ -577,6 +630,9 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         if p["tipo"] == "layers" and isinstance(v, list):
             v = ",".join(str(x) for x in v[1:-1])
         params[p["nombre"]] = _py(v)
+    # Lo que el modelo entrenado no guarda (ALSModel no tiene regParam, por ejemplo) sale de la receta
+    for k, v in (receta.get("modelo", {}).get("params") or {}).items():
+        params.setdefault(k, v)
     import subprocess
     tam = None
     if resultado.get("modelo_hdfs"):
@@ -596,6 +652,10 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         "yarn": {"app_id": resultado.get("app_id")},
         "artefactos": sorted(p.name for p in dest.iterdir() if p.is_file() and not p.name.endswith(".tmp")),
         "n_jobs": receta.get("busqueda", {}).get("n_jobs", 1),
+        "recursos": recursos or receta.get("recursos"),
+        "umbral": resultado.get("umbral"),
+        "evaluacion": "entrenamiento, validación y prueba separados; la prueba se usó una sola vez, al final"
+                      if supervisada and (resultado.get("filas") or {}).get("validacion") is not None else None,
     })
     if tarea == "clasificacion":
         exp["clases"] = [str(c) for c in clases]

@@ -37,7 +37,7 @@ RECETA_VERSION = 1
 CAPAS = re.compile(r"^\s*\d{1,4}(\s*,\s*\d{1,4}){0,4}\s*$")
 NOMBRE_COL = re.compile(r"^[^\x00-\x1f]{1,200}$")
 TABLA = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
-SUPERVISADAS = ("regresion", "clasificacion")
+SUPERVISADAS = ("regresion", "clasificacion", "recomendacion")
 
 
 class RecetaInvalida(ValueError):
@@ -189,6 +189,7 @@ def _preproceso(d, rev: _Rev) -> dict:
     _rango(out, "texto_max", 10, 20000, rev, "preproceso", entero=True)
     _rango(out, "k", 1, 10000, rev, "preproceso", entero=True)
     _rango(out, "umbral_varianza", 0.0, 1e6, rev, "preproceso")
+    _rango(out, "hash_columnas", 16, 262144, rev, "preproceso", entero=True)
     if out["pca"] is not None:
         _rango(out, "pca", 1, 500, rev, "preproceso", entero=True)
     return out
@@ -207,11 +208,14 @@ def _validacion(d, tarea: str, motor: str, rev: _Rev) -> dict:
     sup = tarea in SUPERVISADAS
     out = {"particion": "estratificada" if tarea == "clasificacion" else "aleatoria", "prueba": 0.2, "validacion": 0.0,
            "columna_tiempo": None, "cv": ("estratificada" if tarea == "clasificacion" else "kfold") if sup else "ninguna",
-           "k": 5, "repeticiones": 2, "semilla": 42,
+           "k": 5, "repeticiones": 2, "semilla": 42, "umbral": "fijo",
            "metrica": (cat.METRICA_DEFECTO_SPARK if motor == "spark" else cat.METRICA_DEFECTO)[tarea]}
     if motor == "spark" and sup:
-        out["particion"] = "aleatoria"
-        out["cv"] = "kfold"
+        # En Spark: entrenamiento, validación y prueba separados de entrada (70 / 15 / 15). La validación elige el
+        # umbral y mide al modelo elegido; la prueba se mira una sola vez, al final.
+        out.update(particion="aleatoria", cv="kfold", prueba=0.15, validacion=0.15)
+        if tarea == "clasificacion":
+            out["umbral"] = "f1"
     if d is None:
         d = {}
     if not isinstance(d, dict):
@@ -233,8 +237,18 @@ def _validacion(d, tarea: str, motor: str, rev: _Rev) -> dict:
     _rango(out, "semilla", 0, 2 ** 31 - 1, rev, "validacion", entero=True)
     if _es_num(out["prueba"]) and _es_num(out["validacion"]) and out["prueba"] + out["validacion"] > 0.6:
         rev.error("validacion.validacion", "prueba y validación juntas no pueden pasar el 60 % de las filas")
+    if out["umbral"] not in cat.UMBRALES:
+        rev.error("validacion.umbral", f"es {', '.join(cat.UMBRALES)}")
+    elif out["umbral"] != "fijo":
+        if motor != "spark" or tarea != "clasificacion":
+            rev.aviso("validacion.umbral", "elegir el umbral en la validación es de la clasificación con Spark: queda el "
+                                           "del modelo", "info")
+            out["umbral"] = "fijo"
+        elif _es_num(out["validacion"]) and out["validacion"] == 0:
+            rev.error("validacion.umbral", "para elegir el umbral hace falta una validación aparte (subí la validación "
+                                           "o dejá el umbral del modelo)")
     met = cat.METRICAS.get(out["metrica"])
-    if met is None or met["tarea"] != tarea:
+    if met is None or met["tarea"] != cat.tarea_metrica(tarea):
         rev.error("validacion.metrica", f"{out['metrica']} no es una métrica de {cat.TAREAS[tarea]['etiqueta'].lower()}")
     elif motor == "spark" and sup and not met.get("spark"):
         rev.error("validacion.metrica", f"Spark MLlib no tiene {met['etiqueta']}: elegí otra métrica")
@@ -249,12 +263,46 @@ def _validacion(d, tarea: str, motor: str, rev: _Rev) -> dict:
         if not isinstance(out["columna_tiempo"], str) or not out["columna_tiempo"]:
             rev.error("validacion.columna_tiempo", "la partición temporal necesita una columna de fecha u orden")
     if motor == "spark":
+        if _es_num(out["validacion"]) and out["validacion"] == 0:
+            rev.aviso("validacion.validacion", "sin validación aparte, el modelo elegido no se mide antes de la prueba "
+                                               "(y el umbral queda fijo)", "info")
         if out["cv"] in ("repetida", "temporal", "estratificada"):
             rev.error("validacion.cv", "Spark MLlib solo tiene validación cruzada KFold (CrossValidator)")
         if out["particion"] == "estratificada":
             rev.aviso("validacion.particion", "en Spark la partición estratificada se arma con sampleBy por clase "
                                               "(proporciones aproximadas)", "info")
     return out
+
+
+def _recursos(d, rev: _Rev) -> dict:
+    """Lo que se le pide a YARN: executors, memoria y cores (spark-submit --num-executors ...)."""
+    out = dict(cat.RECURSOS_DEFECTO)
+    if d is None:
+        return out
+    if not isinstance(d, dict):
+        rev.error("recursos", "tiene que ser un objeto")
+        return out
+    for k, v in d.items():
+        if k not in out:
+            rev.error(f"recursos.{k}", f"{k} no es un recurso de Spark ({', '.join(out)})")
+            continue
+        out[k] = v
+    for k, info in cat.RECURSOS.items():
+        _rango(out, k, info["min"], info["max"], rev, "recursos", entero=True)
+    return out
+
+
+def argumentos_spark(recursos: dict | None) -> list[str]:
+    """Los flags de spark-submit para esos recursos."""
+    r = {**cat.RECURSOS_DEFECTO, **(recursos or {})}
+    return ["--num-executors", str(r["executors"]), "--executor-cores", str(r["cores"]),
+            "--executor-memory", f"{r['memoria_executor_mb']}m", "--driver-memory", f"{r['memoria_driver_mb']}m"]
+
+
+def recursos(d) -> tuple[dict, list[dict]]:
+    """(recursos completos, errores): para el código editado, que trae los suyos aparte de la receta."""
+    rev = _Rev()
+    return _recursos(d, rev), rev.errores
 
 
 def _busqueda(d, mid: str, motor: str, tarea: str, val: dict, rev: _Rev) -> dict:
@@ -448,13 +496,16 @@ def normalizar(receta, perfil: dict | None = None) -> tuple[dict, list[dict], li
     motor = mod["motor"]
     tarea = receta.get("tarea") or mod["tarea"]
     if tarea not in cat.TAREAS:
-        rev.error("tarea", "es regresion, clasificacion, clustering o reduccion")
+        rev.error("tarea", "es regresion, clasificacion, clustering, reduccion o recomendacion")
         tarea = mod["tarea"]
     if tarea != mod["tarea"]:
         rev.error("modelo.id", f"{mod['etiqueta']} es para {cat.TAREAS[mod['tarea']]['etiqueta'].lower()}, "
                                f"no para {cat.TAREAS[tarea]['etiqueta'].lower()}")
     out["tarea"] = tarea
     out["motor"] = motor
+    falta = cat.requisito_faltante(mod)
+    if falta:
+        rev.error("modelo.id", falta)
 
     obj = receta.get("objetivo")
     ref = receta.get("referencia")
@@ -490,9 +541,20 @@ def normalizar(receta, perfil: dict | None = None) -> tuple[dict, list[dict], li
         if especial and especial in limpio:
             limpio[especial] = "ignorar"
     out["columnas"] = limpio
-    variables = [c for c, r in limpio.items() if r in ("numerica", "categorica", "fecha", "texto")]
-    if not variables:
-        rev.error("columnas", "marcá al menos una columna como variable (numérica, categórica, fecha o texto)")
+    if tarea == "recomendacion":
+        for rol in cat.ROLES_RECOMENDACION:
+            n = sum(1 for r_ in limpio.values() if r_ == rol)
+            if n != 1:
+                rev.error("columnas", f"ALS necesita exactamente una columna con el rol {rol} (hay {n})")
+        variables = [c for c, r in limpio.items() if r in cat.ROLES_RECOMENDACION]
+    else:
+        raros = [c for c, r in limpio.items() if r in cat.ROLES_RECOMENDACION]
+        if raros:
+            rev.error("columnas", f"usuario e ítem son roles de recomendación: {', '.join(raros)} queda sin usar "
+                                  "(marcalas como id o ignorar)")
+        variables = [c for c, r in limpio.items() if r in ("numerica", "categorica", "fecha", "texto")]
+        if not variables:
+            rev.error("columnas", "marcá al menos una columna como variable (numérica, categórica, fecha o texto)")
     if obj and obj in variables:
         rev.error("objetivo", "el objetivo no puede ser también una variable")
 
@@ -510,6 +572,15 @@ def normalizar(receta, perfil: dict | None = None) -> tuple[dict, list[dict], li
     out["modelo"] = {"id": mid, "params": params_modelo(mid, m.get("params"), rev)}
     out["busqueda"] = _busqueda(receta.get("busqueda"), mid, motor, tarea, out["validacion"], rev)
     out["informe"] = _informe(receta.get("informe"), tarea, motor, mid, rev)
+    if motor == "spark":
+        out["recursos"] = _recursos(receta.get("recursos"), rev)
+    elif receta.get("recursos") is not None:
+        rev.aviso("recursos", "los recursos de YARN son de Spark: scikit-learn corre en una sola máquina", "info")
+    if out["validacion"]["umbral"] != "fijo" and (not mod.get("proba") or mod.get("extra") == "xgboost"):
+        if (receta.get("validacion") or {}).get("umbral") not in (None, "fijo"):
+            rev.aviso("validacion.umbral", f"{mod['etiqueta']} no deja mover el umbral de probabilidad en Spark: queda "
+                                           "el del modelo", "info")
+        out["validacion"]["umbral"] = "fijo"
     _por_modelo(out, mod, rev)
     if perfil:
         _con_perfil(out, perfil, rev)
@@ -540,6 +611,18 @@ def _por_modelo(r: dict, mod: dict, rev: _Rev) -> None:
         motivo = fuentes.solo_spark(r["datos"])
         if motivo:
             rev.error("datos.formato", f"{motivo}: elegí un modelo de Spark MLlib")
+    if r["motor"] == "sklearn" and pre["codificar"] == "hashing":
+        rev.error("preproceso.codificar", "el hashing (FeatureHasher) es del Pipeline de Spark: en scikit-learn usá "
+                                          "one-hot u ordinal")
+    if mod["id"] == "glm_spark":
+        links = {"gaussian": ("identity", "log", "inverse"), "binomial": ("logit", "probit", "cloglog"),
+                 "poisson": ("log", "identity", "sqrt"), "gamma": ("inverse", "identity", "log")}
+        fam, link = params.get("family"), params.get("link")
+        if link is not None and fam in links and link not in links[fam]:
+            rev.error("modelo.params.link", f"la familia {fam} acepta el link {', '.join(links[fam])}")
+    if mod["id"] == "mlp_spark" and pre["codificar"] == "hashing":
+        rev.aviso("preproceso.codificar", "con hashing la red recibe hash_columnas entradas por cada grupo: subí las "
+                                          "neuronas o bajá hash_columnas", "info")
     if r["motor"] == "spark":
         if pre["outliers"] == "eliminar_iqr":
             rev.aviso("preproceso.outliers", "en Spark se recortan los extremos en lugar de sacar filas", "info")
@@ -564,7 +647,7 @@ def _con_perfil(r: dict, perfil: dict, rev: _Rev) -> None:
             o = info[obj]
             num = o.get("tipo") in ("int", "float")
             unicos = o.get("unicos") or 0
-            if r["tarea"] == "regresion" and not num and obj not in cambiadas:
+            if r["tarea"] in ("regresion", "recomendacion") and not num and obj not in cambiadas:
                 rev.error("objetivo", f"{obj} no es numérica: para predecir una categoría elegí clasificación")
             if r["tarea"] == "clasificacion":
                 if unicos > 200:
