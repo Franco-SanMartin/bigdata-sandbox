@@ -10,6 +10,7 @@ STATUS = {
     "cluster_stopped": 409,  # el cluster no está en marcha
     "service_down": 503,     # el servicio que hace falta está apagado
     "not_found": 404,
+    "forbidden": 403,        # el pedido no viene de la propia interfaz (seguridad.py)
     "invalid": 400,          # parámetros inválidos
     "busy": 409,             # ya hay algo corriendo que lo impide
     "unsupported": 501,      # no está en esta versión o en esta configuración
@@ -44,6 +45,8 @@ def code_for_status(status: int) -> str:
     """Para los errores que arma Starlette (404 de ruta, 405 de método...)."""
     if status == 404:
         return "not_found"
+    if status == 403:
+        return "forbidden"
     if status in (400, 405, 413, 415, 422):
         return "invalid"
     if status == 409:

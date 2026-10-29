@@ -9,7 +9,7 @@ export const RUN_K: Record<StepRun['state'], 'ok' | 'run' | 'bad'> = { done: 'ok
 export const RUN_LABEL: Record<StepRun['state'], string> = { done: 'Terminó', running: 'Corriendo', failed: 'Falló' };
 
 export const ERR_LABEL: Record<ApiErrorCode, string> = {
-  cluster_stopped: 'cluster apagado', service_down: 'servicio caído', not_found: 'no existe', invalid: 'falta algo antes',
+  cluster_stopped: 'cluster apagado', service_down: 'servicio caído', not_found: 'no existe', forbidden: 'pedido rechazado', invalid: 'falta algo antes',
   busy: 'hay otro paso corriendo', unsupported: 'no disponible', failed: 'el comando falló',
 };
 

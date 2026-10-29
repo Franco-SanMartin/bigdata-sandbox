@@ -266,7 +266,8 @@ Todos los errores son JSON `{error, code}` con los códigos de
 | `cluster_stopped` | 409 | El cluster está apagado |
 | `service_down` | 503 | Hace falta un servicio que está caído (NameNode, RM...) |
 | `not_found` | 404 | No existe la ruta, el archivo o la aplicación |
-| `invalid` | 400 | Parámetros mal (los de validación traen además `issues`) |
+| `forbidden` | 403 | El pedido no viene de la propia interfaz: otro host, u otra página (Origin/Referer) en un POST, PUT, PATCH o DELETE |
+| `invalid` | 400 | Parámetros mal (los de validación traen además `issues`); 415 si un cuerpo no va como `application/json` |
 | `busy` | 409 | Ya hay algo que lo impide (por ejemplo, ese archivo se está subiendo) |
 | `unsupported` | 501 | No está en esta configuración o en esta imagen |
 | `failed` | 500 | El comando falló: `error` trae la última línea de su salida |
@@ -327,7 +328,7 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 | `SANDBOX_UPLOADS` | `$TMPDIR/sandbox-subidas` | Carpeta temporal de las subidas desde la compu |
 | `SANDBOX_MAX_UPLOAD_MB` | `2048` | Tamaño máximo de una subida |
 | `TERMINAL` | `1` | `0`: apaga la terminal de la interfaz (`/api/terminal`) |
-| `TERMINAL_HOSTS` | (vacío) | Otros nombres desde los que se acepta la terminal, separados por coma (además de `localhost`, `127.0.0.1` y `::1`). Ojo: quien llegue por ese nombre tiene una terminal de root |
+| `SANDBOX_HOSTS` / `TERMINAL_HOSTS` | (vacío) | Otros nombres desde los que se aceptan la interfaz, la API y la terminal, separados por coma (además de `localhost`, `127.0.0.1` y `::1`). Las dos variables suman a la misma lista (`seguridad.py`). Ojo: quien llegue por ese nombre tiene una terminal de root |
 | `TERMINAL_CWD` | `/datos` | Dónde arranca la terminal |
 | `SANDBOX_SQOOP_USER` / `SANDBOX_SQOOP_PASS` | los de `ejemplos/sqoop.sh` | Usuario y clave de MySQL para `sqoop import`/`export`. Le llegan a sqoop por variables de entorno, no en el comando que se muestra |
 
