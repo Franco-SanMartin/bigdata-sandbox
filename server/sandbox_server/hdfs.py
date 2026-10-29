@@ -544,13 +544,16 @@ class Hdfs:
         async with self._fsck_lock:
             if self._fsck and time.monotonic() - self._fsck[0] < max_age:
                 return self._fsck[1]
+            # La edad cuenta desde que arrancó el fsck, no desde que terminó: en arm64 tarda
+            # varios segundos y lo que se escribió mientras corría no tiene que salir viejo.
+            inicio = time.monotonic()
             rc, out, err = await self.exec(["hdfs", "fsck", "/", "-files", "-blocks", "-locations", "-openforwrite"])
             if "Connecting to namenode" not in out + err and not probes._FSCK_FILE.search(out):
                 last = next((l for l in reversed((err or out).splitlines()) if l.strip()), "sin salida")
                 raise ApiError(f"hdfs fsck falló: {last}", "failed")
             files = probes.parse_fsck(out, self.block_mb)
             self.observe(files)
-            self._fsck = (time.monotonic(), files, out)
+            self._fsck = (inicio, files, out)
             return files
 
     def _down(self) -> set[int]:
