@@ -5,7 +5,12 @@
     receta     el JSON que describe un experimento: normalizar y validar
     codigo     receta → script de scikit-learn o PySpark completo, y a notebook
     estudio    lo que llama el script al final: registra el experimento
-    perfil     perfil de columnas de un CSV, Parquet o tabla de Hive
+    perfil     perfil de columnas de un CSV, Parquet o tabla de Hive (pandas)
+    fuentes    los formatos de HDFS (Parquet, ORC, Avro, JSON, CSV, texto, comprimidos y
+               particionados): detectarlos, validarlos y el código que los lee
+    perfil_spark   el perfil a escala, con Spark (spark-submit en YARN)
+    limpieza   la receta de limpieza columna por columna: validarla, su PySpark y la vista previa
+    transformadores_spark   Limpiar, el paso del Pipeline de Spark que lleva la limpieza adentro del modelo
     predecir   predecir con un modelo guardado
 
 Un ejemplo desde JupyterLab (versión ml):
