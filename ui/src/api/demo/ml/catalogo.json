@@ -6560,5 +6560,280 @@
   "min_minutos": 1,
   "max_n_jobs": 8,
   "max_filas_perfil": 200000
+ },
+ "formatos": {
+  "parquet": {
+   "etiqueta": "Parquet",
+   "ayuda": "Columnar y con el esquema adentro: el formato de Spark. Lee solo las columnas que usa."
+  },
+  "orc": {
+   "etiqueta": "ORC",
+   "ayuda": "Columnar, el de Hive. Como Parquet: esquema adentro y compresión por columna."
+  },
+  "avro": {
+   "etiqueta": "Avro",
+   "ayuda": "Por filas, con el esquema adentro. Lo usan Kafka y Sqoop."
+  },
+  "json": {
+   "etiqueta": "JSON",
+   "ayuda": "JSON lines (un objeto por línea, el que escribe Spark) o un documento entero (multilínea)."
+  },
+  "csv": {
+   "etiqueta": "CSV / TSV",
+   "ayuda": "Texto separado por comas, punto y coma, tabulaciones o barras. El esquema se infiere leyéndolo."
+  },
+  "texto": {
+   "etiqueta": "texto",
+   "ayuda": "Una fila por línea, en la columna «linea». Las columnas se sacan después con una expresión regular."
+  }
+ },
+ "tiposEsquema": [
+  "string",
+  "int",
+  "bigint",
+  "double",
+  "float",
+  "decimal(18,2)",
+  "boolean",
+  "date",
+  "timestamp"
+ ],
+ "limpieza": {
+  "pasos": {
+   "tipo": {
+    "etiqueta": "tipo",
+    "fase": "modelo",
+    "ayuda": "Convierte la columna a otro tipo (texto a número, a fecha...). Lo que no se puede convertir queda vacío: mirá las filas afectadas."
+   },
+   "texto": {
+    "etiqueta": "texto",
+    "fase": "modelo",
+    "ayuda": "Recorta espacios, junta los repetidos, saca acentos, pasa a minúsculas o mayúsculas y convierte los vacíos en nulos. «Frecuente», «frecuente » y «FRECUENTE» pasan a ser la misma categoría."
+   },
+   "regex": {
+    "etiqueta": "expresión regular",
+    "fase": "modelo",
+    "ayuda": "Reemplaza lo que coincide con el patrón (los grupos son $1, $2...) o extrae un grupo a la misma columna o a una nueva. Es el regex de Java: \\d, \\s, [^0-9] andan igual que en Python."
+   },
+   "fecha": {
+    "etiqueta": "fecha",
+    "fase": "modelo",
+    "ayuda": "Lee el texto como fecha con un formato (dd/MM/yyyy, yyyy-MM-dd HH:mm...) y puede separar año, mes, día, día de la semana y hora en columnas numéricas."
+   },
+   "nulos": {
+    "etiqueta": "nulos",
+    "fase": "modelo",
+    "ayuda": "Rellena los vacíos con la media, la mediana o la más común DEL ENTRENAMIENTO, o con un valor fijo. La columna indicadora (0/1) guarda dónde faltaba: a veces que falte es información. «Sacar las filas» es solo de entrenamiento."
+   },
+   "outliers": {
+    "etiqueta": "extremos",
+    "fase": "modelo",
+    "ayuda": "Bordes con el rango intercuartil (Q1 − k·IQR, Q3 + k·IQR), con percentiles o con z (media ± z·desvío), calculados con el entrenamiento. Recortar lleva al borde; vaciar los deja nulos; sacar filas es solo de entrenamiento (y se calcula antes de partir)."
+   },
+   "raras": {
+    "etiqueta": "categorías raras",
+    "fase": "modelo",
+    "ayuda": "Junta en «(otra)» las categorías que aparecen menos que el mínimo en el entrenamiento: evita miles de columnas one-hot y categorías que el modelo vio dos veces."
+   },
+   "mapeo": {
+    "etiqueta": "mapeo",
+    "fase": "modelo",
+    "ayuda": "Cambia valores por otros (si → 1, «Bs As» → «Buenos Aires»). Lo que no está en la tabla se deja, se vacía o pasa a un valor fijo."
+   },
+   "derivada": {
+    "etiqueta": "columna derivada",
+    "fase": "modelo",
+    "ayuda": "Una columna nueva con una expresión de Spark SQL sobre las demás: precio * cantidad, datediff(fecha_entrega, fecha), length(comentario)..."
+   },
+   "duplicados": {
+    "etiqueta": "duplicados",
+    "fase": "entrenamiento",
+    "ayuda": "Saca las filas repetidas (en todas las columnas o en las que elijas, como un id). Se hace antes de partir: si no, la misma fila puede caer en entrenamiento y en prueba."
+   },
+   "filtro": {
+    "etiqueta": "filtro",
+    "fase": "entrenamiento",
+    "ayuda": "Deja solo las filas que cumplen una condición de Spark SQL (cantidad > 0, pais = 'AR'). Ve las columnas como vienen en los datos, antes de la limpieza del modelo."
+   }
+  },
+  "opciones": {
+   "texto": [
+    {
+     "valor": "recortar",
+     "etiqueta": "recortar espacios"
+    },
+    {
+     "valor": "espacios",
+     "etiqueta": "juntar espacios"
+    },
+    {
+     "valor": "sin_acentos",
+     "etiqueta": "sin acentos"
+    },
+    {
+     "valor": "minusculas",
+     "etiqueta": "minúsculas"
+    },
+    {
+     "valor": "mayusculas",
+     "etiqueta": "mayúsculas"
+    },
+    {
+     "valor": "vacio_a_nulo",
+     "etiqueta": "vacío → nulo"
+    }
+   ],
+   "estrategia": [
+    {
+     "valor": "mediana",
+     "etiqueta": "mediana"
+    },
+    {
+     "valor": "media",
+     "etiqueta": "media"
+    },
+    {
+     "valor": "moda",
+     "etiqueta": "la más común"
+    },
+    {
+     "valor": "constante",
+     "etiqueta": "un valor fijo"
+    },
+    {
+     "valor": "eliminar",
+     "etiqueta": "sacar las filas (entrenamiento)"
+    }
+   ],
+   "metodo": [
+    {
+     "valor": "iqr",
+     "etiqueta": "IQR (Tukey)"
+    },
+    {
+     "valor": "percentiles",
+     "etiqueta": "percentiles"
+    },
+    {
+     "valor": "zscore",
+     "etiqueta": "z (desvíos)"
+    }
+   ],
+   "accion": [
+    {
+     "valor": "recortar",
+     "etiqueta": "recortar al borde"
+    },
+    {
+     "valor": "nulo",
+     "etiqueta": "vaciar"
+    },
+    {
+     "valor": "eliminar",
+     "etiqueta": "sacar las filas (entrenamiento)"
+    }
+   ],
+   "resto": [
+    {
+     "valor": "conservar",
+     "etiqueta": "dejarlo"
+    },
+    {
+     "valor": "nulo",
+     "etiqueta": "vaciarlo"
+    },
+    {
+     "valor": "valor",
+     "etiqueta": "un valor fijo"
+    }
+   ],
+   "modo": [
+    {
+     "valor": "reemplazar",
+     "etiqueta": "reemplazar"
+    },
+    {
+     "valor": "extraer",
+     "etiqueta": "extraer un grupo"
+    }
+   ],
+   "a": [
+    {
+     "valor": "string",
+     "etiqueta": "string"
+    },
+    {
+     "valor": "int",
+     "etiqueta": "int"
+    },
+    {
+     "valor": "bigint",
+     "etiqueta": "bigint"
+    },
+    {
+     "valor": "double",
+     "etiqueta": "double"
+    },
+    {
+     "valor": "float",
+     "etiqueta": "float"
+    },
+    {
+     "valor": "decimal(18,2)",
+     "etiqueta": "decimal(18,2)"
+    },
+    {
+     "valor": "boolean",
+     "etiqueta": "boolean"
+    },
+    {
+     "valor": "date",
+     "etiqueta": "date"
+    },
+    {
+     "valor": "timestamp",
+     "etiqueta": "timestamp"
+    }
+   ],
+   "partes": [
+    {
+     "valor": "anio",
+     "etiqueta": "año"
+    },
+    {
+     "valor": "mes",
+     "etiqueta": "mes"
+    },
+    {
+     "valor": "dia",
+     "etiqueta": "día"
+    },
+    {
+     "valor": "dia_semana",
+     "etiqueta": "día de la semana"
+    },
+    {
+     "valor": "hora",
+     "etiqueta": "hora"
+    }
+   ]
+  },
+  "factor": {
+   "iqr": {
+    "min": 0.5,
+    "max": 10.0,
+    "defecto": 1.5
+   },
+   "percentiles": {
+    "min": 0.1,
+    "max": 25.0,
+    "defecto": 1.0
+   },
+   "zscore": {
+    "min": 1.0,
+    "max": 10.0,
+    "defecto": 3.0
+   }
+  }
  }
 }

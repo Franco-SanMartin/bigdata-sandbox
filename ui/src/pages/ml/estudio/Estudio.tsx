@@ -1,5 +1,5 @@
-/* El estudio de ML: un riel con los ocho pasos (Datos → Objetivo y variables → Preprocesamiento → Modelo e
-   hiperparámetros → Validación y búsqueda → Entrenar → Resultados → Código), el paso abierto en el centro y,
+/* El estudio de ML: un riel con los nueve pasos (Datos → Limpieza → Objetivo y variables → Preprocesamiento →
+   Modelo e hiperparámetros → Validación y búsqueda → Entrenar → Resultados → Código), el paso abierto en el centro y,
    a la derecha, la receta en una lectura con lo que falta arreglar. */
 import { useEffect } from 'react';
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Play } from 'lucide-react';
@@ -12,6 +12,7 @@ import { editar, irA, modeloDe, PASO_LABEL, PASOS, recetaParaDatos, setEstudio, 
 import { PasoCodigo } from './PasoCodigo';
 import { PasoDatos } from './PasoDatos';
 import { PasoEntrenar } from './PasoEntrenar';
+import { PasoLimpieza } from './PasoLimpieza';
 import { PasoModelo } from './PasoModelo';
 import { PasoObjetivo } from './PasoObjetivo';
 import { PasoPreproceso } from './PasoPreproceso';
@@ -20,7 +21,7 @@ import { Resultados } from './Resultados';
 
 /** Qué campos de la receta corresponden a cada paso (para marcar errores en el riel) */
 const CAMPOS: Partial<Record<Paso, string[]>> = {
-  datos: ['datos'], objetivo: ['objetivo', 'tarea', 'columnas', 'referencia'], preproceso: ['preproceso'],
+  datos: ['datos'], limpieza: ['limpieza'], objetivo: ['objetivo', 'tarea', 'columnas', 'referencia'], preproceso: ['preproceso'],
   modelo: ['modelo'], validacion: ['validacion', 'busqueda', 'informe'],
 };
 
@@ -81,7 +82,8 @@ export function Estudio({ cat }: { cat: MlCatalogo }) {
       </nav>
 
       <div className="es-centro">
-        {paso === 'datos' && <PasoDatos />}
+        {paso === 'datos' && <PasoDatos cat={cat} />}
+        {paso === 'limpieza' && <PasoLimpieza cat={cat} rev={rev} />}
         {paso === 'objetivo' && <PasoObjetivo cat={cat} rev={rev} />}
         {paso === 'preproceso' && <PasoPreproceso cat={cat} rev={rev} />}
         {paso === 'modelo' && <PasoModelo cat={cat} rev={rev} />}

@@ -11,8 +11,9 @@ async function req<T>(method: string, path: string, body?: unknown, as: 'json' |
   });
   if (!r.ok) {
     let msg = `${r.status} ${r.statusText}`; let code: ApiErrorCode | undefined;
-    try { const j = await r.json(); if (j?.error) msg = j.error; code = j?.code; } catch { /* sin cuerpo */ }
-    throw new ApiFailure(msg, code, r.status);
+    let extra: Record<string, unknown> | undefined;
+    try { const j = await r.json(); if (j?.error) msg = j.error; code = j?.code; extra = j; } catch { /* sin cuerpo */ }
+    throw new ApiFailure(msg, code, r.status, extra);
   }
   if (r.status === 204 || (r.status === 202 && !(r.headers.get('content-type') || '').includes('json'))) return undefined as T;
   return (as === 'text' ? r.text() : r.json()) as Promise<T>;
@@ -92,9 +93,13 @@ export function createHttpApi(): SandboxApi {
     mlCatalog: () => req('GET', '/ml/catalog'),
     mlSources: () => req('GET', '/ml/sources'),
     mlExample: ejemplo => req('POST', '/ml/sources/example', { ejemplo }),
-    mlProfile: (datos, objetivo) => req('POST', '/ml/profile', { datos, objetivo: objetivo ?? null }),
+    mlProfile: (datos, objetivo, opciones) => req('POST', '/ml/profile', { datos, objetivo: objetivo ?? null, ...opciones }),
+    mlCleaningPreview: (datos, limpieza, objetivo, filas) => req('POST', '/ml/cleaning/preview', { datos, limpieza, objetivo: objetivo ?? null, filas }),
+    mlCleanings: () => req('GET', '/ml/cleaning'),
+    mlCleaning: nombre => req('GET', `/ml/cleaning/${encodeURIComponent(nombre)}`),
+    mlSaveCleaning: (nombre, limpieza, nota) => req('POST', '/ml/cleaning', { nombre, limpieza, nota: nota ?? null }),
     mlCheck: receta => req('POST', '/ml/check', { receta }),
-    mlCode: receta => req('POST', '/ml/code', { receta }),
+    mlCode: (receta, parte, opciones) => req('POST', '/ml/code', { receta, parte: parte ?? 'entrenamiento', opciones }),
     mlTrain: receta => req('POST', '/ml/experiments', { receta }),
     mlRunCode: r => req('POST', '/ml/runs', r),
     mlRuns: () => req('GET', '/ml/runs'),

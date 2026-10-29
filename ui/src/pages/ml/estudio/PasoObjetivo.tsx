@@ -5,7 +5,7 @@ import { ShieldAlert, Wand2 } from 'lucide-react';
 import type { MlCatalogo, MlColumnaPerfil, MlPerfil, MlRevision, MlRol, MlTarea } from '../../../api/types';
 import { EmptyState, Panel, SkeletonLines } from '../../../components/base';
 import { Avisos, Campo, usePerfil } from './comun';
-import { editar, MODELO_INICIAL, modeloDe, ROL_LABEL, rolesSugeridos, useEstudio } from './estado';
+import { conLimpieza, editar, MODELO_INICIAL, modeloDe, ROL_LABEL, rolesSugeridos, useEstudio } from './estado';
 import { Barras, Histograma, SERIE, fnum } from './graficos';
 
 const ROLES: MlRol[] = ['numerica', 'categorica', 'fecha', 'texto', 'id', 'ignorar'];
@@ -15,7 +15,8 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
   const { receta } = useEstudio();
   const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
   const perfil = usePerfil(receta.datos, sup ? receta.objetivo : null);
-  const p = perfil.data;
+  // Con las columnas que crea la limpieza (indicadoras de nulos, partes de fechas, derivadas) al final
+  const p = perfil.data ? conLimpieza(perfil.data, receta.limpieza) : perfil.data;
   if (!p) return <Panel title="Objetivo y variables">{perfil.error ? <EmptyState compact kind="error" title="No se pudo leer el perfil">{perfil.error}</EmptyState> : <SkeletonLines n={6} />}</Panel>;
 
   const sugerida = p.objetivo?.tarea;

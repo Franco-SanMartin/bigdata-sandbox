@@ -7,6 +7,12 @@ informe y código). Los gráficos de dispersión se recortan a 400 puntos para q
     python3 ui/scripts/estudio_demo.py http://127.0.0.1:8080
 
 Usa las recetas que ya estén entrenadas (mismo nombre) y entrena las que falten.
+
+    python3 ui/scripts/estudio_demo.py http://127.0.0.1:8080 --datos
+
+arma solo lo de la etapa (b) (ui/src/api/demo/ml/datos.json): las fuentes de HDFS en varios formatos, sus
+perfiles con Spark y la vista previa de la receta de limpieza de ejemplo. Antes hay que dejar los datos en
+HDFS con ml/preparar_demo_hdfs.py (adentro del contenedor, con spark-submit).
 """
 import json
 import sys
@@ -14,7 +20,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080").rstrip("/")
+BASE = (sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "http://127.0.0.1:8080").rstrip("/")
 DEST = Path(__file__).resolve().parent.parent / "src" / "api" / "demo" / "ml"
 D = {"origen": "local", "ruta": "/datos/clientes_senal.csv"}
 COLS = {"antiguedad_meses": "numerica", "visitas_mes": "numerica", "ticket_promedio": "numerica", "reclamos": "numerica",
@@ -102,5 +108,47 @@ def main():
     print(f"{len(salida)} experimentos y {len(perfiles)} perfiles en {DEST}")
 
 
+# ---------------------------------------------------------------- etapa (b): formatos, perfil con Spark y limpieza
+
+VENTAS_GZ = {"origen": "hdfs", "ruta": "/user/root/ml/crudo/ventas_sucias.csv.gz", "formato": "csv", "separador": ","}
+FECHA = "coalesce(to_date(fecha, 'yyyyMMdd'), to_date(fecha, 'dd/MM/yyyy'), to_date(fecha, 'yyyy-MM-dd'))"
+LIMPIEZA = {"nombre": "ventas", "pasos": [
+    {"tipo": "texto", "columna": "sucursal", "ops": ["recortar", "sin_acentos", "minusculas"]},
+    {"tipo": "texto", "columna": "producto", "ops": ["recortar", "sin_acentos", "minusculas"]},
+    {"tipo": "texto", "columna": "medio_pago", "ops": ["recortar", "sin_acentos", "minusculas", "vacio_a_nulo"]},
+    {"tipo": "regex", "columna": "precio", "patron": "[.]", "reemplazo": ""},
+    {"tipo": "regex", "columna": "precio", "patron": ",", "reemplazo": "."},
+    {"tipo": "tipo", "columna": "precio", "a": "double"},
+    {"tipo": "derivada", "nombre": "fecha_ok", "expresion": FECHA, "rol": "fecha"},
+    {"tipo": "outliers", "columna": "precio", "metodo": "iqr", "factor": 3, "accion": "recortar"},
+    {"tipo": "nulos", "columna": "precio", "estrategia": "mediana", "indicador": True},
+    {"tipo": "nulos", "columna": "medio_pago", "estrategia": "moda", "indicador": True},
+    {"tipo": "raras", "columna": "producto", "min_pct": 0.01, "max_categorias": 50, "otra": "(otra)"},
+    {"tipo": "duplicados", "columnas": []},
+    {"tipo": "filtro", "condicion": "cantidad > 0 AND cantidad < 100"},
+]}
+
+
+def datos():
+    fuentes = pedir("GET", "/api/ml/sources")
+    fuentes["hdfs"] = [f for f in fuentes["hdfs"] if f["ruta"].startswith("/user/root/ml/") and "/modelos/" not in f["ruta"]]
+    perfiles = {}
+    for f in fuentes["hdfs"]:
+        d = {k: f[k] for k in ("origen", "ruta", "formato", "separador", "multilinea") if k in f}
+        print("perfil con Spark de", d["ruta"], flush=True)
+        perfiles[d["ruta"]] = pedir("POST", "/api/ml/profile", {"datos": d, "motor": "spark", "modo": "muestra", "filas": 50000})
+    print("vista previa de la limpieza", flush=True)
+    vista = pedir("POST", "/api/ml/cleaning/preview", {"datos": VENTAS_GZ, "limpieza": LIMPIEZA, "filas": 5000})
+    receta = {"datos": VENTAS_GZ, "objetivo": None, "limpieza": LIMPIEZA}
+    codigo = {"perfil": pedir("POST", "/api/ml/code", {"receta": receta, "parte": "perfil", "opciones": {"modo": "muestra", "filas": 50000}}),
+              "limpieza": pedir("POST", "/api/ml/code", {"receta": receta, "parte": "limpieza"})}
+    salida = {"hdfs": fuentes["hdfs"], "perfiles": perfiles, "limpieza": {"datos": VENTAS_GZ, "receta": LIMPIEZA, "vista": vista},
+              "codigo": codigo}
+    DEST.mkdir(parents=True, exist_ok=True)
+    (DEST / "datos.json").write_text(json.dumps(salida, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    malos = [p["titulo"] for p in vista["pasos"] if not p["ok"]]
+    print(f"{len(fuentes['hdfs'])} fuentes, {len(perfiles)} perfiles y {len(vista['pasos'])} pasos ({len(malos)} con error: {malos}) en {DEST}")
+
+
 if __name__ == "__main__":
-    main()
+    datos() if "--datos" in sys.argv else main()
