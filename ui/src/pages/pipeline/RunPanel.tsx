@@ -28,7 +28,7 @@ export function RunPanel({ run, info, now, next, onNext }: {
           <div><dt>Empezó</dt><dd>{clock(run.startedAt)}</dd></div>
           <div><dt>{run.finishedAt ? 'Tardó' : 'Lleva'}</dt><dd>{duration(Math.max(0, secs))}</dd></div>
           {run.appIds.length > 0 && <div><dt>YARN</dt><dd><button type="button" className="btn btn-sm btn-ghost mono" onClick={() => navigate('yarn')}>{run.appIds.join(', ')}</button></dd></div>}
-          {run.modelId && <div><dt>Modelo</dt><dd><button type="button" className="btn btn-sm btn-ghost mono" onClick={() => navigate('ml')}>{run.modelId}</button></dd></div>}
+          {run.modelId && <div><dt>Modelo</dt><dd><button type="button" className="btn btn-sm btn-ghost mono" onClick={() => navigate('ml', 'guiado')}>{run.modelId}</button></dd></div>}
           {o && run.stage !== 'ml' && <div><dt>Dejó</dt><dd><span className="mono">{o.path}</span>{o.rows != null && <span className="muted"> · {nf(o.rows)} filas</span>}{o.sizeMb != null && <span className="muted"> · {sizeLabel(o.sizeMb)}</span>}</dd></div>}
         </dl>
         {o?.summary && o.summary.length > 0 && (
