@@ -32,6 +32,7 @@ import posixpath
 import re
 import shlex
 import shutil
+import signal
 import tempfile
 import time
 import urllib.error
@@ -396,6 +397,22 @@ def http_stream(url: str, chunk: int = 1 << 20):
             yield b
 
 
+async def _kill_client(proc: asyncio.subprocess.Process) -> None:
+    """El cliente hdfs es un script que lanza la JVM: se mata el grupo entero."""
+    if proc.returncode is None:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except asyncio.TimeoutError:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # El módulo
 # ---------------------------------------------------------------------------
@@ -423,9 +440,12 @@ class Hdfs:
         self._last_dn: str = ""
         # Cómo estaba HDFS en el último fsck de fondo: si no cambió nada, no hace falta otro
         self._quiet_sig: str = ""
+        # Clientes hdfs (cada uno una JVM) corriendo ahora: el apagado los mata
+        self._clients: set[asyncio.subprocess.Process] = set()
         self._seq = itertools.count(1)
         self.tmp_root = Path(os.environ.get("SANDBOX_UPLOADS", tempfile.gettempdir())) / "sandbox-subidas"
         cluster.watchers.append(self.watch)
+        cluster.stoppers.append(self.halt)
 
     # ------------------------------------------------------------ util
 
@@ -463,20 +483,41 @@ class Hdfs:
         return None if doc is None else doc.get("FileStatus") or {}
 
     async def exec(self, argv: list[str], timeout: float = 60) -> tuple[int, str, str]:
-        """Comando sin dejar rastro en la consola (para los sondeos)."""
+        """Comando sin dejar rastro en la consola (para los sondeos). Solo con el cluster
+        andando: un hdfs lanzado mientras arranca o se apaga es una JVM que reintenta
+        contra un NameNode que no está y sigue viva después de 'stopped'."""
+        if self.c.phase != "running":
+            raise ApiError(f"HDFS no responde: el cluster está {self.c.phase}", "service_down")
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL)
+                stdin=asyncio.subprocess.DEVNULL, start_new_session=True)
         except OSError as e:
             raise ApiError(f"No se pudo correr {argv[0]}: {e}", "failed") from e
+        self._clients.add(proc)
         try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise ApiError(f"{shlex.join(argv)} tardó más de {timeout:g} s", "failed") from None
+            if self.c.phase != "running":
+                # El apagado empezó mientras se lanzaba
+                await _kill_client(proc)
+            else:
+                try:
+                    out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    await _kill_client(proc)
+                    raise ApiError(f"{shlex.join(argv)} tardó más de {timeout:g} s", "failed") from None
+        finally:
+            self._clients.discard(proc)
+        if self.c.phase != "running":
+            # Lo cortó el apagado (halt): su salida está a medias
+            raise ApiError(f"HDFS no responde: el cluster está {self.c.phase}", "service_down")
         return proc.returncode or 0, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+
+    async def halt(self) -> None:
+        """Al apagar el cluster (Cluster.stoppers): mata los clientes hdfs en vuelo,
+        como el fsck de fondo de watch(), y espera a que terminen."""
+        self._fsck = None
+        procs = list(self._clients)
+        await asyncio.gather(*(_kill_client(p) for p in procs))
 
     def _live_dns(self) -> list[dict]:
         return self.datanodes()
