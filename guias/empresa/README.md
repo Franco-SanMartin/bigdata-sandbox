@@ -35,16 +35,18 @@ que falta:
 | `ROL=maestro` y `ROL=trabajador` | Anda (etapa 1) |
 | Racks por fila: el maestro en `/profe`, las PCs de a `PCS_POR_FILA` en `/fila1`, `/fila2`... | Anda |
 | Política `WARM`: el DataNode del maestro es `ARCHIVE` y guarda una copia de cada bloque | Anda |
-| Aula simulada: maestro y PCs como contenedores en **una sola compu** (`RED=docker`) | Anda: es lo que usan estas guías |
-| Sonda del laboratorio (mide si las PCs reales se pueden ver) | Lista aparte: release `sonda-v1` |
-| Red entre PCs reales (túnel WireGuard o red directa, según la sonda) | **No existe todavía** (etapa 2) |
-| Vista **Aula** en la interfaz web | **No existe todavía** |
+| Aula simulada: maestro y PCs como contenedores en **una sola compu** (`RED=docker`) | Anda: es lo que usan las guías 1 y 2 |
+| Sonda del laboratorio (mide si las PCs reales se pueden ver) | Corrida el 27/10: veredicto A (túnel WireGuard) |
+| Red entre PCs reales: túnel WireGuard con hub en la PC del profe (`RED=wireguard`) | Anda (etapa 2), probada en el CI con cada PC en su propia red; falta la primera clase |
+| Imagen chica para las PCs (`trabajador`, 192 MB) y los `.cmd` para Veyon | Anda (etapa 2): release `aula-v1` |
+| Vista **Aula** en la interfaz web del maestro | Anda (etapa 2) |
 | Kafka, métricas, seguridad y almacenamiento tipo S3 | **No existen todavía** (etapas 3 a 6) |
 
-O sea: hoy el cluster de varias "PCs" se arma **en una sola compu**, con
-cada PC como un contenedor en la misma red de Docker. Con `RED` distinto de
-`docker` el contenedor no arranca. Lo que se aprende es lo mismo que con PCs
-de verdad; lo que cambia es la red (ver [teoría: redes](teoria/06-redes.md)).
+O sea: el cluster de varias "PCs" se puede armar **en una sola compu** (cada
+PC un contenedor en la misma red de Docker, `RED=docker`) o con **las PCs
+del laboratorio** por un túnel WireGuard (`RED=wireguard`, [guía
+3](03-laboratorio.md)). Lo que se aprende es lo mismo; lo que cambia es la
+red (ver [teoría: redes](teoria/06-redes.md)).
 
 ## Requisitos
 
@@ -91,7 +93,7 @@ archivo. El paso a paso está en la [guía 1](01-aula-simulada.md).
 |---|---|---|
 | 1 | [Aula simulada en una compu](01-aula-simulada.md) | Paso a paso: arrancar, ver la topología, dónde quedan los bloques, un trabajo repartido, Hive y Spark contra el maestro, una PC que se cae, apagar y borrar |
 | 2 | [Sumar PCs y cambiar variables](02-sumar-pcs.md) | Agregar PCs al compose, cambiar `PCS_POR_FILA`, `REPLICATION` y `TRABAJADOR_RAM` y ver qué cambia |
-| 3 | [Prueba en el laboratorio](03-laboratorio.md) | La sonda del laboratorio y el aula simulada en la PC del profe, para una clase |
+| 3 | [El cluster del aula, con las PCs del laboratorio](03-laboratorio.md) | La clase paso a paso: el maestro en la PC del profe, las PCs por Veyon, cargar el dataset, la vista Aula y "ya pueden apagar" |
 | - | [Referencia](referencia.md) | Roles, puertos, RAM, variables, racks, políticas, comandos útiles, la sonda y dónde se usa cada cosa en la industria |
 | - | [Teoría](teoria/README.md) | De pseudo-distribuido a cluster real, réplicas y racks, fallas, tiers de almacenamiento, localidad en YARN, redes, RAM por rol |
 | - | [Evaluación](evaluacion/README.md) | Preguntas de opción múltiple, de desarrollo y ejercicios prácticos sobre el aula simulada, con respuestas |

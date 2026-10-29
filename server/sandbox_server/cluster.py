@@ -19,6 +19,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import aula as aula_mod
 from . import config as cfg
 from . import probes
 from .actions import Action, ActionRunner
@@ -26,7 +27,7 @@ from .boot import BootTracker, Volume, now_ms, plan
 from .errors import ApiError
 from .events import EventBus
 from .proc import exited
-from .specs import ProcSpec, dn_data, dn_http, nn_http, process_specs
+from .specs import ProcSpec, dn_data, dn_http, maestro_specs, nn_http, process_specs
 
 
 class Conflict(ApiError):
@@ -69,6 +70,9 @@ class Settings:
     datos_dir: Path = field(default_factory=lambda: _env_path("SANDBOX_DATOS", "/datos"))
     # Las funciones del entrypoint (apagar_en_orden)
     lib: Path = field(default_factory=lambda: _env_path("SANDBOX_LIB", "/opt/sandbox/lib.sh"))
+    # ECO_ARRANQUE=1: la salida del arranque sale también en docker logs (el
+    # maestro del aula: los .cmd y las pruebas esperan ahí "Cluster LISTO")
+    eco: bool = field(default_factory=lambda: os.environ.get("ECO_ARRANQUE", "0").strip() in ("1", "si", "true"))
 
     def __post_init__(self) -> None:
         if self.state_file is None:
@@ -136,6 +140,13 @@ class Cluster:
         self._last_pub = 0
         self.image = {"name": "franki678/bigdata-sandbox", "tag": os.environ.get("SANDBOX_VERSION", "full"),
                       **_detect_versions()}
+        # Versión empresa con ROL=maestro: la PC del profe en el cluster del aula.
+        # La configuración sale de las variables del contenedor y no se cambia
+        # desde la interfaz (las PCs ya se sumaron con esa).
+        self.aula = aula_mod.modo()
+        if self.aula:
+            self.saved = cfg.from_env()
+            self.config = dict(self.saved)
 
     # ------------------------------------------------------------------ util
 
@@ -146,6 +157,10 @@ class Cluster:
         return shutil.which("jupyter-lab") is not None or not self.s.probe
 
     def specs(self) -> list[ProcSpec]:
+        if self.aula:
+            nm = os.environ.get("MAESTRO_NM", "no").strip().lower().replace("í", "i") == "si"
+            sp = maestro_specs(self.config, self.s.ui_port, nm)
+            return sp if self.jupyter_installed() else [p for p in sp if p.id != "jupyter"]
         sp = process_specs(self.config, self.s.ui_port)
         vol_nn = self.volume().namenodes
         if vol_nn and vol_nn != self.config["namenodes"]:
@@ -160,6 +175,10 @@ class Cluster:
     # --------------------------------------------------------------- config
 
     def check(self, raw: object) -> tuple[dict, list[dict]]:
+        if self.aula:
+            return cfg.from_env(), [{"field": "datanodes", "level": "warning", "message":
+                "En el maestro del aula la configuración sale de las variables del contenedor "
+                "(empresa-profe.cmd): desde acá no se cambia."}]
         try:
             c = cfg.normalize(raw)
         except ValueError as e:
@@ -195,7 +214,8 @@ class Cluster:
         self.startedAt = None
         self.logs.clear()
         env = dict(os.environ)
-        env.update(cfg.to_env(self.config))
+        if not self.aula:   # en el aula mandan las variables del contenedor tal cual
+            env.update(cfg.to_env(self.config))
         self.bus.log("Cluster", "info", "Arrancando el cluster",
                      command=" ".join(f"{k}={v}" for k, v in cfg.to_env(self.config).items()) + " /opt/entrypoint.sh",
                      action="corre el mismo arranque que docker run, paso a paso")
@@ -249,6 +269,8 @@ class Cluster:
             if not raw:
                 break
             line = raw.decode("utf-8", "replace")
+            if self.s.eco:
+                print(line, end="", flush=True)
             if tracker.ready or tracker.failed:
                 self.logs.append(line.rstrip("\n"))
                 continue
@@ -387,6 +409,9 @@ class Cluster:
         """Borra el volumen (como docker compose down -v). Solo con el cluster apagado.
         La configuración guardada de la interfaz se conserva."""
         async with self._lock:
+            if self.aula:
+                raise Conflict("En el maestro del aula el volumen no se borra desde la interfaz: las PCs "
+                               "perderían el túnel y sus bloques. Para empezar de cero, empresa-profe.cmd cero.")
             if self.phase != "stopped":
                 raise Conflict("primero hay que apagar el cluster")
             root = self.s.hadoop_dir
@@ -651,4 +676,5 @@ class Cluster:
             "yarn": self.yarn,
             "boot": self.tracker.to_json() if self.tracker else None,
             "image": self.image,
+            "aula": self.aula,
         }

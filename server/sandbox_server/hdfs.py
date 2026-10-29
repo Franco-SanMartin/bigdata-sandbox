@@ -485,7 +485,9 @@ class Hdfs:
         running = {int(p["id"][2:]) for p in self.c.processes
                    if p["kind"] == "datanode" and p["state"] in ("up", "starting")}
         expected = max([self.c.config["datanodes"], *running])
-        return probes.datanodes_from_jmx(self.c.nn_jmx, now_ms(), expected, running)
+        # En el maestro del aula, el DataNode 1 es el suyo (el "archivo")
+        hosts = {"maestro": 1} if self.c.aula else None
+        return probes.datanodes_from_jmx(self.c.nn_jmx, now_ms(), expected, running, hosts=hosts)
 
     def _live_count(self) -> int:
         return sum(1 for d in self.datanodes() if d["state"] in ("live", "stale")) or self.c.hdfs.get("liveDataNodes", 0)

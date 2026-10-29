@@ -93,7 +93,7 @@ números del archivo `aula-simulada.yml` y de las guías. Si los trabajos
 llenan los 2048 MB de `TRABAJADOR_RAM` de cada PC, pueden pedir un poco
 más.
 
-**Laboratorio de verdad** (cuando exista la etapa 2), cada nodo en su PC:
+**Laboratorio de verdad** (`RED=wireguard`, [guía 3](../03-laboratorio.md)), cada nodo en su PC:
 
 | PC | Qué necesita |
 |---|---|
@@ -101,7 +101,9 @@ más.
 | Cada alumno | DataNode + NodeManager (~0,5 GB) + `TRABAJADOR_RAM` + lo que el alumno use en esa PC (navegador, editor) + el driver de Spark si lanza desde ahí |
 
 La sonda anota la RAM de cada PC (`ram_gb`) y la que tiene Docker
-(`docker_ram_mb`): con eso se elige `TRABAJADOR_RAM` para ese laboratorio.
+(`docker_ram_mb`). Con `RED=wireguard`, cada PC elige su `TRABAJADOR_RAM`
+sola: dos tercios de la RAM de Docker (2048 MB en las de 8 GB, 5120 en las
+de 16).
 
 La capacidad del cluster crece con las PCs: 20 PCs con 2048 MB son 40 GB
 para trabajos, aunque ninguna PC tenga más de 8 GB. Esa es la gracia de un

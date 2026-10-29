@@ -11,6 +11,37 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **`empresa` con las PCs del laboratorio** (etapa 2, rama `empresa-aula`),
+  con lo que midió la sonda el 27/10:
+  - `RED=wireguard`: túnel WireGuard con hub en la PC del profe (UDP 51820) e
+    inscripción con un código de la clase (TCP 8099). Cada PC reserva su
+    nombre (`pcNN`), se conecta **hacia** el profe y se anuncia a HDFS y YARN
+    con su IP del túnel (`10.13.0.x`). Las PCs no publican ningún puerto (no
+    aparece el cartel del firewall). MTU 1380, con respaldo a 1280 por PC.
+    Módulo del kernel o `wireguard-go`.
+  - Imagen **`trabajador`** para las PCs: Java 8, Hadoop recortado al
+    DataNode y al NodeManager, Python con numpy (el mismo que el maestro) y
+    WireGuard; Spark y Tez llegan desde HDFS. 192 MB comprimida, contra
+    1,6 GB de `empresa`. amd64 y arm64.
+  - Cada PC presta dos tercios de la RAM de Docker (2048 MB en las de 8 GB,
+    5120 en las de 16) y sus cores; `TRABAJADOR_RAM` y `TRABAJADOR_CORES` lo
+    pisan. YARN reparte por memoria y por cores y da por perdida una PC al
+    minuto.
+  - El maestro corre la interfaz con la vista **Aula**: cada PC una lámpara
+    (sumándose, arriba, sin respuesta, caída) con lo que presta y sus
+    bloques, la IP, el código y la línea para Veyon, y el aviso "ya pueden
+    apagar" cuando el maestro tiene una copia de cada bloque.
+  - `empresa-profe.cmd` (arranca el maestro, muestra la línea para Veyon y
+    carga datasets midiendo la velocidad) y `empresa-alumno.cmd` (carga la
+    imagen de su carpeta o de una ruta de red y suma la PC). Release
+    `aula-v1` con las imágenes en `.tar.gz`.
+  - Guía 3 reescrita como el paso a paso de la clase, con tiempos y una tabla
+    de tamaños de dataset para esta red.
+- Sonda: `sonda-alumno.cmd IP sin-b`, sin la prueba B (no publica el 8098 y
+  no aparece el cartel del firewall).
+- Pruebas `aula-wg`, `aula-wg-caida` y `aula-wg-cero`: las PCs en redes de
+  Docker separadas, unidas solo por el túnel, sin puertos publicados.
+
 - Terminal integrada en la interfaz de `full` (``Ctrl+` `` o el ícono de arriba):
   bash del contenedor por websocket (`/api/terminal`), solo desde `localhost`
   (chequea Host y Origin). `TERMINAL=0` la apaga; `TERMINAL_HOSTS` suma

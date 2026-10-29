@@ -31,7 +31,13 @@ entre "$REPLICATION" 1 9      || error "REPLICATION=$REPLICATION: tiene que ser 
 [[ "$JUPYTER" =~ ^(si|no)$ ]] || error "JUPYTER=$JUPYTER: tiene que ser si o no"
 [[ "$ROL" =~ ^(solo|maestro|trabajador)$ ]] || error "ROL=$ROL: tiene que ser solo, maestro o trabajador"
 if en_aula; then
-  [ "$RED" = docker ] || error "RED=$RED: por ahora solo docker (los nodos en una red de Docker)"
+  [[ "$RED" =~ ^(docker|wireguard)$ ]] \
+    || error "RED=$RED: tiene que ser docker (los nodos en una red de Docker) o wireguard (las PCs del aula)"
+  if con_tunel && ! ip link show wg0 > /dev/null 2>&1; then
+    error "RED=wireguard sin el tunel del aula (wg0): lo arma arranque-empresa.sh antes de este paso"
+  fi
+  [ -z "$TRABAJADOR_CORES" ] || entre "$TRABAJADOR_CORES" 1 256 \
+    || error "TRABAJADOR_CORES=$TRABAJADOR_CORES: cores para trabajos, de 1 a 256"
   [ "$NAMENODES_PEDIDO" = 1 ] \
     || error "NAMENODES=$NAMENODES_PEDIDO: con ROL=$ROL hay un solo NameNode (la alta disponibilidad se ve con ROL=solo)"
   [[ "$PCS_POR_FILA" =~ ^[1-9][0-9]*$ ]] || error "PCS_POR_FILA=$PCS_POR_FILA: tiene que ser un numero de 1 en adelante"

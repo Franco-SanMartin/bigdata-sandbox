@@ -46,7 +46,7 @@ el volumen nuevo en `volumes:` al final. Lo que no puede faltar:
 |---|---|
 | `hostname: pcNN` | Es el nombre con el que el nodo se anuncia (`dfs.datanode.hostname`, `yarn.nodemanager.hostname`) y del que sale su rack. Un nombre que no sea `pcNN` cae en `/default-rack` |
 | `ROL: trabajador` y `MAESTRO: maestro` | Qué corre y a quién se suma |
-| La red `aula` | Hoy la única red posible es una red de Docker (`RED=docker`): todos los nodos en la misma |
+| La red `aula` | En una sola compu, una red de Docker (`RED=docker`): todos los nodos en la misma. Con las PCs del laboratorio es un túnel (`RED=wireguard`, [guía 3](03-laboratorio.md)) |
 | Un volumen propio en `/hadoop` | Ahí guarda sus bloques. Dos PCs con el mismo volumen se pisarían |
 | La RAM | Cada PC pide unos 2 GB más a Docker |
 
@@ -213,7 +213,7 @@ aula: se corta antes de buscar al maestro):
 docker run --rm -e ROL=trabajador -e TRABAJADOR_RAM=512 franki678/bigdata-sandbox:empresa
 ```
 
-<!-- prueba: compu | falla | espera: por ahora solo docker -->
+<!-- prueba: compu | falla | espera: tiene que ser docker -->
 ```bash
 docker run --rm -e ROL=trabajador -e RED=directa franki678/bigdata-sandbox:empresa
 ```
@@ -221,7 +221,7 @@ docker run --rm -e ROL=trabajador -e RED=directa franki678/bigdata-sandbox:empre
 | Variable | Qué acepta |
 |---|---|
 | `ROL` | `solo`, `maestro` o `trabajador` |
-| `RED` | Solo `docker` (la red entre PCs reales es la etapa 2) |
+| `RED` | `docker` (estas guías) o `wireguard` (las PCs del laboratorio: [guía 3](03-laboratorio.md)) |
 | `NAMENODES` | Solo `1` con `maestro`/`trabajador`: la alta disponibilidad se ve con `ROL=solo` ([guía 9 de `base`](../09-zookeeper-ha.md)) |
 | `PCS_POR_FILA` | Un número de 1 en adelante |
 | `TRABAJADOR_RAM` | MB, de 1024 a 65536 |

@@ -12,24 +12,91 @@ JOURNALNODES=3                      # quorum de edits en modo HA (siempre impar)
 #               historial de Spark y un DataNode "archivo" (guarda una copia
 #               de todo, para que no se pierda nada al apagar el aula)
 #   trabajador  cada PC de alumno: 1 DataNode + 1 NodeManager, contra el maestro
-# RED dice como se ven los nodos: docker = una red de Docker (varios
-# contenedores en la misma compu, o el CI). La red del aula llega despues.
+# RED dice como se ven los nodos:
+#   docker     una red de Docker (varios contenedores en la misma compu, o el CI)
+#   wireguard  las PCs del aula de verdad: un tunel WireGuard con hub en el
+#              maestro. Cada PC se inscribe con el codigo de la clase, recibe
+#              su IP del tunel (10.13.0.x) y su nombre (pcNN), y solo hace
+#              conexiones salientes: no publica puertos (empresa/aula/red.sh)
 ROL=${ROL:-solo};  ROL=${ROL,,}
 RED=${RED:-docker};  RED=${RED,,}
+AULA_DIR=/hadoop/aula                   # RED=wireguard: claves, codigo de la clase y PCs inscriptas
+RED_TUNEL=10.13.0                       # el maestro es .1 y la PC N es .(10+N): pc03 = 10.13.0.13
+HUB_IP=$RED_TUNEL.1
+P_WG=51820                              # UDP: WireGuard (el hub, en el maestro)
+P_INSCRIPCION=8099                      # TCP: inscripcion de las PCs (en el maestro)
+# 1500 de la red del aula, menos 80 de WireGuard (sobre IPv6, el peor caso) y
+# 40 de margen por si Docker Desktop o la red agregan algo
+WG_MTU=${WG_MTU:-1380}
+if [ "$RED" = wireguard ]; then
+  # En una PC, MAESTRO es la IP de la PC del profe en el aula: por ahi sale el
+  # tunel. Adentro del cluster el maestro se llama "maestro" (10.13.0.1).
+  if [ "$ROL" = trabajador ]; then HUB=${HUB:-${MAESTRO:-}}; fi
+  if [ "$ROL" = maestro ]; then NODO=maestro; fi
+  MAESTRO=maestro
+  # Lo que le toco a esta PC al inscribirse (NODO) y lo que decide el maestro
+  # para toda la clase (REPLICATION, BLOCK_SIZE, SERVICIOS, PCS_POR_FILA)
+  if [ "$ROL" = trabajador ] && [ -r "$AULA_DIR/nodo.env" ]; then . "$AULA_DIR/nodo.env"; fi
+fi
 MAESTRO=${MAESTRO:-maestro}             # nombre (o IP) del maestro, para los trabajadores
 NODO=${NODO:-$(hostname)}               # nombre con el que este nodo se anuncia
 PCS_POR_FILA=${PCS_POR_FILA:-5}         # racks: pc01-pc05 = /fila1, pc06-pc10 = /fila2...
-TRABAJADOR_RAM=${TRABAJADOR_RAM:-2048}  # MB de YARN para los trabajos en cada nodo
 MAESTRO_NM=${MAESTRO_NM:-no};  MAESTRO_NM=${MAESTRO_NM,,};  MAESTRO_NM=${MAESTRO_NM//í/i}
 en_aula()       { [ "$ROL" != solo ]; }
 es_maestro()    { [ "$ROL" = maestro ]; }
 es_trabajador() { [ "$ROL" = trabajador ]; }
+con_tunel()     { [ "$RED" = wireguard ]; }
+
+# Lo que Docker le da a este contenedor: el limite del cgroup (docker run
+# --memory / --cpus) o, si no hay, lo de la maquina virtual de Docker Desktop
+# (en el aula: unos 3,8 GB en las PCs de 8 GB y 7,8 GB en las de 16)
+docker_ram_mb() {
+  local total lim
+  total=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
+  lim=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo max)
+  if [[ "$lim" =~ ^[0-9]+$ ]] && [ $(( lim / 1048576 )) -lt "$total" ]; then total=$(( lim / 1048576 )); fi
+  echo "$total"
+}
+docker_cores() {
+  local n cuota periodo
+  n=$(nproc 2>/dev/null || echo 1)
+  { read -r cuota periodo < /sys/fs/cgroup/cpu.max; } 2>/dev/null || cuota=max
+  if [[ "$cuota" =~ ^[0-9]+$ ]] && [ "${periodo:-0}" -gt 0 ]; then
+    cuota=$(( (cuota + periodo - 1) / periodo ))
+    [ "$cuota" -lt "$n" ] && n=$cuota
+  fi
+  echo "$n"
+}
+# MB para trabajos: dos tercios de lo que tiene Docker, redondeado para abajo
+# al GB. El resto queda para el DataNode, el NodeManager y el sistema. Con lo
+# que midio la sonda el 27/10: 3863 MB (PCs de 8 GB) -> 2048; 7828 MB (PCs de
+# 16 GB) -> 5120.
+ram_para_trabajos() {
+  local mb=$(( $(docker_ram_mb) * 2 / 3 / 1024 * 1024 ))
+  [ "$mb" -lt 1024 ] && mb=1024
+  [ "$mb" -gt 65536 ] && mb=65536
+  echo "$mb"
+}
+
+# MB de YARN y cores para los trabajos en cada nodo. Con RED=wireguard cada
+# PC es un trabajador: salen solos de lo que tiene Docker en esa PC (se pisan
+# con -e TRABAJADOR_RAM / -e TRABAJADOR_CORES). Con RED=docker los nodos
+# comparten la compu: 2048 MB cada uno, y los cores de fabrica de YARN.
+TRABAJADOR_RAM_AUTO=no
+if con_tunel && es_trabajador && [ -z "${TRABAJADOR_RAM:-}" ]; then
+  TRABAJADOR_RAM=$(ram_para_trabajos);  TRABAJADOR_RAM_AUTO=si
+fi
+TRABAJADOR_RAM=${TRABAJADOR_RAM:-2048}
+if con_tunel && es_trabajador; then TRABAJADOR_CORES=${TRABAJADOR_CORES:-$(docker_cores)}; fi
+TRABAJADOR_CORES=${TRABAJADOR_CORES:-}
 
 DATANODES_PEDIDO=${DATANODES:-}
 if en_aula; then
-  # Un DataNode por nodo, con los puertos de fabrica; replicacion 3 de fabrica
+  # Un DataNode por nodo, con los puertos de fabrica. Replicacion de fabrica:
+  # 3 en la red de Docker; 2 en el aula de verdad, donde todo pasa por la PC
+  # del profe (unos 50 Mbit/s): una copia en una PC y la otra en el maestro
   DATANODES=1
-  REPLICATION=${REPLICATION:-3}
+  if con_tunel; then REPLICATION=${REPLICATION:-2}; else REPLICATION=${REPLICATION:-3}; fi
   # JupyterLab solo si se pide: en el aula cada PC tiene la RAM justa
   JUPYTER=${JUPYTER:-no}
 fi
@@ -198,7 +265,19 @@ PY
 
 # Version empresa: YARN, MapReduce, Hive y Spark apuntan al maestro
 conf_aula() {
-  local ram=$TRABAJADOR_RAM
+  local ram=$TRABAJADOR_RAM yarn=()
+  # Los cores que presta cada nodo (sin TRABAJADOR_CORES, los de fabrica de YARN)
+  if [ -n "$TRABAJADOR_CORES" ]; then yarn+=(yarn.nodemanager.resource.cpu-vcores "$TRABAJADOR_CORES"); fi
+  # El tope de un contenedor lo pone el ResourceManager (el maestro): alto, y
+  # YARN lo baja solo a lo que tiene la PC mas grande que se sumo
+  # Una PC que se apaga: YARN la da por perdida (LOST) al minuto, no a los 10
+  # de fabrica, y reintenta sus tareas en otras PCs (como HDFS a los 40 s)
+  if es_maestro; then
+    yarn+=(yarn.scheduler.maximum-allocation-mb 65536 yarn.scheduler.maximum-allocation-vcores 32
+           yarn.nm.liveness-monitor.expiry-interval-ms 60000)
+  else
+    yarn+=(yarn.scheduler.maximum-allocation-mb "$ram")
+  fi
   xml_poner "$HADOOP_CONF_DIR/yarn-site.xml" \
     yarn.resourcemanager.hostname "$MAESTRO" \
     yarn.resourcemanager.bind-host 0.0.0.0 \
@@ -206,15 +285,25 @@ conf_aula() {
     yarn.nodemanager.bind-host 0.0.0.0 \
     yarn.nodemanager.address "$NODO:8041" \
     yarn.nodemanager.resource.memory-mb "$ram" \
-    yarn.scheduler.maximum-allocation-mb "$ram" \
-    yarn.log.server.url "http://$MAESTRO:19888/jobhistory/logs"
+    yarn.log.server.url "http://$MAESTRO:19888/jobhistory/logs" \
+    "${yarn[@]}"
+  # Que YARN reparta por memoria Y por cores: cada PC aporta lo que tiene
+  if es_maestro && [ -f "$HADOOP_CONF_DIR/capacity-scheduler.xml" ]; then
+    xml_poner "$HADOOP_CONF_DIR/capacity-scheduler.xml" \
+      yarn.scheduler.capacity.resource-calculator org.apache.hadoop.yarn.util.resource.DominantResourceCalculator
+  fi
   xml_poner "$HADOOP_CONF_DIR/mapred-site.xml" \
     mapreduce.jobhistory.address "$MAESTRO:10020" \
     mapreduce.jobhistory.webapp.address "$MAESTRO:19888" \
     mapreduce.jobhistory.bind-host 0.0.0.0
-  xml_poner "$HIVE_CONF_DIR/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
-  xml_poner "$SPARK_HOME/conf/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
-  sed -i "s#localhost:18080#$MAESTRO:18080#" "$SPARK_HOME/conf/spark-defaults.conf"
+  # La imagen trabajador no trae Hive ni Spark (le llegan desde HDFS)
+  if [ -f "${HIVE_CONF_DIR:-/-}/hive-site.xml" ]; then
+    xml_poner "$HIVE_CONF_DIR/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
+  fi
+  if [ -d "${SPARK_HOME:-/-}/conf" ]; then
+    xml_poner "$SPARK_HOME/conf/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
+    sed -i "s#localhost:18080#$MAESTRO:18080#" "$SPARK_HOME/conf/spark-defaults.conf"
+  fi
   if es_maestro; then
     # Metastore sobre MariaDB (Derby embebido no aguanta una clase entera)
     xml_poner "$HIVE_CONF_DIR/hive-site.xml" \
@@ -231,8 +320,13 @@ generar_conf() { # conf base, la que usan los clientes (hdfs, hive, spark...)
   local fs; fs=$(fs_uri)
   mkdir -p "$RUN_DIR"
   sed "s#@FS@#$fs#g" /opt/sandbox/templates/core-site.xml     > "$HADOOP_CONF_DIR/core-site.xml"
-  sed "s#@FS@#$fs#g" /opt/sandbox/templates/tez-site.xml      > "$HADOOP_CONF_DIR/tez-site.xml"
-  sed "s#@FS@#$fs#g" /opt/sandbox/templates/spark-defaults.conf > "$SPARK_HOME/conf/spark-defaults.conf"
+  # (la imagen trabajador no trae Tez ni Spark: no hay plantilla)
+  if [ -f /opt/sandbox/templates/tez-site.xml ]; then
+    sed "s#@FS@#$fs#g" /opt/sandbox/templates/tez-site.xml    > "$HADOOP_CONF_DIR/tez-site.xml"
+  fi
+  if [ -f /opt/sandbox/templates/spark-defaults.conf ]; then
+    sed "s#@FS@#$fs#g" /opt/sandbox/templates/spark-defaults.conf > "$SPARK_HOME/conf/spark-defaults.conf"
+  fi
   hdfs_base
   xml_conf "$HADOOP_CONF_DIR/hdfs-site.xml" "${HDFS_BASE[@]}"
   if en_aula; then conf_aula; fi
