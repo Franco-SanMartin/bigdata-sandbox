@@ -45,7 +45,7 @@ def _comparar(mv, v: dict) -> str:
 
 
 def _abrir(page, h, m: dict):
-    h.ir(page, "ml")
+    h.ir(page, "ml/guiado")
     page.locator(f'tr[data-key="{m["id"]}"]').click()
     # mientras trae /viz la sección es un esqueleto sin data-viz-mode: esperar a que cargue (o falle)
     mv = page.locator("section.mv")

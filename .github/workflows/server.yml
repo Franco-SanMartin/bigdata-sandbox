@@ -10,6 +10,8 @@ on:
     branches: [full, main, ui2, 'ui2-*', 'empresa-*']
     paths:
       - "server/**"
+      - "ml/**"
+      - "ui/src/api/demo/ml/catalogo.json"
       - ".github/workflows/server.yml"
   workflow_dispatch:
 

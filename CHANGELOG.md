@@ -57,6 +57,23 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   práctica conviene hacer antes.
 - Prueba de humo de `full`: abre la terminal, corre comandos (`whoami`,
   `pwd`, `hdfs`) y comprueba que rechaza otro origen.
+- Estudio de ML, etapa (a) (motor y primeras pantallas en `full`):
+  - `sandbox_ml` en `ml` y `full` (`/opt/sandbox/ml`, en el `PYTHONPATH`):
+    catálogo de 48 modelos de scikit-learn, XGBoost y Spark MLlib con cada
+    hiperparámetro explicado, recetas validadas contra el catálogo (avisa de
+    fugas, columnas id y desbalance), el script que reproduce la corrida
+    (scikit-learn o PySpark con `pyspark.ml.Pipeline`, también como
+    notebook), perfil de los datos y registro de experimentos en
+    `/hadoop/ml/experimentos`.
+  - Rutas del servidor: `/api/ml/catalog`, `sources`, `profile`, `check`,
+    `code`, `experiments` y `runs` (correr con `python3` o `spark-submit` en
+    YARN, con límite de tiempo y memoria, avance en vivo y cancelar).
+  - Pantalla de ML: las fuentes de `/datos`, HDFS y Hive, el perfil de cada
+    dataset, la receta revisada paso a paso, el código generado (editable) y
+    la tabla de experimentos con las corridas de la sesión. Si una ruta falla,
+    el panel lo dice con el mensaje del servidor. El recorrido de clase
+    anterior sigue en *Guiado*.
+- XGBoost (`xgboost-cpu`, 18 MB, amd64 y arm64) en las imágenes `ml` y `full`.
 
 ### Seguridad
 

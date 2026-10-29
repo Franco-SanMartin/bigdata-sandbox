@@ -7,6 +7,8 @@
  *   - HttpApi (api/http.ts): habla con el backend real en :8080 (rutas /api/...).
  * La correspondencia con las rutas HTTP está al lado de cada método.
  */
+import type { MlCatalogo, MlCodigo, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes, MlPerfil, MlPrediccion, MlReceta, MlRevision } from './estudio';
+export type * from './estudio';
 
 /* ---------- Configuración (las variables de entorno del contenedor) ---------- */
 
@@ -964,6 +966,8 @@ export type ApiEvent =
   | { type: 'step'; step?: StepRun }
   /** Avance de un entrenamiento */
   | { type: 'model'; run: ModelRun }
+  /** Avance de una corrida del estudio de ML (avance, ajustes de la búsqueda, memoria) */
+  | { type: 'mlrun'; run: MlCorrida }
   /** Empezó o terminó una acción del backend (GET /api/actions/:id). El backend también manda una por
       cada línea de salida ({ id, t, stream, text }), pero el cliente solo reenvía las que traen state */
   | { type: 'action'; id: string; state: ActionRun['state']; exitCode?: number };
@@ -1089,4 +1093,40 @@ export interface SandboxApi {
   models(): Promise<ModelRun[]>;
   /** GET /api/ml/models/{id}/viz → lo de adentro del modelo, para dibujarlo */
   modelViz(id: string): Promise<ModelViz>;
+
+  /* Estudio de ML (server/sandbox_server/ml_estudio.py, tipos en estudio.ts) */
+  /** GET /api/ml/catalog → modelos con sus hiperparámetros, métricas, validaciones y búsquedas */
+  mlCatalog(): Promise<MlCatalogo>;
+  /** GET /api/ml/sources → CSV y Parquet de /datos y de HDFS, tablas de Hive */
+  mlSources(): Promise<MlFuentes>;
+  /** POST /api/ml/sources/example { ejemplo: senal | sucias } → genera el dataset de ejemplo en /datos y devuelve sus datos */
+  mlExample(ejemplo: 'senal' | 'sucias'): Promise<MlDatos>;
+  /** POST /api/ml/profile { datos, objetivo? } → perfil de columnas (con el objetivo: balance y asociación de cada columna) */
+  mlProfile(datos: MlDatos, objetivo?: string | null): Promise<MlPerfil>;
+  /** POST /api/ml/check { receta } → receta completa, errores y avisos */
+  mlCheck(receta: MlReceta): Promise<MlRevision>;
+  /** POST /api/ml/code { receta } → el script que reproduce la corrida */
+  mlCode(receta: MlReceta): Promise<MlCodigo>;
+  /** POST /api/ml/experiments { receta } → 202 { id (experimento), run (corrida) }; avanza por SSE mlrun */
+  mlTrain(receta: MlReceta): Promise<{ id: string; run: string }>;
+  /** POST /api/ml/runs { codigo, motor, receta?, minutos?, memoriaMb? } → 202: corre código editado */
+  mlRunCode(req: MlCorrerCodigo): Promise<{ id: string; run: string }>;
+  /** GET /api/ml/runs → corridas recientes */
+  mlRuns(): Promise<MlCorrida[]>;
+  /** GET /api/ml/runs/{id}?desde=N → estado y las líneas de salida desde la N */
+  mlRun(id: string, desde?: number): Promise<MlCorrida>;
+  /** POST /api/ml/runs/{id}/cancel */
+  mlCancel(id: string): Promise<MlCorrida>;
+  /** GET /api/ml/experiments → tabla de posiciones */
+  mlExperiments(): Promise<MlExperimentoFila[]>;
+  /** GET /api/ml/experiments/{id} → experimento con su informe (lo que dibujan los gráficos) */
+  mlExperiment(id: string): Promise<MlExperimento>;
+  /** DELETE /api/ml/experiments/{id} */
+  mlDeleteExperiment(id: string): Promise<void>;
+  /** GET /api/ml/experiments/{id}/download?formato=py|ipynb|modelo|log: la URL para bajarlo */
+  mlDownload(id: string, formato: 'py' | 'ipynb' | 'modelo' | 'log'): Promise<{ url: string; name: string }>;
+  /** POST /api/ml/experiments/{id}/jupyter → copia el notebook a /datos/experimentos */
+  mlToJupyter(id: string): Promise<{ ruta: string; jupyter: boolean; url: string }>;
+  /** POST /api/ml/experiments/{id}/predict { filas } o { archivo } */
+  mlPredict(id: string, req: { filas?: Record<string, unknown>[]; archivo?: string }): Promise<MlPrediccion>;
 }

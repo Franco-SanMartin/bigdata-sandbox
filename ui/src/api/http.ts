@@ -30,7 +30,7 @@ export function createHttpApi(): SandboxApi {
     activity: () => req('GET', '/activity?limit=200'),
     subscribe(fn: (e: ApiEvent) => void) {
       const es = new EventSource('./api/events');
-      ['status', 'activity', 'transfer', 'yarn', 'hdfs', 'step', 'model'].forEach(t => es.addEventListener(t, ev => fn({ type: t, ...JSON.parse((ev as MessageEvent).data || '{}') } as ApiEvent)));
+      ['status', 'activity', 'transfer', 'yarn', 'hdfs', 'step', 'model', 'mlrun'].forEach(t => es.addEventListener(t, ev => fn({ type: t, ...JSON.parse((ev as MessageEvent).data || '{}') } as ApiEvent)));
       // De action solo interesa cuándo empieza y termina, no cada línea de salida
       es.addEventListener('action', ev => { const d = JSON.parse((ev as MessageEvent).data || '{}'); if (d.state) fn({ type: 'action', id: d.id, state: d.state, exitCode: d.exitCode }); });
       return () => es.close();
@@ -90,6 +90,26 @@ export function createHttpApi(): SandboxApi {
     train: async r => (await req<{ id: string }>('POST', '/ml/train', r)).id,
     models: () => req('GET', '/ml/models'),
     modelViz: id => req('GET', `/ml/models/${encodeURIComponent(id)}/viz`),
+    mlCatalog: () => req('GET', '/ml/catalog'),
+    mlSources: () => req('GET', '/ml/sources'),
+    mlExample: ejemplo => req('POST', '/ml/sources/example', { ejemplo }),
+    mlProfile: (datos, objetivo) => req('POST', '/ml/profile', { datos, objetivo: objetivo ?? null }),
+    mlCheck: receta => req('POST', '/ml/check', { receta }),
+    mlCode: receta => req('POST', '/ml/code', { receta }),
+    mlTrain: receta => req('POST', '/ml/experiments', { receta }),
+    mlRunCode: r => req('POST', '/ml/runs', r),
+    mlRuns: () => req('GET', '/ml/runs'),
+    mlRun: (id, desde) => req('GET', `/ml/runs/${encodeURIComponent(id)}?${q({ desde: desde?.toString() })}`),
+    mlCancel: id => req('POST', `/ml/runs/${encodeURIComponent(id)}/cancel`),
+    mlExperiments: () => req('GET', '/ml/experiments'),
+    mlExperiment: id => req('GET', `/ml/experiments/${encodeURIComponent(id)}`),
+    mlDeleteExperiment: id => req('DELETE', `/ml/experiments/${encodeURIComponent(id)}`),
+    mlDownload: async (id, formato) => ({
+      url: `./api/ml/experiments/${encodeURIComponent(id)}/download?${q({ formato })}`,
+      name: `${id}.${formato === 'modelo' ? 'joblib' : formato}`,
+    }),
+    mlToJupyter: id => req('POST', `/ml/experiments/${encodeURIComponent(id)}/jupyter`),
+    mlPredict: (id, r) => req('POST', `/ml/experiments/${encodeURIComponent(id)}/predict`, r),
   };
 }
 
