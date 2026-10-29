@@ -6,6 +6,47 @@ está en [DECISIONES.md](DECISIONES.md).
 
 ## 2026-10-29
 
+- **La noche del hub (05:25 a 10:30)**, siguiendo "Para el hub" de la hoja de ruta:
+  - **Workflow Empresa** sobre `main` (run 40819945257): **verde**, las 34 pruebas en
+    amd64 y arm64. Armó el prerelease **`aula-v1`** (05:47) con
+    `bigdata-sandbox-empresa.tar.gz` (1,58 GB), `bigdata-sandbox-trabajador.tar.gz`
+    (191 MB), el de arm64 (186 MB), los dos `.cmd` y el `LEEME.md`. **No** publicó
+    `:empresa` ni `:trabajador` en Docker Hub: `subir` y `publicar` solo corren
+    desde la rama `empresa` (el `:empresa` de Docker Hub sigue siendo del 27/10 y
+    `:trabajador` no existe). Para el laboratorio alcanza con el release.
+  - **PR #5** (ML a): verde. Chocaba con `main` solo en `HOJA-DE-RUTA.md`; se
+    resolvió con un merge de `main` a la rama (solo `.md`, no relanza Full).
+    **Mergeado** (`ca98877`).
+  - **PR #7** (ML b): rojo en arm64 (run 40820136229), "datos de ejemplo en HDFS":
+    `KeyError: '/user/root/ml/clientes_avro'`. Era real: la caché del `fsck` en
+    `server/sandbox_server/hdfs.py` contaba la edad desde que el fsck
+    **terminaba**. En arm64 tarda varios segundos: si arrancaba antes de que Spark
+    escribiera el Avro, salía como fresco y sin el Avro. El primer arreglo
+    (`ce5085a`, edad desde el arranque) trajo otro problema: con fsck de más de
+    2 s la caché no servía nunca, cada pedido corría su fsck en fila y el humo de
+    la interfaz en amd64 se cayó entero por timeouts. El arreglo que quedó
+    (`c5adb30`) compara la edad con el **momento del pedido**: vale el fsck que
+    arrancó hasta 2 s antes, incluido el que estaba corriendo. Con eso Full dio
+    **verde** en las dos arquitecturas (run 40842607427). Se llevó a
+    `ui2-ml-etapa-c` con merge y `[skip ci]`. **Mergeado** (`3a235ec`).
+  - **Workflow Imagen** en `main`: el run del merge del #5 (40826389671) cayó en
+    `armar (amd64)` porque `dlcdn.apache.org` ya no tiene Hive 4.0.0 (404) y el
+    respaldo `archive.apache.org` no conectaba. Se relanzó y dio verde: `latest` y
+    `base` se republicaron a las 06:58. Full sobre `main` (40826389800) y el
+    amd64 de la (b) cayeron por lo mismo y pasaron al relanzarlos.
+  - **Rediseño 360**: `REDISENO-FULL.md` en el **PR #9** (rama
+    `ui2-rediseno-360`, solo documentación), con la sección Empresa / aula y las
+    guías que faltan para probarla en el laboratorio. El PR #8 (rama
+    `ui2-rediseno-plan`) se cerró: el commit había salido con otro autor y no se
+    hace force-push. La rama quedó sin borrar.
+  - **El merge del #5 salió con autor `ManIAco`** (la cuenta con la que se usa
+    `gh`), no `Franki`. No se reescribe `main`. El #7 se mergeó desde git como
+    `Franki`.
+  - Después del merge del #7, **Imagen** en `main` (40856905342) dio **verde** y
+    republicó `latest`, `base` y `ml` (11:33). **Full** en `main` (40856905329):
+    arm64 verde; amd64 cayó por un `HTTP 500` del registro al bajar la imagen
+    (infraestructura) y **quedó relanzado** (11:53). Hasta que pase, `:full` sigue
+    siendo la del merge del #5.
 - **Pedido de Franki:** dar una **vuelta 360 a `full`**:
   - separar almacenamiento de procesamiento;
   - dejar claro qué es cada herramienta y cómo se combinan;
