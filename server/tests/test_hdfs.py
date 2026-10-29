@@ -225,6 +225,60 @@ def test_archivos_con_el_cluster_apagandose(settings, tmp_path, fake_hdfs):
     asyncio.run(main())
 
 
+def _vivo(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] not in ("Z", "X")
+    except (FileNotFoundError, ProcessLookupError):
+        return False
+
+
+def test_apagado_mata_el_fsck_de_fondo_en_vuelo(settings, tmp_path, fake_hdfs, monkeypatch):
+    """La carrera del humo arm64 (Full, 28/10): el fsck de fondo de watch() arranca
+    con el cluster andando, el apagado termina y la JVM de 'hdfs fsck' sigue viva.
+    Acá el 'hdfs' es un script que lanza una 'JVM' (sleep) y no contesta nunca."""
+    jvm = tmp_path / "jvm.pid"
+    lento = tmp_path / "lento"
+    lento.mkdir()
+    (lento / "hdfs").write_text(f"""#!/bin/bash
+echo "$*" >> {fake_hdfs['log']}
+sleep 60 &
+echo $! > {jvm}
+wait
+""")
+    (lento / "hdfs").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{lento}:{__import__('os').environ['PATH']}")
+
+    async def main():
+        cl, h, _ = make(settings, tmp_path)
+        h.baseline = False                       # así watch() quiere un fsck
+        fondo = asyncio.get_running_loop().create_task(h.watch())
+        for _ in range(100):
+            if jvm.exists() and jvm.read_text().strip():
+                break
+            await asyncio.sleep(0.05)
+        pid = int(jvm.read_text())
+        assert _vivo(pid) and h._clients
+        t0 = asyncio.get_running_loop().time()
+        await cl.stop()
+        assert cl.phase == "stopped" and asyncio.get_running_loop().time() - t0 < 3
+        # Lo que mira el humo: con la fase en 'stopped' no queda ningún cliente vivo
+        assert not _vivo(pid) and not h._clients
+        await fondo                              # watch() se traga el ApiError
+        # Apagado, ni watch() ni nadie lanza otro fsck
+        jvm.unlink()
+        cl.hdfs = dict(RUNNING)
+        await h.watch()
+        for fase in ("starting", "stopping", "stopped"):
+            cl.phase = fase
+            with pytest.raises(ApiError) as e:
+                await h.fsck_all(max_age=0)
+            assert e.value.code == "service_down"
+        assert not jvm.exists()
+        assert fake_hdfs["log"].read_text().count("fsck") == 1
+    asyncio.run(main())
+
+
 def test_transferencias_entre_dos_fsck(settings, tmp_path, fake_hdfs, monkeypatch):
     async def main():
         cl, h, bus = make(settings, tmp_path)
