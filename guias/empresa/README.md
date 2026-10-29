@@ -94,6 +94,12 @@ archivo. El paso a paso está en la [guía 1](01-aula-simulada.md).
 | 1 | [Aula simulada en una compu](01-aula-simulada.md) | Paso a paso: arrancar, ver la topología, dónde quedan los bloques, un trabajo repartido, Hive y Spark contra el maestro, una PC que se cae, apagar y borrar |
 | 2 | [Sumar PCs y cambiar variables](02-sumar-pcs.md) | Agregar PCs al compose, cambiar `PCS_POR_FILA`, `REPLICATION` y `TRABAJADOR_RAM` y ver qué cambia |
 | 3 | [El cluster del aula, con las PCs del laboratorio](03-laboratorio.md) | La clase paso a paso: el maestro en la PC del profe, las PCs por Veyon, cargar el dataset, la vista Aula y "ya pueden apagar" |
+| 4 | [Prueba piloto con 2 o 3 PCs](04-prueba-piloto.md) | Los pasos de la prueba antes de la clase grande y la tabla para anotar tiempos |
+| 5 | [El dataset de la clase](05-dataset.md) | NYC Taxi 2024 en Parquet (~600 MB): por qué, cómo bajarlo, el comando de carga y una consulta |
+| 6 | [Plan B](06-plan-b.md) | Si falla el release: bajarlo de otra forma, los `.cmd` desde el repo, `docker save` |
+| 7 | [Hoja para sistemas](07-hoja-para-sistemas.md) | TCP 8099 y UDP 51820 en la PC del profe, la red "Pública", las IPs 192.169.0.x |
+| 8 | [Hoja del alumno](08-hoja-alumno.md) | Media página: qué pasa en su PC, qué no hacer, cómo mirar por dentro |
+| 9 | [Verificación de 1 minuto](09-verificacion-rapida.md) | Cuatro comandos sin la interfaz, con la salida esperada |
 | - | [Referencia](referencia.md) | Roles, puertos, RAM, variables, racks, políticas, comandos útiles, la sonda y dónde se usa cada cosa en la industria |
 | - | [Teoría](teoria/README.md) | De pseudo-distribuido a cluster real, réplicas y racks, fallas, tiers de almacenamiento, localidad en YARN, redes, RAM por rol |
 | - | [Evaluación](evaluacion/README.md) | Preguntas de opción múltiple, de desarrollo y ejercicios prácticos sobre el aula simulada, con respuestas |
@@ -117,6 +123,11 @@ archivo. El paso a paso está en la [guía 1](01-aula-simulada.md).
 7. La [evaluación](evaluacion/README.md), tema por tema.
 
 La [referencia](referencia.md) es para consultar, no para leer de corrido.
+
+**Para llevar al laboratorio**: la [prueba piloto](04-prueba-piloto.md), el
+[dataset](05-dataset.md), el [plan B](06-plan-b.md), la [hoja para
+sistemas](07-hoja-para-sistemas.md), la [hoja del alumno](08-hoja-alumno.md)
+y la [verificación de 1 minuto](09-verificacion-rapida.md).
 
 ## Cómo leer los comandos
 
