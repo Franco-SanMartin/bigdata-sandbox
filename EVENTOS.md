@@ -6,6 +6,23 @@ está en [DECISIONES.md](DECISIONES.md).
 
 ## 2026-10-29
 
+- **La tarde: hojas del laboratorio, maqueta y orden.**
+  - **Seis hojas nuevas para el aula** en `guias/empresa/` (04 a 09), enlazadas
+    desde su README: prueba piloto con 2 o 3 PCs y tabla para anotar, el dataset
+    (NYC Taxi 2024 en Parquet, ~600 MB, con su comando de carga), plan B si falla
+    el release, hoja para sistemas (TCP 8099 y UDP 51820 en la PC del profe, red
+    "Pública", IPs 192.169.0.x), media página para el alumno y verificación de 1
+    minuto sin la interfaz. Todo sacado de los `.cmd`, `estado`, `bloques.sh`,
+    `lib.sh` y la sonda; `enlaces.py` y `tutoriales.py --revisar` en verde.
+  - **Maqueta del rediseño 360** (`docs/maquetas/rediseno-360.html`) sumada al
+    PR #9: un HTML solo, sin red, con datos simulados. Pestaña FULL (capas,
+    motores y lenguajes, Comparar, tema claro) y pestaña AULA (PCs, tráfico entre
+    PCs, editor 2D de filas, apagar una PC y ver HDFS/YARN reaccionar).
+  - **Run 40856905329** (Full main tras el #7): terminó **verde** con el
+    relanzamiento de las 11:53; publicó `:full`.
+  - **Rama `ui2-rediseno-plan` borrada** (remota y local; PR #8 cerrado).
+  - "Para seguir" en la hoja de ruta: la lista de todo lo que falta, en orden.
+
 - **La noche del hub (05:25 a 10:30)**, siguiendo "Para el hub" de la hoja de ruta:
   - **Workflow Empresa** sobre `main` (run 40819945257): **verde**, las 34 pruebas en
     amd64 y arm64. Armó el prerelease **`aula-v1`** (05:47) con

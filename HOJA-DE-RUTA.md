@@ -5,6 +5,34 @@ partida para retomar el trabajo desde cualquier sesión o compu. Última
 actualización: 2026-10-29. Las decisiones están en [DECISIONES.md](DECISIONES.md)
 y lo que pasó día a día, en [EVENTOS.md](EVENTOS.md).
 
+## Para seguir
+
+Todo lo que falta, en orden (al 2026-10-29 a la tarde):
+
+1. **Revisar y mergear el PR #9** (`ui2-rediseno-360`): el plan del rediseño
+   360 (`REDISENO-FULL.md`) y la maqueta navegable
+   (`docs/maquetas/rediseno-360.html`, se abre con doble clic). Mergear desde
+   git como Franki, no con `gh pr merge` (deja otro autor).
+2. **ML etapas c, d y e** sobre HDFS: siguen en la rama `ui2-ml-etapa-c` (ya
+   tiene el arreglo de la caché del fsck).
+3. **Implementar el 360**: los 13 PRs chicos del diseño, en el orden de
+   `REDISENO-FULL.md`.
+4. **Aula 2D y tráfico real en `empresa`**: el editor de filas/racks, el
+   tráfico medido en el `wg0` del maestro, la línea de tiempo de una PC que se
+   cae y YARN en vivo (diseño en la sección Empresa de `REDISENO-FULL.md`).
+5. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*
+   desde la rama `empresa` con publicar tildado (~2 h). Hoy `:empresa` es del
+   27/10 y `:trabajador` no existe; para el aula alcanza con el release
+   `aula-v1`. Decide Franki.
+6. **Prueba piloto en el aula** con 2 o 3 PCs:
+   [guía 4](guias/empresa/04-prueba-piloto.md) y las hojas 5 a 9 de
+   `guias/empresa/`. Con lo que se anote, decidir la clase con las 20.
+7. **Riesgo: Hive 4.0.0 ya no está en dlcdn** (404). Sin la caché, cada build
+   de Full baja de archive.apache.org y falla si se cae. Opciones: pasar a la
+   versión que sí está en dlcdn o guardar el tarball en un release propio.
+8. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
+   reescribiendo `main` con force-push: no hacerlo sin que Franki lo decida.
+
 ## Para el hub (desde la noche del 2026-10-29)
 
 Franki apaga su compu. El hub controla git y el CI mientras duerme
