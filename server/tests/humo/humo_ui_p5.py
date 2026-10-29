@@ -100,7 +100,7 @@ def todo(page, h) -> None:
                                  ("clasificación", "arbol", "Spark MLlib"), ("agrupamiento", None, "scikit-learn")):
         with h.Chequeo(f"p5 todo: ML desde la interfaz, {tarea} con {motor}") as c:
             n = len(h.CONSOLA)
-            h.ir(page, "ml")
+            h.ir(page, "ml/guiado")
             m = _entrenar(page, h, ids, tarea, modelo, motor)
             h.captura(page, f"p5-todo-ml-{m['engine']}-{m['task']}-{m['model']}")
             c.detalle = f"{m['engine']} {m['model']} {m.get('seconds')} s: {h.hf.revisar_modelo(m)}"[:500]
