@@ -62,7 +62,7 @@ La versión se elige con el *tag*, lo que va después de los dos puntos:
 | `latest` = `base` | **Publicada. La de la materia** | Ubuntu 24.04 + Hadoop, Hive, Spark, Pig, Sqoop, MySQL, ZooKeeper y MongoDB. Es la de las guías |
 | `ml` | Publicada | `base` + Python para datos (pandas, numpy, scikit-learn, matplotlib, pymongo) y JupyterLab, para ETL y machine learning |
 | `full` | Publicada | `ml` + una interfaz web en el puerto 8080 para prender, configurar y mirar el cluster desde el navegador ([abajo](#la-versión-full)) |
-| `empresa` | Beta | `full` + varias compus arman un solo cluster: la del profe es el maestro y cada PC suma un DataNode y un NodeManager, con racks por fila. Hoy anda el aula simulada en una sola compu; la red entre PCs reales viene después ([guías](guias/empresa/README.md)) |
+| `empresa` | Beta | `full` + varias compus arman un solo cluster: la del profe es el maestro y cada PC suma un DataNode y un NodeManager, con racks por fila. Anda en una sola compu (aula simulada) y con las PCs del laboratorio por un túnel WireGuard, con una imagen chica para las PCs (`trabajador`) y la vista Aula; falta estrenarlo en una clase ([guías](guias/empresa/README.md)) |
 
 - Cada versión tiene su documentación completa en
   [`guias/`](guias/README.md#qué-versión-uso): paso a paso, referencia,

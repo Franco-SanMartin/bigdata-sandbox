@@ -15,6 +15,20 @@ if en_aula; then
   echo
   echo "  ${NEGRITA}Cluster del aula:${FIN} este nodo es ${NEGRITA}$NODO${FIN} (ROL=$ROL), maestro: $MAESTRO"
   echo "  ${NEGRITA}Replicacion:${FIN} $REPLICATION   ${NEGRITA}Tamano de bloque:${FIN} $BLOCK_SIZE   ${NEGRITA}Servicios:${FIN} $SERVICIOS"
+  if con_tunel; then
+    ip_tunel=$(ip -4 -o addr show wg0 2>/dev/null | awk '{ print $4; exit }')
+    if es_maestro; then
+      echo "  ${NEGRITA}Red del aula:${FIN} tunel WireGuard ($(cat "$AULA_DIR/modo" 2>/dev/null)), hub en ${ip_tunel:-?}," \
+           "codigo ${NEGRITA}$(cat "$AULA_DIR/codigo" 2>/dev/null)${FIN}, $(find "$AULA_DIR/pcs" -type f ! -name '*.tmp' 2>/dev/null | wc -l) PC(s) inscriptas"
+    else
+      echo "  ${NEGRITA}Red del aula:${FIN} tunel WireGuard al profe ($HUB), IP del tunel ${ip_tunel:-?}," \
+           "MTU $(cat /sys/class/net/wg0/mtu 2>/dev/null)"
+    fi
+  fi
+  if es_trabajador; then
+    echo "  ${NEGRITA}Esta PC presta:${FIN} $TRABAJADOR_RAM MB y ${TRABAJADOR_CORES:-los} cores" \
+         "${GRIS}(Docker tiene $(docker_ram_mb) MB y $(docker_cores) cores$([ "$TRABAJADOR_RAM_AUTO" = si ] && echo ": automatico, dos tercios"))${FIN}"
+  fi
   echo
   if es_maestro; then
     fila "NameNode" 9870 "http://$NODO:9870"

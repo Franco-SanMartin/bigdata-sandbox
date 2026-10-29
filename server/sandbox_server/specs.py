@@ -30,6 +30,32 @@ class ProcSpec:
     extra: dict = field(default_factory=dict)
 
 
+def maestro_specs(c: dict, ui_port: int = 8080, maestro_nm: bool = False) -> list[ProcSpec]:
+    """El maestro del aula (versión empresa, ROL=maestro): un NameNode y el
+    Secondary, su DataNode "archivo" (con los puertos de fábrica de Hadoop,
+    como cada nodo del aula), YARN sin NodeManager (salvo MAESTRO_NM=si) y los
+    servicios. Los DataNodes y NodeManagers de las PCs se ven en la vista Aula."""
+    s = [ProcSpec("nn1", "namenode", "NameNode", "hdfs", [9870, 9000], 9870, web=9870),
+         ProcSpec("snn", "secondarynamenode", "Secondary NameNode", "hdfs", [9868], 9868, web=9868),
+         ProcSpec("dn1", "datanode", "DataNode (archivo)", "hdfs", [9864, 9866], 9864, web=9864)]
+    if c["services"] != "hdfs":
+        s.append(ProcSpec("rm", "resourcemanager", "ResourceManager", "yarn", [8088, 8031], 8088, web=8088))
+        if maestro_nm:
+            s.append(ProcSpec("nm", "nodemanager", "NodeManager", "yarn", [8042], 8042, web=8042))
+        s.append(ProcSpec("jh", "historyserver", "MapReduce JobHistory", "yarn", [19888], 19888, web=19888))
+        s.append(ProcSpec("mysql", "mysql", "MySQL (MariaDB)", "servicios", [3306], 3306))
+    if c["services"] == "todo":
+        s.append(ProcSpec("metastore", "metastore", "Hive Metastore", "servicios", [9083], 9083))
+        s.append(ProcSpec("hiveserver2", "hiveserver2", "HiveServer2", "servicios", [10000, 10002], 10000, web=10002))
+        s.append(ProcSpec("sparkhistory", "sparkhistory", "Spark History", "servicios", [18080], 18080, web=18080))
+    if c["mongodb"]:
+        s.append(ProcSpec("mongodb", "mongodb", "MongoDB", "servicios", [27017], 27017, controllable=True))
+    if c["jupyter"]:
+        s.append(ProcSpec("jupyter", "jupyter", "JupyterLab", "servicios", [8888], 8888, web=8888, controllable=True))
+    s.append(ProcSpec("ui", "ui", "Esta interfaz", "servicios", [ui_port], ui_port))
+    return s
+
+
 def process_specs(c: dict, ui_port: int = 8080) -> list[ProcSpec]:
     s: list[ProcSpec] = []
     ha = c["namenodes"] > 1

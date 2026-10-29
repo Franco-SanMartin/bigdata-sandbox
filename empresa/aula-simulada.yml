@@ -11,7 +11,8 @@
 #   docker exec maestro estado         lo que corre en el maestro y los DataNodes vivos
 #   docker compose -f aula-simulada.yml down -v      apagar y borrar todo
 #
-# UIs: NameNode http://localhost:9870, YARN http://localhost:8088,
+# UIs: la interfaz del maestro (con la vista Aula) http://localhost:8080,
+#      NameNode http://localhost:9870, YARN http://localhost:8088,
 #      JobHistory http://localhost:19888, Spark History http://localhost:18080
 #
 # Los nombres importan: el maestro se llama "maestro" y las PCs pcNN. Con
@@ -38,6 +39,7 @@ services:
       ROL: maestro
       PCS_POR_FILA: "2"
     ports:
+      - "127.0.0.1:8080:8080"
       - "9870:9870"
       - "8088:8088"
       - "19888:19888"

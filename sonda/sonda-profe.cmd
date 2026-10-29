@@ -168,6 +168,8 @@ Write-Host ''
 Write-Host 'En Veyon: seleccionar las PCs > "Ejecutar programa" con:'
 Write-Host "   cmd /c `"`"%USERPROFILE%\sonda-alumno.cmd`" $($d.ip_pc)`""
 Write-Host '(si Veyon deja los archivos en otra carpeta, poner esa ruta)'
+Write-Host 'Sin la prueba B (las PCs no publican el 8098 y no aparece el cartel del firewall):'
+Write-Host "   cmd /c `"`"%USERPROFILE%\sonda-alumno.cmd`" $($d.ip_pc) sin-b`""
 Write-Host ''
 
 docker rm -f sonda-profe *> $null
