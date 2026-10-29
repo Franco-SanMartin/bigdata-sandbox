@@ -132,18 +132,43 @@ export interface MlCatalogo {
   cv: Record<string, { etiqueta: string; ayuda: string }>;
   busquedas: Record<MlMotor, Record<string, { etiqueta: string; ayuda: string }>>;
   limites: { max_ajustes: number; max_combinaciones: number; max_minutos: number; min_minutos: number; max_n_jobs: number };
+  /** Los formatos que lee el estudio (sandbox_ml/fuentes.py) */
+  formatos: Record<MlFormato, { etiqueta: string; ayuda: string }>;
+  /** Los tipos de Spark que se pueden poner en el esquema editado */
+  tiposEsquema: string[];
+  /** Los pasos de la receta de limpieza (sandbox_ml/limpieza.py) */
+  limpieza: {
+    pasos: Record<MlPasoTipo, { etiqueta: string; fase: MlFase; ayuda: string }>;
+    opciones: Record<string, { valor: string; etiqueta: string }[]>;
+    factor: Record<'iqr' | 'percentiles' | 'zscore', { min: number; max: number; defecto: number }>;
+  };
 }
 
 /* ---------- Datos y perfil ---------- */
+
+export type MlFormato = 'parquet' | 'orc' | 'avro' | 'json' | 'csv' | 'texto';
 
 export interface MlDatos {
   origen: 'local' | 'hdfs' | 'hive';
   ruta?: string;
   tabla?: string;
-  formato?: 'csv' | 'parquet';
+  formato?: MlFormato;
+  /** CSV: el separador (coma, punto y coma, tabulación o barra), si la primera fila es el encabezado y si se infieren los tipos */
   separador?: string;
+  encabezado?: boolean;
+  inferir?: boolean;
+  /** JSON: un documento entero (o un array) en vez de un objeto por línea */
+  multilinea?: boolean;
+  /** Lo detecta el servidor por la extensión (gzip, bz2, snappy): Hadoop lo descomprime solo */
+  compresion?: string | null;
+  /** Tipos editados: {columna: tipo de Spark} (se aplican con un cast al leer) */
+  esquema?: Record<string, string>;
+  /** Condición de Spark SQL sobre las columnas de partición (anio = 2024): Spark ni abre las demás carpetas */
+  filtro_particiones?: string | null;
   limite?: number | null;
 }
+
+export interface MlParticiones { columnas: string[]; n: number; ejemplos: string[] }
 
 export interface MlFuente extends MlDatos {
   nombre: string;
@@ -151,6 +176,7 @@ export interface MlFuente extends MlDatos {
   filas?: number | null;
   columnas?: string[];
   partes?: number;
+  particiones?: MlParticiones;
 }
 
 export interface MlFuentes { local: MlFuente[]; hdfs: MlFuente[]; hive: MlFuente[]; avisos: string[] }
@@ -167,7 +193,11 @@ export interface MlColumnaPerfil {
   rol: MlRol;
   por_que: string;
   ejemplos: MlValor[];
-  num?: { min: number; max: number; media: number; desvio: number; p25: number; p50: number; p75: number; ceros: number; extremos: number };
+  num?: { min: number; max: number; media: number; desvio: number; p25: number; p50: number; p75: number; ceros: number; extremos: number;
+    /** Solo en el perfil con Spark (cuantiles aproximados) */
+    p01?: number; p05?: number; p95?: number; p99?: number };
+  /** Con Spark los distintos son aproximados (HyperLogLog, ±2 %) */
+  unicos_aprox?: boolean;
   histograma?: { bordes: number[]; cuentas: number[] };
   top?: { valor: string; n: number }[];
   fecha?: { min: string; max: string };
@@ -185,11 +215,120 @@ export interface MlPerfil {
   recortado: boolean;
   columnas: MlColumnaPerfil[];
   duplicadas: number | null;
-  memoria_mb: number;
+  memoria_mb: number | null;
   vista: { columnas: string[]; filas: MlValor[][] };
   objetivo?: { columna: string; tarea: MlTarea; por_que: string };
   segundos: number;
+  /** pandas (una máquina, hasta 200.000 filas) o spark (a escala, en YARN) */
+  motor?: 'pandas' | 'spark';
+  modo?: 'muestra' | 'completo';
+  /** Spark: las filas de todos los datos (filas son las perfiladas) */
+  filas_total?: number;
+  muestra_filas?: number | null;
+  fuente?: MlFuenteInfo;
+  app_id?: string;
+  master?: string;
+  /** Lo que el perfil vio distinto de lo elegido (p. ej. el separador del CSV) */
+  sugerencias?: { separador?: string };
 }
+
+export interface MlFuenteInfo {
+  formato?: string | null;
+  compresion?: string | null;
+  bytes?: number;
+  archivos?: number;
+  leidos?: number;
+  ubicacion?: string;
+  tabla?: string;
+  particiones?: MlParticiones;
+  aviso?: string;
+}
+
+export interface MlPerfilOpciones { motor?: 'pandas' | 'spark'; modo?: 'muestra' | 'completo'; filas?: number }
+
+/* ---------- Receta de limpieza (sandbox_ml/limpieza.py) ---------- */
+
+export type MlPasoTipo = 'tipo' | 'texto' | 'regex' | 'fecha' | 'nulos' | 'outliers' | 'raras' | 'mapeo' | 'derivada' | 'duplicados' | 'filtro';
+export type MlFase = 'entrenamiento' | 'modelo';
+
+/** Un paso: el tipo y sus opciones (las mismas claves que limpieza.py) */
+export interface MlPaso {
+  tipo: MlPasoTipo;
+  columna?: string;
+  activo?: boolean;
+  nota?: string;
+  // tipo
+  a?: string;
+  formato?: string;
+  // texto
+  ops?: string[];
+  // regex
+  patron?: string;
+  reemplazo?: string;
+  modo?: 'reemplazar' | 'extraer';
+  grupo?: number;
+  destino?: string;
+  // fecha
+  con_hora?: boolean;
+  partes?: string[];
+  // nulos
+  estrategia?: 'mediana' | 'media' | 'moda' | 'constante' | 'eliminar';
+  valor?: MlValor;
+  indicador?: boolean;
+  // outliers
+  metodo?: 'iqr' | 'percentiles' | 'zscore';
+  factor?: number;
+  accion?: 'recortar' | 'nulo' | 'eliminar';
+  // raras
+  min_pct?: number;
+  max_categorias?: number;
+  otra?: string;
+  // mapeo
+  mapa?: Record<string, MlValor>;
+  resto?: 'conservar' | 'nulo' | 'valor';
+  otro?: MlValor;
+  // derivada
+  nombre?: string;
+  expresion?: string;
+  rol?: MlRol;
+  // duplicados
+  columnas?: string[];
+  // filtro
+  condicion?: string;
+}
+
+export interface MlLimpieza { nombre?: string | null; version?: number | null; pasos: MlPaso[] }
+
+export interface MlPasoVista {
+  paso: number;
+  tipo: MlPasoTipo;
+  titulo: string;
+  fase: MlFase;
+  ok: boolean;
+  error?: { mensaje: string; detalle?: string | null };
+  filas_antes?: number;
+  filas_despues?: number;
+  /** Filas que cambiaron (o que se sacaron, si quita) */
+  afectadas?: number;
+  quita?: boolean;
+  aprendido?: Record<string, MlValor | MlValor[]> | null;
+  expresiones?: [string, string][];
+  ejemplos?: { columnas: string[]; filas: MlValor[][] };
+}
+
+export interface MlVistaLimpieza {
+  filas: { leidas: number; entrenamiento: number };
+  pasos: MlPasoVista[];
+  final: { columnas: string[]; filas: MlValor[][] };
+  expresiones: [string, string][];
+  muestra: number;
+  segundos: number;
+  huella: string;
+}
+
+export interface MlLimpiezaVersion { version: number; creado: string; huella: string; nota: string | null; limpieza: MlLimpieza }
+export interface MlLimpiezaGuardada { nombre: string; versiones: MlLimpiezaVersion[] }
+export interface MlLimpiezaFila { nombre: string; versiones: number; version: number; creado: string; pasos: number; huella: string }
 
 /* ---------- Receta (sandbox_ml/receta.py) ---------- */
 
@@ -205,6 +344,8 @@ export interface MlReceta {
   modelo: { id: string; params: Record<string, MlValor> };
   busqueda: Partial<MlBusqueda>;
   informe?: Partial<MlInformeOpciones>;
+  /** La receta de limpieza, columna por columna (solo con modelos de Spark) */
+  limpieza?: MlLimpieza;
   /** Lo completa el servidor (sale del modelo) */
   motor?: MlMotor;
   version?: number;
@@ -222,7 +363,8 @@ export interface MlRevision {
   huella: string | null;
 }
 
-export interface MlCodigo { codigo: string; archivo: string; motor: MlMotor; huella: string; comando: string }
+export type MlParteCodigo = 'entrenamiento' | 'perfil' | 'limpieza';
+export interface MlCodigo { codigo: string; archivo: string; motor: MlMotor; huella: string; comando: string; parte?: MlParteCodigo }
 
 /* ---------- Corridas ---------- */
 

@@ -1,25 +1,38 @@
 /* Estudio de ML en el modo demo (sin contenedor). No hay Python acá: los experimentos, su código y los perfiles
    son los que dejaron corridas de verdad (ui/scripts/estudio_demo.py contra una full). Al "entrenar", la demo
    simula el avance y guarda una copia del experimento real más parecido (mismo modelo, si no misma tarea),
-   marcada como tal. La revisión de la receta es una versión chica de la del servidor. */
+   marcada como tal. La revisión de la receta es una versión chica de la del servidor.
+   Lo de HDFS (formatos, perfiles con Spark, la vista previa de la limpieza y su código) sale de ml/datos.json:
+   corridas reales sobre ventas_sucias y clientes_senal en HDFS (estudio_demo.py --datos). */
 import type {
-  ApiEvent, MlBusqueda, MlCatalogo, MlCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes, MlIssue,
-  MlLinea, MlPerfil, MlReceta, MlRevision, MlValor,
+  ApiEvent, MlBusqueda, MlCatalogo, MlCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuente, MlFuentes, MlIssue,
+  MlLimpieza, MlLimpiezaFila, MlLimpiezaGuardada, MlLinea, MlPaso, MlParteCodigo, MlPasoVista, MlPerfil, MlPerfilOpciones, MlReceta,
+  MlRevision, MlValor, MlVistaLimpieza,
 } from '../types';
 import { fail } from '../errors';
 import type { DemoEngine } from './engine';
 
 interface Fixture { fila: MlExperimentoFila; experimento: MlExperimento; codigo: string }
+interface DatosHdfs {
+  hdfs: MlFuente[];
+  perfiles: Record<string, MlPerfil>;
+  limpieza: { datos: MlDatos; receta: MlLimpieza; vista: MlVistaLimpieza };
+  codigo: Record<'perfil' | 'limpieza', MlCodigo>;
+}
 
-let fixtures: Promise<{ exps: Fixture[]; perfiles: Record<string, MlPerfil>; cat: MlCatalogo }> | null = null;
-const cargar = () => (fixtures ??= Promise.all([import('./ml/experimentos.json'), import('./ml/perfiles.json'), import('./ml/catalogo.json')])
-  .then(([e, p, c]) => ({ exps: e.default as unknown as Fixture[], perfiles: p.default as unknown as Record<string, MlPerfil>, cat: c.default as unknown as MlCatalogo })));
+let fixtures: Promise<{ exps: Fixture[]; perfiles: Record<string, MlPerfil>; cat: MlCatalogo; hdfs: DatosHdfs }> | null = null;
+const cargar = () => (fixtures ??= Promise.all([import('./ml/experimentos.json'), import('./ml/perfiles.json'), import('./ml/catalogo.json'), import('./ml/datos.json')])
+  .then(([e, p, c, d]) => ({ exps: e.default as unknown as Fixture[], perfiles: p.default as unknown as Record<string, MlPerfil>,
+    cat: c.default as unknown as MlCatalogo, hdfs: d.default as unknown as DatosHdfs })));
+/** Un paso en texto, con las claves ordenadas (para reconocer los de la receta de ejemplo) */
+const firma = (p: MlPaso) => JSON.stringify(Object.keys(p).filter(k => k !== 'activo' && k !== 'nota').sort().map(k => [k, p[k as keyof MlPaso]]));
 
 const SENAL = '/datos/clientes_senal.csv';
 const clon = <T>(v: T): T => structuredClone(v);
 
 export class DemoEstudio {
   private exps: Fixture[] | null = null;
+  private limpiezas: MlLimpiezaGuardada[] | null = null;
   private corridas = new Map<string, MlCorrida & { lineasTodas: MlLinea[] }>();
   private seq = 0;
   constructor(private e: DemoEngine) {}
@@ -35,16 +48,23 @@ export class DemoEstudio {
   async sources(): Promise<MlFuentes> {
     return {
       local: [{ origen: 'local', ruta: SENAL, nombre: 'clientes_senal.csv', formato: 'csv', bytes: 681463 }],
-      hdfs: [{ origen: 'hdfs', ruta: '/user/root/ml/clientes_senal.csv', nombre: '/user/root/ml/clientes_senal.csv', formato: 'csv', bytes: 681463 }],
+      hdfs: clon((await this.base()).hdfs.hdfs),
       hive: [],
-      avisos: ['Modo demo: solo está clientes_senal.csv (los perfiles y resultados son de corridas reales)'],
+      avisos: ['Modo demo: clientes_senal.csv en /datos y ventas_sucias en HDFS (los perfiles y resultados son de corridas reales)'],
     };
   }
 
   async example(): Promise<MlDatos> { return { origen: 'local', ruta: SENAL, formato: 'csv' }; }
 
-  async profile(datos: MlDatos, objetivo?: string | null): Promise<MlPerfil> {
-    const { perfiles } = await this.base();
+  async profile(datos: MlDatos, objetivo?: string | null, op?: MlPerfilOpciones): Promise<MlPerfil> {
+    const { perfiles, hdfs } = await this.base();
+    if (datos.origen === 'hdfs') {
+      const p = hdfs.perfiles[datos.ruta ?? ''];
+      if (!p) fail('not_found', 'En el modo demo están perfilados con Spark los datos de HDFS de la lista: con el contenedor, cualquier ruta');
+      if (op?.motor === 'pandas') fail('invalid', `Con pandas no: ${datos.formato === 'csv' ? 'perfilalo con Spark (en la demo está precalculado con Spark)' : `${datos.formato} se lee con Spark`}`);
+      return { ...clon(p), datos };
+    }
+    if (op?.motor === 'spark') fail('unsupported', 'En el modo demo el perfil con Spark está precalculado para los datos de HDFS: elegí una fuente de HDFS (o «auto» para este CSV)');
     if (!(datos.ruta ?? '').endsWith('clientes_senal.csv')) fail('not_found', 'En el modo demo solo está clientes_senal.csv: con el contenedor, cualquier CSV, Parquet o tabla de Hive');
     const p = perfiles[objetivo ?? ''] ?? perfiles[''];
     return { ...clon(p), datos };
@@ -93,7 +113,15 @@ export class DemoEstudio {
       ?? exps.find(f => f.experimento.tarea === receta.tarea) ?? exps[0];
   }
 
-  async code(receta: MlReceta): Promise<MlCodigo> {
+  async code(receta: MlReceta, parte: MlParteCodigo = 'entrenamiento'): Promise<MlCodigo> {
+    if (parte !== 'entrenamiento') {
+      const { hdfs } = await this.base();
+      const c = clon(hdfs.codigo[parte]);
+      const igual = parte === 'perfil' ? receta.datos.ruta === hdfs.limpieza.datos.ruta
+        : JSON.stringify((receta.limpieza?.pasos ?? []).map(firma)) === JSON.stringify(hdfs.limpieza.receta.pasos.map(firma));
+      if (!igual) c.codigo = `# Modo demo: este es el código real ${parte === 'perfil' ? 'del perfil' : 'de la receta de limpieza de ejemplo'} de ${hdfs.limpieza.datos.ruta}.\n# Con el contenedor, el estudio arma el de TUS datos y TU receta.\n\n` + c.codigo;
+      return c;
+    }
     const { exps } = await this.base();
     const f = this.parecido(exps, receta);
     const igual = f.experimento.modelo?.id === receta.modelo.id;
@@ -174,6 +202,60 @@ export class DemoEstudio {
     if (!c) fail('not_found', 'No existe esa corrida');
     if (c.estado === 'corriendo') { c.estado = 'falló'; c.error = 'cancelado desde la interfaz'; c.mensaje = c.error; c.fin = Date.now(); this.emitir(c); }
     return this.run(id);
+  }
+
+  /* ---------- receta de limpieza: la vista previa precalculada y las versiones en memoria ---------- */
+
+  async cleaningPreview(datos: MlDatos, limpieza: MlLimpieza): Promise<MlVistaLimpieza> {
+    const { hdfs } = await this.base();
+    const ej = hdfs.limpieza;
+    if (datos.ruta !== ej.datos.ruta) {
+      fail('unsupported', `En el modo demo la vista previa está precalculada para ${ej.datos.ruta} con la receta de ejemplo (abrila en «Abrir una guardada»). Con el contenedor, Spark corre cualquier receta sobre cualquier fuente`);
+    }
+    const porFirma = new Map(ej.receta.pasos.map((p, i) => [firma(p), ej.vista.pasos.find(v => v.paso === i)!]));
+    const pasos: MlPasoVista[] = limpieza.pasos.map((p, i) => {
+      const v = porFirma.get(firma(p));
+      return v ? { ...clon(v), paso: i } : {
+        paso: i, tipo: p.tipo, titulo: p.tipo, fase: 'modelo', ok: false,
+        error: { mensaje: 'En el modo demo solo están precalculados los pasos de la receta de ejemplo: con el contenedor, Spark corre cualquier paso' },
+      } as MlPasoVista;
+    });
+    return { ...clon(ej.vista), pasos, huella: huella(JSON.stringify(limpieza.pasos)) };
+  }
+
+  private async guardadas(): Promise<MlLimpiezaGuardada[]> {
+    const { hdfs } = await this.base();
+    this.limpiezas ??= [{ nombre: 'ventas', versiones: [{ version: 1, creado: '2026-10-28T22:10:00', huella: huella(JSON.stringify(hdfs.limpieza.receta.pasos)),
+      nota: 'la receta de ejemplo de ventas_sucias', limpieza: { ...clon(hdfs.limpieza.receta), version: 1 } }] }];
+    return this.limpiezas;
+  }
+
+  async cleanings(): Promise<MlLimpiezaFila[]> {
+    return (await this.guardadas()).map(d => {
+      const v = d.versiones[d.versiones.length - 1];
+      return { nombre: d.nombre, versiones: d.versiones.length, version: v.version, creado: v.creado, pasos: v.limpieza.pasos.length, huella: v.huella };
+    });
+  }
+
+  async cleaning(nombre: string): Promise<MlLimpiezaGuardada> {
+    const d = (await this.guardadas()).find(x => x.nombre === nombre);
+    if (!d) fail('not_found', `No hay una receta de limpieza que se llame ${nombre}`);
+    return clon(d);
+  }
+
+  async saveCleaning(nombre: string, limpieza: MlLimpieza, nota?: string | null) {
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_ .-]{0,59}$/.test(nombre)) fail('invalid', 'El nombre de la receta de limpieza: letras, números, espacios, punto y guiones (hasta 60)');
+    if (!limpieza.pasos.length) fail('invalid', 'La receta de limpieza no tiene pasos');
+    const todas = await this.guardadas();
+    let d = todas.find(x => x.nombre === nombre);
+    if (!d) { d = { nombre, versiones: [] }; todas.push(d); }
+    const h = huella(JSON.stringify(limpieza.pasos));
+    const ultima = d.versiones[d.versiones.length - 1];
+    if (ultima?.huella === h) return { nombre, version: ultima.version, huella: h, creado: ultima.creado, nueva: false };
+    const v = { version: (ultima?.version ?? 0) + 1, creado: new Date().toISOString().slice(0, 19), huella: h, nota: nota ?? null,
+      limpieza: { nombre, version: (ultima?.version ?? 0) + 1, pasos: clon(limpieza.pasos) } };
+    d.versiones.push(v);
+    return { nombre, version: v.version, huella: h, creado: v.creado, nueva: true };
   }
 
   async experiments(): Promise<MlExperimentoFila[]> { return clon((await this.base()).exps.map(f => f.fila)); }
