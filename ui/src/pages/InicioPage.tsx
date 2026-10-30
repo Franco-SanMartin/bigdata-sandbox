@@ -1,5 +1,7 @@
-/* Inicio: en qué estado está el cluster, la única acción que importa ahora y qué se puede hacer
-   (y qué no, por qué, y el botón que lo arregla). Es lo primero que ve quien abre la interfaz. */
+/* Inicio: en qué estado está el cluster y la única acción que importa ahora; el mapa vivo del
+   ecosistema (qué es cada herramienta, cómo se conectan y cuál está andando); qué se puede hacer
+   (y qué no, por qué, y el botón que lo arregla) y cuál conviene para cada tarea. Es lo primero
+   que ve quien abre la interfaz. */
 import { ArrowRight, BookOpen, Boxes, Brain, ChevronRight, Database, HardDrive, Play, Settings, Square, type LucideIcon } from 'lucide-react';
 import { useSnapshot } from '../state/store';
 import { navigate } from '../state/ui';
@@ -13,6 +15,7 @@ import { bootLine, EmptyState, PageHeader, Panel } from '../components/base';
 import type { ReactNode } from 'react';
 import type { Activity, ClusterStatus, DataNode } from '../api/types';
 import type { PageId } from '../lib/route';
+import { Comparar, Ecosistema } from './inicio/Ecosistema';
 
 const CAP_LABEL: Record<Capability['state'], string> = { ready: 'Listo', starting: 'Arrancando', blocked: 'No disponible' };
 const CAP_DOT: Record<Capability['state'], string> = { ready: 'up', starting: 'starting', blocked: 'off' };
@@ -202,8 +205,9 @@ export function InicioPage() {
   const sum = capSummary(caps);
   return (
     <div className="page-in inicio">
-      <PageHeader title="Inicio" sub="Cómo está el cluster y qué podés hacer ahora." />
+      <PageHeader title="Inicio" sub="Cómo está el cluster, qué es cada herramienta y qué podés hacer con cada una." />
       <Hero s={s} dataNodes={dataNodes} />
+      <Ecosistema />
       <div className="section-h">
         <h2>Qué podés hacer ahora</h2>
         <span className="sum-chips">
@@ -213,6 +217,11 @@ export function InicioPage() {
         </span>
       </div>
       <CapGrid caps={caps} />
+      <div className="section-h">
+        <h2>¿Cuál uso?</h2>
+        <span className="muted">Para la misma tarea hay varias herramientas: en qué se diferencian</span>
+      </div>
+      <Comparar />
       <div className="grid cols-12 inicio-bottom">
         <Panel className="span-7" title="Lo que tenés en el cluster" sub="lo que quedó guardado en el volumen">
           <Inventory s={s} caps={caps} />

@@ -6,12 +6,12 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { terminal } from '../lib/terminal';
 
-/** Colores del tema (tokens.css): fondo casi negro, texto gris claro y la paleta ANSI apagada */
+/** Colores del tema (tokens.css): fondo blanco, texto casi negro y la paleta ANSI oscurecida para leerse sobre blanco */
 const THEME = {
-  background: '#0E0E0E', foreground: '#EDEDED', cursor: '#CFCFCF', cursorAccent: '#0E0E0E',
-  selectionBackground: 'rgba(237, 237, 237, .25)',
-  black: '#181818', red: '#E5534B', green: '#4CB782', yellow: '#D9A43F', blue: '#6E9FD8', magenta: '#B07CC6', cyan: '#5DB3B3', white: '#B8B8B8',
-  brightBlack: '#7A7A7A', brightRed: '#F2867F', brightGreen: '#74CFA1', brightYellow: '#E8BC66', brightBlue: '#94B8E4', brightMagenta: '#C9A0DA', brightCyan: '#86CACA', brightWhite: '#EDEDED',
+  background: '#FFFFFF', foreground: '#141414', cursor: '#1F1F1E', cursorAccent: '#FFFFFF',
+  selectionBackground: 'rgba(20, 20, 20, .16)',
+  black: '#141414', red: '#CF222E', green: '#1A7F37', yellow: '#9A6700', blue: '#2F5FA8', magenta: '#7A4FA8', cyan: '#1B7C83', white: '#8E8E8D',
+  brightBlack: '#6B6B6A', brightRed: '#A40E26', brightGreen: '#116329', brightYellow: '#7D4E00', brightBlue: '#1F4C8F', brightMagenta: '#5E3A8C', brightCyan: '#126269', brightWhite: '#333332',
 };
 
 export default function XTerm({ visible }: { visible: boolean }) {

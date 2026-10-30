@@ -11,6 +11,34 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **Inicio con el mapa vivo del ecosistema** (`full`): las 20 herramientas
+  ordenadas por capa (desde dónde trabajás → cómo lo pedís → quién hace el
+  trabajo → quién reparte → dónde quedan los datos, más el puente y lo que
+  corre en una sola máquina), cada una con la lámpara de sus procesos reales y
+  flechas de quién le pide qué a quién. Las flechas de MapReduce, Tez y Spark
+  se mueven cuando hay un trabajo de ese motor corriendo en YARN.
+  - **Ficha de cada herramienta**: qué hace, una analogía, qué se puede hacer
+    ahí (la pantalla de la interfaz y sus UIs web), el comando de ejemplo
+    (los de bash se mandan a la terminal integrada), con qué no confundirla y
+    con quién habla.
+  - **Recorridos guiados** sobre el mapa ("De un CSV a un tablero" y "Una
+    consulta, tres motores"), paso a paso con el comando de cada paso.
+  - **¿Cuál uso?**: seis comparaciones (lenguajes, motores, almacenamiento,
+    una máquina contra el cluster, quién coordina, cómo entran los datos).
+  - El contenido sale de `docs/maquetas/ecosistema.html`.
+- **Vista Aula rehecha como plano del laboratorio** (`empresa`): el maestro
+  adelante, cada fila como un rack con sus PCs, y en cada PC su lámpara, la
+  memoria de YARN que presta y usa, sus bloques y sus contenedores. Arriba, el
+  aula en números y "¿Ya pueden apagar?"; al costado, los pasos para sumar PCs
+  por Veyon y el detalle de la PC elegida.
+
+### Cambiado
+
+- **Tema claro en toda la interfaz** (D-06): tokens nuevos (fondo blanco,
+  grises y estados con contraste ≥ 4,5:1 sobre blanco), la terminal integrada,
+  el editor del estudio de ML y los gráficos. `tema.test.ts` pasa a exigir
+  claro.
+
 - **`empresa` con las PCs del laboratorio** (etapa 2, rama `empresa-aula`),
   con lo que midió la sonda el 27/10:
   - `RED=wireguard`: túnel WireGuard con hub en la PC del profe (UDP 51820) e
