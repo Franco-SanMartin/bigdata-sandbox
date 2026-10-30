@@ -68,6 +68,15 @@ export const HELP: Record<PageId, Help> = {
       ['Plan', 'Lo que el motor va a hacer para resolver la consulta: EXPLAIN en Hive y MySQL, explain() en MongoDB.'],
     ],
   },
+  comparar: {
+    intro: 'La misma cuenta (ventas por producto) escrita en MapReduce a mano, Pig, Hive y PySpark, con el código real de datos/ejemplos. Cada columna dice qué motor la ejecuta, cuántas líneas lleva y cuánto tardó la última vez en YARN. Abajo, las preguntas de siempre (cómo lo pido, quién hace el trabajo, dónde quedan los datos) con una tabla cada una.',
+    terms: [
+      ['Lenguaje', 'Cómo le pedís el trabajo al cluster: Pig Latin, HiveQL, Spark SQL, PySpark o un map y un reduce escritos a mano.'],
+      ['Motor', 'Quién hace la cuenta: MapReduce (escribe a disco entre fases), Tez (un DAG) o Spark (en memoria). En YARN es la columna Application Type.'],
+      ['Núcleo', 'Las líneas del archivo que hacen la cuenta, sin comentarios ni líneas vacías.'],
+      ['Shuffle', 'El paso del medio: ordenar y agrupar por clave para que todo lo de un mismo producto llegue junto a quien suma.'],
+    ],
+  },
   ml: {
     intro: 'Un estudio de ML de punta a punta: elegís los datos (/datos, HDFS o Hive), el objetivo y el rol de cada columna, el preprocesamiento, el modelo con todos sus hiperparámetros, la validación y la búsqueda. Cada corrida es un script de Python completo que podés ver, editar, correr y bajar como .py o notebook, y queda guardada como experimento para compararla.',
     terms: [

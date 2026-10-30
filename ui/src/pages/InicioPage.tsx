@@ -15,7 +15,7 @@ import { bootLine, EmptyState, PageHeader, Panel } from '../components/base';
 import type { ReactNode } from 'react';
 import type { Activity, ClusterStatus, DataNode } from '../api/types';
 import type { PageId } from '../lib/route';
-import { Comparar, Ecosistema } from './inicio/Ecosistema';
+import { CualUso, Ecosistema } from './inicio/Ecosistema';
 
 const CAP_LABEL: Record<Capability['state'], string> = { ready: 'Listo', starting: 'Arrancando', blocked: 'No disponible' };
 const CAP_DOT: Record<Capability['state'], string> = { ready: 'up', starting: 'starting', blocked: 'off' };
@@ -219,9 +219,9 @@ export function InicioPage() {
       <CapGrid caps={caps} />
       <div className="section-h">
         <h2>¿Cuál uso?</h2>
-        <span className="muted">Para la misma tarea hay varias herramientas: en qué se diferencian</span>
+        <span className="muted">Para la misma tarea hay varias herramientas: elegí una pregunta y mirá en qué se diferencian</span>
       </div>
-      <Comparar />
+      <CualUso />
       <div className="grid cols-12 inicio-bottom">
         <Panel className="span-7" title="Lo que tenés en el cluster" sub="lo que quedó guardado en el volumen">
           <Inventory s={s} caps={caps} />

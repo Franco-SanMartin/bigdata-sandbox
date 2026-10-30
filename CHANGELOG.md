@@ -23,9 +23,25 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     con quién habla.
   - **Recorridos guiados** sobre el mapa ("De un CSV a un tablero" y "Una
     consulta, tres motores"), paso a paso con el comando de cada paso.
-  - **¿Cuál uso?**: seis comparaciones (lenguajes, motores, almacenamiento,
-    una máquina contra el cluster, quién coordina, cómo entran los datos).
+  - **¿Cuál uso?**: las seis preguntas (lenguajes, motores, almacenamiento,
+    una máquina contra el cluster, quién coordina, cómo entran los datos),
+    cada una abre su tabla en Comparar.
   - El contenido sale de `docs/maquetas/ecosistema.html`.
+- **Pantalla Comparar** (`full`, `G K`): la misma cuenta de ventas por
+  producto en MapReduce a mano, Pig, Hive y PySpark, con el código real de
+  `datos/ejemplos` (la parte que hace la cuenta o el archivo entero). Arriba,
+  el flujo: el dato una sola vez en HDFS, cuatro lenguajes, tres motores y
+  cuatro resultados, con los cables que se mueven mientras corre cada versión.
+  Cada columna dice qué motor la ejecuta, cuántas líneas hacen la cuenta,
+  qué fases arma (las de la última corrida si YARN las trae) y cuánto tardó
+  la última vez, en la misma escala para las cuatro. MapReduce, Hive y Spark
+  se lanzan desde ahí (las mismas plantillas de Trabajos); las cuatro tienen
+  su comando para la terminal y uno final para ver que dieron lo mismo.
+  Abajo, las seis tablas de "¿Cuál uso?" (`#comparar/quien-hace-el-trabajo`).
+- **La barra lateral sigue las capas del mapa**: Empezar, Almacenamiento
+  (HDFS), Recursos (Trabajos), Procesamiento (Consultas, Comparar, Machine
+  Learning), Ingesta (Pipeline) y Operar, cada capa con su color. Arriba de
+  cada pantalla se ve en qué capa está (Almacenamiento › HDFS).
 - **Vista Aula rehecha como plano del laboratorio** (`empresa`): el maestro
   adelante, cada fila como un rack con sus PCs, y en cada PC su lámpara, la
   memoria de YARN que presta y usa, sus bloques y sus contenedores. Arriba, el

@@ -352,6 +352,10 @@ FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS interfaz
 WORKDIR /ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
+# La pantalla Comparar muestra el codigo de estos ejemplos tal cual (ui/src/lib/comparar.ts
+# los importa de ../datos/ejemplos): van al lado de /ui, como en el repo
+COPY datos/ejemplos/mapper.py datos/ejemplos/reducer.py datos/ejemplos/ventas.pig \
+     datos/ejemplos/ventas.hql datos/ejemplos/ventas.py /datos/ejemplos/
 COPY ui/ ./
 RUN npm run build
 

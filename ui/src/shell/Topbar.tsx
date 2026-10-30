@@ -1,9 +1,9 @@
-import { ArrowRight, CircleHelp, Play, Search, Square, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
+import { ArrowRight, ChevronRight, CircleHelp, Play, Search, Square, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
 import { useSnapshot } from '../state/store';
 import { consoleOpen, helpOpen, navigate, paletteOpen, route, terminalOpen } from '../state/ui';
 import { startCluster, stopCluster } from '../state/actions';
 import { clusterHealth } from '../lib/cluster';
-import { navById } from './nav';
+import { GROUP_CAPA, navById } from './nav';
 import { Dot, Kbd, Meter, Tip } from '../components/ui';
 import { mbLabel, nf, uptime } from '../lib/format';
 
@@ -24,6 +24,8 @@ function TopAction() {
 export function Topbar() {
   const { status: s, dataNodes } = useSnapshot();
   const page = route.use();
+  // En qué capa del ecosistema está esta pantalla (Almacenamiento › HDFS)
+  const nav = navById(page), capa = GROUP_CAPA[nav.group];
   const cons = consoleOpen.use(), help = helpOpen.use(), term = terminalOpen.use();
   const h = clusterHealth(s, dataNodes);
   const ram = s ? s.memory.usedMb / s.memory.limitMb : 0;
@@ -31,7 +33,10 @@ export function Topbar() {
   const tip = h.issues.length ? <span className="tip-list">{h.issues.map((i, n) => <span key={n}>{i.text}</span>)}</span> : h.detail;
   return (
     <header className="top">
-      <div className="top-crumb">{navById(page).title}</div>
+      <div className="top-crumb">
+        {capa && <><span className="top-capa" data-capa={capa.capa} title={capa.tip}>{nav.group}</span><ChevronRight size={13} className="top-crumb-sep" aria-hidden="true" /></>}
+        {nav.title}
+      </div>
       <Tip content={tip}>
         <span className="top-health" data-k={h.tone} tabIndex={0} role="status">
           <Dot s={DOT[h.tone]} />

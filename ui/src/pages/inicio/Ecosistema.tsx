@@ -5,12 +5,11 @@
    Tocar una herramienta abre su ficha: qué hace, qué podés hacer ahí, cómo (la pantalla y el
    comando, que se puede mandar a la terminal integrada) y con qué no confundirla. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Play, Route, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Route, X } from 'lucide-react';
 import { useSnapshot } from '../../state/store';
 import { useCapabilities } from '../../state/capabilities';
-import { navigate, terminalOpen } from '../../state/ui';
-import { terminal } from '../../lib/terminal';
-import { api } from '../../api';
+import { navigate, setRouteArg, useRouteArg } from '../../state/ui';
+import { Codigo } from '../../components/Comando';
 import {
   CAPAS, COMPARAR, DONDE, FILAS, FLECHAS, HERRAMIENTAS, PANTALLA, RECORRIDOS,
   flechasVivas, parecidas, vivo, type CapaId, type Flecha, type Lampara, type ToolId, type Vivo,
@@ -30,38 +29,6 @@ const BASH = /^(hdfs|hadoop|yarn|spark-submit|spark-sql|beeline|sqoop|mysql|pyth
 const SIN_WEB = new Set(['10000', '9083', '2181', '3306', '27017']);
 
 const html = (s: string) => ({ __html: s });
-
-/* ---------- Acciones chicas ---------- */
-
-function Copiar({ texto }: { texto: string }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <button type="button" className="btn btn-sm btn-ghost" aria-label="Copiar el comando"
-      onClick={() => { void navigator.clipboard?.writeText(texto).then(() => { setOk(true); setTimeout(() => setOk(false), 1400); }); }}>
-      {ok ? <Check size={13} /> : <Copy size={13} />}{ok ? 'Copiado' : 'Copiar'}
-    </button>
-  );
-}
-
-function Correr({ cmd }: { cmd: string }) {
-  const demo = api().mode === 'demo';
-  return (
-    <button type="button" className="btn btn-sm" disabled={demo} title={demo ? 'En la demo no hay contenedor: copialo y correlo en tu sandbox' : 'Lo escribe y lo corre en la terminal integrada'}
-      onClick={() => { terminalOpen.set(true); terminal.run(cmd).catch(() => { /* el motivo queda en la terminal */ }); }}>
-      <Play size={12} />Correr en la terminal
-    </button>
-  );
-}
-
-function Codigo({ cmd, bash, donde }: { cmd: string; bash: boolean; donde?: string }) {
-  return (
-    <div className="eco-code">
-      {donde && <span className="eco-code-donde">{donde}</span>}
-      <pre className="mono">{cmd}</pre>
-      <div className="eco-code-a"><Copiar texto={cmd} />{bash && <Correr cmd={cmd} />}</div>
-    </div>
-  );
-}
 
 /* ---------- Medir dónde quedó cada herramienta para dibujar las flechas ---------- */
 
@@ -285,6 +252,17 @@ export function Ecosistema() {
   const [hover, setHover] = useState<ToolId | null>(null);
   const [elegida, setElegida] = useState<ToolId | null>(null);
   const [tour, setTour] = useState<{ id: string; paso: number } | null>(null);
+  const seccion = useRef<HTMLElement>(null);
+  // #inicio/recorrido/tres abre ese recorrido (así lo enlaza Comparar)
+  const arg = useRouteArg();
+  useEffect(() => {
+    const m = /^recorrido\/(\w+)$/.exec(arg);
+    if (!m || !RECORRIDOS[m[1]]) return;
+    setElegida(null);
+    setTour({ id: m[1], paso: 0 });
+    seccion.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [arg]);
+  const salirTour = () => { setTour(null); if (arg) setRouteArg(''); };
 
   const estados = useMemo(() => {
     const out = {} as Record<ToolId, Vivo>;
@@ -308,13 +286,13 @@ export function Ecosistema() {
   if (!s) return null;
   const lado = ladoLibre(cajas, foco?.nodos, mapa.current?.offsetWidth ?? 0);
   const corriendo = apps.filter(a => a.state === 'RUNNING' || a.state === 'ACCEPTED').length;
-  const pick = (id: ToolId) => { setTour(null); setElegida(e => (e === id ? null : id)); };
+  const pick = (id: ToolId) => { salirTour(); setElegida(e => (e === id ? null : id)); };
   const nodo = (id: ToolId) => (
     <Nodo key={id} id={id} v={estados[id]} on={!!foco?.nodos.has(id) && (!!tour || id === (hover ?? elegida))} dim={!!foco && !foco.nodos.has(id)} onPick={pick} onHover={setHover} />
   );
 
   return (
-    <section className="eco" aria-label="El ecosistema de la imagen">
+    <section className="eco" ref={seccion} aria-label="El ecosistema de la imagen">
       <div className="eco-head">
         <div className="eco-head-t">
           <h2>El ecosistema</h2>
@@ -348,7 +326,7 @@ export function Ecosistema() {
           ))}
         </div>
         {elegida && !tour && <Ficha id={elegida} v={estados[elegida]} lado={lado} onPick={pick} onClose={() => setElegida(null)} />}
-        {tour && <Recorrido id={tour.id} paso={tour.paso} lado={lado} setPaso={p => setTour({ ...tour, paso: p })} onClose={() => setTour(null)} />}
+        {tour && <Recorrido id={tour.id} paso={tour.paso} lado={lado} setPaso={p => setTour({ ...tour, paso: p })} onClose={salirTour} />}
       </div>
 
       <ul className="eco-legend" aria-label="Referencias">
@@ -362,28 +340,21 @@ export function Ecosistema() {
   );
 }
 
-/* ---------- ¿Cuál uso? La misma tarea con varias herramientas ---------- */
+/* ---------- ¿Cuál uso? Las preguntas; las respuestas, en Comparar ---------- */
 
-export function Comparar() {
-  const [i, setI] = useState(0);
-  const c = COMPARAR[i];
+export function CualUso() {
   return (
-    <section className="eco-cmp" aria-label="Comparar herramientas">
-      <div className="eco-cmp-tabs" role="tablist" aria-label="Qué comparar">
-        {COMPARAR.map((x, n) => (
-          <button key={x.t} type="button" role="tab" aria-selected={n === i} className="eco-cmp-tab" onClick={() => setI(n)}>{x.t.replace(/^¿[^?]+\?\s*/, '')}</button>
-        ))}
-      </div>
-      <div className="eco-cmp-body" role="tabpanel">
-        <h3>{c.t}</h3>
-        <p>{c.q}</p>
-        <div className="eco-cmp-wrap">
-          <table className="eco-cmp-t">
-            <thead><tr><th />{c.cols.map(([n, capa]) => <th key={n} data-capa={capa}>{n}</th>)}</tr></thead>
-            <tbody>{c.rows.map(r => <tr key={r[0]}><th scope="row">{r[0]}</th>{r.slice(1).map((x, k) => <td key={k} dangerouslySetInnerHTML={html(x)} />)}</tr>)}</tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    <ul className="eco-preg" aria-label="Comparar herramientas">
+      <li data-destacada>
+        <button type="button" onClick={() => navigate('comparar')}>
+          <b>La misma cuenta, cuatro maneras</b><small>MapReduce a mano, Pig, Hive y PySpark, con su código y su tiempo</small><ArrowRight size={16} />
+        </button>
+      </li>
+      {COMPARAR.map(c => (
+        <li key={c.id}>
+          <button type="button" onClick={() => navigate('comparar', c.id)}><b>{c.pregunta}</b><small>{c.cuales}</small><ArrowRight size={16} /></button>
+        </li>
+      ))}
+    </ul>
   );
 }

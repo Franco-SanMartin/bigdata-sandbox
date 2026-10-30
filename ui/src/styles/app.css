@@ -27,6 +27,7 @@ p { margin: 0; }
 .side-nav { flex: 1; overflow-y: auto; padding: 10px 8px; display: flex; flex-direction: column; gap: 14px; }
 .nav-group { display: flex; flex-direction: column; gap: 1px; }
 .nav-label { font-size: var(--fs-xs); color: var(--text-4); font-weight: 500; padding: 4px 10px; }
+.nav-capa { display: flex; align-items: center; gap: 7px; color: var(--text-3); cursor: default; }
 .nav-item { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: var(--r-2); color: var(--text-2); text-decoration: none; cursor: pointer; border: 0; background: transparent; width: 100%; text-align: left; }
 .nav-item svg { flex: none; color: var(--text-3); }
 .nav-item:hover { background: rgba(20, 20, 20, .045); color: var(--text); }
@@ -41,6 +42,10 @@ p { margin: 0; }
 .top { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line-soft); background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.4) blur(8px); min-width: 0; }
 .top-crumb { display: flex; align-items: center; gap: 8px; font-weight: 500; white-space: nowrap; }
 .top-crumb span { color: var(--text-3); font-weight: 400; }
+/* La capa del ecosistema de la pantalla (Almacenamiento › HDFS): el mismo color que en el mapa */
+.top-capa { display: inline-flex; align-items: center; gap: 6px; }
+.top-capa::before, .nav-capa::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--capa); flex: none; }
+.top-crumb-sep { color: var(--text-4); flex: none; }
 .top-sep { width: 1px; height: 20px; background: var(--line); flex: none; }
 .top-stat { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-2); white-space: nowrap; }
 .top-stat b { color: var(--text); font-weight: 500; }
@@ -495,6 +500,7 @@ select.input:disabled { cursor: not-allowed; opacity: .6; }
   :root { --side-w: 60px; }
   .side-brand b, .side-brand .tag, .nav-label, .nav-item .nav-text, .nav-item .nav-end, .side-foot { display: none; }
   .nav-item { justify-content: center; }
+  .nav-group[data-capa] { box-shadow: inset 2px 0 0 var(--capa); border-radius: 2px; }
   .search-btn { min-width: 0; }
   .search-btn .txt, .search-btn kbd { display: none; }
   .top-stat.opt { display: none; }
@@ -508,6 +514,8 @@ select.input:disabled { cursor: not-allowed; opacity: .6; }
   .nav-item { width: 40px; flex: none; }
   .top { padding: 0 max(16px, env(safe-area-inset-left)); }
   .top-stat, .top-sep { display: none; }
+  /* En el celular la barra no entra entera: sin la ruta (el título está en la pantalla) ni el tiempo andando */
+  .top-crumb, .top-health .num { display: none; }
   .page-in { padding: 16px max(16px, env(safe-area-inset-left)) 32px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat:nth-child(2n) { border-right: 0; }

@@ -1,5 +1,5 @@
 /* Rutas por hash: #pantalla o #pantalla/lo-que-sigue (carpeta de HDFS, id de trabajo, práctica…). */
-export const PAGES = ['inicio', 'practicas', 'cluster', 'hdfs', 'yarn', 'pipeline', 'datos', 'ml', 'aula', 'consola', 'config'] as const;
+export const PAGES = ['inicio', 'practicas', 'cluster', 'hdfs', 'yarn', 'pipeline', 'datos', 'comparar', 'ml', 'aula', 'consola', 'config'] as const;
 export type PageId = typeof PAGES[number];
 
 /** #hdfs/user/root → ['hdfs', 'user/root']. Lo que no es una pantalla conocida va a Inicio */
