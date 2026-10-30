@@ -4,7 +4,7 @@
    la última vez en YARN, y se lanza desde acá o desde la terminal. Abajo, las preguntas de siempre
    (¿cómo lo pido?, ¿quién hace el trabajo?…) con una tabla cada una. */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Database, FolderOpen, Play, Route } from 'lucide-react';
+import { ArrowRight, Braces, FolderOpen, Play, Route } from 'lucide-react';
 import { api } from '../../api';
 import type { YarnApp } from '../../api/types';
 import { Codigo, Copiar } from '../../components/Comando';
@@ -178,7 +178,7 @@ function Columna({ v, app, now, maxLineas, maxT }: { v: Variante; app?: YarnApp;
       <div className="cp-acc">
         {v.plantilla
           ? <GatedButton cap={CAP[v.id]} className="btn btn-sm btn-primary" busy={enviando} onClick={lanzar}><Play size={12} />Lanzar en YARN</GatedButton>
-          : <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate('datos')}><Database size={13} />Probarlo en Consultas</button>}
+          : <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate('lenguajes', 'pig')}><Braces size={13} />Probarlo en Lenguajes</button>}
         {app && <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate('yarn', app.id)}>Ver el trabajo<ArrowRight size={13} /></button>}
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate('hdfs', v.salida.slice(1))}>Ver el resultado</button>
       </div>

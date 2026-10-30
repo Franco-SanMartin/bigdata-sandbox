@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseHash, routeHash, routeParts } from './route';
+import { hashNuevo, parseHash, routeHash, routeParts } from './route';
 
 describe('parseHash', () => {
   it('pantalla sola, con argumento y desconocida', () => {
@@ -12,6 +12,23 @@ describe('parseHash', () => {
   it('decodifica y no se rompe con un % suelto', () => {
     expect(parseHash('#hdfs/user/root/con%20espacio')).toEqual(['hdfs', 'user/root/con espacio']);
     expect(parseHash('#hdfs/100%')).toEqual(['hdfs', '100%']);
+  });
+});
+
+describe('rutas viejas', () => {
+  it('#datos (Consultas) va a Lenguajes, o a Bases si es MariaDB o MongoDB', () => {
+    expect(parseHash('#datos')).toEqual(['lenguajes', '']);
+    expect(parseHash('#datos/pig')).toEqual(['lenguajes', 'pig']);
+    expect(parseHash('#datos/mysql')).toEqual(['bases', 'mariadb']);
+    expect(parseHash('#datos/mariadb')).toEqual(['bases', 'mariadb']);
+    expect(parseHash('#datos/mongodb')).toEqual(['bases', 'mongodb']);
+  });
+  it('hashNuevo solo reemplaza las viejas', () => {
+    expect(hashNuevo('#datos')).toBe('#lenguajes');
+    expect(hashNuevo('#datos/mysql')).toBe('#bases/mariadb');
+    expect(hashNuevo('#lenguajes/hive')).toBeNull();
+    expect(hashNuevo('')).toBeNull();
+    expect(hashNuevo('#constructor')).toBeNull();
   });
 });
 

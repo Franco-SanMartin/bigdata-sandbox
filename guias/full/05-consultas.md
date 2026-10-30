@@ -9,15 +9,19 @@ sola pantalla.
 
 [← 4. YARN y los trabajos](04-trabajos-yarn.md) · [Índice de full](README.md) · Siguiente: [6. Pipeline →](06-pipeline.md)
 
-La pantalla es **Consultas** (`G D`). Los comandos equivalentes van
+El editor está en dos pantallas que siguen las capas del mapa: **Lenguajes**
+(`G L`, Hive y Pig, que corren en el cluster) y **Bases** (`G B`, MariaDB y
+MongoDB, de una sola máquina). El detalle de cada tabla de Hive (columnas,
+carpeta de HDFS, muestra y CREATE TABLE) está en **Tablas** (`G T`). La
+dirección vieja `#datos` lleva a Lenguajes. Los comandos equivalentes van
 **adentro** del contenedor, parado en `/datos`.
 
 ## Paso 1. Los cuatro motores
 
-**Qué se ve.** El título *Consultas* con una etiqueta: **N de 4 motores
+**Qué se ve.** El título *Lenguajes* (o *Bases*) con una etiqueta: **N de 2
 listos**, *Arrancando* o *Cluster apagado*. Arriba del editor, el selector de
-motor (**Hive**, **MariaDB**, **MongoDB**, **Pig**), cada uno con su lámpara,
-y una línea con lo que admite:
+motor (**Hive** y **Pig** en Lenguajes; **MariaDB** y **MongoDB** en Bases),
+cada uno con su lámpara, y una línea con lo que admite:
 
 | Motor | Qué es | Qué se puede | Quién lo resuelve |
 |---|---|---|---|

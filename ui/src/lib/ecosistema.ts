@@ -137,22 +137,22 @@ export function flechasVivas(apps: YarnApp[]): Set<string> {
 /* ---------- Qué se puede hacer con cada una ---------- */
 
 /** La pantalla de la interfaz donde se trabaja con esa herramienta */
-export const PANTALLA: Partial<Record<ToolId, { page: PageId; label: string }>> = {
+export const PANTALLA: Partial<Record<ToolId, { page: PageId; arg?: string; label: string }>> = {
   hdfs: { page: 'hdfs', label: 'Explorar HDFS' },
-  metastore: { page: 'datos', label: 'Ver las tablas' },
+  metastore: { page: 'tablas', label: 'Ver las tablas' },
   yarn: { page: 'yarn', label: 'Ver los trabajos' },
   zookeeper: { page: 'cluster', label: 'Ver los NameNodes' },
   mapreduce: { page: 'yarn', label: 'Lanzar un MapReduce' },
   streaming: { page: 'yarn', label: 'Lanzar un trabajo' },
-  tez: { page: 'datos', label: 'Correr una consulta de Hive' },
+  tez: { page: 'lenguajes', arg: 'hive', label: 'Correr una consulta de Hive' },
   spark: { page: 'yarn', label: 'Lanzar un trabajo de Spark' },
   sparksql: { page: 'yarn', label: 'Lanzar un trabajo de Spark' },
-  hive: { page: 'datos', label: 'Escribir una consulta' },
-  pig: { page: 'datos', label: 'Escribir un script de Pig' },
+  hive: { page: 'lenguajes', arg: 'hive', label: 'Escribir una consulta' },
+  pig: { page: 'lenguajes', arg: 'pig', label: 'Escribir un script de Pig' },
   pyspark: { page: 'ml', label: 'Entrenar un modelo' },
   sqoop: { page: 'pipeline', label: 'Importar con el pipeline' },
-  mariadb: { page: 'datos', label: 'Consultar la base tienda' },
-  mongodb: { page: 'datos', label: 'Consultar MongoDB' },
+  mariadb: { page: 'bases', arg: 'mariadb', label: 'Consultar la base tienda' },
+  mongodb: { page: 'bases', arg: 'mongodb', label: 'Consultar MongoDB' },
   pandas: { page: 'ml', label: 'Probar en una muestra' },
   sklearn: { page: 'ml', label: 'Entrenar un modelo' },
   interfaz: { page: 'config', label: 'Configurar el cluster' },

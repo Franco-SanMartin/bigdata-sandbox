@@ -1,10 +1,26 @@
-/* Lo que Consultas guarda en el navegador: los documentos abiertos, el historial
-   (las últimas 50) y las consultas guardadas. Funciones puras + localStorage. */
+/* Lo que el editor de consultas (Lenguajes y Bases) guarda en el navegador: los documentos abiertos,
+   el historial (las últimas 50) y las consultas guardadas. Funciones puras + localStorage.
+   Las dos pantallas comparten las mismas listas y cada una muestra las de sus motores. */
 import type { DataSource } from '../../api/types';
 
 export const SOURCES: DataSource[] = ['hive', 'mysql', 'mongodb', 'pig'];
 export const SOURCE_LABEL: Record<DataSource, string> = { hive: 'Hive', mysql: 'MariaDB', mongodb: 'MongoDB', pig: 'Pig' };
 export const HISTORY_MAX = 50;
+
+/** Lo que va en la ruta para cada motor: #lenguajes/pig, #bases/mariadb */
+export const SOURCE_ARG: Record<DataSource, string> = { hive: 'hive', pig: 'pig', mysql: 'mariadb', mongodb: 'mongodb' };
+export const argSource = (arg: string): DataSource | undefined =>
+  (Object.keys(SOURCE_ARG) as DataSource[]).find(s => SOURCE_ARG[s] === arg.split('/')[0] || s === arg.split('/')[0]);
+
+/** Una consulta para abrir al llegar al editor (desde Tablas: "Consultarla en Hive"). Se consume una sola vez */
+let pendiente: { source: DataSource; text: string; title?: string } | null = null;
+export const dejarParaAbrir = (source: DataSource, text: string, title?: string) => { pendiente = { source, text, title }; };
+export function tomarPendiente(sources: DataSource[]) {
+  if (!pendiente || !sources.includes(pendiente.source)) return null;
+  const p = pendiente;
+  pendiente = null;
+  return p;
+}
 
 export interface QueryDoc { id: string; title: string; source: DataSource; text: string }
 export interface HistoryEntry { source: DataSource; text: string; at: number; ok: boolean; rows?: number; ms?: number; error?: string }

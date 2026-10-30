@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HISTORY_MAX, addSaved, loadDocs, loadHistory, loadSaved, newDoc, pushHistory, removeSaved, saveHistory, saveSaved, starter, suggestName, type HistoryEntry } from './consultas';
+import { HISTORY_MAX, addSaved, argSource, dejarParaAbrir, loadDocs, loadHistory, loadSaved, newDoc, pushHistory, removeSaved, saveHistory, saveSaved, starter, suggestName, tomarPendiente, type HistoryEntry } from './consultas';
 import { toCsv } from '../../lib/csv';
 
 class MemStore implements Storage {
@@ -73,5 +73,23 @@ describe('guardadas', () => {
 describe('CSV del resultado', () => {
   it('NULL vacío, comillas y saltos escapados', () => {
     expect(toCsv(['sucursal', 'nota'], [['Centro', null], ['Sur', 'dijo "hola", chau']])).toBe('sucursal,nota\r\nCentro,\r\nSur,"dijo ""hola"", chau"\r\n');
+  });
+});
+
+describe('Lenguajes y Bases', () => {
+  it('el motor sale de la ruta: #lenguajes/pig, #bases/mariadb', () => {
+    expect(argSource('pig')).toBe('pig');
+    expect(argSource('hive')).toBe('hive');
+    expect(argSource('mariadb')).toBe('mysql');
+    expect(argSource('mysql')).toBe('mysql');
+    expect(argSource('mongodb/algo')).toBe('mongodb');
+    expect(argSource('')).toBeUndefined();
+    expect(argSource('spark')).toBeUndefined();
+  });
+  it('la consulta que deja Tablas la toma solo la pantalla de su motor, una vez', () => {
+    dejarParaAbrir('pig', 'DUMP x;', 'ventas');
+    expect(tomarPendiente(['mysql', 'mongodb'])).toBeNull();
+    expect(tomarPendiente(['hive', 'pig'])).toEqual({ source: 'pig', text: 'DUMP x;', title: 'ventas' });
+    expect(tomarPendiente(['hive', 'pig'])).toBeNull();
   });
 });
