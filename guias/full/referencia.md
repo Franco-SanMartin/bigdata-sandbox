@@ -25,7 +25,7 @@ Cómo leer las tablas:
 
 | Parte | Qué muestra | De dónde sale | Comando equivalente |
 |---|---|---|---|
-| Barra lateral | Las pantallas en tres grupos: Empezar (Inicio, Prácticas), Trabajar (HDFS, Trabajos, Consultas, Pipeline, Machine Learning), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
+| Barra lateral | Las pantallas por capa: Empezar (Inicio, Prácticas), Almacenamiento (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes, Comparar, Machine Learning), Ingesta (Pipeline), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
 | Estado arriba | *Apagado*, *Arrancando · Paso N de M*, en marcha, *Degradado* o *Con fallas* | `GET /api/status` → procesos propios, JMX del NameNode, REST del ResourceManager | `estado` |
 | Consola (`Ctrl+J`) | El cajón con los eventos | `GET /api/activity?limit=200` + SSE `activity` | `docker logs bigdata-full` |
 | Paleta (`Ctrl+K`) | Buscar pantallas y acciones | Fija, en la interfaz | — |
@@ -33,8 +33,9 @@ Cómo leer las tablas:
 | Direcciones | `#hdfs`, `#yarn/application_…`, `#cluster/dn2`... | La interfaz | — |
 
 Atajos: `G` y después la letra. `G I` Inicio, `G R` Prácticas, `G H` HDFS,
-`G Y` Trabajos, `G D` Consultas, `G P` Pipeline, `G M` Machine Learning,
-`G C` Cluster, `G O` Consola, `G S` Configuración.
+`G T` Tablas, `G B` Bases, `G Y` Trabajos, `G L` Lenguajes, `G K` Comparar,
+`G P` Pipeline, `G M` Machine Learning, `G C` Cluster, `G O` Consola,
+`G S` Configuración. La dirección vieja `#datos` (Consultas) lleva a Lenguajes.
 
 Si no hay servidor (o se abre con `?demo` en la dirección), la interfaz usa
 el **modo demo**: simula el cluster en el navegador con datos medidos en la

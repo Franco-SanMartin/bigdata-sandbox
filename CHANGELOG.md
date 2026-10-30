@@ -39,9 +39,16 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   su comando para la terminal y uno final para ver que dieron lo mismo.
   Abajo, las seis tablas de "¿Cuál uso?" (`#comparar/quien-hace-el-trabajo`).
 - **La barra lateral sigue las capas del mapa**: Empezar, Almacenamiento
-  (HDFS), Recursos (Trabajos), Procesamiento (Consultas, Comparar, Machine
-  Learning), Ingesta (Pipeline) y Operar, cada capa con su color. Arriba de
-  cada pantalla se ve en qué capa está (Almacenamiento › HDFS).
+  (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes,
+  Comparar, Machine Learning), Ingesta (Pipeline) y Operar, cada capa con su
+  color. Arriba de cada pantalla se ve en qué capa está (Almacenamiento › HDFS).
+- **Pantalla Tablas** (`full`, `G T`): lo que anota el Metastore de cada tabla
+  de Hive. Para la tabla elegida: adónde apunta en HDFS (con enlace a la
+  carpeta), si es externa o administrada y qué pasa con DROP TABLE, las
+  columnas, quién la puede leer (Hive y Spark por el nombre, Pig por la
+  carpeta, con el script que arma el esquema y saltea el encabezado), una
+  muestra y el CREATE TABLE. "Consultarla en Hive" y "Leerla con Pig" la abren
+  en Lenguajes.
 - **Vista Aula rehecha como plano del laboratorio** (`empresa`): el maestro
   adelante, cada fila como un rack con sus PCs, y en cada PC su lámpara, la
   memoria de YARN que presta y usa, sus bloques y sus contenedores. Arriba, el
@@ -50,6 +57,14 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Cambiado
 
+- **Consultas se partió en Lenguajes y Bases** (`full`): Lenguajes (`G L`)
+  tiene Hive y Pig, que corren en el cluster; Bases (`G B`) tiene MariaDB y
+  MongoDB, de una sola máquina. Es el mismo editor (documentos, ejemplos,
+  plan, trace, historial y guardadas, que se conservan), con una explicación
+  arriba de qué tiene de distinto cada una. `#lenguajes/pig` o
+  `#bases/mongodb` abren directo ese motor (Comparar ya lleva a Pig), y
+  `#datos` sigue andando: lleva a Lenguajes, o a Bases si era MariaDB o
+  MongoDB.
 - **Tema claro en toda la interfaz** (D-06): tokens nuevos (fondo blanco,
   grises y estados con contraste ≥ 4,5:1 sobre blanco), la terminal integrada,
   el editor del estudio de ML y los gráficos. `tema.test.ts` pasa a exigir

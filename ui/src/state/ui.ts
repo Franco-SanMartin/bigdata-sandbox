@@ -12,8 +12,11 @@ function store<T>(init: T) {
 }
 
 /* ---------- Rutas (#inicio, #hdfs/user/root…) ---------- */
-import { parseHash, routeHash, routeParts, type PageId } from '../lib/route';
+import { hashNuevo, parseHash, routeHash, routeParts, type PageId } from '../lib/route';
 export { PAGES, parseHash, routeHash, routeParts, type PageId } from '../lib/route';
+/** Una ruta vieja (#datos) queda escrita con la nueva, sin sumar un paso al historial */
+const reescribir = () => { const h = hashNuevo(location.hash); if (h) history.replaceState(history.state, '', h); };
+reescribir();
 /** #hdfs/user/root → ['hdfs', 'user/root']. Lo que no es una pantalla conocida va a Inicio */
 export const route = store<PageId>(parseHash(location.hash)[0]);
 /** Lo que sigue a la pantalla en la ruta (carpeta de HDFS, id de trabajo, práctica…) */
@@ -24,6 +27,7 @@ export const useRouteParts = () => routeParts(routeArgStore.use());
 /** Ruta actual: la pantalla y su sufijo, para leer fuera de React */
 export const currentRoute = (): [PageId, string] => [route.get(), routeArgStore.get()];
 addEventListener('hashchange', () => {
+  reescribir();
   const [p, a] = parseHash(location.hash);
   if (p !== route.get()) route.set(p);
   if (a !== routeArgStore.get()) routeArgStore.set(a);

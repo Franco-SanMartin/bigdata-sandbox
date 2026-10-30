@@ -148,7 +148,7 @@ function Ficha({ id, v, lado, onPick, onClose }: { id: ToolId; v: Vivo; lado: 'd
         <Seccion t="Qué podés hacer acá">
           <p>{t.cursada}</p>
           <div className="eco-f-acc">
-            {ir && <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate(ir.page)}>{ir.label}<ArrowRight size={13} /></button>}
+            {ir && <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate(ir.page, ir.arg)}>{ir.label}<ArrowRight size={13} /></button>}
             {puertos.map(([que, u]) => <span key={u + que} className="eco-f-puerto" title="Puerto para clientes, no es una página web">{que} <span className="mono">{u.replace('localhost', '')}</span></span>)}
             {webs.map(([que, u]) => (
               <a key={u + que} className="btn btn-sm" href={`http://${u}`} target="_blank" rel="noreferrer" title={que}>

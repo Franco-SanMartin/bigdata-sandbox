@@ -59,13 +59,31 @@ export const HELP: Record<PageId, Help> = {
       ['Tabla externa', 'Hive anota dónde están los archivos y qué columnas tienen, sin moverlos. Borrar la tabla no borra los datos.'],
     ],
   },
-  datos: {
-    intro: 'Las tablas de Hive, la base tienda de MySQL y las colecciones de MongoDB: catálogo, esquema, consultas con resultado en tabla y el plan de cada consulta, con el motor que la resuelve.',
+  tablas: {
+    intro: 'Lo que anota el Metastore de cada tabla de Hive: el nombre, las columnas, el formato y la carpeta de HDFS donde están los archivos. Elegí una para ver su muestra, su CREATE TABLE y quién la puede leer (Hive y Spark por el nombre, Pig por la carpeta).',
+    terms: [
+      ['Metastore', 'El catálogo de Hive: una base chica con el nombre, las columnas y la carpeta de cada tabla. No guarda las filas.'],
+      ['Tabla externa', 'Apunta a una carpeta que ya existía. DROP TABLE borra la entrada del Metastore y deja los archivos.'],
+      ['Tabla administrada', 'Hive es dueño de la carpeta (en /user/hive/warehouse). DROP TABLE borra también los archivos.'],
+      ['Formato', 'Cómo están escritos los archivos: textfile (CSV), Parquet u ORC. Hive lo necesita para leerlos.'],
+    ],
+  },
+  bases: {
+    intro: 'La base tienda en MariaDB (SQL, tablas con filas) y en MongoDB (documentos): catálogo, consultas con resultado en tabla y el plan de cada una. Corren en un solo proceso, sin YARN: contestan en milisegundos.',
+    terms: [
+      ['MariaDB', 'Base relacional de una sola máquina (compatible con MySQL): rápida para consultas chicas y con índices.'],
+      ['MongoDB', 'Base de documentos: cada pedido trae sus ítems adentro. Sin índice, recorre toda la colección (COLLSCAN).'],
+      ['Índice', 'Una lista ordenada de una columna que le evita a la base recorrer todo. Se ve en el plan.'],
+      ['Plan', 'Lo que la base va a hacer para resolver la consulta: EXPLAIN en MariaDB, explain() en MongoDB.'],
+    ],
+  },
+  lenguajes: {
+    intro: 'Hive (SQL) y Pig (Pig Latin) sobre los archivos de HDFS: cada consulta muestra su resultado, su plan y qué trabajo lanzó en YARN. PySpark y MapReduce a mano se lanzan desde Trabajos; la misma cuenta en los cuatro está en Comparar.',
     terms: [
       ['Hive', 'SQL sobre archivos de HDFS. Si hay que agrupar o unir, lanza un trabajo Tez en YARN; un SELECT con LIMIT lo lee directo.'],
-      ['MySQL', 'Base relacional de una sola máquina: rápida para consultas chicas y con índices.'],
-      ['MongoDB', 'Base de documentos: cada pedido trae sus ítems adentro. Sin índice, recorre toda la colección (COLLSCAN).'],
-      ['Plan', 'Lo que el motor va a hacer para resolver la consulta: EXPLAIN en Hive y MySQL, explain() en MongoDB.'],
+      ['Pig', 'Un script de pasos (LOAD, FILTER, GROUP, STORE) que se traduce a trabajos MapReduce. No usa el Metastore: lee la carpeta.'],
+      ['Motor', 'Quién hace la cuenta: Tez para Hive, MapReduce para Pig. Lo dice la etiqueta del resultado.'],
+      ['Plan', 'Lo que el motor va a hacer para resolver la consulta: EXPLAIN en Hive, sin correrla.'],
     ],
   },
   comparar: {

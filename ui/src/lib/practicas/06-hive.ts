@@ -55,7 +55,7 @@ export const hive: Practice = {
       },
       run: async c => {
         const r = await c.api.query('hive', HIVE_CREATE);
-        return { summary: r.note ?? 'Tabla default.ventas creada', trace: r.trace, link: { label: 'Ver en Consultas', page: 'datos' } };
+        return { summary: r.note ?? 'Tabla default.ventas creada', trace: r.trace, link: { label: 'Ver la tabla', page: 'tablas', arg: 'ventas' } };
       },
       verify: async c => {
         const t = (await c.api.catalog()).find(x => x.source === 'hive' && x.name === 'default.ventas');

@@ -1,4 +1,4 @@
-"""Humo de la interfaz, parte 3: Consultas (Hive, MariaDB, MongoDB y Pig).
+"""Humo de la interfaz, parte 3: Lenguajes (Hive y Pig; antes Consultas).
 
 Lo carga humo_ui.py (no se corre solo). Cada función recibe la página de Playwright y el
 módulo humo_ui como `h`, con sus ayudas (Chequeo, ir, captura, esperar, pedir...).
@@ -65,7 +65,7 @@ def todo(page, h) -> None:
     with h.Chequeo("p3 todo: Pig LOAD/GROUP/DUMP sobre ventas da filas en la tabla") as c:
         n = len(h.CONSOLA)
         _ventas_en_hdfs(h)
-        h.ir(page, "datos")
+        h.ir(page, "lenguajes")
         _nueva(page, "Pig", PIG)
         h.captura(page, "p3-todo-pig-editor")
         _correr(page)
@@ -91,7 +91,7 @@ def todo(page, h) -> None:
 
     with h.Chequeo("p3 todo: Hive CREATE EXTERNAL TABLE + SELECT desde el editor") as c:
         n = len(h.CONSOLA)
-        h.ir(page, "datos")
+        h.ir(page, "lenguajes")
         _nueva(page, "Hive", CREATE)
         _correr(page, 300)
         _sin_error(page)
@@ -120,7 +120,7 @@ def todo(page, h) -> None:
 
 def solo_hdfs(page, h) -> None:
     with h.Chequeo("p3 solo HDFS: Pig y Hive dicen por qué no están; el editor sigue escribible") as c:
-        h.ir(page, "datos")
+        h.ir(page, "lenguajes")
         for motor in ("Pig", "Hive"):
             page.get_by_role("radio", name=motor).click()
             nota = page.locator(".qx-editor .capnote")
@@ -135,7 +135,7 @@ def solo_hdfs(page, h) -> None:
 def apagado(page, h) -> None:
     with h.Chequeo("p3 apagado: editor usable, Correr explica y el catálogo ofrece iniciar") as c:
         n409 = len(h.RESPUESTAS_409)
-        h.ir(page, "datos")
+        h.ir(page, "lenguajes")
         expect(page.locator(".qe textarea")).to_be_editable()
         expect(page.get_by_role("button", name="Correr", exact=True)).to_have_attribute("aria-disabled", "true")
         expect(page.locator(".qx-side").get_by_role("button", name="Iniciar cluster")).to_be_visible()
