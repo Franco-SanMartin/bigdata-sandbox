@@ -39,7 +39,14 @@ export const CAPAS = D.capas;
 export const HERRAMIENTAS = D.herramientas;
 export const FLECHAS = D.flechas.filter(f => !f.hide);
 export const RECORRIDOS = D.recorridos;
-export const COMPARAR = D.comparar;
+/** 'Dónde quedan' → 'donde-quedan': para enlazar una comparación (#comparar/donde-quedan-los-datos) */
+export const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+/** Cada comparación con su pregunta suelta (¿Cómo lo pido?), las herramientas y un id */
+export const COMPARAR: (Comparacion & { id: string; pregunta: string; cuales: string })[] = D.comparar.map(c => {
+  const m = /^(¿[^?]+\?)\s*(.*)$/.exec(c.t);
+  const pregunta = m?.[1] ?? c.t;
+  return { ...c, id: slug(pregunta), pregunta, cuales: m?.[2] ?? '' };
+});
 export const GLOSARIO = D.glosario;
 
 /** Cómo se dibuja el mapa: el cluster en filas (de dónde trabajás arriba a dónde quedan los datos
@@ -69,7 +76,7 @@ const CAP: Partial<Record<ToolId, CapId>> = {
 /** Qué tipo de aplicación de YARN muestra que esa herramienta está trabajando */
 const APP_TYPE: Partial<Record<ToolId, YarnApp['type']>> = { mapreduce: 'MAPREDUCE', tez: 'TEZ', spark: 'SPARK' };
 
-const activa = (a: YarnApp) => a.state === 'RUNNING' || a.state === 'ACCEPTED';
+export const activa = (a: YarnApp) => a.state === 'RUNNING' || a.state === 'ACCEPTED';
 
 function lamparaDe(procs: Process[]): Lampara {
   const on = procs.filter(p => p.state !== 'off');

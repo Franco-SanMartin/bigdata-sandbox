@@ -25,6 +25,7 @@ const PAGE: Record<PageId, ComponentType> = {
   yarn: page(() => import('./pages/yarn/YarnPage'), 'YarnPage'),
   pipeline: page(() => import('./pages/pipeline/PipelinePage'), 'PipelinePage'),
   datos: page(() => import('./pages/datos/DatosPage'), 'DatosPage'),
+  comparar: page(() => import('./pages/comparar/CompararPage'), 'CompararPage'),
   ml: page(() => import('./pages/ml/MlPage'), 'MlPage'),
   aula: page(() => import('./pages/aula/AulaPage'), 'AulaPage'),
   consola: page(() => import('./pages/OtherPages'), 'ConsolePage'),
