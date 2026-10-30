@@ -1,0 +1,1406 @@
+{
+ "capas": {
+  "puertas": {
+   "name": "Desde dónde trabajás",
+   "color": "var(--c-puertas)",
+   "hex": "#a7b0bd"
+  },
+  "lenguajes": {
+   "name": "Cómo lo pedís",
+   "color": "var(--c-lenguajes)",
+   "hex": "#b597e4"
+  },
+  "motores": {
+   "name": "Quién hace el trabajo",
+   "color": "var(--c-motores)",
+   "hex": "#81a1f0"
+  },
+  "recursos": {
+   "name": "Quién reparte",
+   "color": "var(--c-recursos)",
+   "hex": "#d3aa62"
+  },
+  "datos": {
+   "name": "Dónde quedan los datos",
+   "color": "var(--c-datos)",
+   "hex": "#5fbaa7"
+  },
+  "puente": {
+   "name": "Puente entre mundos",
+   "color": "var(--c-puente)",
+   "hex": "#d88fb2"
+  },
+  "maquina": {
+   "name": "Fuera del cluster: una sola máquina",
+   "color": "var(--c-maquina)",
+   "hex": "#e0907a"
+  }
+ },
+ "herramientas": {
+  "hdfs": {
+   "name": "HDFS",
+   "layer": "datos",
+   "version": "Hadoop 3.3.6",
+   "sub": "archivos en bloques, con copias",
+   "subN": "bloques replicados",
+   "frase": "El disco del cluster. Guarda archivos grandes cortados en bloques y reparte copias de cada bloque en varias máquinas, para que no se pierdan si una se cae.",
+   "analogia": "Un depósito con muchas estanterías. El encargado (el NameNode) tiene el cuaderno que dice en qué estante está cada caja; las estanterías (los DataNodes) guardan las cajas. Si se rompe una estantería, hay copias de sus cajas en otras.",
+   "cursada": "Subir el CSV de ventas, ver en cuántos bloques se partió y en qué DataNodes quedó cada copia, y probar qué pasa cuando se apaga un DataNode. En el sandbox el bloque se puede achicar a 1 MB para que se vean muchos.",
+   "confunde": [
+    {
+     "con": "MariaDB y MongoDB",
+     "dif": "HDFS no sabe qué hay adentro de los archivos: no tiene filas, columnas ni SELECT. No se edita una fila: un archivo se escribe una vez y se lee muchas. El que \"entiende\" los datos es un motor que corre encima (Hive, Pig, Spark). Las bases, en cambio, guardan y consultan en el mismo programa."
+    },
+    {
+     "con": "La carpeta datos/ de tu compu",
+     "dif": "La carpeta compartida (/datos adentro del contenedor) es un disco común. HDFS es otro sistema de archivos, aparte: por eso hay que subir con hdfs dfs -put."
+    }
+   ],
+   "ejemplo": "hdfs dfs -mkdir -p /user/root/ventas\nhdfs dfs -put ejemplos/ventas.csv /user/root/ventas/\nhdfs fsck /user/root/ventas -files -blocks -locations",
+   "ui": [
+    [
+     "NameNode (web)",
+     "localhost:9870"
+    ],
+    [
+     "DataNode N",
+     "localhost:990N"
+    ],
+    [
+     "Secondary NameNode",
+     "localhost:9868"
+    ]
+   ]
+  },
+  "metastore": {
+   "name": "Metastore",
+   "layer": "datos",
+   "version": "Hive 4.0.0 · Derby",
+   "sub": "catálogo de tablas",
+   "subN": "catálogo",
+   "frase": "El catálogo de las tablas de Hive. Por cada tabla guarda su nombre, sus columnas, el formato y la carpeta de HDFS donde están los archivos. Los datos no: esos siguen en HDFS.",
+   "analogia": "El fichero de una biblioteca: te dice en qué estante está el libro y de qué trata, pero no es el libro.",
+   "cursada": "Entender por qué una tabla externa no copia nada y por qué un DROP TABLE no borra los archivos. Y por qué Spark SQL ve las mismas tablas que creaste en Hive: los dos leen este catálogo.",
+   "confunde": [
+    {
+     "con": "HDFS",
+     "dif": "HDFS tiene los datos; el Metastore tiene la descripción. Si borrás la descripción de una tabla externa, los archivos quedan."
+    },
+    {
+     "con": "MariaDB",
+     "dif": "El Metastore también usa una base de datos por dentro, pero acá es Derby, una base chiquita embebida en /hadoop/metastore_db. No es la MariaDB de la base tienda."
+    }
+   ],
+   "ejemplo": "-- adentro de beeline\nDESCRIBE FORMATTED ventas;\n-- buscá la línea Location: hdfs://.../user/root/ventas",
+   "ui": [
+    [
+     "Metastore (thrift, sin web)",
+     "localhost:9083"
+    ]
+   ]
+  },
+  "yarn": {
+   "name": "YARN",
+   "layer": "recursos",
+   "version": "Hadoop 3.3.6",
+   "sub": "presta memoria y CPU a cada trabajo",
+   "subN": "reparte recursos",
+   "frase": "El administrador de recursos del cluster. Recibe los trabajos y les asigna contenedores: pedazos de memoria y procesador en alguna máquina. No sabe hacer un GROUP BY: sólo presta lugar.",
+   "analogia": "El maître de un restaurante. No cocina: decide qué mesa le toca a cada grupo y cuándo. Si están todas ocupadas, el grupo espera en la puerta (el trabajo queda en ACCEPTED).",
+   "cursada": "Mirar en localhost:8088 cada trabajo que lanzan Hive, Pig, Sqoop o Spark: su tipo (MAPREDUCE, TEZ, SPARK), sus contenedores y sus logs. Entender por qué un trabajo no arranca si no hay memoria libre.",
+   "confunde": [
+    {
+     "con": "Los motores (MapReduce, Tez, Spark)",
+     "dif": "Los motores hacen el cálculo; YARN les da dónde hacerlo. Un motor le pide contenedores a YARN y adentro de esos contenedores corre su código."
+    },
+    {
+     "con": "ZooKeeper",
+     "dif": "Los dos \"coordinan\", pero cosas distintas: YARN reparte memoria y CPU para trabajos; ZooKeeper sólo lleva un registro chiquito para que los NameNodes se pongan de acuerdo en quién manda."
+    }
+   ],
+   "ejemplo": "yarn node -list\nyarn application -list -appStates ALL\nyarn logs -applicationId application_XXXX_0001",
+   "ui": [
+    [
+     "ResourceManager: todos los trabajos",
+     "localhost:8088"
+    ],
+    [
+     "NodeManager: contenedores",
+     "localhost:8042"
+    ]
+   ]
+  },
+  "zookeeper": {
+   "name": "ZooKeeper",
+   "layer": "recursos",
+   "version": "3.8.7",
+   "sub": "árbitro de NameNodes",
+   "subN": "árbitro (HA)",
+   "frase": "Un servicio de coordinación: un registro chiquito y muy confiable que varios procesos consultan para ponerse de acuerdo. Acá lo usa HDFS para saber cuál NameNode es el activo.",
+   "analogia": "El árbitro que dice quién es el capitán del equipo. Si el capitán se lesiona, el árbitro nombra a otro en segundos (eso es el failover).",
+   "cursada": "Sólo arranca con NAMENODES=2 o 3, la alta disponibilidad. Se usa para ver un failover: apagar el NameNode activo y mirar cómo el que estaba en espera toma el mando. Con un solo NameNode ni se prende.",
+   "confunde": [
+    {
+     "con": "YARN",
+     "dif": "ZooKeeper no corre trabajos ni reparte memoria, y no guarda datos tuyos. Sólo guarda quién es el líder y unos pocos datos de coordinación."
+    },
+    {
+     "con": "El Secondary NameNode",
+     "dif": "El Secondary no es un respaldo que toma el mando: sólo compacta el registro del NameNode. El que sí toma el mando es el NameNode en espera, y lo elige ZooKeeper."
+    }
+   ],
+   "ejemplo": "# con NAMENODES=2 o 3\nhdfs haadmin -getAllServiceState",
+   "ui": [
+    [
+     "Cliente (sin web)",
+     "localhost:2181"
+    ]
+   ]
+  },
+  "mapreduce": {
+   "name": "MapReduce",
+   "layer": "motores",
+   "version": "Hadoop 3.3.6",
+   "sub": "map → reduce, con disco",
+   "subN": "map → reduce",
+   "frase": "El motor original de Hadoop. Todo trabajo tiene dos fases: map (cada pedazo de datos se procesa por separado) y reduce (se junta todo lo que tiene la misma clave). Entre las dos, y al final, escribe a disco.",
+   "analogia": "Un escrutinio: en cada mesa cuentan sus votos (map), las actas viajan a la central ordenadas por candidato (shuffle) y ahí se suman (reduce).",
+   "cursada": "El wordcount, y mapper.py con reducer.py vía Streaming para ver las fases a mano. Además es el motor que usan por debajo Pig y Sqoop, así que sus trabajos también aparecen como MAPREDUCE.",
+   "confunde": [
+    {
+     "con": "Tez",
+     "dif": "MapReduce siempre es map → reduce, y una consulta de varios pasos se convierte en varios trabajos encadenados que se pasan resultados por HDFS. Tez arma un solo grafo con todas las etapas y pasa los datos directo de una a otra."
+    },
+    {
+     "con": "Spark",
+     "dif": "Spark también encadena etapas, y además intenta tenerlas en memoria. Para algo iterativo (como entrenar un modelo, que pasa muchas veces por los mismos datos) la diferencia es enorme."
+    }
+   ],
+   "ejemplo": "hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.6.jar \\\n  wordcount /user/root/texto /user/root/resultados/wordcount",
+   "ui": [
+    [
+     "En vivo: ResourceManager",
+     "localhost:8088"
+    ],
+    [
+     "Terminados: JobHistory",
+     "localhost:19888"
+    ]
+   ]
+  },
+  "tez": {
+   "name": "Tez",
+   "layer": "motores",
+   "version": "0.10.3",
+   "sub": "DAG de etapas",
+   "subN": "DAG",
+   "frase": "El motor que usa Hive en esta imagen. Arma la consulta entera como un grafo de etapas (un DAG) y la corre de una vez, sin guardar en HDFS entre etapa y etapa.",
+   "analogia": "Una línea de montaje: cada pieza pasa directo a la estación siguiente. MapReduce sería llevar la pieza al depósito después de cada estación y volver a buscarla.",
+   "cursada": "No le escribís nada a Tez. Lo ves aparecer cuando Hive tiene que juntar filas de muchos bloques (GROUP BY, ORDER BY, JOIN): en localhost:8088 surge una aplicación de tipo TEZ.",
+   "confunde": [
+    {
+     "con": "Hive",
+     "dif": "Hive es el que entiende el SQL y lo traduce; Tez es el que ejecuta lo traducido. Si Hive fuera el traductor, Tez es el que hace el trabajo."
+    },
+    {
+     "con": "Spark",
+     "dif": "Los dos encadenan etapas en un DAG, pero Tez no tiene un lenguaje propio para vos: es un motor \"de servicio\" para Hive. A Spark sí le programás directo con PySpark."
+    }
+   ],
+   "ejemplo": "-- adentro de beeline\nSET hive.execution.engine;\n-- responde: hive.execution.engine=tez",
+   "ui": [
+    [
+     "Sin web propia: se ve en",
+     "localhost:8088"
+    ]
+   ]
+  },
+  "spark": {
+   "name": "Spark",
+   "layer": "motores",
+   "version": "3.5.9",
+   "sub": "etapas en memoria",
+   "subN": "en memoria",
+   "frase": "Un motor de procesamiento que reparte los datos entre varios procesos (los executors) y encadena las etapas en memoria. En el sandbox corre siempre sobre YARN y lee de HDFS.",
+   "analogia": "Una cocina con varios cocineros que tienen todo a mano en la mesada (la memoria), en vez de ir al freezer (el disco) entre un paso y el otro.",
+   "cursada": "El ETL de las ventas sucias, el mismo SQL que en Hive pero con Spark SQL, y modelos de MLlib. Todo se lanza con spark-submit o pyspark y se mira en 4040 mientras corre y en 18080 cuando terminó.",
+   "confunde": [
+    {
+     "con": "PySpark y Spark SQL",
+     "dif": "Esas son dos formas de hablarle a Spark. El motor es uno solo: lo que escribas en Python o en SQL termina en el mismo plan de ejecución."
+    },
+    {
+     "con": "Hadoop",
+     "dif": "Spark no reemplaza todo Hadoop: no trae disco propio ni administrador de recursos. Acá usa HDFS para los datos y YARN para los executors; reemplaza a MapReduce como motor."
+    }
+   ],
+   "ejemplo": "spark-submit --master yarn ejemplos/ventas.py",
+   "ui": [
+    [
+     "Trabajo activo",
+     "localhost:4040"
+    ],
+    [
+     "Historial (terminados)",
+     "localhost:18080"
+    ]
+   ]
+  },
+  "hive": {
+   "name": "Hive",
+   "layer": "lenguajes",
+   "version": "4.0.0",
+   "sub": "SQL sobre HDFS",
+   "subN": "HiveQL",
+   "frase": "SQL sobre archivos de HDFS. Escribís HiveQL (casi SQL estándar) y Hive lo traduce a un trabajo de Tez. Las tablas son una descripción en el Metastore que apunta a carpetas de HDFS.",
+   "analogia": "Un traductor: vos hablás SQL, que ya conocés, y él se lo explica al motor en su idioma.",
+   "cursada": "Crear la tabla externa ventas sobre /user/root/ventas, agrupar por producto, mirar el plan con EXPLAIN y ver cuál consulta lanza un trabajo y cuál no: un SELECT * ... LIMIT 5 lo resuelve HiveServer2 solo, leyendo el archivo.",
+   "confunde": [
+    {
+     "con": "MariaDB",
+     "dif": "Los dos hablan SQL, pero Hive no tiene datos propios (lee archivos de HDFS), tarda segundos aun para pocas filas porque lanza un trabajo, y no está pensado para cambiar una fila. MariaDB contesta en milisegundos y actualiza filas al instante, pero en una sola máquina."
+    },
+    {
+     "con": "Spark SQL",
+     "dif": "Mismo SQL y mismas tablas (comparten el Metastore). Cambia quién ejecuta: Hive lo manda a Tez, Spark SQL lo corre en Spark."
+    },
+    {
+     "con": "Tez",
+     "dif": "Hive traduce; Tez ejecuta."
+    }
+   ],
+   "ejemplo": "beeline -u jdbc:hive2://localhost:10000 -e \\\n  \"SELECT producto, COUNT(*) AS n FROM ventas GROUP BY producto\"",
+   "ui": [
+    [
+     "HiveServer2 JDBC (beeline, DBeaver)",
+     "localhost:10000"
+    ],
+    [
+     "HiveServer2 web",
+     "localhost:10002"
+    ]
+   ]
+  },
+  "pig": {
+   "name": "Pig",
+   "layer": "lenguajes",
+   "version": "0.18.0",
+   "sub": "paso a paso",
+   "subN": "Pig Latin",
+   "frase": "Un lenguaje de flujo de datos, Pig Latin. Describís paso a paso qué hacer (LOAD, FILTER, GROUP, STORE) y Pig lo convierte en uno o más trabajos de MapReduce.",
+   "analogia": "Una receta paso a paso (\"cortá, mezclá, horneá\"), en vez de pedir el plato terminado como en SQL.",
+   "cursada": "wordcount.pig y ventas.pig. Con pig -x local se prueba sin cluster, leyendo archivos comunes; sin esa opción corre en YARN sobre HDFS.",
+   "confunde": [
+    {
+     "con": "Hive",
+     "dif": "Hive es declarativo: decís qué querés y él decide cómo. Pig es procedural: decís cómo, paso por paso. Pig no tiene catálogo de tablas: el esquema lo escribís en cada LOAD."
+    },
+    {
+     "con": "Un script común",
+     "dif": "Pig es perezoso: las primeras líneas no ejecutan nada. Recién con DUMP o STORE arma el plan completo y lanza los trabajos."
+    }
+   ],
+   "ejemplo": "ventas = LOAD '/user/root/ventas' USING PigStorage(',')\n  AS (fecha:chararray, sucursal:chararray, producto:chararray,\n      cantidad:int, precio:int);\npor_prod = GROUP ventas BY producto;\nDUMP por_prod;",
+   "ui": [
+    [
+     "Sin web: sus trabajos en",
+     "localhost:8088"
+    ],
+    [
+     "Terminados",
+     "localhost:19888"
+    ]
+   ]
+  },
+  "sparksql": {
+   "name": "Spark SQL",
+   "layer": "lenguajes",
+   "version": "Spark 3.5.9",
+   "sub": "SQL en Spark",
+   "subN": "SQL",
+   "frase": "SQL que ejecuta Spark. Ve las mismas tablas que Hive porque se conecta al mismo Metastore.",
+   "analogia": "El mismo menú, preparado en otra cocina.",
+   "cursada": "Correr la misma consulta en Hive y en Spark SQL y comparar tiempos y lo que aparece en YARN. Y mezclar SQL con Python dentro de un mismo programa, con spark.sql(\"...\").",
+   "confunde": [
+    {
+     "con": "Hive",
+     "dif": "El SQL es casi igual y las tablas son las mismas. La diferencia es el motor (Spark en vez de Tez) y que, en un programa de PySpark, el resultado de la consulta es un DataFrame con el que podés seguir trabajando."
+    }
+   ],
+   "ejemplo": "spark-sql -e \"SELECT producto, SUM(cantidad) AS unidades\n              FROM ventas GROUP BY producto\"",
+   "ui": [
+    [
+     "Mientras corre",
+     "localhost:4040"
+    ],
+    [
+     "Después",
+     "localhost:18080"
+    ]
+   ]
+  },
+  "pyspark": {
+   "name": "PySpark",
+   "layer": "lenguajes",
+   "version": "Spark 3.5.9 · MLlib",
+   "sub": "Python + MLlib",
+   "subN": "Python",
+   "frase": "Python para manejar Spark: DataFrames repartidos en el cluster y, con MLlib, modelos de machine learning que se entrenan en los executors.",
+   "analogia": "El control remoto de Spark, con los botones escritos en Python.",
+   "cursada": "ventas.py y etl_spark.py, y los modelos de MLlib de la imagen ml. Desde la terminal con spark-submit o en un notebook de JupyterLab.",
+   "confunde": [
+    {
+     "con": "pandas",
+     "dif": "Se escriben parecido (DataFrame, groupBy), pero pandas vive en la memoria de una sola máquina y ejecuta al instante. PySpark reparte el trabajo y es perezoso: no hace nada hasta una acción (show, count, write). Con 4,5 MB gana pandas; con decenas de GB, sólo Spark."
+    },
+    {
+     "con": "Hadoop Streaming",
+     "dif": "Los dos son Python en el cluster, pero Streaming es MapReduce puro (un script para map y otro para reduce, línea por línea) y PySpark es Spark con DataFrames."
+    }
+   ],
+   "ejemplo": "ventas = spark.read.csv(\"hdfs:///user/root/ventas\",\n                        header=True, inferSchema=True)\nventas.groupBy(\"producto\").sum(\"cantidad\").show()",
+   "ui": [
+    [
+     "Sesión activa",
+     "localhost:4040"
+    ],
+    [
+     "Historial",
+     "localhost:18080"
+    ]
+   ]
+  },
+  "streaming": {
+   "name": "Streaming",
+   "layer": "lenguajes",
+   "version": "Hadoop 3.3.6",
+   "sub": "scripts Python",
+   "subN": "mapper.py",
+   "frase": "Hadoop Streaming: la forma de escribir el map y el reduce en cualquier lenguaje (acá, Python). Hadoop les pasa las líneas por la entrada estándar y lee lo que imprimen.",
+   "analogia": "Tercerizar una tarea: MapReduce le pasa el texto a tu script y recibe lo que el script le devuelve escrito.",
+   "cursada": "mapper.py y reducer.py de la guía 4: ver las fases map → shuffle → reduce sin que nada las esconda. Es lo más cerca de MapReduce \"a mano\".",
+   "confunde": [
+    {
+     "con": "Streaming de datos en tiempo real",
+     "dif": "El nombre engaña: no tiene nada que ver con procesar datos que llegan en vivo. Es un trabajo por lotes común; \"streaming\" se refiere a que los datos pasan por la entrada y la salida estándar."
+    },
+    {
+     "con": "PySpark",
+     "dif": "Ver la ficha de PySpark: Streaming es MapReduce con scripts; PySpark es otro motor."
+    }
+   ],
+   "ejemplo": "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \\\n  -files ejemplos/mapper.py,ejemplos/reducer.py \\\n  -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" \\\n  -input /user/root/ventas -output /user/root/resultados/mr_por_producto",
+   "ui": [
+    [
+     "Como todo MapReduce",
+     "localhost:8088"
+    ]
+   ]
+  },
+  "sqoop": {
+   "name": "Sqoop",
+   "layer": "puente",
+   "version": "1.4.7",
+   "sub": "copia base ⇄ HDFS",
+   "subN": "base ⇄ HDFS",
+   "frase": "Copia tablas entre una base relacional (acá, MariaDB) y HDFS, en las dos direcciones. Para hacerlo lanza un trabajo de MapReduce que sólo tiene map: varios mappers leen la tabla por rangos en paralelo.",
+   "analogia": "Un camión de mudanza con varios ayudantes: cada uno carga una parte de la tabla al mismo tiempo.",
+   "cursada": "sqoop import de tienda.ventas con 4 mappers (quedan 4 archivos part-m-0000N en HDFS) y sqoop export de un resumen hacia una tabla de MariaDB.",
+   "confunde": [
+    {
+     "con": "hdfs dfs -put",
+     "dif": "put copia un archivo que ya tenés. Sqoop lee una base de datos por JDBC y la convierte en archivos. Si el dato ya es un CSV, put; si vive en una base, Sqoop."
+    },
+    {
+     "con": "Una herramienta de hoy",
+     "dif": "El proyecto se retiró en 2021 y la 1.4.7 es la última versión. Se sigue enseñando porque muestra muy claro la idea; en la industria hoy se hace con Spark (lectura JDBC) u otras herramientas de ingesta."
+    }
+   ],
+   "ejemplo": "sqoop import --connect jdbc:mysql://localhost/tienda \\\n  --username alumno --password alumno \\\n  --table ventas --target-dir /user/root/tienda/ventas \\\n  --delete-target-dir -m 4",
+   "ui": [
+    [
+     "Sin web: el trabajo en",
+     "localhost:8088"
+    ]
+   ]
+  },
+  "mariadb": {
+   "name": "MariaDB",
+   "layer": "maquina",
+   "version": "de Ubuntu 24.04",
+   "sub": "tablas SQL",
+   "subN": "tablas SQL",
+   "frase": "Una base de datos relacional clásica, compatible con MySQL: tablas con filas y columnas, en una sola máquina, pensadas para consultas puntuales y cambios rápidos.",
+   "analogia": "Una planilla con reglas estrictas y un índice: encontrás o cambiás una fila al instante, pero toda la planilla está en un solo escritorio.",
+   "cursada": "La base tienda (tienda.sql): origen del sqoop import y destino del sqoop export. Se entra con el cliente mysql, con DBeaver o con Workbench, usuario alumno.",
+   "confunde": [
+    {
+     "con": "MySQL",
+     "dif": "Las guías dicen MySQL porque así se la conoce: el servidor instalado es MariaDB, que nació como copia de MySQL y habla el mismo SQL y el mismo protocolo. Por eso Sqoop se conecta con jdbc:mysql://."
+    },
+    {
+     "con": "Hive",
+     "dif": "Ver la ficha de Hive: mismo idioma (SQL), mundos distintos. MariaDB es una máquina y milisegundos; Hive es el cluster y segundos, pero escala a muchísimo más volumen."
+    }
+   ],
+   "ejemplo": "mysql -u alumno -palumno tienda \\\n  -e \"SELECT producto, precio FROM productos LIMIT 5\"",
+   "ui": [
+    [
+     "MySQL / MariaDB (DBeaver, Workbench)",
+     "localhost:3306"
+    ]
+   ]
+  },
+  "mongodb": {
+   "name": "MongoDB",
+   "layer": "maquina",
+   "version": "8.0",
+   "sub": "documentos",
+   "subN": "documentos",
+   "frase": "Una base de datos de documentos: cada registro es un documento parecido a un JSON, que puede traer listas y otros documentos adentro, sin un esquema fijo de columnas.",
+   "analogia": "Un fichero de carpetas: la carpeta del termo trae adentro sus colores y sus reseñas, en vez de tenerlos en otras planillas que hay que cruzar.",
+   "cursada": "tienda_mongo.js y consultas_mongo.js, que muestran al lado de cada consulta cómo sería en SQL. Desde Python, con pymongo y pandas. Se prende con MONGODB=si.",
+   "confunde": [
+    {
+     "con": "MariaDB",
+     "dif": "En MariaDB, las reseñas van en otra tabla y se cruzan con JOIN. En MongoDB van adentro del documento del producto. Cada documento puede tener campos que otros no tienen."
+    },
+    {
+     "con": "HDFS",
+     "dif": "Acá MongoDB es una sola instancia en una máquina. Puede repartirse en varias (sharding), pero eso es aparte de Hadoop: no usa HDFS ni YARN."
+    }
+   ],
+   "ejemplo": "mongosh tienda\ndb.productos.findOne({ _id: \"termo\" })\ndb.productos.find({ categoria: \"accesorios\" }, { precio: 1 })",
+   "ui": [
+    [
+     "mongosh, Compass",
+     "localhost:27017"
+    ]
+   ]
+  },
+  "pandas": {
+   "name": "pandas",
+   "layer": "maquina",
+   "version": "2.3.3 · numpy 1.26",
+   "sub": "tablas en RAM",
+   "subN": "tablas en memoria",
+   "frase": "Tablas (DataFrames) en la memoria de una sola máquina, con Python. Inmediato y cómodo mientras los datos entren en la RAM. Viene con numpy, pyarrow (Parquet) y matplotlib (gráficos).",
+   "analogia": "Una planilla de cálculo con superpoderes, que manejás escribiendo en vez de con el mouse.",
+   "cursada": "Limpiar ventas_sucias.csv con etl_pandas.py (fechas en tres formatos, precios con coma, duplicados), resumir con groupby y graficar. En el pipeline es la opción sugerida: 4,5 MB se limpian en un par de segundos.",
+   "confunde": [
+    {
+     "con": "PySpark",
+     "dif": "Ver la ficha de PySpark. La regla práctica: si entra en la memoria de una máquina, pandas; si no, Spark."
+    }
+   ],
+   "ejemplo": "import pandas as pd\ndf = pd.read_csv(\"ejemplos/ventas.csv\")\ndf.groupby(\"producto\")[\"cantidad\"].sum()",
+   "ui": [
+    [
+     "Se usa desde JupyterLab",
+     "localhost:8888"
+    ]
+   ]
+  },
+  "sklearn": {
+   "name": "scikit-learn",
+   "layer": "maquina",
+   "version": "1.9.1 · XGBoost 3.1",
+   "sub": "+ XGBoost",
+   "subN": "+ XGBoost",
+   "frase": "Modelos de machine learning en una sola máquina: regresión (cuánto), clasificación (si o no, cuál) y agrupamiento (qué grupos hay). XGBoost suma el gradient boosting.",
+   "analogia": "Una caja de herramientas de modelos listos: elegís uno, lo entrenás con fit y le pedís predicciones con predict.",
+   "cursada": "modelos_sklearn.py con clientes_senal.csv (20.000 filas): entrenar, medir el error y comparar con el mismo modelo en Spark MLlib.",
+   "confunde": [
+    {
+     "con": "Spark MLlib",
+     "dif": "Mismos tipos de modelo; MLlib reparte el entrenamiento en executors de YARN. Con 20.000 filas scikit-learn entrena en milisegundos y MLlib pide 3 GB a YARN y tarda mucho más: el cluster sólo conviene cuando los datos no entran en una máquina."
+    }
+   ],
+   "ejemplo": "from sklearn.linear_model import LinearRegression\nmodelo = LinearRegression().fit(X_train, y_train)\nmodelo.predict(X_test)",
+   "ui": [
+    [
+     "Se usa desde JupyterLab",
+     "localhost:8888"
+    ]
+   ]
+  },
+  "jupyter": {
+   "name": "JupyterLab",
+   "layer": "puertas",
+   "version": "4.6.4",
+   "sub": "notebooks · :8888",
+   "subN": ":8888",
+   "frase": "Cuadernos (notebooks) en el navegador: escribís código en celdas y abajo de cada una ves el resultado, la tabla o el gráfico.",
+   "analogia": "Un cuaderno de laboratorio que ejecuta lo que escribís.",
+   "cursada": "Las guías de la imagen ml: ETL con pandas y con Spark, modelos con scikit-learn y MLlib, MongoDB desde pandas.",
+   "confunde": [
+    {
+     "con": "Un motor",
+     "dif": "Jupyter no procesa nada por su cuenta. Lo que corrés ahí se ejecuta en pandas (una máquina) o en Spark (el cluster) según lo que llames en la celda."
+    }
+   ],
+   "ejemplo": "# en una celda\nfrom pyspark.sql import SparkSession\nspark = SparkSession.builder.getOrCreate()",
+   "ui": [
+    [
+     "JupyterLab (imagen ml y full)",
+     "localhost:8888"
+    ]
+   ]
+  },
+  "terminal": {
+   "name": "Terminal",
+   "layer": "puertas",
+   "version": "bash del contenedor",
+   "sub": "hdfs · beeline · pig · spark-submit · sqoop · mysql",
+   "subN": "bash",
+   "frase": "La consola adentro del contenedor. Desde ahí corrés todos los clientes: hdfs, yarn, beeline, pig, spark-submit, spark-sql, sqoop, mysql y mongosh.",
+   "analogia": "La puerta de servicio: entra a todos lados, pero hay que saber qué decir.",
+   "cursada": "Todas las guías de base. Se entra con docker exec y se trabaja parado en /datos, que es tu carpeta datos/ compartida.",
+   "confunde": [
+    {
+     "con": "beeline y hive",
+     "dif": "beeline es el cliente que se conecta a HiveServer2 por JDBC (el puerto 10000). Es la forma recomendada en Hive 4."
+    }
+   ],
+   "ejemplo": "docker exec -it bigdata bash\ncd /datos",
+   "ui": [
+    [
+     "Sin puerto: docker exec",
+     "—"
+    ]
+   ]
+  },
+  "interfaz": {
+   "name": "Interfaz web",
+   "layer": "puertas",
+   "version": "imagen full",
+   "sub": "el panel del sandbox, en :8080 (imagen full)",
+   "subN": ":8080",
+   "frase": "El panel de la versión full. Prende y apaga el cluster y muestra HDFS con sus bloques, los trabajos de YARN, consultas a Hive, MariaDB, MongoDB y Pig, el pipeline y los modelos. Cada botón muestra el comando que corre.",
+   "analogia": "La terminal con ventanas: mismos comandos, pero viendo qué pasa en el cluster mientras corren.",
+   "cursada": "Para ver lo que en la terminal no se ve: en qué DataNode quedó cada bloque, cuántos contenedores pidió un trabajo, qué plan armó Hive. Y las prácticas guiadas que preguntan el comando antes de correrlo.",
+   "confunde": [
+    {
+     "con": "Un motor nuevo",
+     "dif": "No tiene motor propio: llama a los mismos clientes de la terminal (beeline, mysql, mongosh, pig). Lo que hacés en la terminal aparece en la interfaz, y al revés."
+    }
+   ],
+   "ejemplo": "# con la imagen full prendida\n# abrir http://localhost:8080 y tocar Iniciar",
+   "ui": [
+    [
+     "Interfaz (imagen full)",
+     "localhost:8080"
+    ]
+   ]
+  }
+ },
+ "flechas": [
+  {
+   "id": "e_streaming_mr",
+   "from": "streaming",
+   "to": "mapreduce",
+   "kind": "run",
+   "label": "corre como MapReduce"
+  },
+  {
+   "id": "e_pig_mr",
+   "from": "pig",
+   "to": "mapreduce",
+   "kind": "run",
+   "label": "se traduce a MapReduce"
+  },
+  {
+   "id": "e_hive_tez",
+   "from": "hive",
+   "to": "tez",
+   "kind": "run",
+   "label": "se traduce a un DAG"
+  },
+  {
+   "id": "e_sparksql_spark",
+   "from": "sparksql",
+   "to": "spark",
+   "kind": "run",
+   "label": "lo ejecuta Spark"
+  },
+  {
+   "id": "e_pyspark_spark",
+   "from": "pyspark",
+   "to": "spark",
+   "kind": "run",
+   "label": "lo ejecuta Spark"
+  },
+  {
+   "id": "e_mr_yarn",
+   "from": "mapreduce",
+   "to": "yarn",
+   "kind": "run",
+   "label": "pide contenedores"
+  },
+  {
+   "id": "e_tez_yarn",
+   "from": "tez",
+   "to": "yarn",
+   "kind": "run",
+   "label": "pide contenedores"
+  },
+  {
+   "id": "e_spark_yarn",
+   "from": "spark",
+   "to": "yarn",
+   "kind": "run",
+   "label": "pide executors"
+  },
+  {
+   "id": "e_yarn_hdfs",
+   "from": "yarn",
+   "to": "hdfs",
+   "kind": "run",
+   "label": "leen y escriben bloques"
+  },
+  {
+   "id": "e_meta_hdfs",
+   "from": "l",
+   "to": "r",
+   "kind": "read",
+   "label": "apunta a carpetas",
+   "base": true
+  },
+  {
+   "id": "e_zk_hdfs",
+   "from": "zookeeper",
+   "to": "hdfs",
+   "kind": "read",
+   "label": "elige el NameNode activo",
+   "base": true
+  },
+  {
+   "id": "e_sqoop_maria",
+   "from": "sqoop",
+   "to": "mariadb",
+   "kind": "bridge",
+   "label": "lee y escribe por JDBC"
+  },
+  {
+   "id": "e_sqoop_hdfs",
+   "from": "sqoop",
+   "to": "hdfs",
+   "kind": "bridge",
+   "label": "deja archivos part-m",
+   "baseNarrow": true
+  },
+  {
+   "id": "e_sqoop_mr",
+   "from": "sqoop",
+   "to": "mapreduce",
+   "kind": "run",
+   "label": "usa MapReduce (sólo map)",
+   "hide": true
+  },
+  {
+   "id": "e_hive_meta",
+   "from": "hive",
+   "to": "metastore",
+   "kind": "read",
+   "label": "busca columnas y carpeta"
+  },
+  {
+   "id": "e_sparksql_meta",
+   "from": "sparksql",
+   "to": "metastore",
+   "kind": "read",
+   "label": "usa las tablas de Hive"
+  },
+  {
+   "id": "e_pandas_mongo",
+   "from": "pandas",
+   "to": "mongodb",
+   "kind": "read",
+   "label": "pymongo",
+   "baseNarrow": true
+  },
+  {
+   "id": "e_jup_pandas",
+   "from": "jupyter",
+   "to": "pandas",
+   "kind": "puerta",
+   "label": "celdas de Python"
+  },
+  {
+   "id": "e_jup_sklearn",
+   "from": "jupyter",
+   "to": "sklearn",
+   "kind": "puerta",
+   "label": "celdas de Python"
+  },
+  {
+   "id": "e_jup_pyspark",
+   "from": "jupyter",
+   "to": "pyspark",
+   "kind": "puerta",
+   "label": "abre una sesión de Spark"
+  },
+  {
+   "id": "e_term_streaming",
+   "from": "terminal",
+   "to": "streaming",
+   "kind": "puerta",
+   "label": "hadoop jar"
+  },
+  {
+   "id": "e_term_pig",
+   "from": "terminal",
+   "to": "pig",
+   "kind": "puerta",
+   "label": "pig"
+  },
+  {
+   "id": "e_term_hive",
+   "from": "terminal",
+   "to": "hive",
+   "kind": "puerta",
+   "label": "beeline"
+  },
+  {
+   "id": "e_term_sparksql",
+   "from": "terminal",
+   "to": "sparksql",
+   "kind": "puerta",
+   "label": "spark-sql"
+  },
+  {
+   "id": "e_term_pyspark",
+   "from": "terminal",
+   "to": "pyspark",
+   "kind": "puerta",
+   "label": "spark-submit"
+  },
+  {
+   "id": "e_term_hdfs",
+   "from": "terminal",
+   "to": "hdfs",
+   "kind": "puerta",
+   "label": "hdfs dfs -put"
+  },
+  {
+   "id": "e_int_hive",
+   "from": "interfaz",
+   "to": "hive",
+   "kind": "puerta",
+   "label": "corre beeline"
+  },
+  {
+   "id": "e_int_pig",
+   "from": "interfaz",
+   "to": "pig",
+   "kind": "puerta",
+   "label": "corre pig"
+  }
+ ],
+ "recorridos": {
+  "csv": {
+   "name": "De un CSV a un tablero",
+   "intro": "El camino de un archivo sucio hasta un resumen que puede mostrar un tablero. Es el pipeline de la imagen full, paso por paso.",
+   "steps": [
+    {
+     "t": "El punto de partida",
+     "nodes": [
+      "terminal"
+     ],
+     "edges": [],
+     "x": "<p>Tenés <b>ventas_sucias.csv</b> en tu carpeta <code>datos/</code>: 103.000 ventas con fechas en tres formatos, precios con coma y filas repetidas. Adentro del contenedor esa carpeta es <code>/datos</code>.</p><p>Todavía <b>no está en el cluster</b>: está en un disco común. Nada de Hadoop lo puede leer hasta que lo subas.</p>",
+     "code": "python3 ejemplos/ml/generar_sucios.py"
+    },
+    {
+     "t": "Ingesta: subirlo a HDFS",
+     "nodes": [
+      "terminal",
+      "hdfs"
+     ],
+     "edges": [
+      "e_term_hdfs"
+     ],
+     "x": "<p><code>hdfs dfs -put</code> copia el archivo a HDFS. En el camino lo <b>corta en bloques</b> (128 MB en un cluster real; en el aula se achica a 1 MB para que se vean) y guarda tantas copias de cada bloque como diga <code>REPLICATION</code>.</p><p>Si el dato hubiera estado en una base de datos, en vez de <code>put</code> se usaría Sqoop.</p>",
+     "code": "hdfs dfs -mkdir -p /user/root/ml\nhdfs dfs -put -f ventas_sucias.csv /user/root/ml/"
+    },
+    {
+     "t": "ETL: limpiarlo con PySpark",
+     "nodes": [
+      "pyspark",
+      "spark",
+      "yarn",
+      "hdfs"
+     ],
+     "edges": [
+      "e_pyspark_spark",
+      "e_spark_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p>El script de PySpark describe la limpieza; <b>Spark</b> la ejecuta en executors que le pide a <b>YARN</b>, y cada executor lee sus bloques de HDFS. El resultado se escribe en HDFS en formato <b>Parquet</b>.</p>",
+     "code": "spark-submit --master yarn ejemplos/ml/etl_spark.py",
+     "tip": "<b>Ojo:</b> con 4,5 MB pandas hace exactamente lo mismo en un par de segundos (<code>etl_pandas.py</code>), y Spark tarda más sólo en arrancar. Spark se justifica cuando el archivo no entra en una máquina."
+    },
+    {
+     "t": "Dejarlo consultable",
+     "nodes": [
+      "hive",
+      "metastore",
+      "hdfs"
+     ],
+     "edges": [
+      "e_hive_meta",
+      "e_meta_hdfs"
+     ],
+     "x": "<p>\"Almacenar\" acá no es copiar a una base: los datos <b>ya están</b> en HDFS. Lo que se agrega es la descripción.</p><p>Con <code>CREATE EXTERNAL TABLE ... LOCATION</code>, Hive anota en el <b>Metastore</b> qué columnas tiene y en qué carpeta están los archivos. No mueve nada.</p>",
+     "code": "CREATE EXTERNAL TABLE ventas_limpias (...)\nSTORED AS PARQUET\nLOCATION '/user/root/ml/ventas_limpias';"
+    },
+    {
+     "t": "Análisis: resumir con Hive",
+     "nodes": [
+      "terminal",
+      "hive",
+      "tez",
+      "yarn",
+      "hdfs",
+      "metastore"
+     ],
+     "edges": [
+      "e_term_hive",
+      "e_hive_meta",
+      "e_hive_tez",
+      "e_tez_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p>Escribís un <code>GROUP BY</code> en beeline. Hive busca la tabla en el Metastore, arma un <b>DAG de Tez</b> y lo manda a YARN, que le da contenedores. En <code>localhost:8088</code> aparece una aplicación de tipo <b>TEZ</b>.</p><p>El resultado queda en HDFS como varios archivos (uno por tarea).</p>",
+     "code": "beeline -u jdbc:hive2://localhost:10000 -e \"\n  SELECT producto,\n         SUM(importe) AS facturado\n  FROM ventas_limpias\n  GROUP BY producto\n  ORDER BY facturado DESC\""
+    },
+    {
+     "t": "Resultado: llevarlo al tablero",
+     "nodes": [
+      "hdfs",
+      "sqoop",
+      "mapreduce",
+      "mariadb"
+     ],
+     "edges": [
+      "e_sqoop_hdfs",
+      "e_sqoop_mr",
+      "e_sqoop_maria"
+     ],
+     "x": "<p>Dos salidas, según quién lo use:</p><p><b>Un CSV</b> para una planilla: <code>hdfs dfs -getmerge</code> junta las partes en un solo archivo en tu carpeta <code>datos/</code>.</p><p><b>Una tabla en MariaDB</b> para un tablero: <code>sqoop export</code> (un MapReduce de sólo map) copia el resumen a una tabla que después lee la herramienta de tableros.</p>",
+     "code": "hdfs dfs -getmerge /user/root/resultados/por_producto por_producto.csv\n\n# o, a una tabla que ya existe en MariaDB:\nsqoop export --connect jdbc:mysql://localhost/tienda \\\n  --username alumno --password alumno \\\n  --table resumen_producto \\\n  --export-dir /user/root/resultados/por_producto -m 1",
+     "tip": "El sandbox no trae una herramienta de tableros (Power BI, Metabase, Looker Studio…): el tablero es el <b>destino</b>, afuera. Lo que se aprende acá es dejarle el dato listo, en una base o en un CSV."
+    },
+    {
+     "t": "Rama aparte: un modelo",
+     "nodes": [
+      "jupyter",
+      "pandas",
+      "sklearn"
+     ],
+     "edges": [
+      "e_jup_pandas",
+      "e_jup_sklearn"
+     ],
+     "x": "<p>El machine learning va por otro lado: usa <code>clientes_senal.csv</code> (20.000 filas), porque las ventas generadas no tienen nada que un modelo pueda aprender.</p><p>En JupyterLab, pandas carga los datos y <b>scikit-learn</b> entrena en milisegundos, en una sola máquina, sin YARN.</p>",
+     "code": "python3 ejemplos/ml/modelos_sklearn.py",
+     "tip": "El mismo modelo con Spark MLlib pide 3 GB a YARN y tarda mucho más. Mismo criterio que en el ETL: el cluster es para cuando no entra en una máquina."
+    }
+   ]
+  },
+  "tres": {
+   "name": "Una consulta, tres motores",
+   "intro": "Ventas por producto: cuántas unidades y cuánto se facturó. El repo trae la misma cuenta escrita cuatro veces, y las cuatro tienen que dar igual.",
+   "steps": [
+    {
+     "t": "El dato, una sola vez",
+     "nodes": [
+      "hdfs"
+     ],
+     "edges": [],
+     "x": "<p>Los archivos de ventas están <b>una sola vez</b> en <code>/user/root/ventas</code>. Ninguna de las cuatro versiones los copia: todas leen de ahí.</p><p>Lo que cambia es <b>cómo se escribe</b> el pedido y <b>qué motor</b> lo ejecuta.</p>",
+     "code": "hdfs dfs -ls /user/root/ventas"
+    },
+    {
+     "t": "MapReduce a mano, con Streaming",
+     "nodes": [
+      "terminal",
+      "streaming",
+      "mapreduce",
+      "yarn",
+      "hdfs"
+     ],
+     "edges": [
+      "e_term_streaming",
+      "e_streaming_mr",
+      "e_mr_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p>Escribís vos el map (<code>mapper.py</code>: de cada línea saca producto, cantidad e importe) y el reduce (<code>reducer.py</code>: suma por producto). Hadoop ordena y agrupa en el medio: el <b>shuffle</b>.</p><p>En <code>8088</code> aparece un trabajo de tipo <b>MAPREDUCE</b>.</p>",
+     "code": "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \\\n  -files ejemplos/mapper.py,ejemplos/reducer.py \\\n  -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" \\\n  -input /user/root/ventas -output /user/root/resultados/mr_por_producto"
+    },
+    {
+     "t": "Pig Latin: mismo motor, menos trabajo",
+     "nodes": [
+      "terminal",
+      "pig",
+      "mapreduce",
+      "yarn",
+      "hdfs"
+     ],
+     "edges": [
+      "e_term_pig",
+      "e_pig_mr",
+      "e_mr_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p>Con Pig describís los pasos (LOAD, GROUP, FOREACH, STORE) y Pig <b>escribe el map y el reduce por vos</b>. El motor es el mismo del paso anterior: vuelve a aparecer un trabajo <b>MAPREDUCE</b>.</p><p>Nada corre hasta el <code>STORE</code>: ahí Pig arma el plan entero.</p>",
+     "code": "pig ejemplos/ventas.pig"
+    },
+    {
+     "t": "HiveQL: otro motor, Tez",
+     "nodes": [
+      "terminal",
+      "hive",
+      "metastore",
+      "tez",
+      "yarn",
+      "hdfs"
+     ],
+     "edges": [
+      "e_term_hive",
+      "e_hive_meta",
+      "e_hive_tez",
+      "e_tez_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p>Ahora es SQL: un <code>GROUP BY</code>. Hive busca en el Metastore dónde está la tabla <code>ventas</code> y arma <b>un solo DAG de Tez</b> con todas las etapas, sin pasar por HDFS entre una y otra.</p><p>En <code>8088</code>: tipo <b>TEZ</b>.</p>",
+     "code": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql"
+    },
+    {
+     "t": "PySpark y Spark SQL: Spark",
+     "nodes": [
+      "terminal",
+      "pyspark",
+      "sparksql",
+      "spark",
+      "yarn",
+      "hdfs",
+      "metastore"
+     ],
+     "edges": [
+      "e_term_pyspark",
+      "e_pyspark_spark",
+      "e_sparksql_spark",
+      "e_sparksql_meta",
+      "e_spark_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p><code>ventas.py</code> hace la cuenta con DataFrames; con <code>spark-sql</code> se puede escribir el mismo SQL que en Hive, sobre la misma tabla. En los dos casos el motor es <b>Spark</b>: executors en YARN que trabajan en memoria.</p><p>En <code>8088</code>: tipo <b>SPARK</b>. El detalle, en <code>4040</code> y <code>18080</code>.</p>",
+     "code": "spark-submit ejemplos/ventas.py"
+    },
+    {
+     "t": "Qué cambió y qué no",
+     "nodes": [
+      "mapreduce",
+      "tez",
+      "spark",
+      "yarn",
+      "hdfs"
+     ],
+     "edges": [
+      "e_mr_yarn",
+      "e_tez_yarn",
+      "e_spark_yarn",
+      "e_yarn_hdfs"
+     ],
+     "x": "<p><b>No cambió:</b> los datos (HDFS), quién reparte (YARN) y el resultado.</p><p><b>Cambió el motor:</b> MapReduce escribe a disco entre fases; Tez encadena etapas en un DAG; Spark las encadena en memoria. Con estos datos chicos lo que más tarda es <b>arrancar</b> cada trabajo, no el cálculo: las diferencias de velocidad se notan con volumen grande o con muchos pasos.</p>",
+     "tip": "Para mostrarlo en clase: corré las cuatro versiones y abrí <code>localhost:8088</code>. La columna <b>Application Type</b> dice MAPREDUCE, MAPREDUCE, TEZ y SPARK."
+    }
+   ]
+  }
+ },
+ "comparar": [
+  {
+   "t": "¿Cómo lo pido? Hive, Spark SQL, Pig y PySpark",
+   "q": "Las cuatro sirven para la misma cuenta. La diferencia es el estilo y el motor que hay abajo.",
+   "cols": [
+    [
+     "HiveQL (Hive)",
+     "lenguajes"
+    ],
+    [
+     "Spark SQL",
+     "lenguajes"
+    ],
+    [
+     "Pig Latin",
+     "lenguajes"
+    ],
+    [
+     "PySpark",
+     "lenguajes"
+    ]
+   ],
+   "rows": [
+    [
+     "Motor que lo ejecuta",
+     "Tez",
+     "Spark",
+     "MapReduce",
+     "Spark"
+    ],
+    [
+     "Estilo",
+     "Declarativo: decís qué querés (SQL)",
+     "Declarativo: el mismo SQL",
+     "Procedural: decís cómo, paso a paso",
+     "Código Python que encadena operaciones"
+    ],
+    [
+     "Las tablas",
+     "En el Metastore",
+     "El mismo Metastore que Hive",
+     "No tiene catálogo: el esquema va en cada LOAD",
+     "Lee archivos o tablas del Metastore"
+    ],
+    [
+     "Cuándo ejecuta",
+     "Al mandar la consulta",
+     "Al mandar la consulta",
+     "Recién en DUMP o STORE",
+     "Recién en una acción: show, count, write"
+    ],
+    [
+     "Conviene para",
+     "Reportes en SQL sobre HDFS",
+     "SQL y seguir con Spark en el mismo programa",
+     "Transformaciones por pasos (clásico de la cursada)",
+     "ETL y machine learning en código"
+    ],
+    [
+     "Se corre con",
+     "<code>beeline</code>",
+     "<code>spark-sql</code>",
+     "<code>pig</code>",
+     "<code>spark-submit</code>, <code>pyspark</code>"
+    ]
+   ]
+  },
+  {
+   "t": "¿Quién hace el trabajo? MapReduce, Tez y Spark",
+   "q": "Los tres corren sobre YARN y leen de HDFS. Cambia cómo encadenan los pasos.",
+   "cols": [
+    [
+     "MapReduce",
+     "motores"
+    ],
+    [
+     "Tez",
+     "motores"
+    ],
+    [
+     "Spark",
+     "motores"
+    ]
+   ],
+   "rows": [
+    [
+     "Entre un paso y otro",
+     "Escribe a disco (y entre trabajos, a HDFS)",
+     "Pasa los datos directo de una etapa a la siguiente",
+     "Los tiene en memoria; si no entran, usa el disco local"
+    ],
+    [
+     "Forma del trabajo",
+     "Siempre map → reduce; varios pasos = varios trabajos",
+     "Un grafo de etapas (DAG) por consulta",
+     "Un grafo de etapas (DAG), reusando executors"
+    ],
+    [
+     "Lo usan",
+     "Streaming, Pig, Sqoop",
+     "Hive",
+     "PySpark, Spark SQL, MLlib"
+    ],
+    [
+     "Le programás directo",
+     "Sí: Java o Streaming",
+     "No, casi nunca",
+     "Sí: PySpark"
+    ],
+    [
+     "Fuerte en",
+     "Lotes enormes y simples; muy robusto",
+     "Consultas SQL de varias etapas",
+     "Muchos pasos sobre los mismos datos: ETL largos, ML"
+    ],
+    [
+     "En localhost:8088",
+     "Tipo MAPREDUCE (y en 19888)",
+     "Tipo TEZ",
+     "Tipo SPARK (y en 4040 / 18080)"
+    ]
+   ]
+  },
+  {
+   "t": "¿Dónde quedan los datos? HDFS, MariaDB y MongoDB",
+   "q": "Los tres guardan datos, pero no son intercambiables.",
+   "cols": [
+    [
+     "HDFS",
+     "datos"
+    ],
+    [
+     "MariaDB",
+     "maquina"
+    ],
+    [
+     "MongoDB",
+     "maquina"
+    ]
+   ],
+   "rows": [
+    [
+     "Qué guarda",
+     "Archivos: CSV, Parquet, lo que sea",
+     "Tablas con columnas fijas",
+     "Documentos tipo JSON, con listas y subdocumentos"
+    ],
+    [
+     "Sabe consultar",
+     "No: lo leen Hive, Pig o Spark",
+     "Sí, SQL",
+     "Sí: find, aggregate"
+    ],
+    [
+     "Repartido en varias máquinas",
+     "Sí: bloques con réplicas en varios DataNodes",
+     "No: una sola máquina",
+     "Acá no (puede, con sharding, pero aparte de Hadoop)"
+    ],
+    [
+     "Cambiar un dato",
+     "No se edita: se reescribe el archivo",
+     "UPDATE de una fila, al instante",
+     "updateOne de un documento"
+    ],
+    [
+     "Fuerte en",
+     "Mucho volumen, leído de corrido",
+     "Consultas puntuales rápidas, transacciones",
+     "Datos con forma variable"
+    ],
+    [
+     "Puerto",
+     "<code>9870</code> (web)",
+     "<code>3306</code>",
+     "<code>27017</code>"
+    ]
+   ]
+  },
+  {
+   "t": "¿Una máquina o el cluster? pandas y scikit-learn contra PySpark y MLlib",
+   "q": "Se escriben parecido. La pregunta que decide es si los datos entran en la memoria de una máquina.",
+   "cols": [
+    [
+     "pandas · scikit-learn",
+     "maquina"
+    ],
+    [
+     "PySpark · MLlib",
+     "lenguajes"
+    ]
+   ],
+   "rows": [
+    [
+     "Dónde corre",
+     "En el proceso de Python, en una máquina",
+     "En executors repartidos por YARN"
+    ],
+    [
+     "Cuándo ejecuta",
+     "Al instante, línea por línea",
+     "Perezoso: arma un plan y corre en una acción"
+    ],
+    [
+     "Límite",
+     "La RAM de esa máquina",
+     "La suma de todo el cluster"
+    ],
+    [
+     "Arranque",
+     "Inmediato",
+     "La sesión de Spark lleva unos 15 segundos"
+    ],
+    [
+     "En el pipeline del sandbox",
+     "4,5 MB y 20.000 filas: gana claramente",
+     "Mismo resultado, más lento con datos chicos; escala a decenas de GB"
+    ]
+   ]
+  },
+  {
+   "t": "¿Quién coordina qué? YARN, ZooKeeper y el NameNode",
+   "q": "Los tres \"administran\" algo, y por eso se mezclan.",
+   "cols": [
+    [
+     "YARN",
+     "recursos"
+    ],
+    [
+     "ZooKeeper",
+     "recursos"
+    ],
+    [
+     "NameNode (HDFS)",
+     "datos"
+    ]
+   ],
+   "rows": [
+    [
+     "Lleva la cuenta de",
+     "Memoria y CPU: qué contenedor corre dónde",
+     "Quién es el NameNode activo",
+     "Qué bloques forman cada archivo y en qué DataNodes están"
+    ],
+    [
+     "Si se cae",
+     "No arrancan trabajos nuevos",
+     "No hay cambio automático de NameNode",
+     "Sin alta disponibilidad, HDFS deja de responder"
+    ],
+    [
+     "En el sandbox",
+     "Siempre",
+     "Sólo con NAMENODES = 2 o 3",
+     "Siempre (1 a 3)"
+    ],
+    [
+     "Se mira en",
+     "<code>8088</code>",
+     "Sin web: <code>hdfs haadmin</code>",
+     "<code>9870</code>"
+    ]
+   ]
+  },
+  {
+   "t": "¿Cómo entran los datos? put, Sqoop y pandas",
+   "q": "Depende de dónde está el dato y a dónde tiene que ir.",
+   "cols": [
+    [
+     "hdfs dfs -put",
+     "datos"
+    ],
+    [
+     "sqoop import",
+     "puente"
+    ],
+    [
+     "pd.read_csv",
+     "maquina"
+    ]
+   ],
+   "rows": [
+    [
+     "Desde",
+     "Un archivo que ya tenés",
+     "Una tabla de una base (JDBC)",
+     "Un archivo local"
+    ],
+    [
+     "Hacia",
+     "HDFS, cortado en bloques",
+     "HDFS, como archivos part-m-0000N",
+     "La memoria de Python"
+    ],
+    [
+     "Motor",
+     "Ninguno: el cliente de HDFS copia",
+     "MapReduce con N mappers en paralelo",
+     "Ninguno: el propio Python"
+    ],
+    [
+     "Lo ves en",
+     "<code>9870</code> (el archivo y sus bloques)",
+     "<code>8088</code> (un trabajo MAPREDUCE)",
+     "Tu notebook"
+    ]
+   ]
+  }
+ ],
+ "glosario": [
+  [
+   "Bloque",
+   "El pedazo en que HDFS corta un archivo: 128 MB por defecto. Cada bloque se guarda y se copia por separado."
+  ],
+  [
+   "Réplica",
+   "Cada copia de un bloque, en un DataNode distinto. Con REPLICATION=2, cada bloque está en dos máquinas."
+  ],
+  [
+   "NameNode",
+   "El proceso de HDFS que sabe qué bloques forman cada archivo y dónde está cada uno. No guarda los datos."
+  ],
+  [
+   "DataNode",
+   "El proceso de HDFS que guarda los bloques en disco. Cuantos más DataNodes, más espacio y más copias posibles."
+  ],
+  [
+   "Contenedor",
+   "En YARN, un pedazo de memoria y CPU en una máquina, prestado a un trabajo. No es un contenedor de Docker."
+  ],
+  [
+   "Executor",
+   "En Spark, cada proceso que trabaja en paralelo. En el sandbox, cada executor vive en un contenedor de YARN."
+  ],
+  [
+   "Map, shuffle y reduce",
+   "Map procesa cada pedazo por separado; shuffle junta todo lo que tiene la misma clave; reduce lo resume."
+  ],
+  [
+   "DAG",
+   "Grafo de etapas sin vueltas atrás: el plan que arman Tez y Spark para correr una consulta de una sola vez."
+  ],
+  [
+   "Perezoso (lazy)",
+   "Que no ejecuta hasta el final. Pig espera al STORE o DUMP; Spark, a una acción como show o write."
+  ],
+  [
+   "Tabla externa",
+   "Una tabla de Hive que sólo describe archivos que ya están en HDFS. Si la borrás, los archivos quedan."
+  ],
+  [
+   "Esquema",
+   "La lista de columnas y sus tipos. En Hive vive en el Metastore; en Pig se escribe en cada LOAD."
+  ],
+  [
+   "Parquet",
+   "Formato de archivo por columnas y comprimido. Spark y pandas leen sólo las columnas que usan."
+  ],
+  [
+   "JDBC",
+   "La forma estándar de conectarse a una base de datos. beeline, DBeaver y Sqoop la usan."
+  ],
+  [
+   "Fetch task",
+   "Cuando Hive resuelve una consulta simple (un SELECT con LIMIT) leyendo el archivo directo, sin lanzar un trabajo."
+  ],
+  [
+   "part-00000",
+   "El resultado de un trabajo distribuido son varios archivos, uno por tarea. getmerge los junta en uno."
+  ],
+  [
+   "Alta disponibilidad (HA)",
+   "Tener más de un NameNode, uno activo y otros en espera, para que HDFS siga si se cae el activo."
+  ],
+  [
+   "Modo local",
+   "Correr sin cluster, en una sola máquina y con archivos comunes. Por ejemplo, pig -x local."
+  ],
+  [
+   "Localidad de datos",
+   "La idea de mandar el cálculo a la máquina donde está el bloque, en vez de mover los datos por la red."
+  ]
+ ]
+}

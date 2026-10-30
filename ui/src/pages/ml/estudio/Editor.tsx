@@ -27,20 +27,20 @@ const tema = EditorView.theme({
   '.cm-panels input, .cm-panels button': { fontFamily: 'var(--f-sans)', fontSize: '12px' },
   '.cm-foldGutter span': { color: 'var(--text-4)' },
   '.cm-tooltip': { backgroundColor: 'var(--popover)', border: '1px solid var(--line)' },
-}, { dark: true });
+}, { dark: false });
 
 /* Resaltado en grises, como el resto de la interfaz: el peso y la itálica separan lo que el color no */
 const resaltado = HighlightStyle.define([
-  { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.moduleKeyword, t.operatorKeyword], color: '#EDEDED', fontWeight: '600' },
-  { tag: [t.string, t.special(t.string)], color: '#B8B8B8' },
-  { tag: [t.number, t.bool, t.null], color: '#DADADA' },
-  { tag: [t.comment, t.lineComment], color: '#6E6E6E', fontStyle: 'italic' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#EDEDED' },
-  { tag: [t.className, t.definition(t.className)], color: '#EDEDED', fontWeight: '600' },
-  { tag: [t.definition(t.variableName)], color: '#EDEDED' },
-  { tag: [t.propertyName], color: '#CFCFCF' },
-  { tag: [t.self], color: '#B8B8B8', fontStyle: 'italic' },
-  { tag: [t.operator, t.punctuation, t.bracket], color: '#7A7A7A' },
+  { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.moduleKeyword, t.operatorKeyword], color: '#141414', fontWeight: '600' },
+  { tag: [t.string, t.special(t.string)], color: '#525251' },
+  { tag: [t.number, t.bool, t.null], color: '#333332' },
+  { tag: [t.comment, t.lineComment], color: '#8E8E8D', fontStyle: 'italic' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#141414' },
+  { tag: [t.className, t.definition(t.className)], color: '#141414', fontWeight: '600' },
+  { tag: [t.definition(t.variableName)], color: '#141414' },
+  { tag: [t.propertyName], color: '#333332' },
+  { tag: [t.self], color: '#525251', fontStyle: 'italic' },
+  { tag: [t.operator, t.punctuation, t.bracket], color: '#8E8E8D' },
 ]);
 
 export default function Editor({ value, onChange, readOnly, alto = 560, label, onRun }: {

@@ -14,10 +14,10 @@ export function palette(el: Element = document.documentElement): Palette {
   const cs = getComputedStyle(el);
   const c = (name: string, fallback: string) => new Color((cs.getPropertyValue(name).trim() || fallback));
   return {
-    bg: c('--surface', '#131313'), surface: c('--n-2', '#131313'), line: c('--n-5', '#262626'), node: c('--n-6', '#2F2F2F'),
-    ink: c('--n-11', '#B8B8B8'), text: c('--text', '#EDEDED'), muted: c('--n-8', '#4F4F4F'),
+    bg: c('--surface', '#F3F3F2'), surface: c('--n-2', '#F3F3F2'), line: c('--n-5', '#DADAD9'), node: c('--n-6', '#C8C8C7'),
+    ink: c('--n-11', '#333332'), text: c('--text', '#141414'), muted: c('--n-8', '#8E8E8D'),
     // tema oscuro en grises: positivo = gris claro (acento), negativo = gris medio
-    pos: c('--accent', 'lightgray'), neg: c('--n-9', 'gray'),
+    pos: c('--accent', '#1F1F1E'), neg: c('--n-9', 'gray'),
   };
 }
 
