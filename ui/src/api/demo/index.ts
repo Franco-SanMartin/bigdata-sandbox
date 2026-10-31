@@ -68,6 +68,7 @@ export function createDemoApi(): SandboxApi {
     aula: () => ok(demoAula(abierta, e.now())),
     app: id => call(() => yarn.app(id)),
     appLogs: (id, c) => call(() => yarn.logs(id, c)),
+    yarnMetrics: ids => call(() => yarn.metrics(ids)),
 
     pipelineCatalog: () => call(() => pipe.catalog()),
     pipelineState: () => call(() => pipe.state()),

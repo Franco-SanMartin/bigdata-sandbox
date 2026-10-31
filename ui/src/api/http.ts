@@ -76,6 +76,7 @@ export function createHttpApi(): SandboxApi {
     aula: () => req('GET', '/aula'),
     app: id => req('GET', `/yarn/apps/${encodeURIComponent(id)}`),
     appLogs: (id, container) => req('GET', `/yarn/apps/${encodeURIComponent(id)}/logs?${q({ container })}`),
+    yarnMetrics: ids => req('GET', `/yarn/metrics?${q({ apps: ids.join(',') })}`),
     pipelineCatalog: () => req('GET', '/pipeline/catalog'),
     pipelineState: () => req('GET', '/pipeline'),
     runStep: async r => (await req<{ id: string }>('POST', '/pipeline/steps', r)).id,

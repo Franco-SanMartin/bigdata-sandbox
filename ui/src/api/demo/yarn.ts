@@ -1,6 +1,6 @@
 /* YARN en el modo demo: NodeManager con memoria y vcores, detalle de cada trabajo con su DAG, los logs por
    contenedor y las plantillas con parámetros (wordcount, pi, grep…), que escriben un resultado de verdad. */
-import type { AppLogs, AppType, DagVertex, Engine, ExampleJob, JobTemplate, SubmitJobRequest, YarnApp, YarnAppDetail, YarnCluster } from '../types';
+import type { AppLogs, AppType, DagVertex, Engine, ExampleJob, JobTemplate, SubmitJobRequest, YarnApp, YarnAppDetail, YarnCluster, YarnMetrics } from '../types';
 import { fail } from '../errors';
 import { TS, YARN_MB, type AppDef, type AppRec, type DemoEngine, type StageDef } from './engine';
 import { n, needHdfs, needProc, parentOf, trace } from './common';
@@ -90,6 +90,39 @@ export class DemoYarn {
         done ? `Terminó en ${secs} s${a.def?.rowsOut ? ` · ${n(a.def.rowsOut)} filas` : ''}${a.def?.out ? ` en ${a.def.out}` : ''}` : a.state === 'KILLED' ? 'Cancelado: no dejó resultado' : 'Todavía corriendo',
         { engine: eng, appIds: [a.id] }),
     };
+  }
+
+  /** Lo que costó cada trabajo (Comparar), con las proporciones que midió el humo en el contenedor real
+      (ventas por producto, 6,2 MB): MapReduce Streaming manda el 54 % de la entrada por el shuffle y escribe
+      el 121 % en disco local; Spark suma antes del shuffle (3 KB). Tez sin Timeline Server: solo lo del RM */
+  metrics(ids: string[]): YarnMetrics[] {
+    if (this.e.phase !== 'running') fail('cluster_stopped', 'El cluster está apagado');
+    needProc(this.e, 'rm', 'El ResourceManager');
+    const now = this.e.now();
+    const blockMb = (bid?: number) => this.e.files.flatMap(f => f.blocks).find(b => b.id === bid)?.mb ?? 0;
+    return ids.map((id): YarnMetrics => {
+      const a = this.e.jobs.find(x => x.id === id);
+      if (!a) return { id, error: `No existe el trabajo ${id}` };
+      const elapsedMs = Math.round((a.end ?? now) - a.sub);
+      const tasks = a.stages.flatMap(s => s.tasks);
+      const taskSecs = tasks.reduce((x, t) => x + (t.startedAt ? ((t.finishedAt ?? now) - t.startedAt) / 1000 : 0), 0);
+      const base: YarnMetrics = {
+        id, type: a.type, state: a.state, elapsedMs, source: 'rm',
+        mbSeconds: Math.round(a.am * elapsedMs / 1000 + (a.taskMb || 1024) * taskSecs),
+        vcoreSeconds: Math.round(elapsedMs / 1000 + taskSecs),
+      };
+      if (a.state !== 'FINISHED' || a.type === 'TEZ') return base;
+      const leido = (ts: typeof tasks) => Math.round(ts.reduce((x, t) => x + blockMb(t.blockId), 0) * 1048576);
+      // Si se lanzó mientras ventas todavía subía, sus tareas no tienen bloque: vale lo que pesa la carpeta ahora
+      const ventas = Math.round(this.e.files.filter(f => f.path.startsWith('/user/root/ventas/')).reduce((x, f) => x + f.sizeMb, 0) * 1048576);
+      if (a.type === 'MAPREDUCE') {
+        const entrada = leido(a.stages[0]?.tasks ?? []) || ventas;
+        return { ...base, source: 'jobhistory', hdfsReadBytes: entrada, hdfsWrittenBytes: 188, shuffleBytes: Math.round(entrada * 0.538),
+          localDiskBytes: Math.round(entrada * 1.212), tasks: tasks.length, dataLocalTasks: a.stages[0]?.tasks.length ?? 0 };
+      }
+      // Spark lee la entrada tres veces (inferSchema, show y write) más el encabezado
+      return { ...base, source: 'spark-history', hdfsReadBytes: leido(tasks) || ventas * 3 + 65536, hdfsWrittenBytes: 216, shuffleBytes: 3102, localDiskBytes: 2214, tasks: tasks.length };
+    });
   }
 
   logs(id: string, container?: string): AppLogs {
