@@ -44,7 +44,7 @@ SALIDAS = Path(os.environ.get("HUMO_SALIDAS", "humo-salidas"))
 CAPTURAS = SALIDAS / "capturas"
 # "ml/guiado" es la ML de clase (la de antes del estudio): sigue en la imagen del aula
 # "datos" es la ruta vieja de Consultas: tiene que seguir llevando a Lenguajes
-PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "tablas", "bases", "yarn", "pipeline", "lenguajes", "datos",
+PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "tablas", "bases", "formatos", "yarn", "pipeline", "lenguajes", "datos",
              "comparar", "ml", "ml/guiado", "consola", "config"]
 SOLO_HDFS = hf.SOLO_HDFS
 
