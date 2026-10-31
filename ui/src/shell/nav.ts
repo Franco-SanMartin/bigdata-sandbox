@@ -1,4 +1,4 @@
-import { Boxes, Braces, Brain, Database, GitCompareArrows, GraduationCap, HardDrive, Home, LayoutGrid, Server, Settings2, SquareTerminal, Table2, Workflow, type LucideIcon } from 'lucide-react';
+import { Boxes, Braces, Brain, Columns3, Database, GitCompareArrows, GraduationCap, HardDrive, Home, LayoutGrid, Server, Settings2, SquareTerminal, Table2, Workflow, type LucideIcon } from 'lucide-react';
 import type { PageId } from '../state/ui';
 import type { CapaId } from '../lib/ecosistema';
 
@@ -9,7 +9,7 @@ export type NavGroup = typeof NAV_GROUPS[number];
 
 /** Los grupos que son una capa del mapa: su color y qué entra ahí */
 export const GROUP_CAPA: Partial<Record<NavGroup, { capa: CapaId; tip: string }>> = {
-  Almacenamiento: { capa: 'datos', tip: 'Dónde quedan los datos: HDFS, las tablas y las bases' },
+  Almacenamiento: { capa: 'datos', tip: 'Dónde quedan los datos: HDFS, las tablas, las bases y los formatos' },
   Recursos: { capa: 'recursos', tip: 'Quién reparte la memoria y los núcleos de la máquina: YARN' },
   Procesamiento: { capa: 'motores', tip: 'Qué hace las cuentas (MapReduce, Tez, Spark) y con qué lenguaje se las pedís' },
   Ingesta: { capa: 'puente', tip: 'Cómo entran los datos al cluster y pasan de un lado a otro' },
@@ -24,6 +24,7 @@ export const NAV: NavItem[] = [
   { id: 'hdfs', label: 'HDFS', icon: HardDrive, key: 'h', group: 'Almacenamiento', title: 'HDFS' },
   { id: 'tablas', label: 'Tablas', icon: Table2, key: 't', group: 'Almacenamiento', title: 'Tablas del Metastore' },
   { id: 'bases', label: 'Bases', icon: Database, key: 'b', group: 'Almacenamiento', title: 'Bases: MariaDB y MongoDB' },
+  { id: 'formatos', label: 'Formatos', icon: Columns3, key: 'f', group: 'Almacenamiento', title: 'Formatos: CSV, Parquet y ORC' },
   { id: 'yarn', label: 'Trabajos', icon: Boxes, key: 'y', group: 'Recursos', title: 'Trabajos en YARN' },
   { id: 'lenguajes', label: 'Lenguajes', icon: Braces, key: 'l', group: 'Procesamiento', title: 'Lenguajes: Hive y Pig' },
   { id: 'comparar', label: 'Comparar', icon: GitCompareArrows, key: 'k', group: 'Procesamiento', title: 'Comparar herramientas' },

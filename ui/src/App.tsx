@@ -26,6 +26,7 @@ const PAGE: Record<PageId, ComponentType> = {
   pipeline: page(() => import('./pages/pipeline/PipelinePage'), 'PipelinePage'),
   tablas: page(() => import('./pages/tablas/TablasPage'), 'TablasPage'),
   bases: page(() => import('./pages/datos/EditorConsultas'), 'BasesPage'),
+  formatos: page(() => import('./pages/formatos/FormatosPage'), 'FormatosPage'),
   lenguajes: page(() => import('./pages/datos/EditorConsultas'), 'LenguajesPage'),
   comparar: page(() => import('./pages/comparar/CompararPage'), 'CompararPage'),
   ml: page(() => import('./pages/ml/MlPage'), 'MlPage'),

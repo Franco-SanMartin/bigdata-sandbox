@@ -45,6 +45,17 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
     PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
     Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Pantalla Formatos** (`full`, `G F`, en Almacenamiento): la misma tabla
+  de ventas en texto (CSV), Parquet y ORC.
+  - Un dibujo de fila contra columna, con las columnas que la consulta no
+    usa apagadas.
+  - **Crear las copias en Parquet y ORC**: Hive escribe dos tablas externas
+    en `/user/root/formatos` con un `INSERT OVERWRITE … SELECT * FROM ventas`.
+  - Cada copia muestra lo que ocupa en HDFS, cuántas veces menos que el CSV y
+    en cuántos bloques queda, leído del listado de su carpeta.
+  - La misma consulta corre en las tres, una por vez, con su tiempo y su
+    trabajo de YARN.
+  - Guía 12 y la sección en la referencia.
 - **Glosario único** (`guias/glosario.md`): las palabras del cluster por capa
   (almacenamiento, recursos, motores, lenguajes, ingesta y alta
   disponibilidad), más la tabla "la misma tarea, con varias herramientas".

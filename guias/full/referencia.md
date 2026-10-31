@@ -4,7 +4,7 @@ Para consultar, no para leer de corrido. Por cada pantalla: qué muestra cada
 parte, **de dónde sale el dato** (la ruta de la API que la alimenta y lo que
 esa ruta le pregunta a Hadoop), el **comando equivalente** para hacerlo en la
 terminal y dónde aparece lo mismo en la industria. El paso a paso está en las
-guías [1](01-arrancar-y-recorrido.md) a [11](11-comparar.md); el contrato
+guías [1](01-arrancar-y-recorrido.md) a [12](12-formatos.md); el contrato
 completo de la API, con los tipos, en [`ui/API.md`](../../ui/API.md).
 
 [← 11. Comparar](11-comparar.md) · [Índice de full](README.md) · [Glosario](../glosario.md) · [Teoría →](teoria/README.md)
@@ -28,7 +28,7 @@ Cómo leer las tablas:
 
 | Parte | Qué muestra | De dónde sale | Comando equivalente |
 |---|---|---|---|
-| Barra lateral | Las pantallas por capa: Empezar (Inicio, Prácticas), Almacenamiento (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes, Comparar, Machine Learning), Ingesta (Pipeline), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
+| Barra lateral | Las pantallas por capa: Empezar (Inicio, Prácticas), Almacenamiento (HDFS, Tablas, Bases, Formatos), Recursos (Trabajos), Procesamiento (Lenguajes, Comparar, Machine Learning), Ingesta (Pipeline), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
 | Estado arriba | *Apagado*, *Arrancando · Paso N de M*, en marcha, *Degradado* o *Con fallas* | `GET /api/status` → procesos propios, JMX del NameNode, REST del ResourceManager | `estado` |
 | Consola (`Ctrl+J`) | El cajón con los eventos | `GET /api/activity?limit=200` + SSE `activity` | `docker logs bigdata-full` |
 | Paleta (`Ctrl+K`) | Buscar pantallas, acciones y palabras del glosario (aparecen al escribir) | Fija, en la interfaz | — |
@@ -36,7 +36,7 @@ Cómo leer las tablas:
 | Direcciones | `#hdfs/user/root`, `#tablas/ventas`, `#lenguajes/pig`, `#bases/mongodb`, `#yarn/application_…`, `#comparar/quien-hace-el-trabajo`, `#inicio/recorrido/tres`... | La interfaz | — |
 
 Atajos: `G` y después la letra. `G I` Inicio, `G R` Prácticas, `G H` HDFS,
-`G T` Tablas, `G B` Bases, `G Y` Trabajos, `G L` Lenguajes, `G K` Comparar,
+`G T` Tablas, `G B` Bases, `G F` Formatos, `G Y` Trabajos, `G L` Lenguajes, `G K` Comparar,
 `G P` Pipeline, `G M` Machine Learning, `G C` Cluster, `G O` Consola,
 `G S` Configuración. La dirección vieja `#datos` (Consultas) lleva a Lenguajes.
 
@@ -150,6 +150,23 @@ Guía: [5. Lenguajes, Bases y Tablas](05-consultas.md), pasos 7 y 8.
 
 **En la industria.** **DBeaver**, **MySQL Workbench** o **MongoDB Compass**:
 catálogo, editor, resultado y plan contra una base de una sola máquina.
+
+## Formatos
+
+Guía: [12. Formatos](12-formatos.md).
+
+| Parte | Qué muestra | De dónde sale | Comando equivalente |
+|---|---|---|---|
+| Fila contra columna | Las mismas ventas en CSV y por columnas; las columnas que la consulta no usa, apagadas | Fijo en la interfaz (`ui/src/lib/formatos.ts`) | — |
+| Las tres copias | `ventas` (CSV), `ventas_parquet` y `ventas_orc`: lo que ocupa cada una, cuántas veces menos que el CSV, archivos y bloques | `GET /api/data/catalog` (si existen y su carpeta) + `GET /api/hdfs/ls?path=<carpeta>` (solo de las que existen) | `hdfs dfs -du -s -h /user/root/formatos/parquet` |
+| Crear las copias | Las dos tablas externas en `/user/root/formatos` y el `INSERT OVERWRITE` que las llena | `POST /api/data/query` con el `CREATE EXTERNAL TABLE … STORED AS PARQUET` (u `ORC`) y el `INSERT OVERWRITE TABLE … SELECT * FROM ventas` (un trabajo de Tez) | `beeline -u jdbc:hive2://localhost:10000 -e "INSERT OVERWRITE TABLE ventas_parquet SELECT * FROM ventas;"` |
+| La misma consulta en las tres | Tiempo, filas leídas y el trabajo de YARN de cada una, corridas una por vez | `POST /api/data/query` con la misma consulta sobre cada tabla | `beeline … -e "SELECT producto, SUM(cantidad) FROM ventas_orc GROUP BY producto;"` |
+| Qué muestra esto | Las cuentas con esos números | Armado en la interfaz | — |
+
+**En la industria.** Parquet es el formato de casi todo data lake (Spark,
+Databricks, Athena) y ORC el de Hive; **Delta Lake**, **Iceberg** y **Hudi**
+son Parquet más un registro de cambios. Glosario:
+[Parquet y ORC](../glosario.md#parquet-y-orc).
 
 ## Trabajos en YARN
 

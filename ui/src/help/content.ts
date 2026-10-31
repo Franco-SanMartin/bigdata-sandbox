@@ -77,6 +77,15 @@ export const HELP: Record<PageId, Help> = {
       ['Plan', 'Lo que la base va a hacer para resolver la consulta: EXPLAIN en MariaDB, explain() en MongoDB.'],
     ],
   },
+  formatos: {
+    intro: 'La misma tabla de ventas en texto (CSV), Parquet y ORC. Parquet y ORC son copias que escribe Hive leyendo el CSV, como tablas externas en /user/root/formatos. Cada copia muestra lo que ocupa en HDFS y en cuántos bloques queda, y la misma consulta se corre en las tres, una por vez.',
+    terms: [
+      ['Por filas', 'El CSV guarda una línea por venta: para leer una columna hay que leer todas.'],
+      ['Por columnas', 'Parquet y ORC guardan cada columna junta: una consulta lee solo las que usa.'],
+      ['Compresión', 'Una columna tiene valores parecidos (4 sucursales, 8 productos): se comprime mucho más que una línea de texto.'],
+      ['Bloques', 'Cuantos menos bloques, menos tareas de map: cada una lee uno.'],
+    ],
+  },
   lenguajes: {
     intro: 'Hive (SQL) y Pig (Pig Latin) sobre los archivos de HDFS: cada consulta muestra su resultado, su plan y qué trabajo lanzó en YARN. PySpark y MapReduce a mano se lanzan desde Trabajos; la misma cuenta en los cuatro está en Comparar.',
     terms: [
@@ -150,6 +159,7 @@ export const GLOSARIO_DE: Record<PageId, string[]> = {
   hdfs: ['hdfs', 'bloque', 'réplica', 'namenode', 'datanode', 'rack'],
   tablas: ['metastore', 'tabla-externa', 'tabla-administrada', 'formato-de-archivo', 'parquet-y-orc', 'partición-de-tabla'],
   bases: ['mariadb', 'mongodb', 'índice', 'plan', 'sqoop'],
+  formatos: ['formato-de-archivo', 'parquet-y-orc', 'bloque', 'tabla-externa', 'data-lake'],
   yarn: ['yarn', 'contenedor', 'applicationmaster', 'cola', 'localidad', 'memoria-por-tiempo', 'jobhistory-y-spark-history'],
   pipeline: ['ingesta', 'sqoop', 'etl', 'pipeline', 'data-lake'],
   lenguajes: ['lenguaje', 'hive', 'pig', 'motor', 'tez', 'mapreduce', 'plan'],
@@ -162,7 +172,7 @@ export const GLOSARIO_DE: Record<PageId, string[]> = {
 
 export const SHORTCUTS: [string, string][] = [
   ['Buscar o ejecutar', 'Ctrl+K'], ['Consola', 'Ctrl+J'], ['Ayuda y glosario', '?'],
-  ['Ir a HDFS', 'G H'], ['Ir a Tablas', 'G T'], ['Ir a Bases', 'G B'], ['Ir a Trabajos', 'G Y'], ['Ir a Lenguajes', 'G L'],
+  ['Ir a HDFS', 'G H'], ['Ir a Tablas', 'G T'], ['Ir a Bases', 'G B'], ['Ir a Formatos', 'G F'], ['Ir a Trabajos', 'G Y'], ['Ir a Lenguajes', 'G L'],
   ['Ir a Comparar', 'G K'], ['Ir a Machine Learning', 'G M'], ['Ir al Pipeline', 'G P'],
   ['Ir a Cluster', 'G C'], ['Ir a la Consola', 'G O'], ['Ir a Configuración', 'G S'],
 ];

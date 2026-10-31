@@ -7,7 +7,7 @@ palabras qué muestran los números. Es la tabla "la misma tarea, con varias
 herramientas" del [glosario](../glosario.md#la-misma-tarea-con-varias-herramientas),
 corriendo.
 
-[← 10. La Consola](10-consola.md) · [Índice de full](README.md)
+[← 10. La Consola](10-consola.md) · [Índice de full](README.md) · Siguiente: [12. Formatos →](12-formatos.md)
 
 La pantalla es **Comparar** (`G K`), en el grupo *Procesamiento* de la barra.
 Los comandos van **adentro** del contenedor, parado en `/datos`.

@@ -99,7 +99,7 @@ documentación salen de la demo.
 
 | Parte | Qué tiene | Para qué |
 |---|---|---|
-| Guía paso a paso (01 a 11) | Una pantalla por guía: qué hacer, qué se ve, qué significa y el comando equivalente | Aprender a usarla, en orden |
+| Guía paso a paso (01 a 12) | Una pantalla por guía: qué hacer, qué se ve, qué significa y el comando equivalente | Aprender a usarla, en orden |
 | [Glosario](../glosario.md) | Las palabras del cluster por capa (almacenamiento, recursos, motores, lenguajes, ingesta) y la misma tarea con varias herramientas. Es el mismo texto que el `?` de cada pantalla | Cuando una palabra no cierra |
 | [Referencia](referencia.md) | Pantalla por pantalla y control por control: qué muestra, de dónde sale el dato, el comando y dónde se usa en la industria | Consultar mientras trabajás |
 | [Teoría](teoria/README.md) | Observabilidad, salud de HDFS, ciclo de vida en YARN, pipelines, cómo una UI habla con un cluster, interpretabilidad | Entender por qué funciona así |
@@ -126,6 +126,8 @@ orden; el número es el de siempre, para no romper enlaces.
   fsck y apagar un DataNode.
 - [05. Lenguajes, Bases y Tablas](05-consultas.md), primera parte: las tablas
   del Metastore, adónde apuntan en HDFS, y las bases MariaDB y MongoDB.
+- [12. Formatos](12-formatos.md): la misma tabla en CSV, Parquet y ORC, con
+  lo que ocupa cada una en HDFS y cuánto tarda la misma consulta.
 
 **Recursos: quién corre dónde** (Trabajos)
 
