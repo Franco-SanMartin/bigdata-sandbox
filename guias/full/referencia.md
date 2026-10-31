@@ -141,7 +141,7 @@ trabajos de **EMR** y **Dataproc**. Teoría:
 
 ## Consultas
 
-Guía: [5. Consultas](05-consultas.md).
+Guía: [5. Lenguajes, Bases y Tablas](05-consultas.md).
 
 | Parte | Qué muestra | De dónde sale | Comando equivalente |
 |---|---|---|---|

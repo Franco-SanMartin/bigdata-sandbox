@@ -99,32 +99,60 @@ documentación salen de la demo.
 
 | Parte | Qué tiene | Para qué |
 |---|---|---|
-| Guía paso a paso (01 a 10) | Una pantalla por guía: qué hacer, qué se ve, qué significa y el comando equivalente | Aprender a usarla, en orden |
+| Guía paso a paso (01 a 11) | Una pantalla por guía: qué hacer, qué se ve, qué significa y el comando equivalente | Aprender a usarla, en orden |
+| [Glosario](../glosario.md) | Las palabras del cluster por capa (almacenamiento, recursos, motores, lenguajes, ingesta) y la misma tarea con varias herramientas. Es el mismo texto que el `?` de cada pantalla | Cuando una palabra no cierra |
 | [Referencia](referencia.md) | Pantalla por pantalla y control por control: qué muestra, de dónde sale el dato, el comando y dónde se usa en la industria | Consultar mientras trabajás |
 | [Teoría](teoria/README.md) | Observabilidad, salud de HDFS, ciclo de vida en YARN, pipelines, cómo una UI habla con un cluster, interpretabilidad | Entender por qué funciona así |
 | [Evaluación](evaluacion/README.md) | Multiple choice, preguntas de desarrollo y ejercicios sobre la interfaz, con respuestas y rúbricas | Repasar y evaluar |
 
-### La guía paso a paso
+### La guía paso a paso, por capas
 
-1. [Arrancar y primer recorrido](01-arrancar-y-recorrido.md): el `docker run`,
-   Inicio, la barra lateral, la paleta y la ayuda.
-2. [El panel del cluster y el sinóptico](02-cluster-y-sinoptico.md): las
-   lámparas, los procesos, el arranque paso a paso y las alertas.
-3. [HDFS desde la interfaz](03-hdfs.md): subir, mirar bloques, replicar, fsck
-   y apagar un DataNode.
-4. [YARN y los trabajos](04-trabajos-yarn.md): lanzar MapReduce, Tez y Spark,
-   seguir el avance, el DAG y los logs.
-5. [Consultas](05-consultas.md): Hive, MariaDB, MongoDB y Pig, con el
-   resultado, el plan y quién lo resolvió.
-6. [Pipeline](06-pipeline.md): de `ventas_sucias.csv` al resumen y al modelo,
-   en 6 etapas.
-7. [Machine Learning y el modelo por dentro](07-machine-learning.md):
-   entrenar, comparar y mirar qué aprendió.
-8. [Prácticas guiadas](08-practicas.md): las guías de la materia con pregunta,
-   Ejecutar y verificación.
-9. [Configuración y compose](09-configuracion-y-compose.md): nodos,
-   réplicas, servicios, memoria y el `docker-compose.yml`.
-10. [La Consola](10-consola.md): todo lo que pasó, con el comando exacto.
+La interfaz está ordenada como el mapa de Inicio: primero dónde viven los
+datos, después quién reparte la máquina, después qué hace las cuentas y con
+qué lenguaje, y por último cómo entran los datos. Las guías siguen el mismo
+orden; el número es el de siempre, para no romper enlaces.
+
+**Empezar**
+
+- [01. Arrancar y primer recorrido](01-arrancar-y-recorrido.md): el
+  `docker run`, Inicio con el mapa del ecosistema, la barra lateral, la paleta
+  y la ayuda.
+- [08. Prácticas guiadas](08-practicas.md): las guías de la materia con
+  pregunta, Ejecutar y verificación.
+
+**Almacenamiento: dónde viven los datos** (HDFS, Tablas, Bases)
+
+- [03. HDFS desde la interfaz](03-hdfs.md): subir, mirar bloques, replicar,
+  fsck y apagar un DataNode.
+- [05. Lenguajes, Bases y Tablas](05-consultas.md), primera parte: las tablas
+  del Metastore, adónde apuntan en HDFS, y las bases MariaDB y MongoDB.
+
+**Recursos: quién corre dónde** (Trabajos)
+
+- [04. YARN y los trabajos](04-trabajos-yarn.md): lanzar MapReduce, Tez y
+  Spark, seguir el avance, el DAG, los contenedores y los logs.
+
+**Procesamiento: motores y lenguajes** (Lenguajes, Comparar, Machine Learning)
+
+- [05. Lenguajes, Bases y Tablas](05-consultas.md), segunda parte: Hive y Pig,
+  con el resultado, el plan y qué trabajo lanzaron.
+- [11. Comparar](11-comparar.md): ventas por producto en MapReduce a mano, Pig,
+  Hive y PySpark, con lo que movió cada una y el glosario.
+- [07. Machine Learning y el modelo por dentro](07-machine-learning.md):
+  entrenar, comparar y mirar qué aprendió.
+
+**Ingesta: cómo entran los datos** (Pipeline)
+
+- [06. Pipeline](06-pipeline.md): de `ventas_sucias.csv` al resumen y al
+  modelo, en 6 etapas, con Sqoop, Hive y Spark.
+
+**Operar** (Cluster, Consola, Configuración)
+
+- [02. El panel del cluster y el sinóptico](02-cluster-y-sinoptico.md): las
+  lámparas, los procesos, el arranque paso a paso y las alertas.
+- [10. La Consola](10-consola.md): todo lo que pasó, con el comando exacto.
+- [09. Configuración y compose](09-configuracion-y-compose.md): nodos,
+  réplicas, servicios, memoria y el `docker-compose.yml`.
 
 ### Orden de estudio sugerido
 

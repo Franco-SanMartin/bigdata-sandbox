@@ -55,6 +55,9 @@ export const consoleOpen = store(false);
 /** El panel de la terminal (bash adentro del contenedor). Una vez abierto queda montado: cerrarlo lo esconde */
 export const terminalOpen = store(false);
 export const helpOpen = store(false);
+/** La ayuda abierta en el glosario: '' arriba de todo, o el ancla de un término ('tez', 'réplica'…). null: en la pantalla */
+export const glosarioEn = store<string | null>(null);
+export function abrirGlosario(termino = '') { glosarioEn.set(termino); helpOpen.set(true); }
 export const paletteOpen = store(false);
 export const composeOpen = store(false);
 /** La configuración que muestra el docker-compose.yml (el borrador de Configuración, si hay) */

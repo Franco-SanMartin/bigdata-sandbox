@@ -93,7 +93,7 @@ export class DemoYarn {
   }
 
   /** Lo que costó cada trabajo (Comparar), con las proporciones que midió el humo en el contenedor real
-      (ventas por producto, 6,2 MB): MapReduce Streaming manda el 54 % de la entrada por el shuffle y escribe
+      (ventas por producto, 5,9 MB): MapReduce Streaming manda el 54 % de la entrada por el shuffle y escribe
       el 121 % en disco local; Spark suma antes del shuffle (3 KB). Tez sin Timeline Server: solo lo del RM */
   metrics(ids: string[]): YarnMetrics[] {
     if (this.e.phase !== 'running') fail('cluster_stopped', 'El cluster está apagado');

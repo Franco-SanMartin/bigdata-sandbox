@@ -45,6 +45,16 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
     PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
     Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Glosario único** (`guias/glosario.md`): las palabras del cluster por capa
+  (almacenamiento, recursos, motores, lenguajes, ingesta y alta
+  disponibilidad), más la tabla "la misma tarea, con varias herramientas".
+  - En `full`, el `?` de cada pantalla suma la pestaña **Glosario**, con
+    buscador y los términos de esa pantalla a un clic.
+  - En `Ctrl+K`, escribir una palabra lo abre en ella.
+  - La interfaz lee el mismo `.md` al armarse la imagen: hay un solo texto.
+- **Guía 11 de `full`: Comparar**, con los números reales de las cuatro
+  versiones. El índice de las guías de `full` queda ordenado por capas, y la
+  guía 5 suma la pantalla Tablas.
 - **`GET /api/yarn/metrics?apps=…`** (servidor): lo que costó cada trabajo,
   igual para los tres motores. Tiempo, MB·s y vcores·s salen del RM; cuando
   terminó, lo leído y escrito en HDFS, el shuffle, el disco local y las tareas
