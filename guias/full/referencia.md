@@ -80,7 +80,7 @@ Guía: [8. Prácticas guiadas](08-practicas.md).
 
 | Parte | Qué muestra | De dónde sale | Comando equivalente |
 |---|---|---|---|
-| Lista | Las 9 prácticas con su estado y avance | Fija en la interfaz + el avance en `localStorage` (`bds.practicas.v1`) | — |
+| Lista | Las 9 prácticas por capa (Almacenamiento, Recursos, Procesamiento, Ingesta y Alta disponibilidad), con su estado y avance | Fija en la interfaz + el avance en `localStorage` (`bds.practicas.v1`) | — |
 | Antes de empezar | Cada servicio que necesita, con su lámpara | `GET /api/status` | `estado` |
 | Pregunta | 4 opciones, por qué sí y por qué no | Fija en la interfaz | — |
 | Ejecutar | Salida, código de salida, trace, *Dónde quedó* | No tiene ruta propia: usa las mismas que las pantallas (`/api/hdfs/mkdir`, `/api/hdfs/upload`, `/api/data/query`, `/api/yarn/apps`, `/api/processes/:id/stop`...) | El comando del paso |

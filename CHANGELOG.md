@@ -107,6 +107,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   `#bases/mongodb` abren directo ese motor (Comparar ya lleva a Pig), y
   `#datos` sigue andando: lleva a Lenguajes, o a Bases si era MariaDB o
   MongoDB.
+- **Prácticas por capa**: la lista se agrupa en Almacenamiento (HDFS y
+  MongoDB), Recursos (MapReduce), Procesamiento (Pig, Hive y Spark), Ingesta
+  (MariaDB y Sqoop) y Alta disponibilidad. Los ids y el avance guardado no
+  cambian. Las de procesamiento terminan con *Probalo también con las otras
+  herramientas*, que abre Comparar.
+- **Página pública en tema claro** (`docs/index.html`): la misma escala de
+  grises y los mismos colores de estado y de motores que la interfaz.
 - **Tema claro en toda la interfaz** (D-06): tokens nuevos (fondo blanco,
   grises y estados con contraste ≥ 4,5:1 sobre blanco), la terminal integrada,
   el editor del estudio de ML y los gráficos. `tema.test.ts` pasa a exigir

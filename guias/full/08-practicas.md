@@ -19,7 +19,11 @@ contenedor.
 **Qué se ve.** El título *Prácticas* con "Las guías de la materia paso a
 paso: el comando de cada paso y un botón que lo corre y lo verifica." y una
 etiqueta "N de 9 completas". Arriba, **Para seguir** ("Las que empezaste y
-las que se pueden hacer ya"); abajo, **Todas** ("En el orden de las guías").
+las que se pueden hacer ya"); abajo, todas agrupadas por capa, como la barra:
+**Almacenamiento** (HDFS y MongoDB), **Recursos** (MapReduce), **Procesamiento**
+(Pig, Hive y Spark), **Ingesta** (MariaDB y Sqoop) y **Alta disponibilidad**.
+Las de procesamiento terminan con *Probalo también con las otras
+herramientas*, que abre Comparar.
 Cada tarjeta dice la guía, el estado (*Sin empezar*, *En curso*, *Completa*,
 *Preparándose* o *No disponible* con el motivo), los minutos, los pasos y una
 barra con cuántos van hechos.

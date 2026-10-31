@@ -256,3 +256,15 @@ describe('Correr en la terminal', () => {
     expect(ok).toMatchObject({ ok: true, vars: { dn: '2' }, result: { summary: 'Corrió en tu terminal' } });
   });
 });
+
+describe('prácticas por capa', () => {
+  it('cada práctica aparece una sola vez, y las de procesamiento abren una pregunta de Comparar que existe', async () => {
+    const { POR_CAPA, PROBALO } = await import('./index');
+    const { COMPARAR } = await import('../ecosistema');
+    expect(POR_CAPA.flatMap(g => g.ids).sort()).toEqual(PRACTICES.map(p => p.id).sort());
+    for (const [id, q] of Object.entries(PROBALO)) {
+      expect(PRACTICES.some(p => p.id === id), id).toBe(true);
+      expect(COMPARAR.some(c => c.id === q), q).toBe(true);
+    }
+  });
+});

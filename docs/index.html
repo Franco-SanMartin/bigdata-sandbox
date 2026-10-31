@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light">
 <title>bigdata-sandbox · arquitectura</title>
 <meta name="description" content="Arquitectura de la imagen bigdata-sandbox (versión base): cada módulo del cluster, cómo se conectan, sus comandos y sus puertos.">
 <style>
@@ -15,14 +15,15 @@
 @font-face { font-family: "Plex Mono"; src: url("fuentes/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 
 :root {
-  --n0: #090909; --n1: #0E0E0E; --n2: #131313; --n3: #181818; --n4: #1E1E1E; --n5: #262626; --n6: #2F2F2F;
-  --n7: #3B3B3B; --n8: #4F4F4F; --n9: #6E6E6E; --n10: #8F8F8F; --n11: #B4B4B4; --n12: #EDEDED;
-  --ok: #4CB782; --run: #D9A43F; --bad: #E5534B; --bad-t: #F2867F;
-  --mr: #A69E8A; --tez: #9389C4; --spark: #C38C64; --uno: #B48AA2;
+  /* Tema claro (D-06): la misma escala que la interfaz (ui/src/styles/tokens.css), de fondo blanco a texto casi negro */
+  --n0: #FFFFFF; --n1: #F7F7F6; --n2: #F3F3F2; --n3: #ECECEB; --n4: #E4E4E3; --n5: #DADAD9; --n6: #C8C8C7;
+  --n7: #B0B0AF; --n8: #8E8E8D; --n9: #6B6B6A; --n10: #525251; --n11: #333332; --n12: #141414;
+  --ok: #2DA44E; --run: #D4A72C; --bad: #E5534B; --bad-t: #CF222E;
+  --mr: #9A8455; --tez: #6F62B8; --spark: #C06A2B; --uno: #A5577E;
   --sans: "Plex Sans", system-ui, sans-serif;
   --mono: "Plex Mono", ui-monospace, Consolas, monospace;
   --r1: 4px; --r2: 6px; --r3: 8px;
-  color-scheme: dark;
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -65,9 +66,9 @@ main { overflow: hidden; min-height: 0; min-width: 0; }
 
 /* lámparas */
 .lamp { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; background: var(--n7); }
-.lamp.ok { background: var(--ok); box-shadow: 0 0 6px rgba(76,183,130,.55); }
-.lamp.run { background: var(--run); box-shadow: 0 0 6px rgba(217,164,63,.6); }
-.lamp.bad { background: var(--bad); box-shadow: 0 0 6px rgba(229,83,75,.6); }
+.lamp.ok { background: var(--ok); }
+.lamp.run { background: var(--run); }
+.lamp.bad { background: var(--bad); }
 .lamp.off { background: transparent; border: 1px solid var(--n8); }
 
 /* --- sinóptico: diagrama + ficha --- */
@@ -172,7 +173,7 @@ td.p { font: 500 12px var(--mono); color: var(--n12); white-space: nowrap; }
 
 /* --- paleta Ctrl+K --- */
 dialog { padding: 0; border: 1px solid var(--n7); border-radius: var(--r3); background: var(--n2); color: var(--n11); width: min(600px, 92vw); margin-top: 12vh; }
-dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog::backdrop { background: rgba(20,20,20,.28); }
 .pal input { width: 100%; border: 0; border-bottom: 1px solid var(--n6); border-radius: var(--r3) var(--r3) 0 0; padding: 12px 14px; font: 14px var(--sans); background: var(--n2); color: var(--n12); }
 .pal input:focus { outline: none; }
 .pal ul { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow: auto; }
