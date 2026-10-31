@@ -178,3 +178,13 @@
 .pr-challenge details[open] { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
 .pr-challenge details[open] > * { max-width: 100%; }
 .pr-challenge-ok { display: inline-flex; gap: 8px; align-items: center; font-size: var(--fs-md); cursor: pointer; }
+
+/* Por capa, como la barra y el mapa de Inicio */
+.pr-capa .section-h h2 { display: flex; align-items: center; gap: 8px; }
+.pr-capa .section-h h2::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--capa, var(--n-6)); }
+.pr-capa + .pr-capa { margin-top: 8px; }
+/* Al final de las de procesamiento: lo mismo con las otras herramientas */
+.pr-probalo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--capa); border-radius: var(--r-2); background: var(--surface); font-size: var(--fs-sm); color: var(--text-2); }
+.pr-probalo > span { flex: 1 1 320px; line-height: 1.5; }
+.pr-probalo b { color: var(--text); }
+.pr-probalo > svg { color: var(--capa); flex: none; }

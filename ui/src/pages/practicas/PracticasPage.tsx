@@ -2,9 +2,9 @@
    paso: la pregunta (¿cuál es el comando?), el comando de la terminal, qué entra, qué hace, qué tiene
    que dar, la salida como en la terminal y dónde queda cada cosa. Al terminar, el resumen. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, ClipboardCheck, Download, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, Upload, RotateCcw, SearchCheck, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, GitCompareArrows, ClipboardCheck, Download, CircleCheck, CircleHelp, CircleX, Clock, Container, ExternalLink, Eye, HardDrive, Laptop, Layers, Lightbulb, MapPin, Play, Upload, RotateCcw, SearchCheck, SquareTerminal, Terminal as TerminalIcon } from 'lucide-react';
 import {
-  AUTOEVAL, PRACTICES, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, pinVars, practiceById, practiceState, requirements, score, stepVars, suggested,
+  AUTOEVAL, POR_CAPA, PRACTICES, PROBALO, blocker, canRun, correctIndex, currentStep, splitCommon, doneCount, fill, optionOrder, pinVars, practiceById, practiceState, requirements, score, stepVars, suggested,
   type Practice, type PracticeProgress, type RawOut, type Step, type StepOut,
 } from '../../lib/practicas';
 import type { ClusterStatus } from '../../api/types';
@@ -74,10 +74,14 @@ function List() {
         </>
       )}
 
-      <div className="section-h"><h2>Todas</h2><span>En el orden de las guías</span></div>
-      <div className="capgrid">
-        {PRACTICES.map(p => <Card key={p.id} pr={p} pp={progress[p.id]} cap={blocker(status, p)} />)}
-      </div>
+      {POR_CAPA.map(g => (
+        <section key={g.titulo} className="pr-capa" data-capa={g.capa} aria-label={g.titulo}>
+          <div className="section-h"><h2>{g.titulo}</h2><span>{g.sub}</span></div>
+          <div className="capgrid">
+            {g.ids.map(id => practiceById(id)).filter((p): p is Practice => !!p).map(p => <Card key={p.id} pr={p} pp={progress[p.id]} cap={blocker(status, p)} />)}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -286,6 +290,13 @@ function Detail({ pr }: { pr: Practice }) {
                 open={open.has(s.id)} onToggle={() => toggle(s.id)} cap={blocker(status, pr, s)} />
             ))}
           </ol>
+          {PROBALO[pr.id] && (
+            <div className="pr-probalo" data-capa="motores">
+              <GitCompareArrows size={16} aria-hidden="true" />
+              <span><b>Probalo también con las otras herramientas.</b> En Comparar, ventas por producto escrita en MapReduce a mano, Pig, Hive y PySpark, una al lado de la otra, con lo que movió cada una.</span>
+              <button type="button" className="btn btn-sm" onClick={() => navigate('comparar', PROBALO[pr.id])}>Abrir Comparar<ArrowRight size={13} /></button>
+            </div>
+          )}
           {AUTOEVAL[pr.id] && <SelfCheck pr={pr} pp={pp} done={st === 'completa'} />}
         </div>
       </div>
