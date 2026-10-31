@@ -155,6 +155,7 @@ POST /api/hdfs/upload
 | `yarnCluster()` | `GET /api/yarn/cluster` | `YarnCluster` | `GET :8088/ws/v1/cluster/nodes`, `…/scheduler` y `…/metrics`. |
 | `app(id)` | `GET /api/yarn/apps/:id` | `YarnAppDetail` | REST del RM + JobHistory (`:19888/ws/v1/history/mapreduce/jobs/:job/counters`), Tez (sin Timeline Server: los vértices salen de las líneas de avance de beeline, `Map 1: 6/6  Reducer 2: 1(+1)/2`, si el trabajo lo mandó la interfaz; si no, una sola etapa `{ id: "dag", name: "DAG de Tez" }`) o Spark History (`:18080/api/v1/applications/:id/stages`, etapas sin aristas). |
 | `appLogs(id, c?)` | `GET /api/yarn/apps/:id/logs?container=…` | `AppLogs` | `yarn logs -applicationId <id> -containerId <c>` (o los archivos de `userlogs/` mientras corre). |
+| `yarnMetrics(ids)` | `GET /api/yarn/metrics?apps=a,b` | `YarnMetrics[]` (hasta 12 ids; uno que no existe vuelve como `{ id, error }`; sin RM, `service_down`) | RM `…/apps/:id` (`elapsedTime`, `memorySeconds`, `vcoreSeconds`). Terminado: JobHistory `…/jobs/:job/counters` (`HDFS_BYTES_READ`/`WRITTEN`, `REDUCE_SHUFFLE_BYTES`, `FILE_BYTES_WRITTEN`, `TOTAL_LAUNCHED_MAPS`/`REDUCES`, `DATA_LOCAL_MAPS`) o Spark History `…/stages` sin las SKIPPED (`inputBytes`, `outputBytes`, `shuffleReadBytes`, `shuffleWriteBytes` + `diskBytesSpilled`, `numTasks`). Tez: solo el RM (`source: "rm"`). Lo usa Comparar. |
 
 ### Pipeline
 
