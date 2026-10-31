@@ -777,6 +777,59 @@ class Yarn:
             detail["outputPath"] = out_path
         return detail
 
+    async def metrics(self, app_id: str) -> dict:
+        """Lo que costó un trabajo, igual para los tres motores (la pantalla Comparar): tiempo y
+        memoria × segundos del RM; leído y escrito en HDFS, shuffle y disco local de JobHistory
+        o de Spark History cuando terminó. Tez no deja contadores sin Timeline Server: solo lo del RM."""
+        a = await self.rm_app(app_id)
+        typ = a.get("applicationType", "").upper()
+        state = app_state(a)
+        out: dict = {"id": app_id, "type": typ if typ in ENGINE else "MAPREDUCE", "state": state,
+                     "elapsedMs": int(a.get("elapsedTime", 0) or 0), "mbSeconds": int(a.get("memorySeconds", 0) or 0),
+                     "vcoreSeconds": int(a.get("vcoreSeconds", 0) or 0), "source": "rm"}
+        if state != "FINISHED":
+            return out
+        if typ == "MAPREDUCE":
+            doc = await self.get(f"{JHS}/ws/v1/history/mapreduce/jobs/{job_id(app_id)}/counters")
+            c = {x.get("name", ""): int(x.get("totalCounterValue", 0) or 0)
+                 for g in ((doc or {}).get("jobCounters") or {}).get("counterGroup") or [] for x in g.get("counter") or []}
+            if c:
+                out.update(hdfsReadBytes=c.get("HDFS_BYTES_READ", 0), hdfsWrittenBytes=c.get("HDFS_BYTES_WRITTEN", 0),
+                           shuffleBytes=c.get("REDUCE_SHUFFLE_BYTES", 0), localDiskBytes=c.get("FILE_BYTES_WRITTEN", 0),
+                           tasks=c.get("TOTAL_LAUNCHED_MAPS", 0) + c.get("TOTAL_LAUNCHED_REDUCES", 0),
+                           dataLocalTasks=c.get("DATA_LOCAL_MAPS", 0), source="jobhistory")
+        elif typ == "SPARK":
+            doc = await self.get(f"{SHS}/api/v1/applications/{app_id}/stages")
+            raw = sorted((s for s in (doc or []) if isinstance(s, dict)),
+                         key=lambda s: (s.get("stageId", 0), -s.get("attemptId", 0)))
+            best: dict[int, dict] = {}
+            for s in raw:
+                best.setdefault(int(s.get("stageId", 0)), s)
+            # Las SKIPPED reusaron un shuffle anterior: no leyeron ni escribieron nada
+            done = [s for s in best.values() if s.get("status") == "COMPLETE"]
+            if done:
+                tot = lambda k: sum(int(s.get(k, 0) or 0) for s in done)  # noqa: E731
+                # Al disco local van los archivos del shuffle y lo que no entró en memoria
+                out.update(hdfsReadBytes=tot("inputBytes"), hdfsWrittenBytes=tot("outputBytes"),
+                           shuffleBytes=tot("shuffleReadBytes"),
+                           localDiskBytes=tot("shuffleWriteBytes") + tot("diskBytesSpilled"),
+                           tasks=tot("numTasks"), source="spark-history")
+        return out
+
+    async def metrics_many(self, ids: list[str]) -> list[dict]:
+        """Las de varios trabajos a la vez (Pig lanza más de uno por script); un trabajo que no
+        está no corta a los demás"""
+        self._need_rm()
+
+        async def una(i: str) -> dict:
+            try:
+                return await self.metrics(i)
+            except ApiError as e:
+                if e.code == "service_down":
+                    raise
+                return {"id": i, "error": str(e)}
+        return list(await asyncio.gather(*(una(i) for i in ids)))
+
     async def logs(self, app_id: str, container: str | None) -> dict:
         self._need_rm()
         # Lo que imprimió el comando que lo mandó (hadoop jar, spark-submit, beeline): ahí están los
@@ -1067,11 +1120,18 @@ class Yarn:
         async def logs(request: Request) -> JSONResponse:
             return JSONResponse(await self.logs(request.path_params["id"], request.query_params.get("container")))
 
+        async def metrics(request: Request) -> JSONResponse:
+            ids = list(dict.fromkeys(i.strip() for i in request.query_params.get("apps", "").split(",") if i.strip()))
+            if not ids or len(ids) > 12:
+                raise ApiError("Pasá entre 1 y 12 trabajos: ?apps=application_…,application_…", "invalid")
+            return JSONResponse(await self.metrics_many(ids))
+
         return [
             Route("/api/yarn/apps", apps, methods=["GET"]),
             Route("/api/yarn/apps", submit, methods=["POST"]),
             Route("/api/yarn/cluster", cluster, methods=["GET"]),
             Route("/api/yarn/templates", templates, methods=["GET"]),
+            Route("/api/yarn/metrics", metrics, methods=["GET"]),
             Route("/api/yarn/apps/{id}", app, methods=["GET"]),
             Route("/api/yarn/apps/{id}/kill", kill, methods=["POST"]),
             Route("/api/yarn/apps/{id}/logs", logs, methods=["GET"]),

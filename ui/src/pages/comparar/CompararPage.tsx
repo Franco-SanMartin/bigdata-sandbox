@@ -6,14 +6,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, Braces, FolderOpen, Play, Route } from 'lucide-react';
 import { api } from '../../api';
-import type { YarnApp } from '../../api/types';
+import type { YarnApp, YarnMetrics } from '../../api/types';
 import { Codigo, Copiar } from '../../components/Comando';
 import { GatedButton, PageHeader } from '../../components/base';
 import { EngineTag } from '../../components/Trace';
 import { useSnapshot } from '../../state/store';
 import { navigate, setRouteArg, toast, useRouteArg } from '../../state/ui';
 import { COMPARAR, RECORRIDOS, activa, type ToolId } from '../../lib/ecosistema';
-import { DATOS, MOTOR, VARIANTES, VERIFICAR, duracion, ultimas, type Archivo, type Variante } from '../../lib/comparar';
+import { DATOS, MOTOR, VARIANTES, VERIFICAR, bytesLabel, duracionCorrida, observaciones, sumar, ultimaCorrida, type Archivo, type Movido, type Variante } from '../../lib/comparar';
 import { duration, nf } from '../../lib/format';
 import type { CapId } from '../../lib/capabilities';
 import './comparar.css';
@@ -140,9 +140,32 @@ function Fases({ v, app }: { v: Variante; app?: YarnApp }) {
   );
 }
 
-function Columna({ v, app, now, maxLineas, maxT }: { v: Variante; app?: YarnApp; now: number; maxLineas: number; maxT: number }) {
+/** Lo que movió la última corrida, en la misma escala para las cuatro columnas */
+function Movimiento({ v, mov, max }: { v: Variante; mov: Movido; max: Maximos }) {
+  return (
+    <div className="cp-mov" aria-label="Lo que movió la última corrida">
+      <span className="cp-mov-h">Lo que movió{mov.trabajos > 1 ? ` · ${mov.trabajos} trabajos` : ''}</span>
+      {mov.leido != null && <Barra valor={mov.leido} max={max.leido}><b className="num">{bytesLabel(mov.leido)}</b> leídos de HDFS</Barra>}
+      {mov.shuffle != null && <Barra valor={mov.shuffle} max={max.shuffle}><b className="num">{bytesLabel(mov.shuffle)}</b> por el shuffle, de una fase a otra</Barra>}
+      {mov.discoLocal != null && <Barra valor={mov.discoLocal} max={max.discoLocal}><b className="num">{bytesLabel(mov.discoLocal)}</b> al disco local de los nodos</Barra>}
+      <Barra valor={mov.mbSeconds} max={max.mbSeconds}>
+        <b className="num" title="Los MB de cada contenedor por los segundos que estuvo vivo, sumados">{nf(mov.mbSeconds / 1024, 1)} GB·s</b> de memoria × tiempo en YARN
+      </Barra>
+      {mov.leido == null && (
+        <p className="cp-mov-no">{v.motor === 'TEZ'
+          ? 'Tez no guarda contadores sin Timeline Server: de esta corrida YARN solo sabe cuánto tardó y cuánta memoria usó.'
+          : 'Los contadores todavía no llegaron al historial.'}</p>
+      )}
+    </div>
+  );
+}
+
+type Maximos = { leido: number; shuffle: number; discoLocal: number; mbSeconds: number };
+
+function Columna({ v, run, mov, maxMov, now, maxLineas, maxT }: { v: Variante; run?: YarnApp[]; mov?: Movido; maxMov: Maximos; now: number; maxLineas: number; maxT: number }) {
   const [enviando, setEnviando] = useState(false);
   const lineas = v.archivos.reduce((n, a) => n + a.lineas, 0);
+  const app = run?.at(-1);
   const vivo = app && activa(app);
   const lanzar = async () => {
     if (!v.plantilla) return;
@@ -164,11 +187,12 @@ function Columna({ v, app, now, maxLineas, maxT }: { v: Variante; app?: YarnApp;
 
       <div className="cp-med">
         <Barra valor={lineas} max={maxLineas}><b className="num">{nf(lineas)}</b> líneas hacen la cuenta</Barra>
-        {app
-          ? <Barra valor={duracion(app, now)} max={maxT}>
-              <b className="num">{duration(duracion(app, now) / 1000)}</b> la última vez · <span data-st={app.state}>{ESTADO[app.state]}{vivo ? ` ${nf(app.progress)} %` : ''}</span>
+        {app && run
+          ? <Barra valor={duracionCorrida(run, now)} max={maxT}>
+              <b className="num">{duration(duracionCorrida(run, now) / 1000)}</b> la última vez · <span data-st={app.state}>{ESTADO[app.state]}{vivo ? ` ${nf(app.progress)} %` : ''}</span>
             </Barra>
           : <div className="cp-bar cp-bar-nada">Todavía no corrió en este cluster</div>}
+        {mov && <Movimiento v={v} mov={mov} max={maxMov} />}
       </div>
 
       <Fases v={v} app={app} />
@@ -219,14 +243,52 @@ function Preguntas({ sel }: { sel: string }) {
   );
 }
 
+/** Lo que movió la última corrida de cada versión. Se pide cuando todos sus trabajos terminaron; JobHistory
+    y Spark History tardan unos segundos en tener los contadores, así que si llegan sin ellos se vuelve a pedir */
+function useMovido(corridas: Partial<Record<ToolId, YarnApp[]>>, prendido: boolean): Partial<Record<ToolId, Movido>> {
+  const [ms, setMs] = useState<Record<string, YarnMetrics>>({});
+  const [vuelta, setVuelta] = useState(0);
+  const intentos = useRef<Record<string, number>>({});
+  const listas = Object.values(corridas).filter(r => r!.every(a => !activa(a))).flatMap(r => r!.map(a => a.id));
+  const incompleta = (m?: YarnMetrics) => !m || (m.source === 'rm' && m.type !== 'TEZ' && m.state === 'FINISHED');
+  const falta = listas.filter(id => incompleta(ms[id]) && (intentos.current[id] ?? 0) < 6);
+  const clave = falta.join(',');
+  useEffect(() => {
+    if (!prendido || !falta.length) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      falta.forEach(id => { intentos.current[id] = (intentos.current[id] ?? 0) + 1; });
+      api().yarnMetrics(falta.slice(0, 12)).then(
+        r => { if (vivo) { setMs(m => ({ ...m, ...Object.fromEntries(r.map(x => [x.id, x])) })); setVuelta(n => n + 1); } },
+        () => { /* sin el RM quedan las barras de tiempo */ });
+    }, vuelta ? 5000 : 0);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [clave, prendido, vuelta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const out: Partial<Record<ToolId, Movido>> = {};
+  for (const [id, run] of Object.entries(corridas) as [ToolId, YarnApp[]][]) {
+    const m = run.map(a => ms[a.id]);
+    const s = m.every(Boolean) ? sumar(m as YarnMetrics[]) : undefined;
+    if (s) out[id] = s;
+  }
+  return out;
+}
+
 export function CompararPage() {
   const { status: s, apps } = useSnapshot();
   const arg = useRouteArg();
-  const ult = useMemo(() => ultimas(apps), [apps]);
+  const corridas = useMemo(() => ultimaCorrida(apps), [apps]);
+  const mov = useMovido(corridas, s?.phase === 'running');
   if (!s) return null;
   const vivos = new Set<string>(apps.filter(activa).map(a => a.type));
+  const ult: Partial<Record<ToolId, YarnApp>> = Object.fromEntries(Object.entries(corridas).map(([k, r]) => [k, r!.at(-1)]));
   const maxLineas = Math.max(...VARIANTES.map(v => v.archivos.reduce((n, a) => n + a.lineas, 0)));
-  const maxT = Math.max(0, ...Object.values(ult).map(a => duracion(a!, s.now)));
+  const maxT = Math.max(0, ...Object.values(corridas).map(r => duracionCorrida(r!, s.now)));
+  const movs = Object.values(mov);
+  const maxMov: Maximos = {
+    leido: Math.max(0, ...movs.map(m => m!.leido ?? 0)), shuffle: Math.max(0, ...movs.map(m => m!.shuffle ?? 0)),
+    discoLocal: Math.max(0, ...movs.map(m => m!.discoLocal ?? 0)), mbSeconds: Math.max(0, ...movs.map(m => m!.mbSeconds)),
+  };
+  const obs = observaciones(mov);
   const cierre = RECORRIDOS.tres.steps[RECORRIDOS.tres.steps.length - 1];
   return (
     <div className="page-in cp">
@@ -245,8 +307,16 @@ export function CompararPage() {
       <Flujo vivos={vivos} ult={ult} />
 
       <div className="cp-cols">
-        {VARIANTES.map(v => <Columna key={v.id} v={v} app={ult[v.id]} now={s.now} maxLineas={maxLineas} maxT={maxT} />)}
+        {VARIANTES.map(v => <Columna key={v.id} v={v} run={corridas[v.id]} mov={mov[v.id]} maxMov={maxMov} now={s.now} maxLineas={maxLineas} maxT={maxT} />)}
       </div>
+
+      {obs.length > 0 && (
+        <section className="cp-obs" aria-label="Qué muestran los números">
+          <h3>Qué muestran los números</h3>
+          <ul>{obs.map(o => <li key={o}>{o}</li>)}</ul>
+          <p>Salen de la última corrida de cada una: el tiempo y la memoria, de YARN; lo leído, el shuffle y el disco local, de JobHistory (MapReduce) y de Spark History.</p>
+        </section>
+      )}
 
       <section className="cp-cierre" aria-label={cierre.t}>
         <div>

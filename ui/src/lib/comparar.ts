@@ -7,8 +7,9 @@ import reducer from '../../../datos/ejemplos/reducer.py?raw';
 import pig from '../../../datos/ejemplos/ventas.pig?raw';
 import hql from '../../../datos/ejemplos/ventas.hql?raw';
 import py from '../../../datos/ejemplos/ventas.py?raw';
-import type { AppType, ExampleJob, YarnApp } from '../api/types';
+import type { AppType, ExampleJob, YarnApp, YarnMetrics } from '../api/types';
 import type { ToolId } from './ecosistema';
+import { nf } from './format';
 
 /** Las líneas desde la primera que cumple `desde` hasta la primera (después) que cumple `hasta`.
     Si el archivo cambió y no aparece la marca, devuelve el archivo entero (lo avisa la prueba) */
@@ -39,7 +40,7 @@ export interface Variante {
   archivos: Archivo[];
   /** Lo que se escribe en la terminal (parado en /datos) */
   cmd: string;
-  /** La plantilla de YARN que lo lanza desde la interfaz (Pig no tiene: va por Consultas) */
+  /** La plantilla de YARN que lo lanza desde la interfaz (Pig no tiene: va por Lenguajes) */
   plantilla?: ExampleJob;
   salida: string;
   /** Las fases que arma el motor; disco: el resultado intermedio pasa por HDFS */
@@ -124,3 +125,59 @@ export function ultimas(apps: YarnApp[]): Partial<Record<ToolId, YarnApp>> {
 
 /** Cuánto tardó (o lleva) un trabajo, en milisegundos */
 export const duracion = (a: YarnApp, now: number) => Math.max(0, (a.finishedAt ?? now) - (a.startedAt ?? a.submittedAt));
+
+/** Los trabajos de la última corrida de cada versión. Pig manda uno atrás del otro (agrupar, muestrear
+    para ordenar, ordenar): son de la misma corrida si cada uno arrancó a menos de 30 s de que terminó el anterior */
+export function ultimaCorrida(apps: YarnApp[]): Partial<Record<ToolId, YarnApp[]>> {
+  const out: Partial<Record<ToolId, YarnApp[]>> = {};
+  for (const v of VARIANTES) {
+    const suyas = apps.filter(v.esSuya).sort((a, b) => b.submittedAt - a.submittedAt);
+    if (!suyas.length) continue;
+    const run = [suyas[0]];
+    if (v.id === 'pig') {
+      for (const a of suyas.slice(1)) {
+        if (a.finishedAt == null || run[run.length - 1].submittedAt - a.finishedAt > 30_000) break;
+        run.push(a);
+      }
+    }
+    out[v.id] = run.reverse();
+  }
+  return out;
+}
+
+/** Cuánto tardó (o lleva) una corrida: del primer trabajo al último */
+export const duracionCorrida = (run: YarnApp[], now: number) =>
+  Math.max(0, (run[run.length - 1].finishedAt ?? now) - (run[0].startedAt ?? run[0].submittedAt));
+
+/** Lo que movió una corrida entera (la suma de sus trabajos). Lo que falta en alguno, falta en la suma */
+export interface Movido { trabajos: number; ms: number; mbSeconds: number; leido?: number; escrito?: number; shuffle?: number; discoLocal?: number; tareas?: number }
+
+export function sumar(ms: YarnMetrics[]): Movido | undefined {
+  const ok = ms.filter(m => !m.error && m.state === 'FINISHED');
+  if (!ok.length || ok.length < ms.length) return undefined;
+  const tot = (k: keyof YarnMetrics) => (ok.every(m => typeof m[k] === 'number') ? ok.reduce((x, m) => x + (m[k] as number), 0) : undefined);
+  return { trabajos: ok.length, ms: tot('elapsedMs') ?? 0, mbSeconds: tot('mbSeconds') ?? 0, leido: tot('hdfsReadBytes'),
+    escrito: tot('hdfsWrittenBytes'), shuffle: tot('shuffleBytes'), discoLocal: tot('localDiskBytes'), tareas: tot('tasks') };
+}
+
+const mb = (b: number) => (b < 1024 * 1024 ? `${nf(b / 1024, b < 10240 ? 1 : 0)} KB` : `${nf(b / 1048576, 1)} MB`);
+export const bytesLabel = (b: number) => (b < 1024 ? `${nf(b)} bytes` : mb(b));
+
+/** Lo que dicen los números, en palabras: solo lo que se puede afirmar con lo que hay */
+export function observaciones(m: Partial<Record<ToolId, Movido>>): string[] {
+  const out: string[] = [];
+  const s = m.streaming, sp = m.pyspark, pg = m.pig;
+  if (s?.shuffle != null && sp?.shuffle != null && s.shuffle > sp.shuffle * 10) {
+    out.push(`MapReduce a mano mandó ${bytesLabel(s.shuffle)} por el shuffle y PySpark ${bytesLabel(sp.shuffle)}: mapper.py emite una línea por venta, y Spark suma por producto en cada partición antes de mandar.`);
+  }
+  // La entrada es lo que leyó la versión que la recorre una sola vez (MapReduce a mano)
+  const entrada = s?.leido;
+  if (entrada && sp?.leido && sp.leido > entrada * 1.8) {
+    out.push(`PySpark leyó ${bytesLabel(sp.leido)} de HDFS, ${nf(sp.leido / entrada, 1)} veces la entrada: inferSchema la recorre entera para adivinar los tipos y cada acción (show, write) la vuelve a leer, porque no hay cache().`);
+  }
+  if (s?.discoLocal != null && sp?.discoLocal != null && s.discoLocal > sp.discoLocal * 10) {
+    out.push(`MapReduce escribió ${bytesLabel(s.discoLocal)} en el disco local de los nodos (los spills del map y la mezcla del reduce); PySpark, ${bytesLabel(sp.discoLocal)}.`);
+  }
+  if (pg && pg.trabajos > 1) out.push(`Pig lanzó ${pg.trabajos} trabajos MapReduce para un solo script: uno agrupa y suma, y ORDER BY necesita otros (muestrear las claves y ordenar).`);
+  return out;
+}

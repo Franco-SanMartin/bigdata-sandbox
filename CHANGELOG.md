@@ -38,6 +38,18 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   se lanzan desde ahí (las mismas plantillas de Trabajos); las cuatro tienen
   su comando para la terminal y uno final para ver que dieron lo mismo.
   Abajo, las seis tablas de "¿Cuál uso?" (`#comparar/quien-hace-el-trabajo`).
+  - **Lo que movió cada corrida**, en la misma escala para las cuatro:
+    leído de HDFS, shuffle, disco local de los nodos y memoria × tiempo en
+    YARN (Pig suma sus varios trabajos). Debajo, "Qué muestran los números"
+    lo dice en palabras. Con las salidas reales: MapReduce a mano manda
+    3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
+    PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
+    Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **`GET /api/yarn/metrics?apps=…`** (servidor): lo que costó cada trabajo,
+  igual para los tres motores. Tiempo, MB·s y vcores·s salen del RM; cuando
+  terminó, lo leído y escrito en HDFS, el shuffle, el disco local y las tareas
+  salen de JobHistory (MapReduce) o de Spark History (sin las etapas SKIPPED).
+  Hasta 12 trabajos por pedido; uno que no existe vuelve con `error`.
 - **La barra lateral sigue las capas del mapa**: Empezar, Almacenamiento
   (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes,
   Comparar, Machine Learning), Ingesta (Pipeline) y Operar, cada capa con su

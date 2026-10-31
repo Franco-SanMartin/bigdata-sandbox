@@ -168,3 +168,15 @@
   .cp-preg-tabs { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
   .cp-preg-tabs button { flex: none; max-width: 220px; }
 }
+
+/* Lo que movió la última corrida (YARN, JobHistory y Spark History), misma escala en las cuatro columnas */
+.cp-mov { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.cp-mov-h { font: var(--t-label); color: var(--text-4); text-transform: uppercase; letter-spacing: .04em; font-size: var(--fs-xs); }
+.cp-mov .cp-bar b { font-size: 14px; }
+.cp-mov-no { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-3); }
+
+/* Qué muestran los números, en palabras */
+.cp-obs { margin: 4px 0 20px; padding: 16px 20px; border: 1px solid var(--line); border-left: 3px solid var(--capa-motores); border-radius: var(--r-4); background: var(--n-0); }
+.cp-obs h3 { margin: 0 0 8px; font: var(--t-section); }
+.cp-obs ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--text-2); line-height: 1.55; }
+.cp-obs p { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-3); }
