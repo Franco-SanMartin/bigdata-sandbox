@@ -122,7 +122,7 @@
 .mimic-svg .m-chip-t.miss { fill: var(--run-text); }
 .mimic-svg .m-under { fill: var(--run); stroke: var(--surface); stroke-width: 1.5; }
 .mimic-svg .m-chipg { cursor: default; }
-.mimic-svg .m-hl { fill: rgba(255, 255, 255, .03); stroke: rgba(255, 255, 255, .14); stroke-width: 1; }
+.mimic-svg .m-hl { fill: rgba(20, 20, 20, .025); stroke: rgba(20, 20, 20, .16); stroke-width: 1; }
 .mimic-svg .m-box, .mimic-svg .m-unit { animation: mIn .3s ease-out; }
 @keyframes mIn { from { opacity: 0; } }
 .mimic-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-3); }
@@ -165,3 +165,19 @@
 .diffbar-n { color: var(--text-3); font-size: var(--fs-xs); }
 .diffbar-a { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .mimic-svg .m-t { font-size: 12.5px; }
+
+/* Las capas del ecosistema (D-05): cada una con su color, el mismo en el mapa, la barra lateral,
+   el encabezado de cada pantalla y Comparar. Se usa como var(--capa) */
+[data-capa="puertas"] { --capa: var(--capa-puertas); }
+[data-capa="lenguajes"] { --capa: var(--capa-lenguajes); }
+[data-capa="motores"] { --capa: var(--capa-motores); }
+[data-capa="recursos"] { --capa: var(--capa-recursos); }
+[data-capa="datos"] { --capa: var(--capa-datos); }
+[data-capa="puente"] { --capa: var(--capa-puente); }
+[data-capa="maquina"] { --capa: var(--capa-maquina); }
+
+/* Un comando: dónde se escribe, el texto y copiar / correr en la terminal integrada */
+.cmdbox { border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); overflow: hidden; }
+.cmdbox-donde { display: block; padding: 6px 10px 0; font: 500 10.5px/1.3 var(--f-mono); color: var(--text-4); text-transform: uppercase; letter-spacing: .05em; }
+.cmdbox pre { margin: 0; padding: 8px 10px 10px; font: var(--t-code); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.cmdbox-a { display: flex; gap: 6px; justify-content: flex-end; padding: 6px 8px; border-top: 1px solid var(--line-soft); background: var(--n-0); }

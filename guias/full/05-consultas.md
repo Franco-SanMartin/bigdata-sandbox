@@ -1,4 +1,4 @@
-# 5. Consultas: Hive, MariaDB, MongoDB y Pig
+# 5. Lenguajes, Bases y Tablas: Hive, Pig, MariaDB y MongoDB
 
 Escribir una consulta, correrla, ver el resultado, pedir el plan y entender
 **quién** la resolvió: HiveServer2 solo, un trabajo Tez en YARN, MapReduce
@@ -9,15 +9,19 @@ sola pantalla.
 
 [← 4. YARN y los trabajos](04-trabajos-yarn.md) · [Índice de full](README.md) · Siguiente: [6. Pipeline →](06-pipeline.md)
 
-La pantalla es **Consultas** (`G D`). Los comandos equivalentes van
+El editor está en dos pantallas que siguen las capas del mapa: **Lenguajes**
+(`G L`, Hive y Pig, que corren en el cluster) y **Bases** (`G B`, MariaDB y
+MongoDB, de una sola máquina). El detalle de cada tabla de Hive (columnas,
+carpeta de HDFS, muestra y CREATE TABLE) está en **Tablas** (`G T`). La
+dirección vieja `#datos` lleva a Lenguajes. Los comandos equivalentes van
 **adentro** del contenedor, parado en `/datos`.
 
 ## Paso 1. Los cuatro motores
 
-**Qué se ve.** El título *Consultas* con una etiqueta: **N de 4 motores
+**Qué se ve.** El título *Lenguajes* (o *Bases*) con una etiqueta: **N de 2
 listos**, *Arrancando* o *Cluster apagado*. Arriba del editor, el selector de
-motor (**Hive**, **MariaDB**, **MongoDB**, **Pig**), cada uno con su lámpara,
-y una línea con lo que admite:
+motor (**Hive** y **Pig** en Lenguajes; **MariaDB** y **MongoDB** en Bases),
+cada uno con su lámpara, y una línea con lo que admite:
 
 | Motor | Qué es | Qué se puede | Quién lo resuelve |
 |---|---|---|---|
@@ -40,12 +44,13 @@ llama a los mismos clientes de la terminal (`beeline`, `mysql`, `mongosh`,
 
 **Qué se ve.** A la izquierda, tres pestañas:
 
-- **Tablas**: las tablas de Hive y MariaDB y las colecciones de MongoDB, con
-  la cantidad de filas, y el buscador "Buscar tabla o columna". Un clic abre
-  `SELECT * FROM … LIMIT 100;` (o `db.<colección>.find().limit(100)` en
-  MongoDB). Al pie: "Pig no tiene catálogo: lee los archivos de HDFS con
-  LOAD." Con el cluster apagado: "El catálogo aparece con el cluster
-  prendido", y se puede igual escribir y guardar.
+- **Tablas**: en Lenguajes, las tablas de Hive; en Bases, las de MariaDB y
+  las colecciones de MongoDB. Cada una con la cantidad de filas, y el
+  buscador "Buscar tabla o columna". Un clic abre `SELECT * FROM … LIMIT 100;`
+  (o `db.<colección>.find().limit(100)` en MongoDB). Al pie de Lenguajes:
+  "Pig no usa el catálogo: lee los archivos de HDFS con LOAD.", con un botón
+  a la pantalla Tablas. Con el cluster apagado: "El catálogo aparece con el
+  cluster prendido", y se puede igual escribir y guardar.
 - **Guardadas**: las consultas guardadas con **Guardar**, con su motor.
 - **Historial**: las últimas 50 que corriste, con cuántas filas devolvieron o
   si fallaron, y **Borrar historial**.
@@ -95,6 +100,37 @@ TBLPROPERTIES ('skip.header.line.count' = '1');
 (columnas, separador, dónde están los archivos) en el Metastore; los datos
 siguen siendo los archivos de HDFS. Un `DROP TABLE ventas` borra la
 descripción, no los archivos.
+
+## Paso 3b. La tabla en la pantalla Tablas
+
+**Qué se ve.** En **Tablas** (`G T`, grupo *Almacenamiento*), la lista de lo
+que anotó el Metastore. Al elegir `default.ventas`:
+
+- un dibujo con la entrada del Metastore (nombre, columnas y formato) y la
+  carpeta de HDFS a la que **apunta**, con **Abrir la carpeta**;
+- "Es externa: DROP TABLE borra la entrada del Metastore y deja los archivos
+  en la carpeta." (o, si es administrada, que los borra también);
+- las columnas con su tipo;
+- **Quién la puede leer**: Hive y Spark por el nombre (`SELECT * FROM
+  default.ventas LIMIT 100;` y `spark.table("default.ventas").show(10)`) y Pig
+  por la carpeta, con el script que arma el esquema y saltea el encabezado a
+  mano, porque Pig no ve las propiedades de la tabla;
+- una muestra de las primeras filas y el `CREATE TABLE` que devuelve
+  `SHOW CREATE TABLE`.
+
+**Qué hacer.** Tocá **Leerla con Pig**: abre Lenguajes con el script cargado.
+Corrélo y fijate que da las mismas filas que la muestra, pero en un trabajo de
+MapReduce.
+
+**Qué significa.** Una tabla no guarda filas: es una entrada de un catálogo
+que dice cómo leer una carpeta. Hive y Spark comparten ese catálogo (el
+Metastore); Pig no lo usa. Ver [Metastore](../glosario.md#metastore) en el
+glosario.
+
+<!-- prueba: no (necesita SERVICIOS=todo y la tabla ventas creada) -->
+```bash
+beeline -u jdbc:hive2://localhost:10000 -e "SHOW CREATE TABLE ventas;"
+```
 
 ## Paso 4. Correr: con y sin YARN
 

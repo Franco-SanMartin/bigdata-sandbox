@@ -1,0 +1,182 @@
+/* Comparar: la misma cuenta con cada herramienta. Grises sobre blanco; el color de la capa marca
+   lenguajes y datos (como en el mapa) y el de cada motor tiñe su columna, sus barras y sus fases. */
+.cp { display: flex; flex-direction: column; gap: 18px; }
+
+[data-motor="mr"] { --c: var(--eng-mr); }
+[data-motor="tez"] { --c: var(--eng-tez); }
+[data-motor="spark"] { --c: var(--eng-spark); }
+
+.cp-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+.cp-intro h2 { font: var(--t-title); margin: 0; letter-spacing: -.01em; }
+.cp-intro p { margin: 4px 0 0; color: var(--text-3); max-width: 86ch; line-height: 1.5; }
+
+/* ---------- El flujo: dato → lenguaje → motor → resultado ---------- */
+
+.cp-flujo {
+  display: grid; grid-template-columns: minmax(210px, 1.15fr) 40px minmax(160px, 1fr) 40px minmax(150px, .9fr) 40px minmax(180px, 1fr);
+  grid-template-rows: auto repeat(4, minmax(54px, auto)); gap: 8px 0; padding: 14px 18px 18px;
+  border: 1px solid var(--line); border-radius: var(--r-4); overflow-x: auto;
+  background: radial-gradient(circle at 1px 1px, var(--n-4) 1px, transparent 1.2px) 0 0 / 22px 22px, var(--n-1);
+}
+.cp-fl-cap { font: 600 10.5px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); padding: 0 2px 2px; align-self: end; }
+.cp-fl-dato {
+  grid-column: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: var(--r-3); background: var(--n-0); box-shadow: inset 3px 0 0 var(--capa), var(--shadow-1);
+}
+.cp-fl-k { font: var(--t-label); color: var(--text-3); }
+.cp-fl-dato b { font-size: 14px; color: var(--text); }
+.cp-fl-dato small { color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; }
+.cp-fl-dato .btn { align-self: flex-start; margin-top: 4px; }
+
+.cp-fl-l {
+  grid-column: 3; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 8px 12px; min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--r-2); background: var(--n-0); box-shadow: inset 3px 0 0 var(--capa);
+  color: var(--text); text-decoration: none; transition: box-shadow var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
+}
+.cp-fl-l:hover { border-color: var(--line-strong); box-shadow: inset 3px 0 0 var(--capa), var(--shadow-2); }
+.cp-fl-l:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cp-fl-l b { font-size: 13.5px; }
+.cp-fl-l small { color: var(--text-4); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cp-fl-m {
+  grid-column: 5; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px;
+  border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: var(--r-2); background: var(--n-0);
+  transition: box-shadow var(--dur-2) var(--ease);
+}
+.cp-fl-m b { font-size: 14.5px; }
+.cp-fl-m small { color: var(--text-4); font-size: 11px; }
+.cp-fl-m[data-run] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent), var(--shadow-2); }
+.cp-fl-m[data-run] small { color: var(--c); font-weight: 600; }
+
+.cp-fl-out {
+  grid-column: 7; align-self: center; padding: 7px 10px; border-radius: var(--r-2); background: var(--n-0);
+  border: 1px dashed var(--line-strong); box-shadow: inset 3px 0 0 var(--capa); font-size: 11.5px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Los cables, con su punta; se mueven mientras corre un trabajo de ese motor */
+.cp-fl-w { align-self: center; height: 2px; margin: 0 7px 0 3px; background: var(--n-6); position: relative; }
+.cp-fl-w::after { content: ""; position: absolute; right: -6px; top: -4px; border-style: solid; border-width: 5px 0 5px 7px; border-color: transparent transparent transparent var(--n-6); }
+.cp-fl-w[data-run] { background: repeating-linear-gradient(90deg, var(--run) 0 6px, transparent 6px 11px) 0 0 / 22px 2px; animation: cp-corre .7s linear infinite; }
+.cp-fl-w[data-run]::after { border-left-color: var(--run); }
+
+/* ---------- Una columna por herramienta ---------- */
+
+.cp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cp-col {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; scroll-margin-top: calc(var(--top-h) + 16px);
+  border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: var(--r-4); background: var(--n-0); box-shadow: var(--shadow-1);
+  transition: box-shadow var(--dur-2) var(--ease);
+}
+.cp-col[data-run] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent), var(--shadow-2); }
+.cp-col-h { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.cp-col-h h3 { margin: 0; font: 600 17px/1.25 var(--f-sans); letter-spacing: -.01em; }
+.cp-col-h p { grid-column: 1 / -1; margin: 0; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; }
+
+/* Lo que se mide, en la misma escala para las cuatro */
+.cp-med { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: var(--r-2); background: var(--surface); }
+.cp-bar { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); color: var(--text-3); }
+.cp-bar b { color: var(--text); font-size: 15px; margin-right: 2px; }
+.cp-bar-0 { height: 6px; border-radius: 3px; background: var(--n-3); overflow: hidden; }
+.cp-bar-0 i { display: block; height: 100%; border-radius: 3px; background: var(--c); transition: width var(--dur-3) var(--ease); }
+.cp-bar-nada { color: var(--text-4); }
+.cp-bar [data-st="RUNNING"], .cp-bar [data-st="ACCEPTED"] { color: var(--run-text); font-weight: 500; }
+.cp-bar [data-st="FAILED"], .cp-bar [data-st="KILLED"] { color: var(--bad-text); font-weight: 500; }
+
+/* Las fases que arma el motor */
+.cp-fases ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
+.cp-fases li {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px;
+  font: 500 12px/1.3 var(--f-mono); color: var(--text);
+  background: color-mix(in srgb, var(--c) 11%, var(--n-0)); border: 1px solid color-mix(in srgb, var(--c) 38%, transparent);
+}
+.cp-fases li + li { margin-left: 20px; }
+.cp-fases li + li::before { content: "→"; position: absolute; left: -16px; color: var(--text-4); font-family: var(--f-sans); }
+.cp-fases li small { color: var(--text-3); }
+.cp-fases li[data-disco] { background: var(--n-1); border: 1px dashed var(--line-strong); color: var(--text-3); }
+.cp-fases li[data-st="running"] { animation: cp-titila 1.2s ease-in-out infinite; }
+.cp-fases li[data-st="pending"] { opacity: .55; }
+.cp-fases p { margin: 7px 0 0; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; }
+
+/* El código, tal cual está en datos/ejemplos */
+.cp-src { border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; background: var(--n-0); }
+.cp-src-h { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; padding: 5px 6px 0; background: var(--n-1); border-bottom: 1px solid var(--line); }
+.cp-src-h [role="tablist"] { display: flex; gap: 2px; }
+.cp-src-h [role="tab"] {
+  all: unset; cursor: pointer; padding: 6px 10px; margin-bottom: -1px; font-size: 11.5px; color: var(--text-3);
+  border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0;
+}
+.cp-src-h [role="tab"][aria-selected="true"] { background: var(--n-0); color: var(--text); border-color: var(--line); }
+.cp-src-h [role="tab"]:focus-visible, .cp-src-t:focus-visible { outline: 2px solid var(--focus); }
+.cp-src-t { all: unset; cursor: pointer; margin-bottom: 4px; padding: 3px 7px; border-radius: 5px; font-size: 11px; color: var(--text-3); }
+.cp-src-t:hover { color: var(--text); background: var(--surface-2); }
+.cp-src-t[aria-pressed="true"] { color: var(--text); background: var(--n-0); box-shadow: inset 0 0 0 1px var(--line); }
+.cp-pre { margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; font: var(--t-code); font-size: 11.5px; line-height: 1.6; color: var(--text); white-space: pre; tab-size: 4; }
+.cp-pre:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cp-kw { color: var(--capa-lenguajes); font-weight: 600; }
+.cp-tx { color: var(--capa-datos); }
+.cp-com { color: var(--text-4); }
+.cp-src-f { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 6px 3px 12px; border-top: 1px solid var(--line-soft); background: var(--n-1); font: 400 11px/1.3 var(--f-mono); color: var(--text-4); }
+
+.cp-nota { margin: 0; padding: 8px 10px; border-left: 2px solid var(--c); border-radius: 0 var(--r-2) var(--r-2) 0; background: var(--surface); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.cp-acc { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- Qué cambió y si dieron lo mismo ---------- */
+
+.cp-cierre { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-4); background: var(--n-0); box-shadow: var(--shadow-1); }
+.cp-cierre h3 { margin: 0 0 8px; font: var(--t-section); }
+.cp-cierre-x { color: var(--text-2); line-height: 1.6; }
+.cp-cierre-x p { margin: 0 0 8px; }
+.cp-cierre-tip { margin: 6px 0 0; padding: 8px 10px; border-radius: var(--r-2); background: var(--surface); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.cp-cierre code, .cp-tabla code { font: 400 12px/1 var(--f-mono); background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.cp-cierre-p { margin: 0 0 10px; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.5; }
+
+/* ---------- ¿Cuál uso? ---------- */
+
+.cp-sec { margin-top: 8px; }
+.cp-preg {
+  display: grid; grid-template-columns: 270px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--r-4);
+  overflow: hidden; background: var(--n-0); scroll-margin-top: calc(var(--top-h) + 16px);
+}
+.cp-preg-tabs { display: flex; flex-direction: column; gap: 2px; padding: 8px; background: var(--n-1); border-right: 1px solid var(--line); }
+.cp-preg-tabs button { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--r-2); }
+.cp-preg-tabs b { font: 600 13px/1.35 var(--f-sans); color: var(--text-2); }
+.cp-preg-tabs small { font-size: 11.5px; line-height: 1.35; color: var(--text-4); }
+.cp-preg-tabs button:hover { background: var(--surface-2); }
+.cp-preg-tabs button[aria-selected="true"] { background: var(--n-0); box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line); }
+.cp-preg-tabs button[aria-selected="true"] b { color: var(--text); }
+.cp-preg-tabs button:focus-visible { outline: 2px solid var(--focus); }
+.cp-preg-body { padding: 18px 20px 20px; min-width: 0; }
+.cp-preg-body h3 { margin: 0; font: var(--t-section); }
+.cp-preg-body > p { margin: 4px 0 14px; color: var(--text-3); }
+.cp-preg-wrap { overflow-x: auto; }
+.cp-tabla { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+.cp-tabla th, .cp-tabla td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); line-height: 1.45; }
+.cp-tabla thead th { font: 600 12.5px/1.3 var(--f-sans); color: var(--text); border-bottom: 1px solid var(--line); box-shadow: inset 0 2px 0 var(--capa); }
+.cp-tabla tbody th { font: 500 12px/1.45 var(--f-sans); color: var(--text-4); white-space: nowrap; width: 1%; }
+.cp-tabla td { color: var(--text-2); }
+.cp-tabla tbody tr:hover td { background: var(--surface); }
+
+@keyframes cp-corre { to { background-position: 22px 0; } }
+@keyframes cp-titila { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .cp-fl-w[data-run], .cp-fases li[data-st="running"] { animation: none; } }
+@media (min-width: 1760px) { .cp-cols { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .cp-cierre { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .cp-cols { grid-template-columns: 1fr; }
+  .cp-preg { grid-template-columns: 1fr; }
+  .cp-preg-tabs { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .cp-preg-tabs button { flex: none; max-width: 220px; }
+}
+
+/* Lo que movió la última corrida (YARN, JobHistory y Spark History), misma escala en las cuatro columnas */
+.cp-mov { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.cp-mov-h { font: var(--t-label); color: var(--text-4); text-transform: uppercase; letter-spacing: .04em; font-size: var(--fs-xs); }
+.cp-mov .cp-bar b { font-size: 14px; }
+.cp-mov-no { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-3); }
+
+/* Qué muestran los números, en palabras */
+.cp-obs { margin: 4px 0 20px; padding: 16px 20px; border: 1px solid var(--line); border-left: 3px solid var(--capa-motores); border-radius: var(--r-4); background: var(--n-0); }
+.cp-obs h3 { margin: 0 0 8px; font: var(--t-section); }
+.cp-obs ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--text-2); line-height: 1.55; }
+.cp-obs p { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-3); }

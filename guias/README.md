@@ -18,6 +18,11 @@ ejercicios sobre la imagen con su solución y rúbrica).
 | [`full`](full/README.md) | La interfaz web: el cluster, HDFS, trabajos, consultas, pipeline, ML y las prácticas guiadas con multiple choice | Hacer todo desde el navegador, viendo qué pasa y dónde queda cada cosa | [Guías de full](full/README.md) | [referencia](full/referencia.md) | [teoría](full/teoria/README.md) | [evaluación](full/evaluacion/README.md) |
 | [`empresa`](empresa/README.md) (beta) | Varias PCs arman un solo cluster: maestro, trabajadores, racks por fila | Ver un cluster distribuido de verdad en el aula, con el profe | [Guías de empresa](empresa/README.md) | [referencia](empresa/referencia.md) | [teoría](empresa/teoria/README.md) | [evaluación](empresa/evaluacion/README.md) |
 
+Las palabras de las cuatro versiones (bloque, contenedor, shuffle, Metastore,
+motor, lenguaje…) están en el [glosario](glosario.md), ordenadas por capa:
+dónde viven los datos, quién reparte la máquina, qué hace las cuentas y cómo
+entran los datos.
+
 Si recién empezás, andá por `base` y las guías de abajo: todo lo demás se
 apoya en eso. Lo que dicen las guías de `base` vale igual para las otras
 tres versiones.

@@ -11,6 +11,87 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **Inicio con el mapa vivo del ecosistema** (`full`): las 20 herramientas
+  ordenadas por capa (desde dónde trabajás → cómo lo pedís → quién hace el
+  trabajo → quién reparte → dónde quedan los datos, más el puente y lo que
+  corre en una sola máquina), cada una con la lámpara de sus procesos reales y
+  flechas de quién le pide qué a quién. Las flechas de MapReduce, Tez y Spark
+  se mueven cuando hay un trabajo de ese motor corriendo en YARN.
+  - **Ficha de cada herramienta**: qué hace, una analogía, qué se puede hacer
+    ahí (la pantalla de la interfaz y sus UIs web), el comando de ejemplo
+    (los de bash se mandan a la terminal integrada), con qué no confundirla y
+    con quién habla.
+  - **Recorridos guiados** sobre el mapa ("De un CSV a un tablero" y "Una
+    consulta, tres motores"), paso a paso con el comando de cada paso.
+  - **¿Cuál uso?**: las seis preguntas (lenguajes, motores, almacenamiento,
+    una máquina contra el cluster, quién coordina, cómo entran los datos),
+    cada una abre su tabla en Comparar.
+  - El contenido sale de `docs/maquetas/ecosistema.html`.
+- **Pantalla Comparar** (`full`, `G K`): la misma cuenta de ventas por
+  producto en MapReduce a mano, Pig, Hive y PySpark, con el código real de
+  `datos/ejemplos` (la parte que hace la cuenta o el archivo entero). Arriba,
+  el flujo: el dato una sola vez en HDFS, cuatro lenguajes, tres motores y
+  cuatro resultados, con los cables que se mueven mientras corre cada versión.
+  Cada columna dice qué motor la ejecuta, cuántas líneas hacen la cuenta,
+  qué fases arma (las de la última corrida si YARN las trae) y cuánto tardó
+  la última vez, en la misma escala para las cuatro. MapReduce, Hive y Spark
+  se lanzan desde ahí (las mismas plantillas de Trabajos); las cuatro tienen
+  su comando para la terminal y uno final para ver que dieron lo mismo.
+  Abajo, las seis tablas de "¿Cuál uso?" (`#comparar/quien-hace-el-trabajo`).
+  - **Lo que movió cada corrida**, en la misma escala para las cuatro:
+    leído de HDFS, shuffle, disco local de los nodos y memoria × tiempo en
+    YARN (Pig suma sus varios trabajos). Debajo, "Qué muestran los números"
+    lo dice en palabras. Con las salidas reales: MapReduce a mano manda
+    3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
+    PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
+    Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Glosario único** (`guias/glosario.md`): las palabras del cluster por capa
+  (almacenamiento, recursos, motores, lenguajes, ingesta y alta
+  disponibilidad), más la tabla "la misma tarea, con varias herramientas".
+  - En `full`, el `?` de cada pantalla suma la pestaña **Glosario**, con
+    buscador y los términos de esa pantalla a un clic.
+  - En `Ctrl+K`, escribir una palabra lo abre en ella.
+  - La interfaz lee el mismo `.md` al armarse la imagen: hay un solo texto.
+- **Guía 11 de `full`: Comparar**, con los números reales de las cuatro
+  versiones. El índice de las guías de `full` queda ordenado por capas, y la
+  guía 5 suma la pantalla Tablas.
+- **`GET /api/yarn/metrics?apps=…`** (servidor): lo que costó cada trabajo,
+  igual para los tres motores. Tiempo, MB·s y vcores·s salen del RM; cuando
+  terminó, lo leído y escrito en HDFS, el shuffle, el disco local y las tareas
+  salen de JobHistory (MapReduce) o de Spark History (sin las etapas SKIPPED).
+  Hasta 12 trabajos por pedido; uno que no existe vuelve con `error`.
+- **La barra lateral sigue las capas del mapa**: Empezar, Almacenamiento
+  (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes,
+  Comparar, Machine Learning), Ingesta (Pipeline) y Operar, cada capa con su
+  color. Arriba de cada pantalla se ve en qué capa está (Almacenamiento › HDFS).
+- **Pantalla Tablas** (`full`, `G T`): lo que anota el Metastore de cada tabla
+  de Hive. Para la tabla elegida: adónde apunta en HDFS (con enlace a la
+  carpeta), si es externa o administrada y qué pasa con DROP TABLE, las
+  columnas, quién la puede leer (Hive y Spark por el nombre, Pig por la
+  carpeta, con el script que arma el esquema y saltea el encabezado), una
+  muestra y el CREATE TABLE. "Consultarla en Hive" y "Leerla con Pig" la abren
+  en Lenguajes.
+- **Vista Aula rehecha como plano del laboratorio** (`empresa`): el maestro
+  adelante, cada fila como un rack con sus PCs, y en cada PC su lámpara, la
+  memoria de YARN que presta y usa, sus bloques y sus contenedores. Arriba, el
+  aula en números y "¿Ya pueden apagar?"; al costado, los pasos para sumar PCs
+  por Veyon y el detalle de la PC elegida.
+
+### Cambiado
+
+- **Consultas se partió en Lenguajes y Bases** (`full`): Lenguajes (`G L`)
+  tiene Hive y Pig, que corren en el cluster; Bases (`G B`) tiene MariaDB y
+  MongoDB, de una sola máquina. Es el mismo editor (documentos, ejemplos,
+  plan, trace, historial y guardadas, que se conservan), con una explicación
+  arriba de qué tiene de distinto cada una. `#lenguajes/pig` o
+  `#bases/mongodb` abren directo ese motor (Comparar ya lleva a Pig), y
+  `#datos` sigue andando: lleva a Lenguajes, o a Bases si era MariaDB o
+  MongoDB.
+- **Tema claro en toda la interfaz** (D-06): tokens nuevos (fondo blanco,
+  grises y estados con contraste ≥ 4,5:1 sobre blanco), la terminal integrada,
+  el editor del estudio de ML y los gráficos. `tema.test.ts` pasa a exigir
+  claro.
+
 - **`empresa` con las PCs del laboratorio** (etapa 2, rama `empresa-aula`),
   con lo que midió la sonda el 27/10:
   - `RED=wireguard`: túnel WireGuard con hub en la PC del profe (UDP 51820) e

@@ -1,0 +1,200 @@
+/* El mapa vivo del ecosistema (Inicio). Todo en grises sobre blanco; el color de cada capa
+   aparece solo como marca fina (rótulo de la fila, borde de la herramienta, ficha) y el de
+   los motores en las flechas de un trabajo que está corriendo. */
+
+.eco { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-6); }
+
+.eco-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
+.eco-head-t h2 { font: var(--t-title); margin: 0; letter-spacing: -.01em; }
+.eco-head-t p { margin: 4px 0 0; color: var(--text-3); max-width: 70ch; }
+.eco-head-t p b { color: var(--text); }
+.eco-tours { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.eco-tours > span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-4); font: var(--t-label); margin-right: 2px; }
+.eco-tours .btn[aria-pressed="true"] { background: var(--accent); color: var(--n-0); border-color: var(--accent); }
+
+/* ---------- El escenario: el mapa y, encima a la derecha, la ficha o el recorrido ---------- */
+
+.eco-stage {
+  position: relative; border: 1px solid var(--line); border-radius: var(--r-4);
+  background:
+    radial-gradient(circle at 1px 1px, var(--n-4) 1px, transparent 1.2px) 0 0 / 22px 22px,
+    var(--n-1);
+  overflow: hidden;
+}
+.eco-map {
+  position: relative; display: grid;
+  grid-template-columns: 138px minmax(660px, 1fr) 124px 178px;
+  grid-template-rows: repeat(5, auto);
+  row-gap: 30px; padding: 46px 18px 26px 16px;
+}
+.eco-row { display: contents; }
+.eco-row > * { position: relative; z-index: 2; align-self: center; }
+
+.eco-row-l { grid-column: 1; display: flex; flex-direction: column; gap: 1px; padding-left: 14px; border-left: 2px solid var(--capa); }
+.eco-row-l b { font: 600 13px/1.25 var(--f-sans); color: var(--text); }
+.eco-row-l small { font: var(--t-caption); color: var(--text-4); text-transform: uppercase; letter-spacing: .06em; }
+.eco-row-n {
+  position: absolute; left: -12px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; font: 600 11px/1 var(--f-mono); color: var(--n-0); background: var(--capa);
+}
+.eco-row-cl { grid-column: 2; display: flex; justify-content: space-evenly; gap: 10px; padding: 0 12px; }
+.eco-row-pu { grid-column: 3; display: flex; justify-content: center; }
+.eco-row-uno { grid-column: 4; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+/* Los dos marcos: el cluster y la máquina sola (detrás de todo) */
+.eco-frame {
+  grid-row: 1 / -1; position: relative; z-index: 0; margin: -30px 0 -14px;
+  border-radius: var(--r-4); border: 1px solid var(--line); background: rgba(255, 255, 255, .72);
+}
+.eco-frame-cl { grid-column: 2; }
+.eco-frame-uno { grid-column: 4; border-style: dashed; background: rgba(255, 255, 255, .5); }
+.eco-frame span {
+  position: absolute; top: 9px; left: 14px; font: 600 10.5px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-4);
+}
+
+/* ---------- Una herramienta ---------- */
+
+.eco-node {
+  all: unset; box-sizing: border-box; cursor: pointer; position: relative;
+  display: flex; flex-direction: column; gap: 2px; width: 128px; padding: 8px 10px 8px 12px;
+  background: var(--n-0); border: 1px solid var(--line); border-radius: var(--r-3);
+  box-shadow: inset 3px 0 0 var(--capa), var(--shadow-1);
+  transition: opacity var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.eco-node:hover { border-color: var(--line-strong); box-shadow: inset 3px 0 0 var(--capa), var(--shadow-2); transform: translateY(-1px); }
+.eco-node:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.eco-node[data-on] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--capa), 0 0 0 3px var(--accent-bg), var(--shadow-2); }
+.eco-node[data-dim] { opacity: .32; }
+.eco-node-h { display: flex; align-items: center; gap: 7px; }
+.eco-node-h b { font: 600 13px/1.2 var(--f-sans); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eco-node-sub { font: var(--t-caption); color: var(--text-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; }
+.eco-node-vivo { font: 400 10.5px/1.35 var(--f-mono); color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; padding-top: 4px; border-top: 1px solid var(--line-soft); }
+.eco-node[data-l="down"] .eco-node-vivo { color: var(--bad-text); }
+.eco-node[data-l="starting"] .eco-node-vivo { color: var(--run-text); }
+.eco-run {
+  position: absolute; top: -8px; right: -8px; z-index: 1; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center;
+  font: 600 10.5px/1 var(--f-mono); color: var(--run-text); background: var(--n-0); border: 1px solid var(--run-line); box-shadow: 0 0 0 2px var(--n-0);
+}
+.eco-node[data-run]::after {
+  content: ""; position: absolute; inset: -4px; border-radius: calc(var(--r-3) + 4px); border: 1.5px solid var(--run-line);
+  animation: eco-latido 1.6s var(--ease) infinite; pointer-events: none;
+}
+
+.eco-lamp { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--n-6); }
+.eco-lamp[data-l="up"] { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
+.eco-lamp[data-l="starting"] { background: var(--run); box-shadow: 0 0 0 3px var(--run-bg); animation: eco-titila 1.1s ease-in-out infinite; }
+.eco-lamp[data-l="down"] { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-bg); }
+.eco-lamp[data-l="off"] { background: transparent; border: 1.5px solid var(--n-7); }
+.eco-lamp[data-l="lib"] { background: transparent; border: 1.5px dashed var(--n-8); }
+
+/* ---------- Las flechas ---------- */
+
+.eco-wires { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; overflow: visible; }
+.eco-wire path { fill: none; stroke: var(--n-7); stroke-width: 1.3; transition: opacity var(--dur-2) var(--ease), stroke var(--dur-2) var(--ease); }
+.eco-wire[data-k="read"] path { stroke-dasharray: 4 4; }
+.eco-wire[data-k="puerta"] path { stroke: var(--n-6); stroke-dasharray: 1.5 4; stroke-linecap: round; }
+.eco-wire[data-k="bridge"] path { stroke: var(--capa-puente); stroke-width: 1.6; }
+.eco-wire[data-dim] { opacity: .12; }
+.eco-wire[data-on] path { stroke: var(--n-12); stroke-width: 2; }
+.eco-wire[data-viva] path { stroke: currentColor; stroke-width: 2.4; stroke-dasharray: 7 6; animation: eco-flujo .9s linear infinite; }
+.eco-wire[data-viva][data-on] path { stroke: currentColor; }
+.eco-wire text {
+  font: 500 10.5px/1 var(--f-sans); fill: var(--text-2);
+  paint-order: stroke; stroke: var(--n-0); stroke-width: 5px; stroke-linejoin: round;
+}
+.eco-mk-base { fill: var(--n-7); }
+.eco-mk-on { fill: var(--n-12); }
+.eco-mk-viva { fill: var(--n-10); }
+
+/* ---------- La ficha ---------- */
+
+.eco-ficha {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(420px, 100%); z-index: 4;
+  background: var(--popover); border-left: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; animation: eco-entra var(--dur-3) var(--ease);
+}
+.eco-f-h { position: relative; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); border-top: 3px solid var(--capa); }
+.eco-f-h .btn-icon { position: absolute; top: 10px; right: 10px; }
+.eco-f-capa { font: 600 10.5px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--capa); }
+.eco-f-h h3 { margin: 6px 0 8px; font: var(--t-title); display: flex; align-items: baseline; gap: 10px; }
+.eco-f-h h3 small { font: 400 12px/1 var(--f-mono); color: var(--text-4); }
+.eco-f-vivo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-3); }
+.eco-f-vivo b { color: var(--text); font-weight: 600; }
+.eco-f-body { overflow: auto; padding: 4px 18px 22px; }
+.eco-f-frase { font: 400 14.5px/1.55 var(--f-sans); color: var(--text); margin: 14px 0 10px; }
+.eco-f-anal { margin: 0; padding: 10px 12px; border-left: 2px solid var(--capa); background: var(--surface); border-radius: 0 var(--r-2) var(--r-2) 0; color: var(--text-2); font-size: var(--fs-md); line-height: 1.55; }
+.eco-f-sec { margin-top: 18px; }
+.eco-f-sec h4 { margin: 0 0 8px; font: 600 11px/1 var(--f-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--text-4); }
+.eco-f-sec > p { margin: 0 0 10px; color: var(--text-2); line-height: 1.55; }
+.eco-f-acc { display: flex; flex-wrap: wrap; gap: 6px; }
+.eco-f-acc a.btn { text-decoration: none; }
+.eco-f-port { color: var(--text-4); }
+.eco-f-puerto { display: inline-flex; align-items: center; gap: 4px; height: var(--h-ctl-sm); padding: 0 8px; font-size: var(--fs-sm); color: var(--text-3); border: 1px dashed var(--line-strong); border-radius: var(--r-2); }
+.eco-f-puerto .mono { color: var(--text-4); }
+.eco-f-conf, .eco-f-con { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.eco-f-conf li { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; color: var(--text-2); line-height: 1.5; font-size: var(--fs-md); }
+.eco-f-con li { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-sm); }
+.eco-f-dir { color: var(--text-4); width: 12px; }
+.eco-chip {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 7px; border-radius: 6px;
+  font: 600 12px/1.5 var(--f-sans); color: var(--text); background: var(--surface); border: 1px solid var(--line); box-shadow: inset 2px 0 0 var(--capa);
+}
+.eco-chip:hover { border-color: var(--line-strong); }
+.eco-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.eco-ficha[data-lado="izq"] { right: auto; left: 0; border-left: 0; border-right: 1px solid var(--line); animation-name: eco-entra-izq; }
+
+/* ---------- El recorrido ---------- */
+
+.eco-tour {
+  position: absolute; top: 14px; right: 14px; bottom: 14px; width: min(392px, calc(100% - 28px)); z-index: 4; overflow: auto;
+  background: var(--popover); border: 1px solid var(--line); border-radius: var(--r-3); box-shadow: var(--shadow-pop);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; animation: eco-entra var(--dur-3) var(--ease);
+}
+.eco-tour[data-lado="izq"] { right: auto; left: 14px; animation-name: eco-entra-izq; }
+.eco-tour header { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-sm); }
+.eco-tour header b { color: var(--text); }
+.eco-tour header .num { margin-left: auto; }
+.eco-tour-bar { display: flex; gap: 3px; }
+.eco-tour-bar i { flex: 1; height: 3px; border-radius: 2px; background: var(--n-4); }
+.eco-tour-bar i[data-on] { background: var(--n-12); }
+.eco-tour h4 { margin: 4px 0 0; font: var(--t-section); }
+.eco-tour-x { color: var(--text-2); line-height: 1.55; }
+.eco-tour-x p { margin: 0 0 8px; }
+.eco-tour-x code, .eco-tour-tip code { font: 400 12px/1 var(--f-mono); background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.eco-tour-tip { margin: 0; padding: 8px 10px; border-radius: var(--r-2); background: var(--run-bg); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.eco-tour footer { margin-top: auto; display: flex; justify-content: space-between; padding-top: 6px; }
+
+/* ---------- Referencias ---------- */
+
+.eco-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-3); font-size: var(--fs-sm); }
+.eco-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.eco-lg-wire { display: inline-block; width: 26px; height: 0; border-top: 1.5px solid var(--n-7); }
+.eco-lg-wire[data-k="read"] { border-top-style: dashed; }
+.eco-lg-wire[data-k="puerta"] { border-top: 2px dotted var(--n-6); }
+.eco-lg-wire[data-k="viva"] { border-top: 2.5px dashed var(--eng-spark); }
+
+/* ---------- ¿Cuál uso? (las preguntas; las respuestas están en Comparar) ---------- */
+
+.eco-preg { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.eco-preg button {
+  all: unset; box-sizing: border-box; cursor: pointer; width: 100%; height: 100%; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-3); background: var(--n-0); box-shadow: var(--shadow-1);
+  transition: box-shadow var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.eco-preg button:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.eco-preg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.eco-preg b { font: 600 14px/1.3 var(--f-sans); color: var(--text); }
+.eco-preg small { grid-column: 1; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.4; }
+.eco-preg svg { grid-row: 1 / span 2; grid-column: 2; color: var(--text-4); }
+.eco-preg li[data-destacada] button { background: var(--n-12); border-color: var(--n-12); }
+.eco-preg li[data-destacada] b { color: var(--n-0); }
+.eco-preg li[data-destacada] small, .eco-preg li[data-destacada] svg { color: var(--n-6); }
+@keyframes eco-flujo { to { stroke-dashoffset: -13; } }
+@keyframes eco-latido { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.06); } }
+@keyframes eco-titila { 50% { opacity: .45; } }
+@keyframes eco-entra { from { opacity: 0; transform: translateX(12px); } }
+@keyframes eco-entra-izq { from { opacity: 0; transform: translateX(-12px); } }
+@media (prefers-reduced-motion: reduce) {
+  .eco-wire[data-viva] path, .eco-node[data-run]::after, .eco-lamp[data-l="starting"] { animation: none; }
+}

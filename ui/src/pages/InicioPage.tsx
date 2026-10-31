@@ -1,5 +1,7 @@
-/* Inicio: en qué estado está el cluster, la única acción que importa ahora y qué se puede hacer
-   (y qué no, por qué, y el botón que lo arregla). Es lo primero que ve quien abre la interfaz. */
+/* Inicio: en qué estado está el cluster y la única acción que importa ahora; el mapa vivo del
+   ecosistema (qué es cada herramienta, cómo se conectan y cuál está andando); qué se puede hacer
+   (y qué no, por qué, y el botón que lo arregla) y cuál conviene para cada tarea. Es lo primero
+   que ve quien abre la interfaz. */
 import { ArrowRight, BookOpen, Boxes, Brain, ChevronRight, Database, HardDrive, Play, Settings, Square, type LucideIcon } from 'lucide-react';
 import { useSnapshot } from '../state/store';
 import { navigate } from '../state/ui';
@@ -13,6 +15,7 @@ import { bootLine, EmptyState, PageHeader, Panel } from '../components/base';
 import type { ReactNode } from 'react';
 import type { Activity, ClusterStatus, DataNode } from '../api/types';
 import type { PageId } from '../lib/route';
+import { CualUso, Ecosistema } from './inicio/Ecosistema';
 
 const CAP_LABEL: Record<Capability['state'], string> = { ready: 'Listo', starting: 'Arrancando', blocked: 'No disponible' };
 const CAP_DOT: Record<Capability['state'], string> = { ready: 'up', starting: 'starting', blocked: 'off' };
@@ -71,12 +74,12 @@ function Hero({ s, dataNodes }: { s: ClusterStatus; dataNodes: DataNode[] }) {
 
 /* ---------- Qué se puede hacer ---------- */
 
-function CapAction({ c, page }: { c: Capability; page: PageId }) {
-  if (c.state === 'ready') return <button type="button" className="btn btn-sm" onClick={() => navigate(page)}>Abrir<ArrowRight size={13} /></button>;
+function CapAction({ c, page, arg }: { c: Capability; page: PageId; arg?: string }) {
+  if (c.state === 'ready') return <button type="button" className="btn btn-sm" onClick={() => navigate(page, arg)}>Abrir<ArrowRight size={13} /></button>;
   // Con el cluster apagado el arreglo es el mismo para todas: lo ofrece el estado de arriba, no once botones iguales
   if (c.state === 'blocked' && c.fix && c.fix.kind !== 'wait' && c.fix.kind !== 'start') return <button type="button" className="btn btn-sm" onClick={() => runFix(c.fix)}>{c.fixLabel}</button>;
   // Apagado o arrancando: igual se puede entrar a mirar (la pantalla dice qué va a poder hacer y muestra ejemplos y plantillas)
-  return <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate(page)} title={c.reason ? `${c.reason}: igual podés entrar a mirar` : undefined}>Ver la pantalla<ArrowRight size={13} /></button>;
+  return <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate(page, arg)} title={c.reason ? `${c.reason}: igual podés entrar a mirar` : undefined}>Ver la pantalla<ArrowRight size={13} /></button>;
 }
 
 function CapGrid({ caps }: { caps: Capabilities }) {
@@ -94,7 +97,7 @@ function CapGrid({ caps }: { caps: Capabilities }) {
             <p>{i.what}</p>
             {c.state !== 'ready' && c.reason && <span className="capcard-why">{c.reason}</span>}
             <div className="capcard-f">
-              <CapAction c={c} page={i.page} />
+              <CapAction c={c} page={i.page} arg={i.arg} />
               {i.guide && <span className="capcard-guide" title="Guía de la materia">guía {i.guide}</span>}
             </div>
           </article>
@@ -106,11 +109,11 @@ function CapGrid({ caps }: { caps: Capabilities }) {
 
 /* ---------- Prácticas sugeridas: las que se pueden hacer ya, primero ---------- */
 
-const SUGERIDAS: { cap: CapId; title: string; what: string; page: PageId }[] = [
+const SUGERIDAS: { cap: CapId; title: string; what: string; page: PageId; arg?: string }[] = [
   { cap: 'hdfs.write', title: 'HDFS básico', what: 'Subí ventas.csv y mirá en qué DataNodes quedan sus bloques', page: 'hdfs' },
   { cap: 'mapreduce', title: 'WordCount en YARN', what: 'Lanzá un MapReduce y seguí sus contenedores', page: 'yarn' },
   { cap: 'hdfs.write', title: 'HDFS ante fallas', what: 'Apagá un DataNode y mirá cómo se vuelven a copiar los bloques', page: 'cluster' },
-  { cap: 'hive', title: 'Hive sobre HDFS', what: 'Creá una tabla externa y consultala con Tez', page: 'datos' },
+  { cap: 'hive', title: 'Hive sobre HDFS', what: 'Creá una tabla externa y consultala con Tez', page: 'lenguajes', arg: 'hive' },
   { cap: 'sqoop', title: 'De MariaDB a HDFS', what: 'Importá la base tienda con Sqoop', page: 'pipeline' },
   { cap: 'spark', title: 'El mismo cálculo en Spark', what: 'Compará el DAG de Spark con el de MapReduce', page: 'yarn' },
   { cap: 'ha', title: 'Failover del NameNode', what: 'Apagá el activo y mirá cómo ZooKeeper elige otro', page: 'cluster' },
@@ -125,7 +128,7 @@ function Sugeridas({ caps }: { caps: Capabilities }) {
         const c = caps[x.cap];
         return (
           <li key={x.title}>
-            <button type="button" className="sug-row" onClick={() => navigate(x.page)} aria-label={`${x.title}: ${c.state === 'ready' ? 'se puede hacer ya' : c.reason}`}>
+            <button type="button" className="sug-row" onClick={() => navigate(x.page, x.arg)} aria-label={`${x.title}: ${c.state === 'ready' ? 'se puede hacer ya' : c.reason}`}>
               <span className="dot" data-s={CAP_DOT[c.state]} aria-hidden="true" />
               <span className="sug-t"><b>{x.title}</b><span>{c.state === 'ready' ? x.what : c.reason}</span></span>
               <ChevronRight size={15} aria-hidden="true" />
@@ -154,7 +157,7 @@ function Inventory({ s, caps }: { s: ClusterStatus; caps: Capabilities }) {
   const off = running ? 'Sin datos todavía' : 'Prendé el cluster para verlo';
   const rows: { icon: LucideIcon; label: string; value: string; detail: string; page: PageId; arg?: string }[] = [
     { icon: HardDrive, label: 'Archivos en HDFS', value: running && s.hdfs.available ? nf(files.length || s.hdfs.files) : '—', detail: running && files.length ? `${mbLabel(sizeMb)} · último ${files.slice().sort((a, b) => b.modifiedAt - a.modifiedAt)[0].path}` : off, page: 'hdfs' },
-    { icon: Database, label: 'Tablas de Hive', value: tables ? nf(tables.length) : '—', detail: tables ? (tables.length ? tables.slice(0, 3).map(t => t.name.replace(/^default\./, '')).join(', ') : 'Ninguna: el pipeline las crea') : running ? caps.hive.reason ?? off : off, page: 'datos' },
+    { icon: Database, label: 'Tablas de Hive', value: tables ? nf(tables.length) : '—', detail: tables ? (tables.length ? tables.slice(0, 3).map(t => t.name.replace(/^default\./, '')).join(', ') : 'Ninguna: el pipeline las crea') : running ? caps.hive.reason ?? off : off, page: 'tablas' },
     { icon: Boxes, label: 'Trabajos en YARN', value: running ? nf(apps.length) : '—', detail: lastApp ? `último: ${lastApp.name} · ${ago(s.now, lastApp.submittedAt)}` : running ? 'Ninguno todavía' : off, page: 'yarn', arg: lastApp?.id },
     { icon: Brain, label: 'Modelos entrenados', value: done ? nf(done.length) : '—', detail: done ? (done.length ? `último: ${done[0].model} (${done[0].engine})` : 'Ninguno todavía') : off, page: 'ml' },
   ];
@@ -202,8 +205,9 @@ export function InicioPage() {
   const sum = capSummary(caps);
   return (
     <div className="page-in inicio">
-      <PageHeader title="Inicio" sub="Cómo está el cluster y qué podés hacer ahora." />
+      <PageHeader title="Inicio" sub="Cómo está el cluster, qué es cada herramienta y qué podés hacer con cada una." />
       <Hero s={s} dataNodes={dataNodes} />
+      <Ecosistema />
       <div className="section-h">
         <h2>Qué podés hacer ahora</h2>
         <span className="sum-chips">
@@ -213,6 +217,11 @@ export function InicioPage() {
         </span>
       </div>
       <CapGrid caps={caps} />
+      <div className="section-h">
+        <h2>¿Cuál uso?</h2>
+        <span className="muted">Para la misma tarea hay varias herramientas: elegí una pregunta y mirá en qué se diferencian</span>
+      </div>
+      <CualUso />
       <div className="grid cols-12 inicio-bottom">
         <Panel className="span-7" title="Lo que tenés en el cluster" sub="lo que quedó guardado en el volumen">
           <Inventory s={s} caps={caps} />

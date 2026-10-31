@@ -156,6 +156,7 @@ Si `GET /api/status` no contesta JSON en 1,5 s, la interfaz pasa al modo demo.
 | `POST /api/yarn/apps` | `{example}` → 202 `{id}` (espera hasta 120 s a que YARN le dé un id) | `hadoop jar hadoop-streaming…`, `beeline -f ventas.hql` o `spark-submit ejemplos/ventas.py` |
 | `GET /api/yarn/cluster` | `YarnCluster` | RM `…/metrics`, `…/nodes`, `…/scheduler`, `:8088/conf` y los contenedores del NM |
 | `GET /api/yarn/apps/{id}` | `YarnAppDetail` con DAG y contadores | MapReduce: el AM por el proxy del RM mientras corre, JobHistory `:19888` después. Spark: el driver `:4040`, el proxy del RM o Spark History `:18080`. Tez: ver abajo |
+| `GET /api/yarn/metrics?apps=id,id` | `YarnMetrics[]` (hasta 12): tiempo, memoria × s y vcores × s; terminado, también leído y escrito en HDFS, shuffle, disco local y tareas. Un id que no existe vuelve con `error` | RM `…/apps/{id}`. MapReduce: JobHistory `…/counters`. Spark: Spark History `…/stages` (sin las SKIPPED). Tez: solo el RM |
 | `POST /api/yarn/apps/{id}/kill` | → 204 | `yarn application -kill <id>` |
 | `GET /api/yarn/apps/{id}/logs?container=` | `AppLogs` | Corriendo: NM `:8042/ws/v1/node/containerlogs`. Terminado: `yarn logs -applicationId … -containerId … -size -65536` (los agregados) |
 

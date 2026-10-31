@@ -622,6 +622,30 @@ export interface DagVertex {
 
 export interface DagEdge { from: string; to: string; kind: string }
 
+/** Lo que costó un trabajo (Comparar). Tiempo, memoria y vcores del RM; el resto, cuando terminó, de
+    JobHistory (MapReduce) o Spark History. Tez sin Timeline Server no deja contadores: solo lo del RM */
+export interface YarnMetrics {
+  id: string;
+  /** El trabajo no está (o el RM no lo conoce): el resto no viene */
+  error?: string;
+  type?: AppType;
+  state?: YarnApp['state'];
+  elapsedMs?: number;
+  /** Memoria × tiempo de todos sus contenedores (MB·s) */
+  mbSeconds?: number;
+  vcoreSeconds?: number;
+  hdfsReadBytes?: number;
+  hdfsWrittenBytes?: number;
+  /** Lo que viajó entre fases: REDUCE_SHUFFLE_BYTES en MapReduce, shuffleReadBytes en Spark */
+  shuffleBytes?: number;
+  /** Escrito en el disco de cada nodo (no en HDFS): spills y archivos del shuffle */
+  localDiskBytes?: number;
+  tasks?: number;
+  /** Mappers que leyeron su bloque en la misma máquina (solo MapReduce) */
+  dataLocalTasks?: number;
+  source?: 'rm' | 'jobhistory' | 'spark-history';
+}
+
 export interface YarnAppDetail extends YarnApp {
   engine: Engine;
   /** Lo que se mandó a correr */
@@ -1063,6 +1087,8 @@ export interface SandboxApi {
   app(id: string): Promise<YarnAppDetail>;
   /** GET /api/yarn/apps/:id/logs?container=… → stdout, stderr y syslog de un contenedor */
   appLogs(id: string, container?: string): Promise<AppLogs>;
+  /** GET /api/yarn/metrics?apps=a,b → lo que costó cada trabajo, igual para los tres motores (hasta 12) */
+  yarnMetrics(ids: string[]): Promise<YarnMetrics[]>;
 
   /** GET /api/pipeline/catalog → etapas y herramientas, con cuándo conviene cada una */
   pipelineCatalog(): Promise<PipelineStageInfo[]>;

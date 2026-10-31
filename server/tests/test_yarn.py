@@ -351,6 +351,39 @@ def test_detalle_errores(settings, tmp_path):
     asyncio.run(main())
 
 
+def test_metricas_de_los_tres_motores(settings, tmp_path):
+    """Lo que muestra Comparar, de las salidas reales: el mismo cálculo (ventas por producto)"""
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        mr, spark, tez, nada = await y.metrics_many([MR, SPARK, TEZ, "application_1_9999"])
+        # MapReduce Streaming, de JobHistory: sin combiner, los 200.000 pares viajan por el shuffle
+        assert mr == {"id": MR, "type": "MAPREDUCE", "state": "FINISHED", "elapsedMs": 18645, "mbSeconds": 19457,
+                      "vcoreSeconds": 36, "hdfsReadBytes": 6217505, "hdfsWrittenBytes": 188, "shuffleBytes": 3347314,
+                      "localDiskBytes": 7535908, "tasks": 3, "dataLocalTasks": 2, "source": "jobhistory"}
+        # Spark, de Spark History: suma antes del shuffle (3 KB) y lee la entrada más de una vez
+        # (inferSchema, show y write); las etapas SKIPPED no cuentan
+        assert spark == {"id": SPARK, "type": "SPARK", "state": "FINISHED", "elapsedMs": 27747, "mbSeconds": 74474,
+                         "vcoreSeconds": 71, "hdfsReadBytes": 18822508, "hdfsWrittenBytes": 216, "shuffleBytes": 3102,
+                         "localDiskBytes": 2214, "tasks": 11, "source": "spark-history"}
+        # Tez sin Timeline Server: solo lo que sabe el RM
+        assert tez == {"id": TEZ, "type": "TEZ", "state": "FINISHED", "elapsedMs": 17685, "mbSeconds": 24613,
+                       "vcoreSeconds": 29, "source": "rm"}
+        assert nada == {"id": "application_1_9999", "error": "No existe el trabajo application_1_9999"}
+        # Corriendo: todavía no hay contadores que pedir
+        corriendo = await y.metrics(CORRIENDO)
+        assert corriendo["state"] == "RUNNING" and corriendo["source"] == "rm" and "hdfsReadBytes" not in corriendo
+        assert not any("18080" in u and CORRIENDO in u for u in y.http.calls)
+        # Sin JobHistory: lo del RM igual sale
+        y.http.down.add("localhost:19888")
+        assert (await y.metrics(MR))["source"] == "rm"
+        # Sin RM no hay nada que mostrar
+        y.http.down.add("localhost:8088")
+        with pytest.raises(ApiError) as e:
+            await y.metrics_many([MR])
+        assert e.value.code == "service_down"
+    asyncio.run(main())
+
+
 def test_logs(settings, tmp_path, fake_bin):
     async def main():
         cl, y, _ = make(settings, tmp_path)
@@ -446,6 +479,12 @@ def test_rutas_yarn(settings, tmp_path, fake_bin):
         assert c.get(f"/api/yarn/apps/{MR}").json()["engine"] == "mr"
         r = c.get("/api/yarn/apps/application_1_1")
         assert r.status_code == 404 and r.json()["code"] == "not_found"
+        r = c.get("/api/yarn/metrics", params={"apps": f"{MR}, {TEZ},{MR}"})
+        assert r.status_code == 200 and [m["id"] for m in r.json()] == [MR, TEZ]
+        assert r.json()[0]["shuffleBytes"] == 3347314
+        assert c.get("/api/yarn/metrics").json()["code"] == "invalid"
+        muchas = ",".join(f"application_1_{i:04d}" for i in range(13))
+        assert c.get("/api/yarn/metrics", params={"apps": muchas}).status_code == 400
         cont = f"container_{CORRIENDO[12:]}_01_000002"
         r = c.get(f"/api/yarn/apps/{CORRIENDO}/logs", params={"container": cont})
         assert r.json()["container"] == cont

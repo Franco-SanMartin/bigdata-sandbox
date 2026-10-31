@@ -43,7 +43,9 @@ URL = os.environ.get("SANDBOX_URL", "http://localhost:8080").rstrip("/")
 SALIDAS = Path(os.environ.get("HUMO_SALIDAS", "humo-salidas"))
 CAPTURAS = SALIDAS / "capturas"
 # "ml/guiado" es la ML de clase (la de antes del estudio): sigue en la imagen del aula
-PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "yarn", "pipeline", "datos", "ml", "ml/guiado", "consola", "config"]
+# "datos" es la ruta vieja de Consultas: tiene que seguir llevando a Lenguajes
+PANTALLAS = ["inicio", "practicas", "cluster", "hdfs", "tablas", "bases", "yarn", "pipeline", "lenguajes", "datos",
+             "comparar", "ml", "ml/guiado", "consola", "config"]
 SOLO_HDFS = hf.SOLO_HDFS
 
 RESULTADOS: list[dict] = []
@@ -202,9 +204,9 @@ def todo(page: Page) -> None:
         assert paso["state"] == "done", paso.get("error")
         assert not errores_desde(n), errores_desde(n)
 
-    with Chequeo("todo: Datos, consulta de Hive por Tez desde la interfaz") as c:
+    with Chequeo("todo: Lenguajes, consulta de Hive por Tez desde la interfaz") as c:
         n = len(CONSOLA)
-        ir(page, "datos")
+        ir(page, "lenguajes")
         page.get_by_role("radio", name="Hive").click()
         area = page.locator(".qe textarea")
         area.fill("SELECT producto, COUNT(*) AS n FROM ventas_limpias GROUP BY producto")

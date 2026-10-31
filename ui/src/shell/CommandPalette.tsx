@@ -1,8 +1,10 @@
 /* Paleta de comandos (Ctrl+K): ir a cualquier pantalla o ejecutar una acción. */
 import { Command } from 'cmdk';
 import { Dialog } from 'radix-ui';
-import { Brain, ExternalLink, FileCode2, Play, Plus, Power, RotateCcw, Rows3, SquareTerminal, Upload, CircleHelp, Zap } from 'lucide-react';
-import { composeOpen, consoleOpen, helpOpen, navigate, paletteOpen } from '../state/ui';
+import { useState } from 'react';
+import { BookOpen, Brain, ExternalLink, FileCode2, Play, Plus, Power, RotateCcw, Rows3, SquareTerminal, Upload, CircleHelp, Zap } from 'lucide-react';
+import { abrirGlosario, composeOpen, consoleOpen, glosarioEn, helpOpen, navigate, paletteOpen } from '../state/ui';
+import { TERMINOS } from '../help/glosario';
 import { useStatus } from '../state/store';
 import { addDataNode, applyConfig, pipelineReset, processAction, putExample, startCluster, stopCluster, submitExample, trainModel } from '../state/actions';
 import { navVisible } from './nav';
@@ -10,19 +12,21 @@ import { navVisible } from './nav';
 export function CommandPalette() {
   const open = paletteOpen.use();
   const s = useStatus();
+  // Las palabras del glosario aparecen recién cuando se escribe algo: son más de 50
+  const [q, setQ] = useState('');
   const run = (f: () => unknown) => () => { paletteOpen.set(false); setTimeout(f, 60); };
   const running = s?.phase === 'running';
   const yarn = running && s!.config.services !== 'hdfs';
   const todo = running && s!.config.services === 'todo';
   const webs = s?.processes.filter(p => p.webUrl && p.state === 'up') || [];
   return (
-    <Dialog.Root open={open} onOpenChange={paletteOpen.set}>
+    <Dialog.Root open={open} onOpenChange={o => { paletteOpen.set(o); if (!o) setQ(''); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="overlay" />
         <Dialog.Content className="cmdk" aria-describedby={undefined}>
           <Dialog.Title className="sr-only">Buscar o ejecutar</Dialog.Title>
           <Command label="Buscar o ejecutar" loop>
-            <Command.Input placeholder="Buscá una pantalla, un proceso o una acción…" autoFocus />
+            <Command.Input value={q} onValueChange={setQ} placeholder="Buscá una pantalla, un proceso, una acción o una palabra…" autoFocus />
             <Command.List>
               <Command.Empty>No hay nada con ese nombre.</Command.Empty>
               <Command.Group heading="Ir a">
@@ -58,8 +62,12 @@ export function CommandPalette() {
               </Command.Group>}
               <Command.Group heading="Interfaz">
                 <Command.Item value="consola actividad" onSelect={run(() => consoleOpen.set(v => !v))}><SquareTerminal size={15} />Mostrar u ocultar la consola<span className="end"><kbd>Ctrl</kbd><kbd>J</kbd></span></Command.Item>
-                <Command.Item value="ayuda" onSelect={run(() => helpOpen.set(true))}><CircleHelp size={15} />Ayuda de esta pantalla<span className="end"><kbd>?</kbd></span></Command.Item>
+                <Command.Item value="ayuda" onSelect={run(() => { glosarioEn.set(null); helpOpen.set(true); })}><CircleHelp size={15} />Ayuda de esta pantalla<span className="end"><kbd>?</kbd></span></Command.Item>
+                <Command.Item value="glosario palabras definiciones" onSelect={run(() => abrirGlosario())}><BookOpen size={15} />Glosario: las palabras del cluster</Command.Item>
               </Command.Group>
+              {q.trim().length > 1 && <Command.Group heading="Glosario">
+                {[...TERMINOS.values()].map(t => <Command.Item key={t.id} value={`glosario ${t.t} ${t.seccion.titulo}`} onSelect={run(() => abrirGlosario(t.id))}><BookOpen size={15} />{t.t}<span className="end">{t.seccion.titulo.split(':')[0]}</span></Command.Item>)}
+              </Command.Group>}
             </Command.List>
           </Command>
           <div className="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> elegir</span><span><kbd>Enter</kbd> ejecutar</span><span><kbd>Esc</kbd> cerrar</span></div>

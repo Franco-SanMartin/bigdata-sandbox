@@ -126,12 +126,16 @@ bloquea los botones en el resto de las pantallas.
 
 ## Paso 5. La barra lateral y la barra de arriba
 
-**Qué se ve.** A la izquierda, las pantallas en tres grupos:
+**Qué se ve.** A la izquierda, las pantallas agrupadas por las capas del mapa
+de Inicio, cada capa con su color:
 
 | Grupo | Pantallas | Atajo |
 |---|---|---|
 | Empezar | Inicio, Prácticas guiadas | `G I`, `G R` |
-| Trabajar | HDFS, Trabajos en YARN, Consultas, Pipeline, Machine Learning | `G H`, `G Y`, `G D`, `G P`, `G M` |
+| Almacenamiento | HDFS, Tablas (Metastore), Bases (MariaDB y MongoDB) | `G H`, `G T`, `G B` |
+| Recursos | Trabajos en YARN | `G Y` |
+| Procesamiento | Lenguajes (Hive y Pig), Comparar, Machine Learning | `G L`, `G K`, `G M` |
+| Ingesta | Pipeline | `G P` |
 | Operar | Cluster, Consola, Configuración | `G C`, `G O`, `G S` |
 
 Los atajos se escriben como dos teclas seguidas: `G` y después la letra.
