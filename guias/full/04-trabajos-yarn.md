@@ -5,7 +5,7 @@ memoria, cuántos contenedores usa, cómo avanza y qué dice cada log. Es la
 [guía 4 de la materia](../04-yarn-mapreduce.md) (y parte de la
 [8](../08-spark.md)) mirada desde el ResourceManager.
 
-[← 3. HDFS desde la interfaz](03-hdfs.md) · [Índice de full](README.md) · Siguiente: [5. Consultas →](05-consultas.md)
+[← 3. HDFS desde la interfaz](03-hdfs.md) · [Índice de full](README.md) · Siguiente: [5. Lenguajes, Bases y Tablas →](05-consultas.md)
 
 La pantalla es **Trabajos en YARN** (`G Y`). Necesita `SERVICIOS=mapreduce` o
 `todo`; con `SERVICIOS=hdfs` dice "El cluster está prendido solo con HDFS.

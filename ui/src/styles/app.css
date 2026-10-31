@@ -303,6 +303,36 @@ select.input:disabled { cursor: not-allowed; opacity: .6; }
 .keys { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: var(--fs-sm); color: var(--text-2); }
 .keys span:nth-child(2n) { display: flex; gap: 4px; justify-content: flex-end; }
 
+/* Ayuda: las dos pestañas y el glosario (guias/glosario.md), por capa */
+.sheet.help[data-vista="glosario"] { width: min(560px, 100vw); }
+.help-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); flex: none; }
+.help-tabs button { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; font-size: var(--fs-sm); color: var(--text-3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.help-tabs button:hover { color: var(--text); }
+.help-tabs button[aria-selected="true"] { color: var(--text); font-weight: 500; border-bottom-color: var(--accent); }
+.help-tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.help-glo { display: flex; flex-wrap: wrap; gap: 6px; }
+.help-glo-t { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 13px; font-size: var(--fs-sm); color: var(--text-2); cursor: pointer; }
+.help-glo-t::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--capa, var(--n-6)); }
+.help-glo-t:hover { border-color: var(--line-strong); color: var(--text); background: var(--surface-2); }
+.help-glo-t:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.glo { display: flex; flex-direction: column; gap: 18px; }
+.glo-q { position: sticky; top: -16px; z-index: 1; display: flex; align-items: center; gap: 6px; margin: -16px -16px 0; padding: 10px 16px; background: var(--popover); border-bottom: 1px solid var(--line-soft); color: var(--text-4); }
+.glo-q input { all: unset; flex: 1; min-width: 0; height: 28px; font-size: var(--fs-sm); color: var(--text); }
+.glo-s h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.glo-s h3::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--capa, var(--n-6)); }
+.glo-intro { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--text-3) !important; line-height: 1.5; }
+.glo dl > div { padding: 8px 10px; border-left: 2px solid var(--capa, var(--line)); border-radius: 0 var(--r-1) var(--r-1) 0; scroll-margin: 60px; }
+.glo dl > div[data-foco] { background: var(--accent-bg); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.glo dd + dd { margin-top: 6px; }
+.glo code, .glo-tabla code { font: 400 12px/1 var(--f-mono); background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.glo-tabla code { white-space: nowrap; }
+.glo-ir { align-self: flex-start; margin-top: 8px; }
+.glo-tabla { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--r-2); }
+.glo-tabla table { border-collapse: collapse; font-size: var(--fs-xs); min-width: 620px; }
+.glo-tabla th, .glo-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; color: var(--text-2); }
+.glo-tabla thead th { color: var(--text); font-weight: 600; background: var(--surface-2); }
+.glo-nada, .glo-fuente { font-size: var(--fs-sm); color: var(--text-4) !important; }
+
 /* Vacío, carga, error */
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px 20px; color: var(--text-3); }
 .empty h3 { color: var(--text); font-size: var(--fs-lg); font-weight: 500; }

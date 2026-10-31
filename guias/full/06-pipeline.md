@@ -5,7 +5,7 @@ almacenamiento, análisis, machine learning y resultados) eligiendo en cada
 una la herramienta, y ver qué entra, qué hace y qué sale. Junta lo de las
 guías 3, 4, 6, 7 y 8 de la materia con la limpieza de datos de `ml`.
 
-[← 5. Consultas](05-consultas.md) · [Índice de full](README.md) · Siguiente: [7. Machine Learning →](07-machine-learning.md)
+[← 5. Lenguajes, Bases y Tablas](05-consultas.md) · [Índice de full](README.md) · Siguiente: [7. Machine Learning →](07-machine-learning.md)
 
 La pantalla es **Pipeline** (`G P`). Casi todas las herramientas necesitan
 `SERVICIOS=todo` (Python, Spark y Hive); con menos, las que no se pueden usar
@@ -178,7 +178,7 @@ MySQL". Sale "un CSV local o tienda.resumen_<campo>".
 archivos** (`part-…`, uno por reducer o tarea). `getmerge` los junta en uno
 solo en `/datos`, que ves en la carpeta `datos/` de tu compu. Sqoop export
 hace el camino inverso del import: de HDFS a una tabla de MySQL, que después
-podés consultar en [Consultas](05-consultas.md).
+podés consultar en [Lenguajes](05-consultas.md).
 
 <!-- prueba: no (necesita el resumen del análisis) -->
 ```bash

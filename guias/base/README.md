@@ -8,7 +8,7 @@ aparte, con su página web, y la arquitectura de HDFS (cuántos DataNodes y
 NameNodes, cuántas réplicas, de qué tamaño los bloques) se elige en el
 `docker run`.
 
-[← Índice de guías](../README.md)
+[← Índice de guías](../README.md) · [Glosario](../glosario.md): las palabras del cluster, por capa
 
 ## Para quién es
 

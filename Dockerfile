@@ -356,6 +356,8 @@ RUN npm ci --no-audit --no-fund
 # los importa de ../datos/ejemplos): van al lado de /ui, como en el repo
 COPY datos/ejemplos/mapper.py datos/ejemplos/reducer.py datos/ejemplos/ventas.pig \
      datos/ejemplos/ventas.hql datos/ejemplos/ventas.py /datos/ejemplos/
+# El "?" de cada pantalla muestra el glosario de las guias (ui/src/help/glosario.ts lo importa)
+COPY guias/glosario.md /guias/glosario.md
 COPY ui/ ./
 RUN npm run build
 

@@ -25,7 +25,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // Comparar importa el código de los ejemplos del repo (datos/ejemplos), fuera de ui/
-    fs: { allow: ['.', '../datos/ejemplos'] },
+    fs: { allow: ['.', '../datos/ejemplos', '../guias/glosario.md'] },
     // Con el backend corriendo: npm run dev y las llamadas a /api van al contenedor
     proxy: { '/api': 'http://localhost:8080' },
   },

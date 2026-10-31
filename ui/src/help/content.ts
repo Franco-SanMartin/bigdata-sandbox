@@ -142,8 +142,27 @@ export const HELP: Record<PageId, Help> = {
   },
 };
 
+/** Los términos del glosario (guias/glosario.md) que van con cada pantalla, por su ancla */
+export const GLOSARIO_DE: Record<PageId, string[]> = {
+  inicio: ['hdfs', 'yarn', 'motor', 'lenguaje', 'metastore', 'data-lake'],
+  practicas: ['bloque', 'réplica', 'map', 'shuffle', 'reduce', 'metastore'],
+  cluster: ['namenode', 'datanode', 'resourcemanager', 'nodemanager', 'alta-disponibilidad', 'zookeeper'],
+  hdfs: ['hdfs', 'bloque', 'réplica', 'namenode', 'datanode', 'rack'],
+  tablas: ['metastore', 'tabla-externa', 'tabla-administrada', 'formato-de-archivo', 'parquet-y-orc', 'partición-de-tabla'],
+  bases: ['mariadb', 'mongodb', 'índice', 'plan', 'sqoop'],
+  yarn: ['yarn', 'contenedor', 'applicationmaster', 'cola', 'localidad', 'memoria-por-tiempo', 'jobhistory-y-spark-history'],
+  pipeline: ['ingesta', 'sqoop', 'etl', 'pipeline', 'data-lake'],
+  lenguajes: ['lenguaje', 'hive', 'pig', 'motor', 'tez', 'mapreduce', 'plan'],
+  comparar: ['motor', 'lenguaje', 'shuffle', 'combiner', 'spill', 'etapa', 'memoria-por-tiempo', 'acción-y-transformación', 'cache'],
+  ml: ['mllib', 'scikit-learn', 'pyspark', 'driver-y-executors', 'cache'],
+  aula: ['rack', 'datanode', 'nodemanager', 'localidad', 'contenedor'],
+  consola: ['contenedor', 'applicationmaster', 'jobhistory-y-spark-history'],
+  config: ['réplica', 'bloque', 'datanode', 'alta-disponibilidad'],
+};
+
 export const SHORTCUTS: [string, string][] = [
-  ['Buscar o ejecutar', 'Ctrl+K'], ['Consola', 'Ctrl+J'], ['Ayuda', '?'],
-  ['Ir a Cluster', 'G C'], ['Ir a HDFS', 'G H'], ['Ir a YARN', 'G Y'], ['Ir al Pipeline', 'G P'], ['Ir a Datos', 'G D'], ['Ir a Machine Learning', 'G M'],
-  ['Ir a la Consola', 'G O'], ['Ir a Configuración', 'G S'],
+  ['Buscar o ejecutar', 'Ctrl+K'], ['Consola', 'Ctrl+J'], ['Ayuda y glosario', '?'],
+  ['Ir a HDFS', 'G H'], ['Ir a Tablas', 'G T'], ['Ir a Bases', 'G B'], ['Ir a Trabajos', 'G Y'], ['Ir a Lenguajes', 'G L'],
+  ['Ir a Comparar', 'G K'], ['Ir a Machine Learning', 'G M'], ['Ir al Pipeline', 'G P'],
+  ['Ir a Cluster', 'G C'], ['Ir a la Consola', 'G O'], ['Ir a Configuración', 'G S'],
 ];
