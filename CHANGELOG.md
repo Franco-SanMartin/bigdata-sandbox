@@ -45,6 +45,15 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
     PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
     Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Pantalla Motores** (`full`, `G E`, en Procesamiento): una ficha por
+  motor (MapReduce, Tez y Spark) con qué hace, una analogía, cómo trabaja,
+  cuándo conviene, quién lo usa en el sandbox y sus términos del glosario.
+  Al lado, el DAG de su último trabajo en YARN, tarea por tarea, con lo que
+  movió. Cada ficha lanza ventas por producto con su motor.
+- **Franja de camino de datos**: en el detalle de un trabajo y en el
+  resultado de una consulta, de dónde → qué lo procesa → dónde queda. Cada
+  caja lleva el color de su capa, lleva a su pantalla (la carpeta en HDFS,
+  la tabla, el trabajo o el motor) y su `?` abre el glosario.
 - **Pantalla Formatos** (`full`, `G F`, en Almacenamiento): la misma tabla
   de ventas en texto (CSV), Parquet y ORC.
   - Un dibujo de fila contra columna, con las columnas que la consulta no

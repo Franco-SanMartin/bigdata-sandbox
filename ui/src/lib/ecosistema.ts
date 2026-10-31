@@ -32,7 +32,6 @@ const D = data as unknown as {
   flechas: Flecha[];
   recorridos: Record<string, Recorrido>;
   comparar: Comparacion[];
-  glosario: [string, string][];
 };
 
 export const CAPAS = D.capas;
@@ -47,7 +46,6 @@ export const COMPARAR: (Comparacion & { id: string; pregunta: string; cuales: st
   const pregunta = m?.[1] ?? c.t;
   return { ...c, id: slug(pregunta), pregunta, cuales: m?.[2] ?? '' };
 });
-export const GLOSARIO = D.glosario;
 
 /** Cómo se dibuja el mapa: el cluster en filas (de dónde trabajás arriba a dónde quedan los datos
     abajo) y, al costado, lo que corre en una sola máquina. Sqoop es el puente entre los dos. */

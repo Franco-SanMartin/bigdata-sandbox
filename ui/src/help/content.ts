@@ -86,6 +86,14 @@ export const HELP: Record<PageId, Help> = {
       ['Bloques', 'Cuantos menos bloques, menos tareas de map: cada una lee uno.'],
     ],
   },
+  motores: {
+    intro: 'Una ficha por motor: MapReduce, Tez y Spark. Qué hace cada uno, una analogía, cuándo conviene y quién lo usa en el sandbox, y al lado el DAG de su último trabajo en YARN con lo que movió. Cada ficha puede lanzar ventas por producto con su motor.',
+    terms: [
+      ['Motor', "Lo que ejecuta el trabajo en el cluster. En YARN es la columna Application Type: MAPREDUCE, TEZ o SPARK."],
+      ['DAG', 'Los pasos de un trabajo y quién le pasa datos a quién. MapReduce siempre tiene dos (map y reduce); Tez y Spark arman los que hagan falta.'],
+      ['Memoria × tiempo', 'Los MB de cada contenedor por los segundos que estuvo vivo: lo que de verdad ocupó el trabajo.'],
+    ],
+  },
   lenguajes: {
     intro: 'Hive (SQL) y Pig (Pig Latin) sobre los archivos de HDFS: cada consulta muestra su resultado, su plan y qué trabajo lanzó en YARN. PySpark y MapReduce a mano se lanzan desde Trabajos; la misma cuenta en los cuatro está en Comparar.',
     terms: [
@@ -162,6 +170,7 @@ export const GLOSARIO_DE: Record<PageId, string[]> = {
   formatos: ['formato-de-archivo', 'parquet-y-orc', 'bloque', 'tabla-externa', 'data-lake'],
   yarn: ['yarn', 'contenedor', 'applicationmaster', 'cola', 'localidad', 'memoria-por-tiempo', 'jobhistory-y-spark-history'],
   pipeline: ['ingesta', 'sqoop', 'etl', 'pipeline', 'data-lake'],
+  motores: ['motor', 'mapreduce', 'tez', 'spark', 'dag', 'shuffle', 'etapa', 'driver-y-executors'],
   lenguajes: ['lenguaje', 'hive', 'pig', 'motor', 'tez', 'mapreduce', 'plan'],
   comparar: ['motor', 'lenguaje', 'shuffle', 'combiner', 'spill', 'etapa', 'memoria-por-tiempo', 'acción-y-transformación', 'cache'],
   ml: ['mllib', 'scikit-learn', 'pyspark', 'driver-y-executors', 'cache'],
@@ -172,7 +181,7 @@ export const GLOSARIO_DE: Record<PageId, string[]> = {
 
 export const SHORTCUTS: [string, string][] = [
   ['Buscar o ejecutar', 'Ctrl+K'], ['Consola', 'Ctrl+J'], ['Ayuda y glosario', '?'],
-  ['Ir a HDFS', 'G H'], ['Ir a Tablas', 'G T'], ['Ir a Bases', 'G B'], ['Ir a Formatos', 'G F'], ['Ir a Trabajos', 'G Y'], ['Ir a Lenguajes', 'G L'],
+  ['Ir a HDFS', 'G H'], ['Ir a Tablas', 'G T'], ['Ir a Bases', 'G B'], ['Ir a Formatos', 'G F'], ['Ir a Trabajos', 'G Y'], ['Ir a Motores', 'G E'], ['Ir a Lenguajes', 'G L'],
   ['Ir a Comparar', 'G K'], ['Ir a Machine Learning', 'G M'], ['Ir al Pipeline', 'G P'],
   ['Ir a Cluster', 'G C'], ['Ir a la Consola', 'G O'], ['Ir a Configuración', 'G S'],
 ];

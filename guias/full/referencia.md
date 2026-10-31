@@ -28,15 +28,16 @@ Cómo leer las tablas:
 
 | Parte | Qué muestra | De dónde sale | Comando equivalente |
 |---|---|---|---|
-| Barra lateral | Las pantallas por capa: Empezar (Inicio, Prácticas), Almacenamiento (HDFS, Tablas, Bases, Formatos), Recursos (Trabajos), Procesamiento (Lenguajes, Comparar, Machine Learning), Ingesta (Pipeline), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
+| Barra lateral | Las pantallas por capa: Empezar (Inicio, Prácticas), Almacenamiento (HDFS, Tablas, Bases, Formatos), Recursos (Trabajos), Procesamiento (Motores, Lenguajes, Comparar, Machine Learning), Ingesta (Pipeline), Operar (Cluster, Consola, Configuración) | Fija, en la interfaz | — |
 | Estado arriba | *Apagado*, *Arrancando · Paso N de M*, en marcha, *Degradado* o *Con fallas* | `GET /api/status` → procesos propios, JMX del NameNode, REST del ResourceManager | `estado` |
 | Consola (`Ctrl+J`) | El cajón con los eventos | `GET /api/activity?limit=200` + SSE `activity` | `docker logs bigdata-full` |
 | Paleta (`Ctrl+K`) | Buscar pantallas, acciones y palabras del glosario (aparecen al escribir) | Fija, en la interfaz | — |
 | Ayuda (`?`) | *Esta pantalla*: qué es, sus conceptos, sus términos del glosario y los atajos. *Glosario*: todas las palabras por capa, con buscador | `ui/src/help/` y [`guias/glosario.md`](../glosario.md), que se lee al armar la imagen | — |
+| Camino de los datos | En el detalle de un trabajo y en el resultado de una consulta: de dónde → qué lo procesa → dónde queda, cada caja con su capa, su pantalla y su `?` al glosario | Armado en la interfaz (`ui/src/lib/camino.ts`) con el `trace` del trabajo o de la consulta | — |
 | Direcciones | `#hdfs/user/root`, `#tablas/ventas`, `#lenguajes/pig`, `#bases/mongodb`, `#yarn/application_…`, `#comparar/quien-hace-el-trabajo`, `#inicio/recorrido/tres`... | La interfaz | — |
 
 Atajos: `G` y después la letra. `G I` Inicio, `G R` Prácticas, `G H` HDFS,
-`G T` Tablas, `G B` Bases, `G F` Formatos, `G Y` Trabajos, `G L` Lenguajes, `G K` Comparar,
+`G T` Tablas, `G B` Bases, `G F` Formatos, `G Y` Trabajos, `G E` Motores, `G L` Lenguajes, `G K` Comparar,
 `G P` Pipeline, `G M` Machine Learning, `G C` Cluster, `G O` Consola,
 `G S` Configuración. La dirección vieja `#datos` (Consultas) lleva a Lenguajes.
 
@@ -178,6 +179,7 @@ Guía: [4. YARN y los trabajos](04-trabajos-yarn.md).
 | Números | Memoria en uso, Corriendo, En cola, Terminados | `GET /api/yarn/cluster` | `curl -s http://localhost:8088/ws/v1/cluster/metrics` |
 | Lista de trabajos | Nombre, motor, estado, avance | `GET /api/yarn/apps` → `:8088/ws/v1/cluster/apps` + `:8042/ws/v1/node/containers` | `yarn application -list -appStates ALL` |
 | Nuevo trabajo | Las 7 plantillas con sus parámetros y *Lo mismo en la terminal* | `GET /api/yarn/templates`; lanzar: `POST /api/yarn/apps` | `hadoop jar …/hadoop-mapreduce-examples-3.3.6.jar wordcount <entrada> <salida>` |
+| Camino de los datos | De dónde leyó, qué motor lo corrió y la carpeta del resultado, con enlaces a HDFS y a Motores | `trace.input`, `engine` y `outputPath` de `GET /api/yarn/apps/:id` | — |
 | Detalle: avance y resumen | Estado (ACCEPTED, RUNNING, FINISHED, FAILED, KILLED), Cola, Enviado, Memoria, Entra, Sale, Comando | `GET /api/yarn/apps/:id` → REST del ResourceManager | `yarn application -status <id>` |
 | DAG | Fases (MapReduce), vértices (Tez) o etapas (Spark) | MapReduce: el ApplicationMaster y JobHistory (`:19888`); Tez: las tablas que imprime `beeline`; Spark: el driver (`:4040`) o Spark History (`:18080`) | `mapred job -status <job>` |
 | Logs | Un log por contenedor (stdout, stderr, syslog) | `GET /api/yarn/apps/:id/logs?container=…` → `yarn logs` | `yarn logs -applicationId <id>` |
@@ -188,6 +190,22 @@ Guía: [4. YARN y los trabajos](04-trabajos-yarn.md).
 Spark (`:4040` y Spark History), el **Tez UI** y, en la nube, las vistas de
 trabajos de **EMR** y **Dataproc**. Teoría:
 [ciclo de vida de una aplicación en YARN](teoria/ciclo-de-vida-yarn.md).
+
+## Motores
+
+Guía: [4. YARN y los trabajos](04-trabajos-yarn.md); la misma cuenta en los tres, [11. Comparar](11-comparar.md).
+
+| Parte | Qué muestra | De dónde sale | Comando equivalente |
+|---|---|---|---|
+| Ficha | MapReduce, Tez y Spark: qué hace, una analogía, cómo trabaja, cuándo conviene, quién lo usa en el sandbox y sus términos del glosario | Fija: `ecosistema.json` y la tabla de motores de D-05 | — |
+| El último trabajo | El más nuevo de ese motor, con su DAG tarea por tarea (se actualiza mientras corre) | `GET /api/yarn/apps` + `GET /api/yarn/apps/:id` (solo con el cluster prendido) | `yarn application -list -appStates ALL` |
+| Lo que movió | Memoria × tiempo, leído de HDFS, shuffle, disco local y tareas; Tez, solo memoria y tiempo | `GET /api/yarn/metrics?apps=<id>` | `curl -s http://localhost:8088/ws/v1/cluster/apps/<id>` |
+| Lanzar ventas por producto | Un trabajo de ese motor | `POST /api/yarn/apps` con `mr-ventas`, `hive-ventas` o `spark-ventas` | `spark-submit ejemplos/ventas.py` |
+
+**En la industria.** Las interfaces de cada motor: el ResourceManager y JobHistory
+(`:8088`, `:19888`), el **Tez UI** y la de Spark (`:4040`, `:18080`); en la nube,
+el detalle de cada paso en **EMR**, **Dataproc** o **Databricks**. Glosario:
+[motor](../glosario.md#motor) y [DAG](../glosario.md#dag).
 
 ## Lenguajes
 

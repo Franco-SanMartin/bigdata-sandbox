@@ -136,6 +136,8 @@ orden; el número es el de siempre, para no romper enlaces.
 
 **Procesamiento: motores y lenguajes** (Lenguajes, Comparar, Machine Learning)
 
+- [04. YARN y los trabajos](04-trabajos-yarn.md) también cuenta los
+  **Motores** (`G E`): una ficha por motor con el DAG de su último trabajo.
 - [05. Lenguajes, Bases y Tablas](05-consultas.md), segunda parte: Hive y Pig,
   con el resultado, el plan y qué trabajo lanzaron.
 - [11. Comparar](11-comparar.md): ventas por producto en MapReduce a mano, Pig,
