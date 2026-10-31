@@ -1,5 +1,5 @@
 /* Rutas por hash: #pantalla o #pantalla/lo-que-sigue (carpeta de HDFS, id de trabajo, práctica…). */
-export const PAGES = ['inicio', 'practicas', 'cluster', 'hdfs', 'tablas', 'bases', 'formatos', 'yarn', 'pipeline', 'lenguajes', 'comparar', 'ml', 'aula', 'consola', 'config'] as const;
+export const PAGES = ['inicio', 'practicas', 'cluster', 'hdfs', 'tablas', 'bases', 'formatos', 'yarn', 'pipeline', 'motores', 'lenguajes', 'comparar', 'ml', 'aula', 'consola', 'config'] as const;
 export type PageId = typeof PAGES[number];
 
 /** Rutas viejas que siguen andando (guías, prácticas, marcadores). Consultas (#datos) se partió:

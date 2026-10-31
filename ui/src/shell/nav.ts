@@ -1,4 +1,4 @@
-import { Boxes, Braces, Brain, Columns3, Database, GitCompareArrows, GraduationCap, HardDrive, Home, LayoutGrid, Server, Settings2, SquareTerminal, Table2, Workflow, type LucideIcon } from 'lucide-react';
+import { Boxes, Braces, Brain, Columns3, Cpu, Database, GitCompareArrows, GraduationCap, HardDrive, Home, LayoutGrid, Server, Settings2, SquareTerminal, Table2, Workflow, type LucideIcon } from 'lucide-react';
 import type { PageId } from '../state/ui';
 import type { CapaId } from '../lib/ecosistema';
 
@@ -26,6 +26,7 @@ export const NAV: NavItem[] = [
   { id: 'bases', label: 'Bases', icon: Database, key: 'b', group: 'Almacenamiento', title: 'Bases: MariaDB y MongoDB' },
   { id: 'formatos', label: 'Formatos', icon: Columns3, key: 'f', group: 'Almacenamiento', title: 'Formatos: CSV, Parquet y ORC' },
   { id: 'yarn', label: 'Trabajos', icon: Boxes, key: 'y', group: 'Recursos', title: 'Trabajos en YARN' },
+  { id: 'motores', label: 'Motores', icon: Cpu, key: 'e', group: 'Procesamiento', title: 'Motores: MapReduce, Tez y Spark' },
   { id: 'lenguajes', label: 'Lenguajes', icon: Braces, key: 'l', group: 'Procesamiento', title: 'Lenguajes: Hive y Pig' },
   { id: 'comparar', label: 'Comparar', icon: GitCompareArrows, key: 'k', group: 'Procesamiento', title: 'Comparar herramientas' },
   { id: 'ml', label: 'Machine Learning', icon: Brain, key: 'm', group: 'Procesamiento', title: 'Machine Learning' },

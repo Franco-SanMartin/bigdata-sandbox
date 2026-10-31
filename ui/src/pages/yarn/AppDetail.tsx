@@ -7,6 +7,8 @@ import { CodeBlock, Dot, Seg, Tip } from '../../components/ui';
 import { navigate } from '../../state/ui';
 import { clock, duration, mbLabel, nf } from '../../lib/format';
 import { ErrorLine, Loading, type Res } from '../hdfs/common';
+import { Camino } from '../../components/Camino';
+import { caminoDeTrabajo } from '../../lib/camino';
 
 export const APP_STATE: Record<YarnAppDetail['state'], 'ok' | 'run' | 'bad'> = { ACCEPTED: 'run', RUNNING: 'run', FINISHED: 'ok', FAILED: 'bad', KILLED: 'bad' };
 /** El estado de YARN dicho en castellano (el original queda en el tooltip) */
@@ -30,7 +32,7 @@ function layers(vs: DagVertex[], es: DagEdge[]): DagVertex[][] {
   return out.filter(Boolean);
 }
 
-function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
+export function Dag({ app, now }: { app: YarnAppDetail; now: number }) {
   const stage = (id: string): YarnStage | undefined => app.stages.find(s => s.id === id);
   if (!app.dag.vertices.length) return <p className="muted">Todavía no hay etapas: el trabajo espera su ApplicationMaster.</p>;
   // Spark History da las etapas sin decir de cuál depende cada una: van en fila, en el orden en que arrancaron, sin flechas
@@ -191,6 +193,7 @@ export function AppDetail({ res, logs, onContainer, now }: { res: Res<YarnAppDet
   return (
     <div className="ad">
       <Progress a={a} now={now} />
+      <Camino c={caminoDeTrabajo(a)} />
       {a.diagnostics && <div className="callout" data-k={APP_STATE[a.state] === 'bad' ? 'bad' : 'run'}>{a.diagnostics}</div>}
       <div className="ad-top">
         <Panel title="DAG" sub={`${a.dag.vertices.length} ${unit}`}><Dag app={a} now={now} /></Panel>

@@ -16,6 +16,8 @@ import { useStatus } from '../../state/store';
 import { navigate, setRouteArg, toast, useRouteArg } from '../../state/ui';
 import { useApi } from '../../state/useApi';
 import { PlanTree } from './PlanTree';
+import { Camino } from '../../components/Camino';
+import { caminoDeConsulta } from '../../lib/camino';
 import {
   SOURCE_LABEL, addSaved, ago, argSource, loadDocs, loadHistory, loadSaved, newDoc, pushHistory, removeSaved,
   saveDocs, saveHistory, saveSaved, starter, suggestName, tomarPendiente, type HistoryEntry, type QueryDoc, type SavedQuery,
@@ -49,7 +51,7 @@ const RULES: Record<DataSource, string> = {
 type ResTab = 'res' | 'plan' | 'trace' | 'log';
 type SideTab = 'cat' | 'saved' | 'hist';
 interface LogLine { at: number; k: 'ok' | 'bad' | 'run'; text: string }
-interface DocState { res?: QueryResult; plan?: QueryPlan; err?: { code: string; message: string; what: 'consulta' | 'plan' }; tab: ResTab; log: LogLine[] }
+interface DocState { res?: QueryResult; plan?: QueryPlan; /** Lo que se corrió (el editor puede haber cambiado después) */ texto?: string; err?: { code: string; message: string; what: 'consulta' | 'plan' }; tab: ResTab; log: LogLine[] }
 
 export function LenguajesPage() {
   return (
@@ -202,7 +204,7 @@ function EditorConsultas({ sources, title, sub, help, intro }: Props) {
         log(id, 'ok', `Plan: ${plan.nodes.length} pasos${plan.yarnStages ? ` · ${plan.yarnStages} en YARN` : ''}`);
       } else {
         const res = await api().query(src, q);
-        patch(id, { res, plan: undefined });
+        patch(id, { res, plan: undefined, texto: q });
         log(id, 'ok', `${res.trace?.output ?? `${nf(res.rows.length)} filas`}${res.appId ? ` · ${res.appId}` : ''}${res.note && res.note !== res.trace?.output ? ` · ${res.note}` : ''}`);
         setHistory(h => pushHistory(h, { source: src, text: q, at: t0, ok: true, rows: res.rows.length, ms: res.ms }));
         if (/^\s*(create|drop|alter)\b/i.test(q)) catalog.reload();
@@ -480,7 +482,7 @@ function HistoryList({ items, onOpen, onClear }: { items: HistoryEntry[]; onOpen
 /* ---------- Resultado ---------- */
 
 function ResultPanel({ doc, st, running, now, onTab }: { doc: QueryDoc; st: DocState; running: { what: 'consulta' | 'plan'; t0: number } | null; now: number; onTab: (t: ResTab) => void }) {
-  const { res, plan, err, tab, log } = st;
+  const { res, plan, err, tab, log, texto } = st;
   const tabs: { id: ResTab; label: string; on: boolean; why?: string }[] = [
     { id: 'res', label: 'Resultado', on: true },
     { id: 'plan', label: 'Plan', on: !!plan || err?.what === 'plan' || running?.what === 'plan', why: 'Pedí el Plan (Ctrl+Shift+Enter) para ver qué va a hacer el motor' },
@@ -524,10 +526,16 @@ function ResultPanel({ doc, st, running, now, onTab }: { doc: QueryDoc; st: DocS
               : res ? (
                 res.columns.length ? (
                   <>
+                    <div className="qx-camino"><Camino c={caminoDeConsulta(doc.source, texto ?? doc.text, res)} /></div>
                     {res.note && <p className="qx-note">{res.note}</p>}
                     <ResultTable columns={res.columns} rows={res.rows} label={`Resultado de ${doc.title}`} fileName={fileName} maxHeight={460} />
                   </>
-                ) : <EmptyState compact kind="empty" title="Listo">{res.note ?? 'La sentencia corrió y no devuelve filas.'}{res.trace?.output && res.trace.output !== res.note ? ` ${res.trace.output}` : ''}</EmptyState>
+                ) : (
+                  <>
+                    <div className="qx-camino"><Camino c={caminoDeConsulta(doc.source, texto ?? doc.text, res)} /></div>
+                    <EmptyState compact kind="empty" title="Listo">{res.note ?? 'La sentencia corrió y no devuelve filas.'}{res.trace?.output && res.trace.output !== res.note ? ` ${res.trace.output}` : ''}</EmptyState>
+                  </>
+                )
               ) : (
                 <EmptyState compact title="Todavía no corriste esta consulta">
                   Escribí arriba o elegí un ejemplo y apretá <b>Correr</b> (Ctrl+Enter). Con <b>Plan</b> (Ctrl+Shift+Enter) ves qué va a hacer el motor sin correrla.
