@@ -9,7 +9,7 @@ import { sourceOf, store } from './contenido';
 
 const ENGINE: Record<AppType, Engine> = { MAPREDUCE: 'mr', TEZ: 'tez', SPARK: 'spark' };
 const VCORES = 4;
-const JOBS: Record<string, ExampleJob> = { 'mr-ventas': 'mr-ventas', 'hive-ventas': 'hive-ventas', 'spark-ventas': 'spark-ventas' };
+const JOBS: Record<string, ExampleJob> = { 'mr-ventas': 'mr-ventas', 'pig-ventas': 'pig-ventas', 'hive-ventas': 'hive-ventas', 'spark-ventas': 'spark-ventas' };
 /** Palabras como las separa wordcount (StringTokenizer: espacios) */
 const words = (text: string) => text.split(/\s+/).filter(Boolean);
 /** La expresión de Java en JavaScript: \w también acepta letras con tilde, como en Java con UNICODE_CHARACTER_CLASS */
@@ -115,6 +115,12 @@ export class DemoYarn {
       const leido = (ts: typeof tasks) => Math.round(ts.reduce((x, t) => x + blockMb(t.blockId), 0) * 1048576);
       // Si se lanzó mientras ventas todavía subía, sus tareas no tienen bloque: vale lo que pesa la carpeta ahora
       const ventas = Math.round(this.e.files.filter(f => f.path.startsWith('/user/root/ventas/')).reduce((x, f) => x + f.sizeMb, 0) * 1048576);
+      // ventas.pig: en la demo es una sola app con las fases de sus tres trabajos; los números son la suma de los
+      // tres en un :full real (el combiner de SUM deja 646 bytes de shuffle; cada trabajo escribe ~760 KB locales)
+      if (a.name === 'PigLatin:ventas.pig') {
+        const entrada = leido(a.stages[0]?.tasks ?? []) || ventas;
+        return { ...base, source: 'jobhistory', hdfsReadBytes: entrada + 1142, hdfsWrittenBytes: 416, shuffleBytes: 646, localDiskBytes: 2318913, tasks: tasks.length, dataLocalTasks: a.stages[0]?.tasks.length ?? 0 };
+      }
       if (a.type === 'MAPREDUCE') {
         const entrada = leido(a.stages[0]?.tasks ?? []) || ventas;
         return { ...base, source: 'jobhistory', hdfsReadBytes: entrada, hdfsWrittenBytes: 188, shuffleBytes: Math.round(entrada * 0.538),

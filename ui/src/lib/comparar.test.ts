@@ -81,6 +81,12 @@ describe('Comparar: lo que movió cada corrida', () => {
       hive: sumar([{ ...TEZ, hdfsReadBytes: 6233632, hdfsWrittenBytes: 291, shuffleBytes: 268, localDiskBytes: 332, tasks: 3, source: 'hive-summary' }]) });
     expect(conHive[0]).toContain('y Hive 268 bytes, PySpark 3,0 KB');
     expect(conHive[0]).toContain('Hive y PySpark suman por producto');
+    // Pig: tres trabajos en fila; el combiner de SUM deja 646 bytes de shuffle en total (medido en un :full)
+    const pigReal = [6213575, 571, 571].map((leido, i): YarnMetrics => ({ ...MR, id: `p${i}`, hdfsReadBytes: leido, shuffleBytes: [212, 198, 236][i] }));
+    const conPig = observaciones({ streaming: sumar([MR]), pig: sumar(pigReal), hive: sumar([{ ...TEZ, shuffleBytes: 268, source: 'hive-summary' }]) });
+    expect(conPig[0]).toContain('y Pig 646 bytes, Hive 268 bytes:');
+    expect(conPig[0]).toContain('Pig y Hive suman por producto');
+    expect(conPig.at(-1)).toContain('Pig lanzó 3 trabajos MapReduce');
     expect(o[1]).toContain('3,0 veces la entrada');
     expect(o[2]).toContain('7,2 MB en el disco local');
     expect(observaciones({ hive: sumar([TEZ]) })).toEqual([]);

@@ -93,6 +93,18 @@ JOBS: dict[str, dict] = {
                   "(+384 de overhead)",
         "ops": {},
     },
+    "pig-ventas": {
+        # Pig manda varios trabajos MapReduce en fila (agrupar, muestrear y ordenar), todos con el nombre
+        # PigLatin:ventas.pig; el id que se devuelve es el del primero
+        "type": "MAPREDUCE", "proc": ("jh", "JobHistory"),
+        "run": "pig ejemplos/ventas.pig",
+        "shown": "pig ejemplos/ventas.pig",
+        "out": "/user/root/resultados/pig_por_producto",
+        "action": "Pig compila el script a trabajos MapReduce (agrupar, muestrear y ordenar) y los manda a YARN "
+                  "uno detrás del otro; cada uno arranca su ApplicationMaster (512 MB)",
+        "ops": {"map": ["Load (PigStorage)", "Filter", "New For Each", "Local Rearrange"],
+                "reduce": ["Package", "New For Each (SUM)", "Store (temporal)"]},
+    },
 }
 VENTAS = "/user/root/ventas"
 
@@ -143,6 +155,9 @@ TEMPLATES: list[dict] = [
     {"id": "mr-ventas", "label": "Ventas por producto (MapReduce)", "engine": "mr",
      "description": "Hadoop Streaming con mapper.py y reducer.py sobre /user/root/ventas (lo sube si falta).",
      "params": [], "command": JOBS["mr-ventas"]["shown"], "needs": ["yarn"]},
+    {"id": "pig-ventas", "label": "Ventas por producto (Pig)", "engine": "mr",
+     "description": "ventas.pig: Pig compila el script a trabajos MapReduce en fila (agrupar, muestrear y ordenar).",
+     "params": [], "command": JOBS["pig-ventas"]["shown"], "needs": ["yarn"]},
     {"id": "hive-ventas", "label": "Ventas por producto (Hive sobre Tez)", "engine": "tez",
      "description": "ventas.hql en beeline: HiveServer2 compila el SQL a un DAG de Tez.",
      "params": [], "command": JOBS["hive-ventas"]["shown"], "needs": ["yarn", "hiveserver2"]},
@@ -946,7 +961,7 @@ class Yarn:
 
     async def submit(self, example: object) -> str:
         if example not in JOBS:
-            raise ApiError("El trabajo es mr-ventas, hive-ventas o spark-ventas", "invalid")
+            raise ApiError("El trabajo es mr-ventas, hive-ventas, spark-ventas o pig-ventas", "invalid")
         job = JOBS[str(example)]
         self.c.need_hdfs()
         self._need_rm()

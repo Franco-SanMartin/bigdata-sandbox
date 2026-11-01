@@ -4,7 +4,7 @@
    la última vez en YARN, y se lanza desde acá o desde la terminal. Abajo, las preguntas de siempre
    (¿cómo lo pido?, ¿quién hace el trabajo?…) con una tabla cada una. */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Braces, FolderOpen, Play, Route } from 'lucide-react';
+import { ArrowRight, FolderOpen, Play, Route } from 'lucide-react';
 import { api } from '../../api';
 import type { YarnApp, YarnMetrics } from '../../api/types';
 import { Codigo, Copiar } from '../../components/Comando';
@@ -171,7 +171,6 @@ function Columna({ v, run, mov, maxMov, now, maxLineas, maxT }: { v: Variante; r
   const app = run?.at(-1);
   const vivo = app && activa(app);
   const lanzar = async () => {
-    if (!v.plantilla) return;
     setEnviando(true);
     try {
       const id = await api().submitJob({ template: v.plantilla, params: {} });
@@ -203,9 +202,7 @@ function Columna({ v, run, mov, maxMov, now, maxLineas, maxT }: { v: Variante; r
       <p className="cp-nota">{v.nota}</p>
 
       <div className="cp-acc">
-        {v.plantilla
-          ? <GatedButton cap={CAP[v.id]} className="btn btn-sm btn-primary" busy={enviando} onClick={lanzar}><Play size={12} />Lanzar en YARN</GatedButton>
-          : <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate('lenguajes', 'pig')}><Braces size={13} />Probarlo en Lenguajes</button>}
+        <GatedButton cap={CAP[v.id]} className="btn btn-sm btn-primary" busy={enviando} onClick={lanzar}><Play size={12} />Lanzar en YARN</GatedButton>
         {app && <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate('yarn', app.id)}>Ver el trabajo<ArrowRight size={13} /></button>}
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate('hdfs', v.salida.slice(1))}>Ver el resultado</button>
       </div>

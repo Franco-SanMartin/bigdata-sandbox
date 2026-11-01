@@ -11,6 +11,14 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **Comparar lanza Pig** (`full`): la plantilla `pig-ventas` corre
+  `pig ejemplos/ventas.pig` como las otras tres (también en Trabajos y en
+  `Ctrl+K`), y la columna de Pig suma sus tres trabajos. En un `:full` real,
+  Pig mandó 646 bytes por el shuffle (el combiner de `SUM` suma en cada map)
+  contra 3,2 MB de MapReduce a mano, y tardó 50 s contra 19 s porque lanza tres
+  trabajos en fila. "Qué muestran los números" lo dice, y la guía 11 suma la
+  columna de Pig.
+
 - **Inicio con el mapa vivo del ecosistema** (`full`): las 20 herramientas
   ordenadas por capa (desde dónde trabajás → cómo lo pedís → quién hace el
   trabajo → quién reparte → dónde quedan los datos, más el puente y lo que
@@ -264,6 +272,10 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   quedaba el de la primera vez.
 
 ### Seguridad
+
+- `vitest` 3.2.4 → 4.1.12 en `ui/` (solo corre las pruebas: no entra en la
+  imagen ni en la demo). La 3.2.x arrastraba `tinypool` con dos fallas
+  críticas y `@vitest/mocker` con una moderada; `npm audit` queda en 0.
 
 - La API de `full` solo atiende a la propia interfaz, con el mismo criterio
   que la terminal: Host `localhost`, `127.0.0.1` o `[::1]` (más
