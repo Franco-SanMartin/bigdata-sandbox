@@ -40,8 +40,8 @@ export interface Variante {
   archivos: Archivo[];
   /** Lo que se escribe en la terminal (parado en /datos) */
   cmd: string;
-  /** La plantilla de YARN que lo lanza desde la interfaz (Pig no tiene: va por Lenguajes) */
-  plantilla?: ExampleJob;
+  /** La plantilla de YARN que lo lanza desde la interfaz (corre lo mismo que cmd) */
+  plantilla: ExampleJob;
   salida: string;
   /** Las fases que arma el motor; disco: el resultado intermedio pasa por HDFS */
   fases: { t: string; disco?: boolean }[];
@@ -70,7 +70,8 @@ export const VARIANTES: Variante[] = [
   {
     id: 'pig', nombre: 'Pig Latin', estilo: 'Describís los pasos y Pig escribe el map y el reduce por vos', motor: 'MAPREDUCE',
     archivos: [archivo('ventas.pig', pig, '--', /^ventas = LOAD/, /^STORE /)],
-    cmd: 'pig ejemplos/ventas.pig', salida: `${RESULTADOS}/pig_por_producto`,
+    cmd: 'pig ejemplos/ventas.pig',
+    plantilla: 'pig-ventas', salida: `${RESULTADOS}/pig_por_producto`,
     fases: [{ t: 'GROUP' }, { t: 'HDFS', disco: true }, { t: 'ORDER' }],
     faseNota: 'Varios trabajos MapReduce en fila: entre uno y otro, el resultado se escribe en HDFS.',
     nota: 'Nada corre hasta el STORE: recién ahí Pig arma el plan entero.',
@@ -167,10 +168,13 @@ export const bytesLabel = (b: number) => (b < 1024 ? `${nf(b)} bytes` : mb(b));
 export function observaciones(m: Partial<Record<ToolId, Movido>>): string[] {
   const out: string[] = [];
   const s = m.streaming, sp = m.pyspark, pg = m.pig, h = m.hive;
-  // Hive y Spark suman por producto en cada map antes de mandar; mapper.py manda una línea por venta
-  const otros = [h?.shuffle != null && ['Hive', h.shuffle], sp?.shuffle != null && ['PySpark', sp.shuffle]].filter(Boolean) as [string, number][];
+  // Pig (con el combiner de SUM), Hive y Spark suman por producto en cada map antes de mandar; mapper.py manda
+  // una línea por venta. En un :full real: Pig 646 bytes en sus tres trabajos, Hive 268, PySpark 3 KB, contra 3,2 MB
+  const otros = [pg?.shuffle != null && ['Pig', pg.shuffle], h?.shuffle != null && ['Hive', h.shuffle], sp?.shuffle != null && ['PySpark', sp.shuffle]]
+    .filter(Boolean) as [string, number][];
   if (s?.shuffle != null && otros.length && otros.every(([, b]) => s.shuffle! > b * 10)) {
-    const quien = otros.map(([n]) => n).join(' y ');
+    const nombres = otros.map(([n]) => n);
+    const quien = nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}` : nombres[0];
     out.push(`MapReduce a mano mandó ${bytesLabel(s.shuffle)} por el shuffle y ${otros.map(([n, b]) => `${n} ${bytesLabel(b)}`).join(', ')}: mapper.py emite una línea por venta, y ${quien} ${otros.length > 1 ? 'suman' : 'suma'} por producto en cada partición antes de mandar.`);
   }
   // La entrada es lo que leyó la versión que la recorre una sola vez (MapReduce a mano)
