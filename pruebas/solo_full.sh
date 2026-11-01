@@ -6,10 +6,11 @@
 # interfaz no vuelve a etiquetar latest, que es la imagen de la clase.
 #
 # Cuenta como "solo full": la interfaz (ui/), el servidor de la interfaz
-# (server/), los ejemplos que solo copia full (datos/comparar/), la
-# documentación y, en el Dockerfile, las líneas de las etapas que van desde
-# "FROM ... AS interfaz" hasta la última "FROM base" (interfaz, full, empresa
-# y trabajador: ninguna entra en base ni en ml). Ante la duda, "no".
+# (server/), los ejemplos que solo copia full (datos/comparar/, con su
+# excepción en .gitignore y .dockerignore), la documentación y, en el
+# Dockerfile, las líneas de las etapas que van desde "FROM ... AS interfaz"
+# hasta la última "FROM base" (interfaz, full, empresa y trabajador: ninguna
+# entra en base ni en ml). Ante la duda, "no".
 #
 # Uso: pruebas/solo_full.sh <commit-antes> <commit-despues>
 set -euo pipefail
@@ -34,18 +35,19 @@ while IFS= read -r f; do
     # se corre imagen.yml a mano (workflow_dispatch): ahí no se mira esto
     .github/workflows/imagen.yml) ;;
     pruebas/enlaces.py | pruebas/tutoriales.py | pruebas/solo_full.sh) ;;
-    Dockerfile | .dockerignore) ;;   # se miran abajo
+    Dockerfile | .dockerignore | .gitignore) ;;   # se miran abajo
     *) no "$f es de base o ml" ;;
   esac
 done <<< "$cambios"
 
-if grep -qx .dockerignore <<< "$cambios"; then
+for ignore in .dockerignore .gitignore; do
+  grep -qx "$ignore" <<< "$cambios" || continue
   # Solo vale sumar la excepción de datos/comparar (y comentarios): ninguna etapa de base ni de ml
   # copia esa carpeta, copian rutas puntuales (datos/ejemplos, conf, sandbox…)
-  otras=$(git diff -U0 "$desde" "$hasta" -- .dockerignore | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' \
+  otras=$(git diff -U0 "$desde" "$hasta" -- "$ignore" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' \
             | grep -vE '^\+(!datos/comparar/?|#.*)$' || true)
-  [ -z "$otras" ] || no ".dockerignore cambia algo más que la excepción de datos/comparar"
-fi
+  [ -z "$otras" ] || no "$ignore cambia algo más que la excepción de datos/comparar"
+done
 
 if grep -qx Dockerfile <<< "$cambios"; then
   # Las líneas de las etapas de full en cada versión del Dockerfile: [inicio, fin)
