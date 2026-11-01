@@ -115,10 +115,14 @@ después lo ejecutás y ves dónde quedó cada cosa.
 
 | | |
 |---|---|
-| ![Inicio: el estado del cluster y qué podés hacer ahora, con lo que falta y cómo activarlo](docs/capturas/inicio.png) | ![Trabajos: un wordcount terminado y las plantillas de MapReduce, Tez y Spark](docs/capturas/yarn.png) |
-| **Inicio**: qué podés hacer ahora y qué no, con el motivo y el arreglo | **Trabajos**: plantillas con parámetros, avance, contenedores y logs |
-| ![Pipeline: la ingesta hecha y la etapa de ETL con sus herramientas](docs/capturas/pipeline.png) | ![Machine Learning: un árbol de decisión entrenado con scikit-learn y su detalle](docs/capturas/ml.png) |
+| ![Inicio: el mapa del ecosistema, cada pieza en su capa y con su estado real](docs/capturas/inicio.png) | ![Trabajos: un wordcount terminado, con de dónde leyó, qué lo procesó y dónde quedó, y su DAG](docs/capturas/yarn.png) |
+| **Inicio**: el mapa del ecosistema por capas, con el estado de cada pieza | **Trabajos**: de dónde leyó, qué lo procesó y dónde quedó, con el DAG, los contenedores y los logs |
+| ![Pipeline: la etapa de ETL hecha con pandas, el riel de 6 etapas y la corrida](docs/capturas/pipeline.png) | ![Machine Learning: un árbol de decisión entrenado con scikit-learn y su detalle](docs/capturas/ml.png) |
 | **Pipeline**: de un CSV sucio a un resumen y un modelo, eligiendo la herramienta de cada etapa | **Machine Learning**: el mismo modelo con scikit-learn o con Spark MLlib, comparados |
+| ![Comparar: ventas por producto con MapReduce, Pig, Hive y PySpark, y lo que movió cada una en el cluster](docs/capturas/comparar.png) | ![Formatos: la misma tabla en CSV, Parquet y ORC, con lo que ocupa cada una y lo que leyó la misma consulta](docs/capturas/formatos.png) |
+| **Comparar**: la misma cuenta con cuatro herramientas, con el código real y lo que movió cada una | **Formatos**: CSV, Parquet y ORC, con lo que ocupan, sus bloques y lo que lee la misma consulta |
+| ![Tablas: lo que anota el Metastore de cada tabla y la carpeta de HDFS a la que apunta](docs/capturas/tablas.png) | ![Motores: MapReduce, Tez y Spark, cada uno con el DAG de su último trabajo](docs/capturas/motores.png) |
+| **Tablas**: cada tabla del Metastore con su carpeta en HDFS y quién la puede leer | **Motores**: cómo trabaja cada motor, con el DAG y los números de su último trabajo |
 
 #### Por dentro de cada modelo
 

@@ -15,7 +15,7 @@ YARN y HDFS. Los datos y la recomendación se ven igual aunque no se pueda
 entrenar: arriba aparece "Entrenar: *motivo*. Los datos y qué modelo conviene
 se ven igual."
 
-![Machine Learning: el dataset, qué modelo conviene, el panel para entrenar y los entrenamientos](../../docs/capturas/ml.png)
+![Machine Learning: el panel para entrenar, los entrenamientos y el detalle de un árbol con de dónde salen los datos, qué lo entrena y sus métricas](../../docs/capturas/ml.png)
 
 ## Paso 1. El dataset y sus columnas
 

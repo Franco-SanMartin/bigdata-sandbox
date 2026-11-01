@@ -51,7 +51,7 @@ apagado* y el texto "Prendelo para usar HDFS, YARN, Hive y el resto. Los
 datos de la vez anterior siguen en el volumen.". Abajo, el botón **Iniciar
 cluster** y el enlace *¿Querés otros nodos o servicios? Configuralo antes*.
 
-![Inicio: el estado del cluster y qué podés hacer ahora, con lo que falta y cómo activarlo](../../docs/capturas/inicio.png)
+![Inicio: el mapa del ecosistema por capas, cada pieza con su estado real](../../docs/capturas/inicio.png)
 
 **Qué significa.** La interfaz le pregunta al servidor `GET /api/status`. Si
 contesta en 1,5 s, trabaja contra el cluster de verdad; si no contesta (por

@@ -238,9 +238,10 @@ Guía: [11. Comparar](11-comparar.md).
 | Código | La parte que hace la cuenta o el archivo entero | `datos/ejemplos/`, copiados al lado de la interfaz al armar la imagen | `cat /datos/ejemplos/ventas.py` |
 | Líneas, tiempo y fases | Líneas sin comentarios ni vacías; el tiempo de la última corrida; sus fases con las tareas reales | Contadas en la interfaz; `GET /api/yarn/apps` (con sus etapas) | `yarn application -status <id>` |
 | Lanzar en YARN | MapReduce, Hive y Spark (Pig lleva a Lenguajes) | `POST /api/yarn/apps` con la plantilla `mr-ventas`, `hive-ventas` o `spark-ventas` | `spark-submit ejemplos/ventas.py` |
-| Lo que movió | Leído de HDFS, shuffle, disco local y memoria por tiempo, en la misma escala; Pig suma sus trabajos | `GET /api/yarn/metrics?apps=…` → RM `…/apps/:id` (`elapsedTime`, `memorySeconds`, `vcoreSeconds`); JobHistory `…/counters` (`HDFS_BYTES_READ`, `REDUCE_SHUFFLE_BYTES`, `FILE_BYTES_WRITTEN`); Spark History `…/stages` (`inputBytes`, `shuffleReadBytes`, `shuffleWriteBytes`, `diskBytesSpilled`). Tez: solo el RM | `curl -s http://localhost:19888/ws/v1/history/mapreduce/jobs/<job>/counters` |
+| Lo que movió | Leído de HDFS, shuffle, disco local y memoria por tiempo, en la misma escala; Pig suma sus trabajos | `GET /api/yarn/metrics?apps=…` → RM `…/apps/:id` (`elapsedTime`, `memorySeconds`, `vcoreSeconds`); JobHistory `…/counters` (`HDFS_BYTES_READ`, `REDUCE_SHUFFLE_BYTES`, `FILE_BYTES_WRITTEN`); Spark History `…/stages` (`inputBytes`, `shuffleReadBytes`, `shuffleWriteBytes`, `diskBytesSpilled`). Tez: los contadores del resumen que imprimió beeline (`hive.tez.exec.print.summary`), si el trabajo lo mandó la interfaz; si no, solo el RM | `curl -s http://localhost:19888/ws/v1/history/mapreduce/jobs/<job>/counters` |
 | Qué muestran los números | Lo que dicen esos números, en palabras | Armado en la interfaz con las métricas | — |
 | ¿Dieron lo mismo? | Las cuatro salidas con el mismo formato | — | El bucle de `hdfs dfs -cat` de la [guía 11](11-comparar.md#paso-4-dieron-lo-mismo) |
+| Otras tareas | Unir dos tablas (Hive, Pig y PySpark), SQL sobre la misma tabla (Hive y Spark SQL), limpiar los datos (pandas y PySpark), traer una tabla de MariaDB (Sqoop y Spark por JDBC) y entrenar un modelo (scikit-learn y MLlib), con el código real y su comando (`#comparar/tarea/<id>`) | `datos/ejemplos` y `datos/comparar`, importados en el build | El comando de cada columna |
 | ¿Cuál uso? | Seis preguntas con su tabla (`#comparar/<pregunta>`) | Fijas en `ecosistema.json` | — |
 
 **En la industria.** La pestaña *Stages* de la interfaz de Spark (con
@@ -259,6 +260,7 @@ Guía: [7. Machine Learning](07-machine-learning.md).
 | Qué modelo conviene | Recomendación con tiempo y memoria esperados | `POST /api/ml/recommend` → reglas fijas con lo medido en la imagen | — |
 | Entrenar | Avance, métricas, referencia | `POST /api/ml/train` → `python3 server/sandbox_server/jobs/entrenar_sklearn.py` o `spark-submit …/jobs/entrenar_spark.py` + SSE `model` | `python3 ejemplos/ml/modelos_sklearn.py`, `spark-submit ejemplos/ml/modelos_spark.py` |
 | Modelos | Los entrenamientos de la sesión | `GET /api/ml/models` | — |
+| Camino de los datos | El conjunto, qué lo entrenó (scikit-learn en una máquina o MLlib en YARN, con su trabajo) y el modelo que queda | `dataset`, `engine` y `appId` del entrenamiento | — |
 | El modelo por dentro | Árbol, red, KMeans, recta, en 3D y paso a paso | `GET /api/ml/models/{id}/viz` → lo que escribió `jobs/viz.py` al entrenar | — |
 
 Entrenar necesita `SERVICIOS=todo` ("Machine Learning necesita los servicios
@@ -278,6 +280,7 @@ Guía: [6. Pipeline de punta a punta](06-pipeline.md).
 |---|---|---|---|
 | Riel | Las 6 etapas con su estado, herramienta y salida; el dato que viaja | `GET /api/pipeline` | — |
 | Etapa elegida y herramientas | Entra → sale, qué necesita, cuándo conviene cada herramienta | `GET /api/pipeline/catalog` | — |
+| Camino de los datos | De dónde leyó el paso, qué herramienta y motor lo corrió y qué dejó, con enlaces a HDFS y al trabajo | `trace.input`, `engine`, `appIds` y `output.path` de la corrida | — |
 | Correr | La corrida con su avance, motor, YARN, Dejó y el trace | `POST /api/pipeline/steps` + SSE `step` | Según la herramienta, abajo |
 | Historial | Todas las corridas | `GET /api/pipeline/steps` | — |
 | Empezar de nuevo | El riel a la primera etapa | `POST /api/pipeline/reset` (no borra datos) | — |

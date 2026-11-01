@@ -352,10 +352,10 @@ FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS interfaz
 WORKDIR /ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-# La pantalla Comparar muestra el codigo de estos ejemplos tal cual (ui/src/lib/comparar.ts
-# los importa de ../datos/ejemplos): van al lado de /ui, como en el repo
-COPY datos/ejemplos/mapper.py datos/ejemplos/reducer.py datos/ejemplos/ventas.pig \
-     datos/ejemplos/ventas.hql datos/ejemplos/ventas.py /datos/ejemplos/
+# La pantalla Comparar muestra el codigo de los ejemplos tal cual (ui/src/lib/comparar.ts y
+# tareas.ts los importan de ../datos/ejemplos y ../datos/comparar): van al lado de /ui, como en el repo
+COPY datos/ejemplos/ /datos/ejemplos/
+COPY datos/comparar/ /datos/comparar/
 # El "?" de cada pantalla muestra el glosario de las guias (ui/src/help/glosario.ts lo importa)
 COPY guias/glosario.md /guias/glosario.md
 COPY ui/ ./
@@ -371,6 +371,11 @@ RUN pip install --no-cache-dir --break-system-packages -r /opt/sandbox/server/re
 COPY server/sandbox_server/ /opt/sandbox/server/sandbox_server/
 RUN find /opt/sandbox/server -name '*.py' -exec sed -i 's/\r$//' {} + \
  && python3 -c "import sys; sys.path.insert(0, '/opt/sandbox/server'); import sandbox_server.app"
+
+# Los ejemplos que solo muestra Comparar (el join en Pig y en Spark, Spark por JDBC): el
+# entrypoint los copia a /datos/ejemplos/comparar al arrancar, con los de base
+COPY datos/comparar/ /opt/sandbox/ejemplos/comparar/
+RUN find /opt/sandbox/ejemplos/comparar -type f -exec sed -i 's/\r$//' {} +
 
 # UI_DIR: la interfaz compilada (ui/dist), que el servidor sirve en :8080.
 # Si no esta, el servidor anda igual (la API en /api) y en / avisa que falta.

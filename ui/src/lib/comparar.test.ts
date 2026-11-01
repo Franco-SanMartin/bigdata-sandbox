@@ -76,6 +76,11 @@ describe('Comparar: lo que movió cada corrida', () => {
     const o = observaciones({ streaming: sumar([MR]), pyspark: sumar([SPARK]), hive: sumar([TEZ]) });
     expect(o).toHaveLength(3);
     expect(o[0]).toContain('3,2 MB por el shuffle y PySpark 3,0 KB');
+    // Con el resumen de beeline, Hive también tiene shuffle (268 bytes en un :full real)
+    const conHive = observaciones({ streaming: sumar([MR]), pyspark: sumar([SPARK]),
+      hive: sumar([{ ...TEZ, hdfsReadBytes: 6233632, hdfsWrittenBytes: 291, shuffleBytes: 268, localDiskBytes: 332, tasks: 3, source: 'hive-summary' }]) });
+    expect(conHive[0]).toContain('y Hive 268 bytes, PySpark 3,0 KB');
+    expect(conHive[0]).toContain('Hive y PySpark suman por producto');
     expect(o[1]).toContain('3,0 veces la entrada');
     expect(o[2]).toContain('7,2 MB en el disco local');
     expect(observaciones({ hive: sumar([TEZ]) })).toEqual([]);

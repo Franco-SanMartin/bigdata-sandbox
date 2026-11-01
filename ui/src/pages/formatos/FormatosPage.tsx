@@ -10,13 +10,14 @@ import { EmptyState, GatedButton, PageHeader } from '../../components/base';
 import { Dot } from '../../components/ui';
 import { COLUMNAS_USADAS, FORMATOS, MUESTRA, consulta, crearCopia, existentes, medir, type FormatoId, type Medida } from '../../lib/formatos';
 import { duration, nf, sizeLabel } from '../../lib/format';
+import { bytesLabel } from '../../lib/comparar';
 import { runFix, useCapabilities } from '../../state/capabilities';
 import { useStatus } from '../../state/store';
 import { navigate, toast } from '../../state/ui';
 import { useApi } from '../../state/useApi';
 import './formatos.css';
 
-interface Corrida { ms: number; appId?: string; scanned?: number; error?: string }
+interface Corrida { ms: number; appId?: string; scanned?: number; bytesRead?: number; error?: string }
 /* Lo último que se corrió queda mientras la interfaz esté abierta, aunque se cambie de pantalla */
 let guardadas: Partial<Record<FormatoId, Corrida>> = {};
 
@@ -130,7 +131,7 @@ export function FormatosPage() {
       let c: Corrida;
       try {
         const r = await api().query('hive', consulta(f.tabla));
-        c = { ms: r.ms, appId: r.appId, scanned: r.scanned };
+        c = { ms: r.ms, appId: r.appId, scanned: r.scanned, bytesRead: r.bytesRead };
       } catch (e) {
         c = { ms: 0, error: e instanceof Error ? e.message : String(e) };
       }
@@ -142,11 +143,13 @@ export function FormatosPage() {
 
   const n = Object.keys(hay).length;
   const maxMs = Math.max(0, ...Object.values(corridas).map(c => c!.ms));
+  const maxLeido = Math.max(0, ...Object.values(corridas).map(c => c!.bytesRead ?? 0));
   const csv = medidas.csv, pq = medidas.parquet, orc = medidas.orc;
   const cuentas: string[] = [];
   if (csv && pq && pq.mb > 0) cuentas.push(`Parquet ocupa ${nf(csv.mb / pq.mb, 1)} veces menos que el CSV (${sizeLabel(pq.mb)} contra ${sizeLabel(csv.mb)}) y queda en ${pq.bloques} ${pq.bloques === 1 ? 'bloque' : 'bloques'} en vez de ${csv.bloques}: menos bloques son menos tareas de map.`);
   if (csv && orc && orc.mb > 0) cuentas.push(`ORC, ${nf(csv.mb / orc.mb, 1)} veces menos (${sizeLabel(orc.mb)}).`);
   const tc = corridas.csv, tp = corridas.parquet;
+  if (tc?.bytesRead && tp?.bytesRead) cuentas.push(`Para la misma consulta, Parquet leyó ${bytesLabel(tp.bytesRead)} de HDFS y el CSV ${bytesLabel(tc.bytesRead)}: ${nf(tc.bytesRead / tp.bytesRead, 1)} veces menos, porque lee solo las 3 columnas que usa, y comprimidas.`);
   if (tc && tp && !tc.error && !tp.error) cuentas.push(`La misma consulta tardó ${duration(tc.ms / 1000)} sobre el CSV y ${duration(tp.ms / 1000)} sobre Parquet. Con 6 MB casi todo el tiempo es arrancar el trabajo en YARN; con cientos de GB, la diferencia sale de leer menos.`);
 
   return (
@@ -223,6 +226,9 @@ export function FormatosPage() {
                           <span className="fm-r-v">
                             <span className="fm-bar" aria-hidden="true"><i style={{ width: `${maxMs ? Math.max(3, (c.ms / maxMs) * 100) : 0}%` }} /></span>
                             <span><b className="num">{duration(c.ms / 1000)}</b>{c.scanned ? ` · ${nf(c.scanned)} filas` : ''}</span>
+                            {c.bytesRead != null && (
+                              <span className="fm-leido"><span className="fm-bar" aria-hidden="true"><i style={{ width: `${maxLeido ? Math.max(3, (c.bytesRead / maxLeido) * 100) : 0}%` }} /></span><span>leyó <b className="num">{bytesLabel(c.bytesRead)}</b> de HDFS</span></span>
+                            )}
                             {c.appId && <button type="button" className="btn btn-sm btn-ghost" onClick={() => navigate('yarn', c.appId)}>Ver el trabajo<ArrowRight size={13} /></button>}
                           </span>
                         )}
@@ -237,7 +243,7 @@ export function FormatosPage() {
         <h2>Qué muestra esto</h2>
         {cuentas.length ? <ul>{cuentas.map(x => <li key={x}>{x}</li>)}</ul>
           : <p>Con las copias creadas, acá aparecen las cuentas: cuánto menos ocupa cada formato y cuánto tardó la consulta en cada uno.</p>}
-        <p>Lo que leyó cada consulta no se ve: Tez no guarda contadores sin el Timeline Server. En la terminal, lo mismo que mide esta pantalla:</p>
+        <p>Lo leído sale de los contadores del DAG de Tez, que beeline imprime al final de cada consulta (<code>--hiveconf hive.tez.exec.print.summary=true</code>). En la terminal, lo mismo que mide esta pantalla:</p>
         <Codigo cmd={'hdfs dfs -du -s -h /user/root/ventas /user/root/formatos/parquet /user/root/formatos/orc\nhdfs dfs -count /user/root/ventas /user/root/formatos/parquet /user/root/formatos/orc'} bash donde="en la terminal del contenedor" />
       </section>
     </div>

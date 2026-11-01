@@ -73,7 +73,25 @@ jobs:
     timeout-minutes: 5
     outputs:
       run: ${{ steps.buscar.outputs.run }}
+      solo_full: ${{ steps.full.outputs.solo_full }}
     steps:
+      # Un push que solo cambia lo de full (la interfaz, su servidor, la documentacion y
+      # las etapas interfaz/full del Dockerfile) no toca base ni ml: no se rearman ni se
+      # publican, asi latest (la imagen de la clase) queda como estaba. :full lo publica full.yml
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+      - name: Solo cambio lo de full?
+        id: full
+        if: github.event_name == 'push'
+        run: |
+          r=$(bash pruebas/solo_full.sh "${{ github.event.before }}" "$GITHUB_SHA")
+          echo "solo_full=$r" >> "$GITHUB_OUTPUT"
+          if [ "$r" = si ]; then
+            echo "Este push solo cambia lo de full: base, latest y ml no se rearman ni se publican (:full lo publica full.yml)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Run verde de este mismo commit en otra rama
         id: buscar
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -100,7 +118,7 @@ jobs:
   # -------------------------------------------------------------------------
   armar:
     needs: previo
-    if: needs.previo.outputs.run == ''
+    if: needs.previo.outputs.run == '' && needs.previo.outputs.solo_full != 'si'
     runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 120
     strategy:
@@ -356,6 +374,7 @@ jobs:
     # Lo armado y probado en este run, o lo de un run verde del mismo commit
     if: >-
       !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.previo.outputs.solo_full != 'si' &&
       (needs.previo.outputs.run != '' ||
        (needs.armar.result == 'success' && needs.escenarios.result == 'success'))
     runs-on: ubuntu-latest

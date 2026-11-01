@@ -778,3 +778,31 @@ def test_ruta_plantillas(settings, tmp_path, fake_hadoop):
         assert r.status_code == 202 and r.json() == {"id": NUEVA}
         r = c.post("/api/yarn/apps", json={"template": "mr-pi", "params": {"maps": 200}})
         assert r.status_code == 400 and r.json()["code"] == "invalid"
+
+
+def test_resumen_de_tez_de_beeline():
+    """Con hive.tez.exec.print.summary=true, beeline imprime los contadores del DAG (salida real)"""
+    lines = fixture_text("beeline_tez_summary.txt").splitlines()
+    c = Y.parse_tez_summary(lines)
+    assert c["HDFS_BYTES_READ"] == 6233632 and c["SHUFFLE_BYTES"] == 268
+    assert c["INPUT_RECORDS_PROCESSED"] == 200000 and c["TOTAL_LAUNCHED_TASKS"] == 3 and c["DATA_LOCAL_TASKS"] == 1
+    assert c["FILE_BYTES_WRITTEN"] == 332 and c["HDFS_BYTES_WRITTEN"] == 291
+    # Dos consultas en el mismo script (dos DAG de la misma sesión): se suman
+    assert Y.parse_tez_summary(lines + lines)["HDFS_BYTES_READ"] == 2 * 6233632
+    # Lo de antes y después del bloque no cuenta, y sin el bloque no queda nada de él
+    assert Y.parse_tez_summary(["INFO  :    HDFS_BYTES_READ: 5"]) == {}
+    limpias = Y.sin_resumen_tez(["antes"] + lines + ["8 rows selected (9.4 seconds)"])
+    assert limpias[0] == "antes" and limpias[-1] == "8 rows selected (9.4 seconds)"
+    assert not any("HDFS_BYTES_READ" in l for l in limpias)
+
+
+def test_metricas_de_tez_desde_beeline(settings, tmp_path):
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        lines = [{"t": 0, "stream": "stderr", "text": l} for l in fixture_text("beeline_tez_summary.txt").splitlines()]
+        y.submitted[TEZ] = {"example": "hive-ventas", "run": type("R", (), {"lines": lines})()}
+        m = await y.metrics(TEZ)
+        assert m["source"] == "hive-summary" and m["hdfsReadBytes"] == 6233632 and m["shuffleBytes"] == 268
+        assert m["localDiskBytes"] == 332 and m["tasks"] == 3 and m["elapsedMs"] == 17685
+        assert "--hiveconf hive.tez.exec.print.summary=true" in Y.JOBS["hive-ventas"]["run"]
+    asyncio.run(main())

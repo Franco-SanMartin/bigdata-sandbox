@@ -12,6 +12,8 @@ la misma consulta. Las palabras están en el glosario:
 La pantalla es **Formatos** (`G F`), en el grupo *Almacenamiento*. Los
 comandos van **adentro** del contenedor, parado en `/datos`.
 
+![Formatos: las tres copias con lo que ocupa cada una y sus bloques, y la misma consulta con lo que tardó y lo que leyó de HDFS](../../docs/capturas/formatos.png)
+
 ## Paso 1. Fila contra columna
 
 **Qué se ve.** Un dibujo con las mismas cuatro ventas de dos maneras. En texto
@@ -82,9 +84,12 @@ trabajo**.
 YARN, así que la diferencia es chica. Con cientos de GB, lo que se ahorra al
 leer solo tres columnas comprimidas es la mayor parte del tiempo.
 
-**Qué no se ve.** Cuántos bytes leyó cada consulta: Hive corre en Tez, y Tez
-no guarda contadores sin el Timeline Server. En Comparar sí se ven, para
-MapReduce y Spark ([guía 11](11-comparar.md)).
+**Cuánto leyó.** Cada fila también dice cuántos bytes leyó de HDFS, con una
+barra en la misma escala para las tres. Tez no guarda contadores sin el
+Timeline Server: salen del resumen que imprime beeline al final de cada
+consulta (`--hiveconf hive.tez.exec.print.summary=true`). Parquet y ORC
+pueden leer todavía menos de lo que ocupan: solo las columnas que usa la
+consulta.
 
 ## Dónde se usa esto en la industria
 

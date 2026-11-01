@@ -41,3 +41,35 @@ describe('franja de camino de datos', () => {
     glosarioExiste(maria);
   });
 });
+
+describe('franja en el pipeline y en ML', () => {
+  it('un paso: de HDFS a HDFS con Spark, y de MariaDB a HDFS con Sqoop', async () => {
+    const { caminoDePaso, caminoDeModelo } = await import('./camino');
+    const etl = caminoDePaso({ tool: 'spark', engine: 'spark', appIds: ['application_1_0004'], output: { path: '/user/root/ml/ventas_limpias' },
+      trace: { command: '', input: '/user/root/ml/ventas_sucias.csv · 103.000 filas', action: '', output: '' } }, 'Spark (PySpark)');
+    expect(etl.de).toMatchObject({ v: '/user/root/ml/ventas_sucias.csv', sub: '103.000 filas', ir: { page: 'hdfs' } });
+    expect(etl.proc).toMatchObject({ v: 'Spark (PySpark)', ir: { page: 'yarn', arg: 'application_1_0004' }, glosario: 'spark' });
+    expect(etl.queda).toMatchObject({ v: '/user/root/ml/ventas_limpias', ir: { page: 'hdfs', arg: 'user/root/ml/ventas_limpias' } });
+    const sqoop = caminoDePaso({ tool: 'sqoop', engine: 'mr', appIds: [], output: { path: '/user/root/tienda/ventas' },
+      trace: { command: '', input: 'MariaDB tienda.ventas', action: '', output: '' } }, 'Sqoop');
+    expect(sqoop.de).toMatchObject({ v: 'MariaDB tienda.ventas' });
+    expect(sqoop.de.ir).toBeUndefined();
+    glosarioExiste(etl); glosarioExiste(sqoop);
+    // El archivo de la compu (montado en /datos) todavía no está en HDFS
+    const put = caminoDePaso({ tool: 'put', engine: 'hdfs', appIds: [], output: { path: '/user/root/ml/ventas_sucias.csv' },
+      trace: { command: '', input: '/datos/ventas_sucias.csv · 103.000 filas', action: '', output: '' } }, 'hdfs dfs -put');
+    expect(put.de).toMatchObject({ v: '/datos/ventas_sucias.csv', capa: 'maquina' });
+    expect(put.de.ir).toBeUndefined();
+    expect(put.queda.ir).toMatchObject({ page: 'hdfs' });
+    glosarioExiste(put);
+    const sk = caminoDeModelo({ engine: 'sklearn', model: 'arbol', dataset: 'senal' });
+    expect(sk.de).toMatchObject({ v: 'senal' });
+    expect(sk.de.ir).toBeUndefined();
+    expect(sk.proc).toMatchObject({ v: 'scikit-learn', capa: 'maquina' });
+    expect(sk.queda.v).toBe('arbol');
+    expect(caminoDeModelo({ engine: 'sklearn', model: 'arbol', dataset: 'senal' }, 'Árbol de decisión').queda.v).toBe('Árbol de decisión');
+    const ml = caminoDeModelo({ engine: 'mllib', model: 'regresion', appId: 'application_1_0009', dataset: 'senal' });
+    expect(ml.proc).toMatchObject({ ir: { page: 'yarn', arg: 'application_1_0009' }, glosario: 'mllib' });
+    glosarioExiste(sk); glosarioExiste(ml);
+  });
+});

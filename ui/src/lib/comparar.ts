@@ -26,7 +26,7 @@ export const lineasDeCodigo = (texto: string, comentario: string) =>
   texto.split('\n').filter(l => l.trim() && !l.trim().startsWith(comentario)).length;
 
 export interface Archivo { nombre: string; texto: string; nucleo: string; lineas: number }
-const archivo = (nombre: string, texto: string, comentario: string, desde: RegExp, hasta?: RegExp): Archivo => {
+export const archivo = (nombre: string, texto: string, comentario: string, desde: RegExp, hasta?: RegExp): Archivo => {
   const n = nucleo(texto, desde, hasta);
   return { nombre, texto: texto.replace(/\r\n/g, '\n').trim(), nucleo: n, lineas: lineasDeCodigo(n, comentario) };
 };
@@ -79,7 +79,7 @@ export const VARIANTES: Variante[] = [
   {
     id: 'hive', nombre: 'HiveQL', estilo: 'SQL: decís qué querés y Hive arma el plan', motor: 'TEZ',
     archivos: [archivo('ventas.hql', hql, '--', /^CREATE EXTERNAL TABLE/, /^ORDER BY facturado DESC;/)],
-    cmd: 'beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql',
+    cmd: 'beeline -u jdbc:hive2://localhost:10000 --hiveconf hive.tez.exec.print.summary=true \\\n  -f ejemplos/ventas.hql',
     plantilla: 'hive-ventas', salida: `${RESULTADOS}/hive_por_producto`,
     fases: [{ t: 'Map 1' }, { t: 'Reducer 2' }, { t: 'Reducer 3' }],
     faseNota: 'Un solo DAG de Tez: agrupa y ordena sin escribir en HDFS en el medio.',
@@ -166,9 +166,12 @@ export const bytesLabel = (b: number) => (b < 1024 ? `${nf(b)} bytes` : mb(b));
 /** Lo que dicen los números, en palabras: solo lo que se puede afirmar con lo que hay */
 export function observaciones(m: Partial<Record<ToolId, Movido>>): string[] {
   const out: string[] = [];
-  const s = m.streaming, sp = m.pyspark, pg = m.pig;
-  if (s?.shuffle != null && sp?.shuffle != null && s.shuffle > sp.shuffle * 10) {
-    out.push(`MapReduce a mano mandó ${bytesLabel(s.shuffle)} por el shuffle y PySpark ${bytesLabel(sp.shuffle)}: mapper.py emite una línea por venta, y Spark suma por producto en cada partición antes de mandar.`);
+  const s = m.streaming, sp = m.pyspark, pg = m.pig, h = m.hive;
+  // Hive y Spark suman por producto en cada map antes de mandar; mapper.py manda una línea por venta
+  const otros = [h?.shuffle != null && ['Hive', h.shuffle], sp?.shuffle != null && ['PySpark', sp.shuffle]].filter(Boolean) as [string, number][];
+  if (s?.shuffle != null && otros.length && otros.every(([, b]) => s.shuffle! > b * 10)) {
+    const quien = otros.map(([n]) => n).join(' y ');
+    out.push(`MapReduce a mano mandó ${bytesLabel(s.shuffle)} por el shuffle y ${otros.map(([n, b]) => `${n} ${bytesLabel(b)}`).join(', ')}: mapper.py emite una línea por venta, y ${quien} ${otros.length > 1 ? 'suman' : 'suma'} por producto en cada partición antes de mandar.`);
   }
   // La entrada es lo que leyó la versión que la recorre una sola vez (MapReduce a mano)
   const entrada = s?.leido;

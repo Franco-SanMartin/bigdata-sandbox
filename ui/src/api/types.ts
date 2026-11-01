@@ -643,7 +643,8 @@ export interface YarnMetrics {
   tasks?: number;
   /** Mappers que leyeron su bloque en la misma máquina (solo MapReduce) */
   dataLocalTasks?: number;
-  source?: 'rm' | 'jobhistory' | 'spark-history';
+  /** De dónde salió: el RM solo, JobHistory, Spark History o el resumen que imprimió beeline (Tez, si lo mandó la interfaz) */
+  source?: 'rm' | 'jobhistory' | 'spark-history' | 'hive-summary';
 }
 
 export interface YarnAppDetail extends YarnApp {
@@ -805,6 +806,9 @@ export interface QueryResult {
   engine?: Engine;
   /** Filas que leyó el motor (no las que devolvió) */
   scanned?: number;
+  /** Hive con un DAG de Tez: lo que leyó de HDFS y lo que pasó por el shuffle (del resumen que imprime beeline) */
+  bytesRead?: number;
+  shuffleBytes?: number;
   trace?: ActionTrace;
   /** La salida del comando como en la terminal (Hive, MySQL y Pig; el demo no la tiene) */
   raw?: { stream: 'out' | 'err'; text: string }[];

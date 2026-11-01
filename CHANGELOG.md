@@ -45,13 +45,35 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
     PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
     Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Comparar con más tareas** (las de la tabla 5 de D-05), cada una con el
+  código real, dónde corre, su comando y "Qué mirar": unir dos tablas (Hive,
+  Pig y PySpark), SQL sobre la misma tabla (Hive y Spark SQL), limpiar los
+  datos (pandas y PySpark), traer una tabla de MariaDB (Sqoop y Spark por
+  JDBC) y entrenar un modelo (scikit-learn y MLlib). CSV contra Parquet lleva
+  a Formatos. Probadas en un `:full`: las tres versiones del join dan lo mismo
+  (Hive hace map join y Spark `BroadcastHashJoin`), y Spark SQL devuelve una
+  fila de más porque no aplica `skip.header.line.count` de la tabla.
+- **Ejemplos nuevos** en `datos/comparar/` (se copian a
+  `/datos/ejemplos/comparar` en `full`): `categoria.pig`, `categoria.py` (el
+  join) y `jdbc.py` (Spark trae la tabla de MariaDB).
+- **Contadores de Tez**: el trabajo de Hive que lanza la interfaz y las
+  consultas de Hive corren con `hive.tez.exec.print.summary=true`, y el
+  servidor lee lo que imprime beeline (lo leído de HDFS, el shuffle, el disco
+  local). Comparar y Motores muestran lo que movió Hive, y Formatos cuánto
+  leyó cada formato. En un `:full` real, el shuffle de Hive fue de 268 bytes
+  contra 3,2 MB de MapReduce a mano.
+- **Publicar `:full` sin tocar `latest`**: `imagen.yml` saltea `base`,
+  `latest` y `ml` cuando un push a `main` solo cambia lo de `full`
+  (`pruebas/solo_full.sh` decide; en el `Dockerfile` mira las líneas de cada
+  etapa).
 - **Pantalla Motores** (`full`, `G E`, en Procesamiento): una ficha por
   motor (MapReduce, Tez y Spark) con qué hace, una analogía, cómo trabaja,
   cuándo conviene, quién lo usa en el sandbox y sus términos del glosario.
   Al lado, el DAG de su último trabajo en YARN, tarea por tarea, con lo que
   movió. Cada ficha lanza ventas por producto con su motor.
-- **Franja de camino de datos**: en el detalle de un trabajo y en el
-  resultado de una consulta, de dónde → qué lo procesa → dónde queda. Cada
+- **Franja de camino de datos**: en el detalle de un trabajo, en el
+  resultado de una consulta, en cada paso del Pipeline y en cada modelo de ML,
+  de dónde → qué lo procesa → dónde queda. Cada
   caja lleva el color de su capa, lleva a su pantalla (la carpeta en HDFS,
   la tabla, el trabajo o el motor) y su `?` abre el glosario.
 - **Pantalla Formatos** (`full`, `G F`, en Almacenamiento): la misma tabla
@@ -99,6 +121,10 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Cambiado
 
+- **Capturas nuevas** en `docs/capturas`, sacadas de la demo con la barra por
+  capas: Inicio con el mapa del ecosistema, Trabajos, Pipeline y Machine
+  Learning con su franja de camino de datos, y Cluster; más Comparar,
+  Formatos, Tablas y Motores (en el README y en las guías 11 y 12).
 - **Consultas se partió en Lenguajes y Bases** (`full`): Lenguajes (`G L`)
   tiene Hive y Pig, que corren en el cluster; Bases (`G B`) tiene MariaDB y
   MongoDB, de una sola máquina. Es el mismo editor (documentos, ejemplos,

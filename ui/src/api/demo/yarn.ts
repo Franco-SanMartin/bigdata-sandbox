@@ -111,7 +111,7 @@ export class DemoYarn {
         mbSeconds: Math.round(a.am * elapsedMs / 1000 + (a.taskMb || 1024) * taskSecs),
         vcoreSeconds: Math.round(elapsedMs / 1000 + taskSecs),
       };
-      if (a.state !== 'FINISHED' || a.type === 'TEZ') return base;
+      if (a.state !== 'FINISHED') return base;
       const leido = (ts: typeof tasks) => Math.round(ts.reduce((x, t) => x + blockMb(t.blockId), 0) * 1048576);
       // Si se lanzó mientras ventas todavía subía, sus tareas no tienen bloque: vale lo que pesa la carpeta ahora
       const ventas = Math.round(this.e.files.filter(f => f.path.startsWith('/user/root/ventas/')).reduce((x, f) => x + f.sizeMb, 0) * 1048576);
@@ -119,6 +119,11 @@ export class DemoYarn {
         const entrada = leido(a.stages[0]?.tasks ?? []) || ventas;
         return { ...base, source: 'jobhistory', hdfsReadBytes: entrada, hdfsWrittenBytes: 188, shuffleBytes: Math.round(entrada * 0.538),
           localDiskBytes: Math.round(entrada * 1.212), tasks: tasks.length, dataLocalTasks: a.stages[0]?.tasks.length ?? 0 };
+      }
+      // Tez: lo del resumen que imprime beeline (hive.tez.exec.print.summary), con lo que midió un :full real para
+      // ventas por producto: suma parcial en cada map, así que por el shuffle pasan unos pocos cientos de bytes
+      if (a.type === 'TEZ') {
+        return { ...base, source: 'hive-summary', hdfsReadBytes: leido(a.stages[0]?.tasks ?? []) || ventas, hdfsWrittenBytes: 291, shuffleBytes: 268, localDiskBytes: 332, tasks: tasks.length };
       }
       // Spark lee la entrada tres veces (inferSchema, show y write) más el encabezado
       return { ...base, source: 'spark-history', hdfsReadBytes: leido(tasks) || ventas * 3 + 65536, hdfsWrittenBytes: 216, shuffleBytes: 3102, localDiskBytes: 2214, tasks: tasks.length };

@@ -12,7 +12,7 @@ La pantalla es **Pipeline** (`G P`). Casi todas las herramientas necesitan
 aparecen con un candado y el motivo. Los comandos equivalentes van **adentro**
 del contenedor, parado en `/datos`.
 
-![Pipeline: el riel de 6 etapas, la herramienta elegida en cada una y la corrida con lo que entró y lo que salió](../../docs/capturas/pipeline.png)
+![Pipeline: la etapa de ETL hecha con pandas, el riel de 6 etapas y la corrida con lo que entró y lo que salió](../../docs/capturas/pipeline.png)
 
 ## Paso 1. La pantalla
 
