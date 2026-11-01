@@ -12,6 +12,8 @@ corriendo.
 La pantalla es **Comparar** (`G K`), en el grupo *Procesamiento* de la barra.
 Los comandos van **adentro** del contenedor, parado en `/datos`.
 
+![Comparar: el dato una sola vez, las cuatro formas de pedirlo, el motor de cada una y lo que movió MapReduce a mano](../../docs/capturas/comparar.png)
+
 ## Paso 1. El recorrido de los datos
 
 **Qué se ve.** Arriba, un esquema en cuatro columnas: el dato **una sola vez**
@@ -79,8 +81,12 @@ Con las salidas reales del contenedor (ventas de 5,9 MB):
 - Spark tarda más en un archivo tan chico: arrancar el driver y los executors
   lleva más que la cuenta. Con datos que no entran en un nodo, o con pasos que
   se repiten, la diferencia se da vuelta.
-- De Hive solo se ven el tiempo y la memoria: **Tez no guarda contadores sin
-  el Timeline Server**, y la columna lo avisa.
+- Hive también suma antes de mandar: en un `:full` real, su shuffle fueron
+  268 bytes por consulta. Tez no guarda contadores sin el Timeline Server, así
+  que salen del resumen que imprime beeline al final de cada consulta
+  (`--hiveconf hive.tez.exec.print.summary=true`, ya puesto en el trabajo que
+  lanza la pantalla). Un trabajo de Hive mandado desde otro lado solo trae el
+  tiempo y la memoria, y la columna lo avisa.
 
 **De dónde sale.** `GET /api/yarn/metrics?apps=…`: el tiempo y la memoria, del
 ResourceManager; lo leído, el shuffle y el disco local, de JobHistory
@@ -128,6 +134,32 @@ abre el glosario en ella.
 
 **Qué significa.** Es el mismo texto que [`guias/glosario.md`](../glosario.md):
 la interfaz lo lee de ese archivo cuando se arma la imagen.
+
+## Paso 7. Las otras tareas
+
+**Qué se ve.** Arriba de la pantalla, la tarea. Además de ventas por
+producto, cinco más de la tabla del glosario, cada una con el código real del
+repo, cuántas líneas hacen el trabajo, dónde corre, su comando y "Qué mirar":
+
+| Tarea | Con qué | Qué se vio en un `:full` real |
+|---|---|---|
+| Unir dos tablas | Hive (`tienda.hql`), Pig y PySpark (`ejemplos/comparar/`) | Las tres dan las mismas 4 categorías. Hive arma un map join (`BROADCAST_EDGE` en el `EXPLAIN`) y Spark un `BroadcastHashJoin`: la tabla de productos viaja entera y las ventas no se mueven para unirse. Pig une del lado del reduce |
+| SQL sobre la misma tabla | Hive y `spark-sql`, con el mismo SQL | Spark devuelve una fila de más (`sucursal 1 NULL`): no aplica `skip.header.line.count` de la tabla y cuenta el encabezado del CSV |
+| Limpiar los datos | pandas y PySpark (`ejemplos/ml/`) | Los mismos pasos, en una máquina o repartidos |
+| Traer una tabla de MariaDB | Sqoop y Spark por JDBC | Los dos leen la tabla en 4 pedazos por `id`; Spark trae las 200.000 filas |
+| Entrenar un modelo | scikit-learn y MLlib (`ejemplos/ml/`) | Las mismas métricas, en una máquina o en el cluster |
+
+Y **CSV contra Parquet** lleva a la pantalla Formatos ([guía 12](12-formatos.md)).
+
+**Qué hacer.** Cada tarea dice qué tiene que estar antes (por ejemplo, unir
+dos tablas necesita las tablas que trae Sqoop):
+
+<!-- prueba: no (necesita SERVICIOS=todo; tarda unos minutos) -->
+```bash
+bash ejemplos/sqoop.sh
+pig ejemplos/comparar/categoria.pig
+spark-submit ejemplos/comparar/categoria.py
+```
 
 ## Dónde se usa esto en la industria
 

@@ -180,3 +180,19 @@
 .cp-obs h3 { margin: 0 0 8px; font: var(--t-section); }
 .cp-obs ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--text-2); line-height: 1.55; }
 .cp-obs p { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-3); }
+
+/* Qué tarea comparar: ventas por producto (las cuatro) y las otras de la tabla 5 */
+.cp-tareas { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.cp-tareas button { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--n-0); cursor: pointer; }
+.cp-tareas button:hover { border-color: var(--line-strong); background: var(--surface); }
+.cp-tareas button[aria-current] { border-color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+.cp-tareas button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cp-tareas b { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.cp-tareas small { font-size: var(--fs-xs); color: var(--text-3); }
+.cp-tareas .cp-tareas-afuera { border-style: dashed; }
+.cp [data-motor="uno"] { --c: var(--eng-uno); }
+.cp-antes { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--capa-datos); border-radius: 0; background: var(--surface); }
+.cp-antes p { margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.cp-antes .cmdbox { align-self: stretch; }
+.cp-mirar { margin: 0 !important; font-size: var(--fs-md, 14px) !important; color: var(--text-2) !important; line-height: 1.6; }
+@media (min-width: 1400px) { .cp-cols[data-n="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

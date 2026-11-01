@@ -114,10 +114,14 @@ Spanish.
 
 | | |
 |---|---|
-| ![Home: the cluster's state and what you can do now, with what's missing and how to enable it](docs/capturas/inicio.png) | ![Jobs: a finished wordcount and the MapReduce, Tez and Spark templates](docs/capturas/yarn.png) |
-| **Home**: what you can and can't do now, with the reason and the fix | **Jobs**: templates with parameters, progress, containers and logs |
-| ![Pipeline: ingestion done and the ETL stage with its tools](docs/capturas/pipeline.png) | ![Machine Learning: a decision tree trained with scikit-learn and its detail](docs/capturas/ml.png) |
+| ![Home: the map of the ecosystem, each piece in its layer and with its real state](docs/capturas/inicio.png) | ![Jobs: a finished wordcount, with where it read from, what processed it and where it ended up, and its DAG](docs/capturas/yarn.png) |
+| **Home**: the map of the ecosystem by layers, with the state of each piece | **Jobs**: where it read from, what processed it and where it ended up, with the DAG, containers and logs |
+| ![Pipeline: the ETL stage done with pandas, the 6-stage rail and the run](docs/capturas/pipeline.png) | ![Machine Learning: a decision tree trained with scikit-learn and its detail](docs/capturas/ml.png) |
 | **Pipeline**: from a dirty CSV to a summary and a model, choosing the tool for each stage | **Machine Learning**: the same model with scikit-learn or with Spark MLlib, compared |
+| ![Compare: sales by product with MapReduce, Pig, Hive and PySpark, and what each one moved in the cluster](docs/capturas/comparar.png) | ![Formats: the same table in CSV, Parquet and ORC, with how much each takes and what the same query read](docs/capturas/formatos.png) |
+| **Compare**: the same count with four tools, with the real code and what each one moved | **Formats**: CSV, Parquet and ORC, with their size, their blocks and what the same query reads |
+| ![Tables: what the Metastore records for each table and the HDFS folder it points to](docs/capturas/tablas.png) | ![Engines: MapReduce, Tez and Spark, each with the DAG of its last job](docs/capturas/motores.png) |
+| **Tables**: each Metastore table with its HDFS folder and who can read it | **Engines**: how each engine works, with the DAG and the numbers of its last job |
 
 #### Inside each model
 

@@ -101,7 +101,7 @@ En producción nada de esto alcanza: los eventos y las métricas se mandan a
 un sistema aparte que los guarda, los indexa y alerta aunque nadie esté
 mirando.
 
-![La pantalla de Inicio, con el estado y las últimas acciones](../../../docs/capturas/inicio.png)
+![La pantalla de Inicio, con el mapa del ecosistema y el estado de cada pieza](../../../docs/capturas/inicio.png)
 
 ## En la industria
 

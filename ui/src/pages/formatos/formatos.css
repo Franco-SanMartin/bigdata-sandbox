@@ -70,3 +70,6 @@
   .fm-cols { grid-template-columns: repeat(5, minmax(56px, 1fr)); overflow-x: auto; }
   .fm-r { grid-template-columns: minmax(0, 1fr); }
 }
+.fm-leido { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
+.fm-leido .fm-bar { flex: 1 1 120px; }
+.fm-que code { font: 400 12px/1 var(--f-mono); background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }

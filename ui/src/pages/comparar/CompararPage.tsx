@@ -13,6 +13,7 @@ import { EngineTag } from '../../components/Trace';
 import { useSnapshot } from '../../state/store';
 import { navigate, setRouteArg, toast, useRouteArg } from '../../state/ui';
 import { COMPARAR, RECORRIDOS, activa, type ToolId } from '../../lib/ecosistema';
+import { TAREAS, TAREAS_AFUERA, type Tarea, type VarianteTarea } from '../../lib/tareas';
 import { DATOS, MOTOR, VARIANTES, VERIFICAR, bytesLabel, duracionCorrida, observaciones, sumar, ultimaCorrida, type Archivo, type Movido, type Variante } from '../../lib/comparar';
 import { duration, nf } from '../../lib/format';
 import type { CapId } from '../../lib/capabilities';
@@ -25,15 +26,17 @@ const ESTADO: Record<YarnApp['state'], string> = { ACCEPTED: 'en la cola', RUNNI
 /* ---------- Resaltado mínimo: comentarios, palabras clave y textos ---------- */
 
 const palabras = (s: string) => new RegExp(`^(?:${s.trim().split(/\s+/).join('|')})$`);
-const CLAVES: Record<'py' | 'sql' | 'pig', RegExp> = {
+type Lang = 'py' | 'sql' | 'pig' | 'sh';
+const CLAVES: Record<Lang, RegExp> = {
   py: palabras('import from for in if not is None print and or as return def'),
-  sql: palabras('CREATE EXTERNAL TABLE IF NOT EXISTS ROW FORMAT DELIMITED FIELDS TERMINATED BY STORED AS LOCATION TBLPROPERTIES SELECT SUM CAST FROM GROUP ORDER DESC STRING INT BIGINT TEXTFILE'),
-  pig: palabras('LOAD USING AS FILTER BY FOREACH GENERATE GROUP SUM ORDER DESC STORE INTO fs'),
+  sql: palabras('CREATE EXTERNAL TABLE IF NOT EXISTS ROW FORMAT DELIMITED FIELDS TERMINATED BY STORED AS LOCATION TBLPROPERTIES SELECT SUM CAST FROM GROUP ORDER DESC STRING INT BIGINT TEXTFILE JOIN ON COUNT'),
+  pig: palabras('LOAD USING AS FILTER BY FOREACH GENERATE GROUP SUM ORDER DESC STORE INTO fs JOIN'),
+  sh: palabras('sqoop import export hdfs dfs bash'),
 };
-const lenguaje = (nombre: string) => (nombre.endsWith('.py') ? 'py' : nombre.endsWith('.pig') ? 'pig' : 'sql');
+const lenguaje = (nombre: string): Lang => (nombre.endsWith('.py') ? 'py' : nombre.endsWith('.pig') ? 'pig' : nombre.endsWith('.sh') ? 'sh' : 'sql');
 
-function Linea({ l, lang }: { l: string; lang: 'py' | 'sql' | 'pig' }) {
-  const com = lang === 'py' ? '#' : '--';
+function Linea({ l, lang }: { l: string; lang: Lang }) {
+  const com = lang === 'py' || lang === 'sh' ? '#' : '--';
   const i = l.indexOf(com);
   const codigo = i < 0 ? l : l.slice(0, i), resto = i < 0 ? '' : l.slice(i);
   // Palabra por palabra: las claves en negrita, los textos entre comillas aparte
@@ -153,7 +156,7 @@ function Movimiento({ v, mov, max }: { v: Variante; mov: Movido; max: Maximos })
       </Barra>
       {mov.leido == null && (
         <p className="cp-mov-no">{v.motor === 'TEZ'
-          ? 'Tez no guarda contadores sin Timeline Server: de esta corrida YARN solo sabe cuánto tardó y cuánta memoria usó.'
+          ? 'Tez no guarda contadores sin Timeline Server. Los de las corridas que lanza esta interfaz salen de lo que imprime beeline; de esta, YARN solo sabe cuánto tardó y cuánta memoria usó.'
           : 'Los contadores todavía no llegaron al historial.'}</p>
       )}
     </div>
@@ -208,6 +211,76 @@ function Columna({ v, run, mov, maxMov, now, maxLineas, maxT }: { v: Variante; r
       </div>
       <Codigo cmd={v.cmd} bash donde="o en la terminal, parado en /datos" />
     </article>
+  );
+}
+
+/* ---------- Las otras tareas de la tabla 5 ---------- */
+
+function Selector({ tarea }: { tarea: string }) {
+  return (
+    <nav className="cp-tareas" aria-label="Qué tarea comparar">
+      <button type="button" aria-current={tarea === 'ventas' || undefined} onClick={() => setRouteArg('')}>
+        <b>Ventas por producto</b><small>Contar y agrupar, en las cuatro</small>
+      </button>
+      {TAREAS.map(t => (
+        <button key={t.id} type="button" aria-current={tarea === t.id || undefined} onClick={() => setRouteArg(`tarea/${t.id}`)}>
+          <b>{t.titulo}</b><small>{t.variantes.map(v => v.nombre).join(', ')}</small>
+        </button>
+      ))}
+      {TAREAS_AFUERA.map(t => (
+        <button key={t.id} type="button" className="cp-tareas-afuera" onClick={() => navigate(t.ir.page, t.ir.arg)}>
+          <b>{t.titulo}<ArrowRight size={12} aria-hidden="true" /></b><small>{t.ir.label}</small>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function TareaVista({ t }: { t: Tarea }) {
+  const lineas = (v: VarianteTarea) => v.archivos.reduce((n, a) => n + a.lineas, 0);
+  const max = Math.max(...t.variantes.map(lineas));
+  const ir = t.ir;
+  return (
+    <>
+      <div className="cp-intro">
+        <div>
+          <h2>{t.titulo}</h2>
+          <p>{t.corto}, con {t.variantes.length === 2 ? 'dos herramientas' : `${t.variantes.length} herramientas`}: el código real del repo y cómo correr cada una.</p>
+        </div>
+        {ir && <div className="cp-intro-a"><button type="button" className="btn btn-sm" onClick={() => navigate(ir.page, ir.arg)}>{ir.label}<ArrowRight size={13} /></button></div>}
+      </div>
+
+      {t.antes && (
+        <div className="cp-antes">
+          <p><b>Antes:</b> {t.antes.texto}</p>
+          {t.antes.cmd && <Codigo cmd={t.antes.cmd} bash donde="en la terminal, parado en /datos" />}
+          {t.antes.ir && <button type="button" className="btn btn-sm" onClick={() => navigate(t.antes!.ir!.page, t.antes!.ir!.arg)}>{t.antes.ir.label}<ArrowRight size={13} /></button>}
+        </div>
+      )}
+
+      <div className="cp-cols" data-n={t.variantes.length}>
+        {t.variantes.map(v => (
+          <article key={v.nombre} className="cp-col" data-motor={v.motor} aria-label={v.nombre}>
+            <header className="cp-col-h" data-capa="lenguajes">
+              <h3>{v.nombre}</h3>
+              <EngineTag engine={v.motor} />
+              <p>Corre {v.donde}</p>
+            </header>
+            <div className="cp-med">
+              <Barra valor={lineas(v)} max={max}><b className="num">{nf(lineas(v))}</b> líneas hacen el trabajo</Barra>
+            </div>
+            <Fuente archivos={v.archivos} />
+            <p className="cp-nota">{v.nota}</p>
+            <Codigo cmd={v.cmd} bash donde="en la terminal, parado en /datos" />
+          </article>
+        ))}
+      </div>
+
+      <section className="cp-obs" aria-label="Qué mirar">
+        <h3>Qué mirar</h3>
+        <p className="cp-mirar">{t.mirar}</p>
+      </section>
+    </>
   );
 }
 
@@ -290,10 +363,15 @@ export function CompararPage() {
   };
   const obs = observaciones(mov);
   const cierre = RECORRIDOS.tres.steps[RECORRIDOS.tres.steps.length - 1];
+  // #comparar/tarea/<id>: otra tarea de la tabla 5 (sin la ruta, ventas por producto con las cuatro)
+  const tarea = /^tarea\/([\w-]+)$/.exec(arg) ? TAREAS.find(t => t.id === arg.slice(6)) : undefined;
   return (
     <div className="page-in cp">
       <PageHeader title="Comparar" sub="La misma tarea hecha con cada herramienta: el código real, el motor que la ejecuta y en qué se diferencian." />
 
+      <Selector tarea={tarea?.id ?? 'ventas'} />
+
+      {tarea ? <TareaVista t={tarea} /> : <>
       <div className="cp-intro">
         <div>
           <h2>Ventas por producto, cuatro veces</h2>
@@ -330,6 +408,7 @@ export function CompararPage() {
           <Codigo cmd={VERIFICAR} bash donde="en la terminal del contenedor" />
         </div>
       </section>
+      </>}
 
       <div className="section-h cp-sec">
         <h2>¿Cuál uso?</h2>

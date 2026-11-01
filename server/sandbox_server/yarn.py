@@ -73,8 +73,10 @@ JOBS: dict[str, dict] = {
     },
     "hive-ventas": {
         "type": "TEZ", "proc": ("hiveserver2", "HiveServer2"),
-        "run": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql",
-        "shown": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql",
+        # print.summary: al final de cada consulta beeline imprime los contadores del DAG (lo leído,
+        # el shuffle…), que Tez no guarda sin Timeline Server; /api/yarn/metrics los lee de ahí
+        "run": "beeline -u jdbc:hive2://localhost:10000 --hiveconf hive.tez.exec.print.summary=true -f ejemplos/ventas.hql",
+        "shown": "beeline -u jdbc:hive2://localhost:10000 --hiveconf hive.tez.exec.print.summary=true -f ejemplos/ventas.hql",
         "out": "/user/root/resultados/hive_por_producto",
         "action": "HiveServer2 compila el SQL a un DAG de Tez; YARN arranca el ApplicationMaster de Tez "
                   "(1024 MB) y cada vértice corre en contenedores",
@@ -305,6 +307,43 @@ def level_of(text: str) -> str:
     if re.search(r"\b(ERROR|FATAL|EXCEPTION)\b", t) or "FAILED" in t and "0 FAILED" not in t:
         return "ERROR"
     return "WARN" if re.search(r"\bWARN(ING)?\b", t) else "INFO"
+
+
+_TEZ_CONTADOR = re.compile(r"^(?:INFO\s*:)?\s+([A-Z][A-Z0-9_]*):\s*([\d,]+)\s*$")
+
+
+def parse_tez_summary(lines: list[str]) -> dict[str, int]:
+    """Los contadores que imprime beeline al final de cada consulta con
+    hive.tez.exec.print.summary=true (HDFS_BYTES_READ, SHUFFLE_BYTES…): Tez no los
+    guarda en ningún historial sin el Timeline Server. Si el script corrió varias
+    consultas (cada una es un DAG de la misma sesión de Tez), se suman."""
+    out: dict[str, int] = {}
+    adentro = False
+    for line in lines:
+        line = _ANSI.sub("", line).rstrip()
+        if "Task Execution Summary" in line:
+            adentro = True
+        elif "Completed executing command" in line or "Query Execution Summary" in line:
+            adentro = False
+        elif adentro:
+            m = _TEZ_CONTADOR.match(line)
+            if m:
+                out[m.group(1)] = out.get(m.group(1), 0) + int(m.group(2).replace(",", ""))
+    return out
+
+
+def sin_resumen_tez(lines: list[str]) -> list[str]:
+    """Las líneas sin el bloque del resumen de Tez (para mostrar la salida como en la terminal sin ese ruido)."""
+    out, adentro = [], False
+    for line in lines:
+        limpia = _ANSI.sub("", line)
+        if "Query Execution Summary" in limpia:
+            adentro = True
+        elif "Completed executing command" in limpia:
+            adentro = False
+        if not adentro:
+            out.append(line)
+    return out
 
 
 def parse_tez_progress(lines: list[str]) -> list[dict]:
@@ -780,7 +819,8 @@ class Yarn:
     async def metrics(self, app_id: str) -> dict:
         """Lo que costó un trabajo, igual para los tres motores (la pantalla Comparar): tiempo y
         memoria × segundos del RM; leído y escrito en HDFS, shuffle y disco local de JobHistory
-        o de Spark History cuando terminó. Tez no deja contadores sin Timeline Server: solo lo del RM."""
+        o de Spark History cuando terminó. Tez no deja contadores sin Timeline Server: salen del resumen
+        que imprimió beeline, si lo mandó esta interfaz; si no, solo lo del RM."""
         a = await self.rm_app(app_id)
         typ = a.get("applicationType", "").upper()
         state = app_state(a)
@@ -798,6 +838,15 @@ class Yarn:
                            shuffleBytes=c.get("REDUCE_SHUFFLE_BYTES", 0), localDiskBytes=c.get("FILE_BYTES_WRITTEN", 0),
                            tasks=c.get("TOTAL_LAUNCHED_MAPS", 0) + c.get("TOTAL_LAUNCHED_REDUCES", 0),
                            dataLocalTasks=c.get("DATA_LOCAL_MAPS", 0), source="jobhistory")
+        elif typ == "TEZ":
+            # Sin Timeline Server, los contadores están en lo que imprimió beeline (si la mandó esta interfaz)
+            run = (self.submitted.get(app_id) or {}).get("run")
+            c = parse_tez_summary([l["text"] for l in run.lines]) if run else {}
+            if "HDFS_BYTES_READ" in c:
+                out.update(hdfsReadBytes=c["HDFS_BYTES_READ"], hdfsWrittenBytes=c.get("HDFS_BYTES_WRITTEN", 0),
+                           shuffleBytes=c.get("SHUFFLE_BYTES", 0), localDiskBytes=c.get("FILE_BYTES_WRITTEN", 0),
+                           tasks=c.get("TOTAL_LAUNCHED_TASKS", 0), dataLocalTasks=c.get("DATA_LOCAL_TASKS", 0),
+                           source="hive-summary")
         elif typ == "SPARK":
             doc = await self.get(f"{SHS}/api/v1/applications/{app_id}/stages")
             raw = sorted((s for s in (doc or []) if isinstance(s, dict)),

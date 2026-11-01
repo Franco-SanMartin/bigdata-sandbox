@@ -184,7 +184,8 @@ memoria puede costar más que uno lento y chico. Lo informa el ResourceManager.
 Los historiales de los trabajos que ya terminaron, con sus contadores: lo
 leído de HDFS, el shuffle, las tareas. JobHistory es el de MapReduce
 (`localhost:19888`) y Spark History el de Spark (`localhost:18080`). Tez no
-tiene uno propio sin el Timeline Server.
+tiene uno propio sin el Timeline Server, pero beeline imprime sus contadores al
+final de cada consulta con `--hiveconf hive.tez.exec.print.summary=true`.
 
 ## Procesamiento: los motores
 

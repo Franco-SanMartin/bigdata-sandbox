@@ -1,7 +1,7 @@
 /* La franja de camino de datos (REDISENO-FULL.md §4): de dónde vienen los datos, qué los procesa y con
    qué motor, y dónde quedan. Cada tramo dice su capa (el color del mapa), adónde lleva y qué término del
    glosario lo explica. Funciones puras: las usan el detalle de un trabajo y el resultado de una consulta. */
-import type { DataSource, QueryResult, YarnAppDetail } from '../api/types';
+import type { DataSource, ModelRun, QueryResult, StepRun, YarnAppDetail } from '../api/types';
 import type { CapaId } from './ecosistema';
 import type { PageId } from './route';
 import { nf } from './format';
@@ -63,4 +63,43 @@ export function caminoDeConsulta(source: DataSource, texto: string, res: Pick<Qu
         ? { k: 'Dónde queda', v: destino, sub: 'en la base', capa: 'datos' }
         : { k: 'Dónde queda', v: 'En pantalla', sub: `${nf(res.rows.length)} ${res.rows.length === 1 ? 'fila' : 'filas'} · no se guarda`, capa: 'puertas' };
   return { de, proc, queda };
+}
+
+/** Lo que entra o sale, dicho como un tramo: una ruta de HDFS lleva al explorador; lo demás (una tabla de MariaDB,
+    un archivo local) queda como texto */
+function lugar(k: string, texto: string | undefined, vacio: string): Tramo {
+  const ruta = texto ? /^(\/[^\s·,]+)/.exec(texto)?.[1] : undefined;
+  const resto = ruta ? texto!.slice(ruta.length).replace(/^\s*[·,]\s*/, '') : '';
+  // /datos es la carpeta de la compu montada en el contenedor: un archivo local, todavía fuera de HDFS
+  if (ruta?.startsWith('/datos/')) return { k, v: ruta, sub: resto || 'en el disco, fuera de HDFS', capa: 'maquina', glosario: 'subir-archivos-put' };
+  if (ruta) return { k, v: ruta, sub: resto || 'en HDFS', capa: 'datos', ir: { page: 'hdfs', arg: sinBarra(ruta) }, glosario: 'hdfs' };
+  return { k, v: texto || vacio, capa: 'datos' };
+}
+
+const GLO_MOTOR: Partial<Record<string, string>> = { mr: 'mapreduce', tez: 'tez', spark: 'spark', hdfs: 'hdfs' };
+const NOMBRE_MOTOR: Record<string, string> = { mr: 'MapReduce en YARN', tez: 'Tez en YARN', spark: 'Spark en YARN', uno: 'una sola máquina, sin YARN', hdfs: 'el cliente de HDFS' };
+
+/** Un paso del pipeline: lo que leyó, la herramienta y su motor, y lo que dejó */
+export function caminoDePaso(run: Pick<StepRun, 'tool' | 'engine' | 'appIds' | 'output' | 'trace'>, herramienta: string): Camino {
+  const app = run.appIds[0];
+  return {
+    de: lugar('De dónde', run.trace?.input, 'la etapa anterior'),
+    proc: { k: 'Qué lo procesa', v: herramienta, sub: `${NOMBRE_MOTOR[run.engine] ?? run.engine}${app ? ` · ${app}` : ''}`,
+      capa: run.engine === 'uno' ? 'maquina' : 'motores', ir: app ? { page: 'yarn', arg: app } : run.engine === 'uno' ? undefined : { page: 'motores' },
+      glosario: GLO_MOTOR[run.engine] ?? (/sqoop/i.test(run.tool) ? 'sqoop' : undefined) },
+    queda: lugar('Dónde queda', run.output?.path ?? run.trace?.output, 'todavía no dejó nada'),
+  };
+}
+
+/** Un entrenamiento de ML: los datos, la librería y dónde corre, y el modelo que queda (nombre: el que ve la pantalla) */
+export function caminoDeModelo(run: Pick<ModelRun, 'engine' | 'appId' | 'dataset' | 'model' | 'trace'>, nombre?: string): Camino {
+  const mllib = run.engine === 'mllib';
+  return {
+    // dataset es el nombre del conjunto (senal, ventas…), no una ruta
+    de: { k: 'De dónde', v: run.dataset ?? 'los datos elegidos', sub: 'el conjunto de entrenamiento', capa: 'datos' },
+    proc: mllib
+      ? { k: 'Qué lo entrena', v: 'Spark MLlib en YARN', sub: run.appId ?? 'repartido entre executors', capa: 'motores', ir: run.appId ? { page: 'yarn', arg: run.appId } : { page: 'motores' }, glosario: 'mllib' }
+      : { k: 'Qué lo entrena', v: 'scikit-learn', sub: 'una sola máquina, sin YARN', capa: 'maquina', glosario: 'scikit-learn' },
+    queda: { k: 'Dónde queda', v: nombre ?? run.model, sub: 'el modelo, con sus métricas, en esta pantalla', capa: 'puertas' },
+  };
 }

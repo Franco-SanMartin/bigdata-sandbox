@@ -194,7 +194,7 @@ function Detalle({ t }: { t: CatalogEntry }) {
             <button type="button" className="btn btn-sm btn-primary" onClick={() => abrir('hive', starter('hive', t.name))}><Braces size={13} />Consultarla en Hive</button>
           </div>
           <div className="tb-q">
-            <div className="tb-q-h"><span className="tb-eng" data-e="spark">Spark</span><b>Por el nombre, con el mismo Metastore.</b> En memoria, sin escribir a disco entre pasos.</div>
+            <div className="tb-q-h"><span className="tb-eng" data-e="spark">Spark</span><b>Por el nombre, con el mismo Metastore.</b> En memoria, sin escribir a disco entre pasos. Ojo: no aplica <span className="mono">skip.header.line.count</span>, así que el encabezado del CSV le aparece como una fila más.</div>
             <Codigo cmd={`spark.table("${t.name}").show(10)`} bash={false} donde="en pyspark o un notebook" />
           </div>
           <div className="tb-q">

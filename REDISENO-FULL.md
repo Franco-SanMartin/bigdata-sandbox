@@ -23,23 +23,30 @@ Los 13 pasos del [orden de trabajo](#10-orden-de-trabajo-en-prs-chicos), en el P
 | 3 | Glosario | Hecho: [`guias/glosario.md`](guias/glosario.md), en el `?` de cada pantalla y en `Ctrl+K` |
 | 4 | Navegación por capas | Hecho: la barra y la capa arriba de cada pantalla |
 | 5 | Separar Consultas | Hecho: Tablas, Bases y Lenguajes; `#datos` redirige |
-| 6 | Franja de camino de datos | Hecho en el detalle de un trabajo y en el resultado de una consulta. Falta en Pipeline y ML |
+| 6 | Franja de camino de datos | Hecho: en el detalle de un trabajo, en el resultado de una consulta, en cada paso del Pipeline y en cada modelo de ML |
 | 7 | YARN con nodos y colas | Ya estaba: Trabajos tiene el mapa de contenedores por NodeManager y las colas |
-| 8 | Formatos | Hecho: CSV, Parquet y ORC con tamaño, bloques y la misma consulta. Sin bytes leídos (Tez no deja contadores) |
-| 9 | Comparar, servidor | Hecho de otra forma: `GET /api/yarn/metrics` (RM + JobHistory + Spark History) en vez de `POST /api/comparar/{tarea}`; las métricas salen de las corridas, no se guardan aparte |
-| 10 | Comparar, interfaz | Hecho con una tarea (ventas por producto en MapReduce a mano, Pig, Hive y PySpark), con el código de `datos/ejemplos`. Faltan las otras seis de la tabla 5 |
+| 8 | Formatos | Hecho: CSV, Parquet y ORC con tamaño, bloques, la misma consulta y lo que leyó cada una (los contadores de Tez salen del resumen de beeline) |
+| 9 | Comparar, servidor | Hecho de otra forma: `GET /api/yarn/metrics` (RM + JobHistory + Spark History, y para Tez el resumen que imprime beeline con `hive.tez.exec.print.summary`) en vez de `POST /api/comparar/{tarea}`; las métricas salen de las corridas, no se guardan aparte |
+| 10 | Comparar, interfaz | Hecho: ventas por producto con las cuatro (y lo que movió cada una), más unir dos tablas, SQL sobre la misma tabla, limpiar los datos, traer una tabla de MariaDB y entrenar un modelo, con el código real (`datos/ejemplos` y `datos/comparar`, probado en un `:full`). CSV contra Parquet lleva a Formatos. "Algo que repite pasos" queda como explicación (no hay ejemplo propio) |
 | 11 | Motores | Hecho: una ficha por motor con el DAG de su último trabajo |
-| 12 | Guías y prácticas | Hecho: índice por capas, guías 11 (Comparar) y 12 (Formatos), referencia y prácticas agrupadas por capa. No se renumeraron las guías, para no romper enlaces. Faltan las capturas nuevas |
+| 12 | Guías y prácticas | Hecho: índice por capas, guías 11 (Comparar) y 12 (Formatos), referencia y prácticas agrupadas por capa. No se renumeraron las guías, para no romper enlaces. Capturas sacadas de nuevo desde la demo, más cuatro nuevas (Comparar, Formatos, Tablas y Motores) |
 | 13 | `docs/index.html` y Aula | Hecho |
 
 Además de lo planeado: el mapa vivo del ecosistema en Inicio (con fichas,
 recorridos y "¿Cuál uso?").
 
-**Lo que falta:** capturas contra un contenedor `:full` real (y probar ahí si
-`hive.tez.exec.print.summary` da contadores de Tez), las otras seis tareas de
-Comparar, la franja en Pipeline y ML, y el merge. El merge no es automático:
-un push a `main` que toca el `Dockerfile` hace que `imagen.yml` vuelva a etiquetar
-`latest`, y la regla es no tocar `latest`. Hay que decidir cómo publicar solo `:full`.
+**Cómo se publica sin tocar `latest`:** `imagen.yml` mira primero qué cambió
+(`pruebas/solo_full.sh`): si un push a `main` solo toca lo de `full` (la
+interfaz, su servidor, la documentación, `datos/comparar` y las etapas
+`interfaz`/`full` del `Dockerfile`), no rearma ni publica `base`, `latest` ni
+`ml`; `:full` lo publica `full.yml`. Correr `imagen.yml` a mano sigue rearmando
+todo.
+
+**Capturas:** las de la documentación salen de la demo, como siempre (las
+mismas pantallas las saca el humo del CI contra la imagen). Con un `:full`
+real se probaron los ejemplos nuevos y los contadores de Tez. En la demo, la
+columna de Pig de Comparar queda en "Todavía no corrió": ese trabajo se lanza
+desde la terminal (`pig ejemplos/ventas.pig`), que la demo no tiene.
 
 Índice:
 0. [Estado](#estado-31102026)

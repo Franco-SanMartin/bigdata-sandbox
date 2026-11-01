@@ -73,7 +73,7 @@ function Ultimo({ app, now, prendido }: { app: YarnApp; now: number; prendido: b
       </div>
       {!prendido ? <p className="muted">El DAG se ve con el cluster prendido.</p> : det.data ? <Dag app={det.data} now={now} /> : det.error ? <p className="muted">{det.error}</p> : <p className="muted">Pidiendo el DAG…</p>}
       {m && !m.error && <Movido m={m} />}
-      {m && m.source === 'rm' && m.type === 'TEZ' && <p className="mo-nota">Tez no guarda contadores sin el Timeline Server: de este trabajo se sabe el tiempo y la memoria.</p>}
+      {m && m.source === 'rm' && m.type === 'TEZ' && <p className="mo-nota">Tez no guarda contadores sin el Timeline Server. Los trabajos que lanza esta interfaz los traen del resumen de beeline; de este (mandado de otro lado) se sabe el tiempo y la memoria.</p>}
     </div>
   );
 }

@@ -221,7 +221,11 @@ export class DemoData {
         { id: 'r3', name: 'Reducer 3', description: 'ORDER BY: una tarea ordena el resultado', dependsOn: ['r2'], edge: 'SCATTER_GATHER', durSec: 2, n: 1, ops: ['Select Operator', 'File Output Operator'] },
       ];
       const appId = this.e.submitApp({ type: 'TEZ', name: `HIVE: ${text.trim().replace(/\s+/g, ' ').slice(0, 60)}`, am: 1024, amStart: 8, taskMb: 1024, executors: 0, stages: st, rowsIn: tableRows, rowsOut: r.rows.length }, { command, input: `${n(tableRows)} filas`, quiet: true });
-      return new Promise((ok, ko) => this.e.watch(appId, { done: () => ok(out({ appId, engine: 'tez', scanned: tableRows })), fail: why => ko(new ApiFailure(why, 'failed')) }));
+      // Lo leído de HDFS, como lo cuenta el resumen de Tez: el CSV entero; Parquet y ORC, solo las columnas que usa
+      // la consulta (con 3 de 5, un 60 %). El shuffle, el que midió un :full real con la suma parcial por producto
+      const archivos = this.e.files.filter(f => bl.length && f.blocks.some(b => bl.includes(b.id)));
+      const bytesRead = Math.round(archivos.reduce((x, f) => x + f.sizeMb, 0) * 1048576 * (fmt ? 0.6 : 1));
+      return new Promise((ok, ko) => this.e.watch(appId, { done: () => ok(out({ appId, engine: 'tez', scanned: tableRows, ...(bytesRead ? { bytesRead, shuffleBytes: 268 } : {}) })), fail: why => ko(new ApiFailure(why, 'failed')) }));
     }
     const ms = source === 'hive' ? 400 : big ? 180 : 3;
     return new Promise(ok => this.e.at(ms / 1000, () => ok(out({ engine: 'uno', ms, scanned: big ? tableRows : r.rows.length }))));
