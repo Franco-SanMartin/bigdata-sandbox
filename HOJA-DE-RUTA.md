@@ -2,81 +2,52 @@
 
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
-actualización: 2026-10-29. Las decisiones están en [DECISIONES.md](DECISIONES.md)
+actualización: 2026-11-01. Las decisiones están en [DECISIONES.md](DECISIONES.md)
 y lo que pasó día a día, en [EVENTOS.md](EVENTOS.md).
 
 ## Para seguir
 
-Todo lo que falta, en orden (al 2026-10-29 a la tarde):
+Todo lo que falta, por frente (al 2026-11-01):
 
-1. **Revisar y mergear el PR #9** (`ui2-rediseno-360`): el plan del rediseño
-   360 (`REDISENO-FULL.md`) y la maqueta navegable
-   (`docs/maquetas/rediseno-360.html`, se abre con doble clic). Mergear desde
-   git como Franki, no con `gh pr merge` (deja otro autor).
-2. **ML etapas c, d y e** sobre HDFS: siguen en la rama `ui2-ml-etapa-c` (ya
-   tiene el arreglo de la caché del fsck).
-3. **Implementar el 360**: los 13 PRs chicos del diseño, en el orden de
-   `REDISENO-FULL.md`.
-4. **Aula 2D y tráfico real en `empresa`**: el editor de filas/racks, el
-   tráfico medido en el `wg0` del maestro, la línea de tiempo de una PC que se
-   cae y YARN en vivo (diseño en la sección Empresa de `REDISENO-FULL.md`).
-5. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*
-   desde la rama `empresa` con publicar tildado (~2 h). Hoy `:empresa` es del
-   27/10 y `:trabajador` no existe; para el aula alcanza con el release
-   `aula-v1`. Decide Franki.
-6. **Prueba piloto en el aula** con 2 o 3 PCs:
-   [guía 4](guias/empresa/04-prueba-piloto.md) y las hojas 5 a 9 de
-   `guias/empresa/`. Con lo que se anote, decidir la clase con las 20.
-7. **Riesgo: Hive 4.0.0 ya no está en dlcdn** (404). Sin la caché, cada build
-   de Full baja de archive.apache.org y falla si se cae. Opciones: pasar a la
-   versión que sí está en dlcdn o guardar el tarball en un release propio.
-8. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
+**Rediseño 360 de `full`** ([REDISENO-FULL.md](REDISENO-FULL.md)): hecho y
+publicado en `:full` (PR #10). Queda mergear el **PR #11** (`ui2-cierre`):
+Comparar lanza Pig desde la pantalla y `vitest` sin vulnerabilidades. Publica
+solo `:full`.
+
+**ML sobre HDFS** (versiones `ml` y `full`, sección de abajo):
+1. **(c) Modelos, búsqueda y evaluación en Spark:** a medio hacer en la rama
+   `ui2-ml-etapa-c` (motor y catálogo de MLlib, sin interfaz ni pruebas; dos
+   commits WIP de una sesión cortada).
+2. **(d) Biblioteca de modelos, predicción y deriva:** sin empezar.
+3. **(e) Generador a escala, guías y pruebas de humo:** sin empezar.
+
+**`empresa` en el aula** (sección de abajo):
+1. **Prueba piloto** con 2 o 3 PCs: [guía 4](guias/empresa/04-prueba-piloto.md)
+   y las hojas 5 a 9 de `guias/empresa/`, con el release `aula-v1`. Antes,
+   pasarle a sistemas la [hoja 7](guias/empresa/07-hoja-para-sistemas.md). Con
+   lo que se anote, decidir la clase con las 20.
+2. **Aula 2D y tráfico real:** el editor de filas/racks, el tráfico medido en el
+   `wg0` del maestro, la línea de tiempo de una PC que se cae y YARN en vivo.
+   Solo diseño (sección 11 de `REDISENO-FULL.md`); el plano del aula ya está.
+3. **Terminal en `empresa`:** decidir si va apagada de fábrica (`TERMINAL=0`).
+4. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*
+   con publicar tildado (~2 h). Hoy `:empresa` es del 27/10 y `:trabajador` no
+   existe; para el aula alcanza con el release `aula-v1`. Decide Franki.
+
+**`base`, `latest` y mantenimiento:**
+1. **Hive 4.0.0 ya no está en dlcdn** (404): el build baja de
+   archive.apache.org con reintentos y falla si se cae. Guardar el tarball en un
+   release propio lo resuelve.
+2. Correr el workflow **aula** para que el `.tar.gz` del release coincida con
+   `latest`.
+3. Borrar las ramas que ya están en `main`: `full`, `versiones`, `ui`, `ui2`,
+   `practicas`, `empresa-aula` y las `ui2-*` de PRs mergeados. Quedan
+   `empresa` (la usa su workflow), `ui2-ml-etapa-c` (la etapa c) y
+   `ui2-ml-pro` (respaldo).
+4. El compose que genera la interfaz usa el volumen `bigdata_hadoop`, no
+   `bigdata_full`: decidir si se unifican.
+5. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
    reescribiendo `main` con force-push: no hacerlo sin que Franki lo decida.
-
-## Para el hub (desde la noche del 2026-10-29)
-
-Franki apaga su compu. El hub controla git y el CI mientras duerme
-([D-07](DECISIONES.md)). **Desarrollo mínimo: solo lo necesario para que las pruebas
-pasen.** Antes de empezar, leé [DECISIONES.md](DECISIONES.md) completo y
-[EVENTOS.md](EVENTOS.md) del 29/10.
-
-**1. Vigilar el CI (con `gh run list` y `gh pr checks`, un bucle cada 10-15 min, sin
-gastar de más):**
-- **Workflow Empresa** sobre `main` (lo lanzó Franki el 29/10 a las 04:50): tiene
-  que publicar `:empresa` y `:trabajador` y armar el release **`aula-v1`**. Si da
-  rojo, buscá la causa en el log y, si es del código, arreglala en una rama
-  `empresa-fix-*` con PR. Si es del CI (por ejemplo `short read` o `unexpected
-  EOF`), relanzá solo los jobs que fallaron (`gh run rerun --failed`). Franki lo
-  necesita para probar en el laboratorio.
-- **PR #5** (ML a) y **PR #7** (ML b): ya tienen el arreglo del humo (`92a5053`).
-  Si quedan **todo en verde**, mergealos **en orden: #5 y después #7**. Si la
-  falla es intermitente (`short read` o el `fsck` del apagado), relanzá. Si es
-  real, arreglala en la rama de la (a) y llevala con merge (no rebase) a la (b) y
-  a la (c).
-- **Workflow Imagen** en `main`: falló dos veces por `short read` (infraestructura).
-  Si vuelve a fallar igual, relanzá los jobs fallidos. `latest` es la imagen de la
-  clase: no la dejes rota.
-
-**2. Pensar el rediseño 360 de `full` ([D-05](DECISIONES.md)) y el tema claro
-([D-06](DECISIONES.md)). Pensar y escribir, no implementar:**
-- Escribí `REDISENO-FULL.md` en la raíz. Tiene que traer:
-  - la navegación nueva por capas: almacenamiento, recursos, procesamiento, ingesta, ML y prácticas;
-  - qué pantalla actual va a cada lugar y qué se junta, separa o borra;
-  - la vista "Comparar" (la misma tarea con varias herramientas), con qué tareas, qué métricas y de dónde salen (YARN, historial de Spark y de MapReduce);
-  - cómo se reordenan las guías y las prácticas;
-  - la paleta clara (tokens), qué tests y gráficos cambian y el orden de trabajo en PRs chicos.
-- Abrilo como **PR solo de documentación** (rama `ui2-rediseno-plan`), sin código.
-  Franki lo revisa a la mañana y recién ahí se implementa.
-- Si encontrás algo del modelo de D-05 que esté mal o falte, corregilo en ese PR.
-
-**3. No hacer esta noche:**
-- seguir la etapa (c) de ML (WIP en `ui2-ml-etapa-c`), ni la (d) o la (e);
-- cambios grandes de interfaz;
-- force-push o borrar ramas;
-- tocar `ui2-ml-pro` (queda como respaldo).
-
-**4. Al terminar:** anotá en [EVENTOS.md](EVENTOS.md) qué pasó: qué se mergeó, qué
-dio rojo y por qué, qué quedó corriendo. Es un commit con `[skip ci]` a `main`.
 
 Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
 `Co-Authored-By` ni "Generated with". Todo en castellano rioplatense.
@@ -95,7 +66,8 @@ Documentación por versión en [`guias/`](guias/README.md); cambios en el [CHANG
 
 ## En curso: ML distribuido sobre HDFS (versiones `ml` y `full`)
 
-Rama `ui2-ml-pro`, con PRs a `main` por etapa (no se mergean sin el OK de Franki).
+Un PR a `main` por etapa (no se mergean sin el OK de Franki). La rama
+`ui2-ml-pro` queda como respaldo del primer intento.
 
 **La idea:** entrenar modelos sobre los datos que YA están en HDFS, en el formato
 que estén, eligiendo cómo limpiar cada columna, guardar cada modelo en una
@@ -141,13 +113,12 @@ en HDFS, formatos, perfil y limpieza, **(c)** modelos, búsqueda y evaluación,
 **(d)** biblioteca, predicción y deriva, **(e)** generador a escala, guías y
 pruebas de humo.
 
-- [x] **(a) Seguridad de la API + motor base.** *Hecho (PR abierto, sin
-      mergear): la API cerrada a la propia interfaz (PR #4), `sandbox_ml`
+- [x] **(a) Seguridad de la API + motor base.** *Hecho y mergeado (PR #5): la API cerrada a la propia interfaz (PR #4), `sandbox_ml`
       (catálogo, receta, código scikit-learn y PySpark, perfil y registro),
       las rutas `/api/ml/*` y las pantallas: fuentes de `/datos`, HDFS y Hive,
       perfil, receta revisada, código generado, experimentos y corridas.*
 - [x] **(b) Datos en HDFS, perfil y limpieza (puntos 1 a 3, con el 9).** *Hecho
-      (PR abierto, sin mergear; trae los de (a) y la seguridad): `fuentes`
+      y mergeado (PR #7): `fuentes`
       lee Parquet, ORC, Avro (con `spark-avro`), JSON, CSV/TSV y texto,
       comprimidos y particionados, y tablas de Hive. El esquema es editable y
       hay filtro de particiones. `perfil_spark` perfila en YARN (con muestra o
@@ -156,7 +127,8 @@ pruebas de humo.
       Pipeline. Tiene vista previa antes/después, y el PySpark del perfil y de
       la limpieza se puede correr con `spark-submit`. Lo prueban
       `test_estudio_spark.py` (Spark real, en la imagen) y el humo de `full`.*
-- [ ] **(c)** Modelos, búsqueda y evaluación distribuida (puntos 4 a 6).
+- [ ] **(c)** Modelos, búsqueda y evaluación distribuida (puntos 4 a 6). *A
+      medio hacer en `ui2-ml-etapa-c`.*
 - [ ] **(d)** Biblioteca de modelos, predicción y deriva (puntos 7 y 8).
 - [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).
 
@@ -207,7 +179,7 @@ pruebas de humo.
       `styles/tema.test.ts`). Ver abajo si se quiere el selector.*
 - [x] Tema: ¿oscuro por defecto **con selector** de claro? *Decidido el
       2026-10-29 ([D-06](DECISIONES.md)): **todas las interfaces en claro**, sin
-      selector. Falta implementarlo, dentro del rediseño de D-05.*
+      selector. Hecho en el rediseño 360 (PR #10).*
 - [ ] Terminal en `empresa`: si el servidor se publica para otras PCs y se
       suma su nombre a `TERMINAL_HOSTS`, cualquiera que llegue tiene root en el
       contenedor. Decidir si en `empresa` va apagada de fábrica (`TERMINAL=0`).

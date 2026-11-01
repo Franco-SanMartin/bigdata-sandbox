@@ -4,6 +4,27 @@ Lo que pasó en el proyecto, en orden, con lo más nuevo arriba: qué se hizo, q
 falló y en qué quedó. Las horas de GitHub están en UTC. Por qué se hizo cada cosa
 está en [DECISIONES.md](DECISIONES.md).
 
+## 2026-10-30 al 2026-11-01
+
+- **Rediseño 360 de `full`** (rama `ui2-ecosistema`, PR #10): barra por capas,
+  mapa vivo del ecosistema, Tablas, Bases, Lenguajes, Formatos, Motores,
+  Comparar (ventas por producto y cinco tareas más), franja de camino de datos,
+  glosario único y tema claro. Se probó contra un `:full` real (el join en tres
+  motores, Spark por JDBC y los contadores de Tez por beeline) y las capturas
+  salen de la demo.
+- **Publicar `:full` sin tocar `latest`:** `pruebas/solo_full.sh` y el job
+  `previo` de `imagen.yml`. Un commit que faltaba (`.gitignore` dejaba afuera
+  `datos/comparar`) lo agarró el CI de la demo.
+- **PR #10 mergeado** el 01/11 a las 06:47 (`deb6733`): `imagen.yml` salteó
+  `base`, `latest` y `ml`; `full.yml` pasó el humo y publicó `:full` a las 07:48.
+- **PR #11** (`ui2-cierre`): plantilla `pig-ventas`, así Comparar lanza las
+  cuatro. En un `:full` real, `ventas.pig` son tres trabajos MapReduce en 50 s
+  con 646 bytes de shuffle, contra 3,2 MB de MapReduce a mano. `vitest` pasa a
+  4.1.12 (la 3.2.x traía `tinypool` con dos fallas críticas).
+- **Limpieza:** se borraron el contenedor, el volumen y la imagen de las
+  capturas y el `:full` de prueba de Pig. Borrar ramas ya mergeadas lo bloquea
+  el permiso de Claude Code: queda en la hoja de ruta.
+
 ## 2026-10-29
 
 - **La tarde: hojas del laboratorio, maqueta y orden.**
