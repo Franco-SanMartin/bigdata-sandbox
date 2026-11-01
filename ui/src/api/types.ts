@@ -307,7 +307,7 @@ export interface YarnApp {
   log: LogLine[];
 }
 
-export type ExampleJob = 'mr-ventas' | 'hive-ventas' | 'spark-ventas';
+export type ExampleJob = 'mr-ventas' | 'pig-ventas' | 'hive-ventas' | 'spark-ventas';
 
 /** Parámetro de una plantilla de trabajo. Los valores se validan en el backend: nunca llegan a una shell */
 export interface JobParam {

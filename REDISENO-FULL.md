@@ -44,9 +44,9 @@ todo.
 
 **Capturas:** las de la documentación salen de la demo, como siempre (las
 mismas pantallas las saca el humo del CI contra la imagen). Con un `:full`
-real se probaron los ejemplos nuevos y los contadores de Tez. En la demo, la
-columna de Pig de Comparar queda en "Todavía no corrió": ese trabajo se lanza
-desde la terminal (`pig ejemplos/ventas.pig`), que la demo no tiene.
+real se probaron los ejemplos nuevos, los contadores de Tez y la plantilla
+`pig-ventas`: Comparar lanza las cuatro desde la pantalla, y Pig manda 646
+bytes por el shuffle en sus tres trabajos contra 3,2 MB de MapReduce a mano.
 
 Índice:
 0. [Estado](#estado-31102026)

@@ -12,7 +12,7 @@ corriendo.
 La pantalla es **Comparar** (`G K`), en el grupo *Procesamiento* de la barra.
 Los comandos van **adentro** del contenedor, parado en `/datos`.
 
-![Comparar: el dato una sola vez, las cuatro formas de pedirlo, el motor de cada una y lo que movió MapReduce a mano](../../docs/capturas/comparar.png)
+![Comparar: el dato una sola vez, las cuatro formas de pedirlo, el motor de cada una, y lo que movieron MapReduce a mano (3,2 MB de shuffle) y Pig (646 bytes)](../../docs/capturas/comparar.png)
 
 ## Paso 1. El recorrido de los datos
 
@@ -38,12 +38,12 @@ mismos. Hive y Pig son lenguajes; MapReduce, Tez y Spark son motores.
   las etapas de Spark), con las tareas reales de la última corrida si YARN
   las trae;
 - el código, con "Solo la cuenta" o "Archivo entero";
-- **Lanzar en YARN** (MapReduce, Hive y Spark) o **Probarlo en Lenguajes**
-  (Pig), **Ver el trabajo**, **Ver el resultado** y el comando para la
-  terminal.
+- **Lanzar en YARN** (corre lo mismo que el comando de abajo), **Ver el
+  trabajo**, **Ver el resultado** y el comando para la terminal.
 
 **Qué hacer.** Si `/user/root/ventas` está vacío, lanzar cualquiera lo sube
-primero. Lanzá las tres desde la pantalla, o desde la terminal:
+primero. Lanzá las cuatro desde la pantalla, o desde la terminal (el de
+MapReduce a mano, que es largo, está en su columna):
 
 <!-- prueba: no (necesita SERVICIOS=todo; tarda 1 o 2 minutos) -->
 ```bash
@@ -62,19 +62,24 @@ suma. Debajo de las columnas, *Qué muestran los números* lo dice en palabras.
 
 Con las salidas reales del contenedor (ventas de 5,9 MB):
 
-| | MapReduce a mano | PySpark |
-|---|---|---|
-| Leído de HDFS | 5,9 MB | 18,0 MB |
-| Shuffle | 3,2 MB | 3,0 KB |
-| Disco local | 7,2 MB | 2,2 KB |
-| Memoria por tiempo | 19,0 GB·s | 72,7 GB·s |
-| Tiempo | 19 s | 28 s |
+| | MapReduce a mano | Pig (3 trabajos) | PySpark |
+|---|---|---|---|
+| Leído de HDFS | 5,9 MB | 5,9 MB | 18,0 MB |
+| Shuffle | 3,2 MB | 646 bytes | 3,0 KB |
+| Disco local | 7,2 MB | 2,2 MB | 2,2 KB |
+| Memoria por tiempo | 19,0 GB·s | 34,0 GB·s | 72,7 GB·s |
+| Tiempo | 19 s | 50 s | 28 s |
 
 **Qué significa.**
 
 - `mapper.py` emite una línea por venta y las 200.000 viajan por el shuffle;
   Spark suma por producto en cada partición antes de mandar (lo que en
   MapReduce sería un **combiner**) y manda unas pocas filas.
+- Pig sí usa un combiner: `SUM` se puede sumar por partes, así que cada map
+  suma lo suyo y por el shuffle pasan 212 bytes en vez de 3,2 MB. Pero lanza
+  tres trabajos en fila (agrupar, muestrear las claves y ordenar), cada uno
+  con su ApplicationMaster: tarda más del doble, y el disco local es casi todo lo
+  que escribe cada trabajo para arrancar (unos 760 KB).
 - PySpark lee la entrada tres veces: `inferSchema` la recorre entera para
   adivinar los tipos y cada acción (`show`, `write`) la vuelve a leer, porque
   el programa no usa `cache()`.

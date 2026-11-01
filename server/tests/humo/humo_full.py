@@ -460,7 +460,7 @@ def yarn() -> None:
             curl(n, f"http://localhost:8088/{u}")
 
     ids = {}
-    for ejemplo in ("mr-ventas", "spark-ventas", "hive-ventas"):
+    for ejemplo in ("mr-ventas", "spark-ventas", "hive-ventas", "pig-ventas"):
         with Chequeo(f"YARN: submit {ejemplo}") as c:
             t0 = time.time()
             codigo, r = pedir("POST", "/api/yarn/apps", {"example": ejemplo}, timeout=180)
@@ -471,6 +471,11 @@ def yarn() -> None:
             if ejemplo == "mr-ventas":
                 curl("nm_containers.json", "http://localhost:8042/ws/v1/node/containers")
             d = esperar_app(app)
+            if ejemplo == "pig-ventas":
+                # Pig manda sus trabajos en fila (agrupar, muestrear y ordenar): el resultado queda
+                # cuando termina el último, y el id que devolvió el POST es el del primero
+                esperar(lambda: en_contenedor("hdfs dfs -test -e /user/root/resultados/pig_por_producto/_SUCCESS")[0] == 0,
+                        600, "el resultado de ventas.pig", 3)
             total = round(time.time() - t0, 1)
             TIEMPOS[f"YARN {ejemplo}"] = total
             guardar(f"yarn_app_{ejemplo}", d)

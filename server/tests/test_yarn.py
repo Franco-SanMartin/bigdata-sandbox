@@ -607,7 +607,8 @@ def hadoop_args(log):
 
 def test_lista_de_plantillas():
     ids = [t["id"] for t in Y.TEMPLATES]
-    assert ids == ["mr-wordcount", "mr-pi", "mr-grep", "mr-ventas", "hive-ventas", "spark-pi", "spark-ventas"]
+    assert ids == ["mr-wordcount", "mr-pi", "mr-grep", "mr-ventas", "pig-ventas", "hive-ventas", "spark-pi", "spark-ventas"]
+    assert Y.TEMPLATE["pig-ventas"]["command"] == Y.JOBS["pig-ventas"]["run"] == "pig ejemplos/ventas.pig"
     for t in Y.TEMPLATES:
         assert t["engine"] in ("mr", "tez", "spark") and t["needs"] and t["description"]
         for p in t["params"]:
