@@ -64,7 +64,7 @@ describe('HDFS del demo', () => {
 describe('plantillas de trabajos del demo', () => {
   it('lista las mismas plantillas que el servidor', async () => {
     const t = await api.jobTemplates();
-    expect(t.map(x => x.id)).toEqual(['mr-wordcount', 'mr-pi', 'mr-grep', 'mr-ventas', 'hive-ventas', 'spark-pi', 'spark-ventas']);
+    expect(t.map(x => x.id)).toEqual(['mr-wordcount', 'mr-pi', 'mr-grep', 'mr-ventas', 'pig-ventas', 'hive-ventas', 'spark-pi', 'spark-ventas']);
   });
 
   it('wordcount cuenta las palabras de texto.txt y deja el resultado en HDFS', async () => {

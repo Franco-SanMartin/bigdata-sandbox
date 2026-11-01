@@ -43,9 +43,14 @@ export const TEMPLATES: JobTemplate[] = [
     params: [], command: 'hadoop jar hadoop-streaming-3.3.6.jar -mapper mapper.py -reducer reducer.py -input /user/root/ventas -output /user/root/resultados/mr_por_producto', needs: ['yarn'],
   },
   {
+    id: 'pig-ventas', label: 'Ventas por producto (Pig)', engine: 'mr',
+    description: 'ventas.pig: Pig compila el script a trabajos MapReduce en fila (agrupar, muestrear y ordenar).',
+    params: [], command: 'pig ejemplos/ventas.pig', needs: ['yarn'],
+  },
+  {
     id: 'hive-ventas', label: 'Ventas por producto (Hive sobre Tez)', engine: 'tez',
     description: 'ventas.hql en beeline: HiveServer2 compila el SQL a un DAG de Tez.',
-    params: [], command: 'beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql', needs: ['yarn', 'hiveserver2'],
+    params: [], command: 'beeline -u jdbc:hive2://localhost:10000 --hiveconf hive.tez.exec.print.summary=true -f ejemplos/ventas.hql', needs: ['yarn', 'hiveserver2'],
   },
   {
     id: 'spark-pi', label: 'Estimar π (SparkPi)', engine: 'spark',

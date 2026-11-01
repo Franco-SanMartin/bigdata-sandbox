@@ -61,6 +61,6 @@ describe('plantillas de trabajos', () => {
   });
 
   it('las plantillas sin parámetros muestran su comando tal cual', () => {
-    for (const id of ['mr-ventas', 'hive-ventas', 'spark-ventas']) expect(fillCommand(tpl(id), {})).toBe(tpl(id).command);
+    for (const id of ['mr-ventas', 'pig-ventas', 'hive-ventas', 'spark-ventas']) expect(fillCommand(tpl(id), {})).toBe(tpl(id).command);
   });
 });

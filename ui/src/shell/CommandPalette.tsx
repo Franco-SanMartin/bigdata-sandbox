@@ -49,6 +49,7 @@ export function CommandPalette() {
                 <Command.Item value="subir numeros.txt hdfs put" onSelect={run(() => putExample('numeros'))}><Upload size={15} />Subir numeros.txt a HDFS</Command.Item>
                 <Command.Item value="subir ventas_sucias.csv hdfs put pipeline" onSelect={run(() => putExample('sucias'))}><Upload size={15} />Subir ventas_sucias.csv a HDFS</Command.Item>
                 {yarn && <Command.Item value="lanzar mapreduce ventas" onSelect={run(() => submitExample('mr-ventas'))}><Rows3 size={15} />Lanzar MapReduce: ventas por producto</Command.Item>}
+                {yarn && <Command.Item value="lanzar pig ventas.pig" onSelect={run(() => submitExample('pig-ventas'))}><Rows3 size={15} />Lanzar ventas.pig en Pig</Command.Item>}
                 {todo && <Command.Item value="lanzar hive tez consulta" onSelect={run(() => submitExample('hive-ventas'))}><Rows3 size={15} />Lanzar consulta de Hive (Tez)</Command.Item>}
                 {todo && <Command.Item value="lanzar spark ventas.py" onSelect={run(() => submitExample('spark-ventas'))}><Rows3 size={15} />Lanzar ventas.py en Spark</Command.Item>}
                 <Command.Item value="revisar hdfs fsck bloques" onSelect={run(() => navigate('hdfs'))}><Rows3 size={15} />Revisar HDFS con fsck</Command.Item>
