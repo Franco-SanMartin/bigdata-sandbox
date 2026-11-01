@@ -3,14 +3,21 @@
 import type { CatalogEntry, DataSample, DataSource, QueryExample, QueryPlan, QueryResult, TableSchema } from '../types';
 import { ApiFailure, fail } from '../errors';
 import type { DemoEngine, StageDef } from './engine';
+import { blockSizeMb } from '../../lib/cluster';
 import { EXAMPLES, LIMPIAS_HEAD, MONGO_COLLECTIONS, MYSQL_TABLES, POR_CATEGORIA, POR_PRODUCTO, POR_SUCURSAL, VENTAS_HEAD, answer } from './datasets';
 import { LIMPIAS_COLS, POR, PRODUCTOS_ROWS, VENTAS_COLS, n, procUp, needProc, trace } from './common';
+
+/** La copia de ventas que arma la pantalla Formatos */
+const COPIA = /^insert overwrite table (?:default\.)?ventas_(parquet|orc) select \* from (?:default\.)?ventas\b/;
 
 const PROC: Record<DataSource, [string, string]> = { hive: ['hiveserver2', 'HiveServer2'], mysql: ['mysql', 'MySQL'], mongodb: ['mongodb', 'MongoDB'], pig: ['rm', 'ResourceManager'] };
 
 /* DDL de ejemplos/ventas.hql y ejemplos/tienda.hql */
 const HIVE_DDL: Record<string, string> = {
-  'default.ventas': "CREATE EXTERNAL TABLE ventas (\n  fecha    STRING,\n  sucursal STRING,\n  producto STRING,\n  cantidad INT,\n  precio   INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\nLOCATION '/user/root/ventas'\nTBLPROPERTIES ('skip.header.line.count' = '1');",
+  // Las copias de la pantalla Formatos (lib/formatos.ts)
+  'default.ventas_parquet': "CREATE EXTERNAL TABLE ventas_parquet (\n  fecha    STRING,\n  sucursal STRING,\n  producto STRING,\n  cantidad INT,\n  precio   INT\n)\nSTORED AS PARQUET\nLOCATION '/user/root/formatos/parquet';",
+  'default.ventas_orc': "CREATE EXTERNAL TABLE ventas_orc (\n  fecha    STRING,\n  sucursal STRING,\n  producto STRING,\n  cantidad INT,\n  precio   INT\n)\nSTORED AS ORC\nLOCATION '/user/root/formatos/orc';",
+  'default.ventas':"CREATE EXTERNAL TABLE ventas (\n  fecha    STRING,\n  sucursal STRING,\n  producto STRING,\n  cantidad INT,\n  precio   INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\nLOCATION '/user/root/ventas'\nTBLPROPERTIES ('skip.header.line.count' = '1');",
   'default.tienda_ventas': "CREATE EXTERNAL TABLE tienda_ventas (\n  id       INT,\n  fecha    STRING,\n  sucursal STRING,\n  producto STRING,\n  cantidad INT,\n  precio   INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\nLOCATION '/user/root/tienda/ventas';",
   'default.tienda_productos': "CREATE EXTERNAL TABLE tienda_productos (\n  producto  STRING,\n  categoria STRING,\n  precio    INT\n)\nROW FORMAT DELIMITED FIELDS TERMINATED BY ','\nSTORED AS TEXTFILE\nLOCATION '/user/root/tienda/productos';",
   'default.ventas_limpias': "CREATE EXTERNAL TABLE ventas_limpias (\n  ticket     BIGINT,\n  fecha      TIMESTAMP,\n  sucursal   STRING,\n  producto   STRING,\n  cantidad   BIGINT,\n  precio     BIGINT,\n  importe    BIGINT,\n  medio_pago STRING\n)\nSTORED AS PARQUET\nLOCATION '/user/root/ml/ventas_limpias';",
@@ -88,6 +95,7 @@ export class DemoData {
       if (this.has('/user/root/tienda/ventas/')) t('default.tienda_ventas', 200000, '/user/root/tienda/ventas');
       if (this.has('/user/root/tienda/productos/')) t('default.tienda_productos', 8, '/user/root/tienda/productos');
       if (this.hiveExtra.has('default.ventas_limpias')) t('default.ventas_limpias', 97200, '/user/root/ml/ventas_limpias');
+      for (const fmt of ['parquet', 'orc']) if (this.hiveExtra.has(`default.ventas_${fmt}`)) t(`default.ventas_${fmt}`, this.has(`/user/root/formatos/${fmt}/`) ? 200000 : 0, `/user/root/formatos/${fmt}`);
     }
     if (procUp(this.e, 'mysql')) {
       out.push(...MYSQL_TABLES.map(t => (t.name === 'tienda.resumen_categoria' && this.resumenCategoria ? { ...t, rows: 4 } : t)));
@@ -105,9 +113,9 @@ export class DemoData {
     const s = (columns: string[], rows: (string | number | null)[][], total: number | undefined, note?: string): DataSample => ({ columns, rows, total, note });
     if (source === 'hive') {
       const ddl = HIVE_DDL[name];
-      const sample = name === 'default.ventas' ? s(VENTAS_COLS, VENTAS_HEAD, 200000) : name === 'default.tienda_ventas' ? s(['id', ...VENTAS_COLS], VENTAS_HEAD.map((r, i) => [i + 1, ...r]), 200000)
+      const sample = /^default\.ventas(_parquet|_orc)?$/.test(name) ? s(VENTAS_COLS, VENTAS_HEAD, 200000) : name === 'default.tienda_ventas' ? s(['id', ...VENTAS_COLS], VENTAS_HEAD.map((r, i) => [i + 1, ...r]), 200000)
         : name === 'default.tienda_productos' ? s(['producto', 'categoria', 'precio'], PRODUCTOS_ROWS, 8) : s(LIMPIAS_COLS, LIMPIAS_HEAD, 97200);
-      return { ...entry, columns: entry.columns, format: /PARQUET/.test(ddl) ? 'parquet' : 'textfile', ddl, sample, partitions: [], sizeMb: this.e.files.filter(f => f.path.startsWith(entry.location + '/')).reduce((a, f) => a + f.sizeMb, 0) };
+      return { ...entry, columns: entry.columns, format: /PARQUET/.test(ddl) ? 'parquet' : /\bORC\b/.test(ddl) ? 'orc' : 'textfile', ddl, sample, partitions: [], sizeMb: this.e.files.filter(f => f.path.startsWith(entry.location + '/')).reduce((a, f) => a + f.sizeMb, 0) };
     }
     if (source === 'mysql') {
       const ddl = MYSQL_DDL[name];
@@ -142,9 +150,11 @@ export class DemoData {
       const name = `default.${created[3]}`;
       const had = this.catalog().some(c => c.source === 'hive' && c.name === name);
       if (had && !created[2]) fail('failed', `Error: Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. AlreadyExistsException(message:Table hive.default.${created[3]} already exists)`);
-      if (name === 'default.ventas') this.hiveExtra.add(name);
+      if (/^default\.ventas(_parquet|_orc)?$/.test(name)) this.hiveExtra.add(name);
       return { columns: [], rows: [], note: had ? `La tabla ${name} ya existía: IF NOT EXISTS no la toca` : `Tabla ${name} creada: apunta a los archivos de HDFS, no los copia` };
     }
+    const copia = source === 'hive' ? COPIA.exec(q.trim()) : null;
+    if (copia) return { columns: [], rows: [], note: `200.000 filas escritas en /user/root/formatos/${copia[1]}, en ${copia[1] === 'orc' ? 'ORC' : 'Parquet'}` };
     if (source === 'hive' && /join/.test(q) && /categoria/.test(q)) return { columns: ['categoria', 'unidades', 'facturado'], rows: POR_CATEGORIA };
     if (source === 'hive' && /from tienda_productos/.test(q)) return { columns: ['producto', 'categoria', 'precio'], rows: PRODUCTOS_ROWS };
     if (source === 'mysql' && /from resumen_categoria/.test(q)) return this.resumenCategoria ? { columns: ['categoria', 'unidades', 'facturado'], rows: POR_CATEGORIA } : { columns: ['categoria', 'unidades', 'facturado'], rows: [], note: 'Vacía hasta que sqoop export traiga el resultado de Hadoop' };
@@ -197,20 +207,50 @@ export class DemoData {
       this.e.act('Vos', 'info', `Consulta en ${PROC[source][1]}`, { command, input: res.trace.input, action: res.trace.action, output: res.trace.output, appId: o.appId });
       return res;
     };
+    const copia = source === 'hive' ? COPIA.exec(text.trim().replace(/\s+/g, ' ').toLowerCase()) : null;
+    if (copia) return this.copiar(copia[1] as 'parquet' | 'orc', command, r, out);
     if (source === 'hive' && this.needsJob(text) && r.rows.length) {
       needProc(this.e, 'rm', 'YARN');
-      const bl = this.e.files.filter(f => f.path.startsWith(/limpias/i.test(text) ? '/user/root/ml/ventas_limpias' : '/user/root/ventas/')).flatMap(f => f.blocks.map(b => b.id));
+      // Cada tabla lee sus bloques: las copias de Formatos ocupan menos y se leen por columnas
+      const fmt = /from (?:default\.)?ventas_(parquet|orc)\b/i.exec(text)?.[1];
+      const bl = this.e.files.filter(f => f.path.startsWith(fmt ? `/user/root/formatos/${fmt}/` : /limpias/i.test(text) ? '/user/root/ml/ventas_limpias' : '/user/root/ventas/')).flatMap(f => f.blocks.map(b => b.id));
       const nb = Math.max(1, bl.length);
       const st: StageDef[] = [
-        { id: 'm1', name: 'Map 1', description: 'Lee la tabla, un bloque por tarea, y agrupa parcial', dependsOn: [], durSec: 4, n: nb, blocks: bl, ops: ['TableScan', 'Select Operator', 'Group By Operator (parcial)', 'Reduce Output Operator'] },
+        { id: 'm1', name: 'Map 1', description: 'Lee la tabla, un bloque por tarea, y agrupa parcial', dependsOn: [], durSec: fmt ? 2.5 : 4, n: nb, blocks: bl, ops: ['TableScan', 'Select Operator', 'Group By Operator (parcial)', 'Reduce Output Operator'] },
         { id: 'r2', name: 'Reducer 2', description: 'GROUP BY: junta los parciales', dependsOn: ['m1'], edge: 'SCATTER_GATHER', durSec: 3, n: 2, ops: ['Group By Operator (final)', 'Reduce Output Operator'] },
         { id: 'r3', name: 'Reducer 3', description: 'ORDER BY: una tarea ordena el resultado', dependsOn: ['r2'], edge: 'SCATTER_GATHER', durSec: 2, n: 1, ops: ['Select Operator', 'File Output Operator'] },
       ];
       const appId = this.e.submitApp({ type: 'TEZ', name: `HIVE: ${text.trim().replace(/\s+/g, ' ').slice(0, 60)}`, am: 1024, amStart: 8, taskMb: 1024, executors: 0, stages: st, rowsIn: tableRows, rowsOut: r.rows.length }, { command, input: `${n(tableRows)} filas`, quiet: true });
-      return new Promise((ok, ko) => this.e.watch(appId, { done: () => ok(out({ appId, engine: 'tez', scanned: tableRows })), fail: why => ko(new ApiFailure(why, 'failed')) }));
+      // Lo leído de HDFS, como lo cuenta el resumen de Tez: el CSV entero; Parquet y ORC, solo las columnas que usa
+      // la consulta (con 3 de 5, un 60 %). El shuffle, el que midió un :full real con la suma parcial por producto
+      const archivos = this.e.files.filter(f => bl.length && f.blocks.some(b => bl.includes(b.id)));
+      const bytesRead = Math.round(archivos.reduce((x, f) => x + f.sizeMb, 0) * 1048576 * (fmt ? 0.6 : 1));
+      return new Promise((ok, ko) => this.e.watch(appId, { done: () => ok(out({ appId, engine: 'tez', scanned: tableRows, ...(bytesRead ? { bytesRead, shuffleBytes: 268 } : {}) })), fail: why => ko(new ApiFailure(why, 'failed')) }));
     }
     const ms = source === 'hive' ? 400 : big ? 180 : 3;
     return new Promise(ok => this.e.at(ms / 1000, () => ok(out({ engine: 'uno', ms, scanned: big ? tableRows : r.rows.length }))));
+  }
+
+  /** INSERT OVERWRITE TABLE ventas_parquet SELECT * FROM ventas: un trabajo de Tez que lee el CSV y deja un archivo
+      en el formato nuevo. Tez junta los bloques chicos en una sola tarea, así que sale un archivo (000000_0); lo que
+      pesa sale de la proporción de un Parquet o un ORC de estas columnas contra el CSV */
+  private copiar(fmt: 'parquet' | 'orc', command: string, r: Omit<QueryResult, 'ms'>, out: (o: Partial<QueryResult>) => QueryResult): Promise<QueryResult> {
+    needProc(this.e, 'rm', 'YARN');
+    const csv = this.e.files.filter(f => f.path.startsWith('/user/root/ventas/'));
+    const bl = csv.flatMap(f => f.blocks.map(b => b.id));
+    const st: StageDef[] = [{ id: 'm1', name: 'Map 1', description: `Lee el CSV y escribe ${fmt === 'orc' ? 'ORC' : 'Parquet'}`, dependsOn: [], durSec: 6, n: 1, blocks: bl, ops: ['TableScan', 'Select Operator', `File Output Operator (${fmt})`] }];
+    const appId = this.e.submitApp({ type: 'TEZ', name: `HIVE: INSERT OVERWRITE TABLE ventas_${fmt} SELECT * FROM ventas`, am: 1024, amStart: 8, taskMb: 1024, executors: 0, stages: st, rowsIn: 200000, rowsOut: 200000 }, { command, input: '200.000 filas', quiet: true });
+    return new Promise((ok, ko) => this.e.watch(appId, {
+      done: () => {
+        const dir = `/user/root/formatos/${fmt}`;
+        this.e.files = this.e.files.filter(f => !f.path.startsWith(`${dir}/`));
+        const mb = csv.reduce((x, f) => x + f.sizeMb, 0) * (fmt === 'orc' ? 0.15 : 0.19);
+        this.e.putNow(`${dir}/000000_0`, Math.round(mb * 100) / 100, blockSizeMb(this.e.applied?.blockSize ?? '128m') ?? 128, 'Hive');
+        this.e.emit({ type: 'hdfs', path: dir });
+        ok(out({ appId, engine: 'tez', scanned: 200000, ...r }));
+      },
+      fail: why => ko(new ApiFailure(why, 'failed')),
+    }));
   }
 
   explain(source: DataSource, text: string): QueryPlan {

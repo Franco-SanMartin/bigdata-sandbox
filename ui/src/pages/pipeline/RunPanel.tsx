@@ -7,6 +7,8 @@ import { Panel } from '../../components/base';
 import { clock, duration, nf, sizeLabel } from '../../lib/format';
 import { navigate } from '../../state/ui';
 import { RUN_K, RUN_LABEL, toolLabel } from './util';
+import { Camino } from '../../components/Camino';
+import { caminoDePaso } from '../../lib/camino';
 
 export function RunPanel({ run, info, now, next, onNext }: {
   run: StepRun; info: PipelineStageInfo | undefined; now: number; next?: { label: string } | null; onNext?: () => void;
@@ -23,6 +25,7 @@ export function RunPanel({ run, info, now, next, onNext }: {
           <span className="pct">{nf(run.progress * 100)} %</span>
           <span className="msg" aria-live="polite" style={run.state === 'failed' ? { color: 'var(--bad-text)' } : undefined}>{run.state === 'failed' ? run.error || run.message : run.message}</span>
         </div>
+        <Camino c={caminoDePaso(run, toolLabel(info, run.tool))} />
         <dl className="pl-meta" style={{ margin: 0 }}>
           <div><dt>Motor</dt><dd><EngineTag engine={run.engine} /></dd></div>
           <div><dt>Empezó</dt><dd>{clock(run.startedAt)}</dd></div>

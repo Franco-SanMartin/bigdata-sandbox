@@ -1,0 +1,111 @@
+INFO  : Query Execution Summary
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  : OPERATION                            DURATION
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  : Compile Query                           0.06s
+INFO  : Prepare Plan                            2.71s
+INFO  : Get Query Coordinator (AM)              0.00s
+INFO  : Submit Plan                             0.20s
+INFO  : Start DAG                               0.04s
+INFO  : Run DAG                                 6.34s
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  : 
+INFO  : Task Execution Summary
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  :   VERTICES      DURATION(ms)   CPU_TIME(ms)    GC_TIME(ms)   INPUT_RECORDS   OUTPUT_RECORDS
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  :      Map 1              0.00          8,390            180         200,000               16
+INFO  :  Reducer 2              0.00            510              4              16                0
+INFO  : ----------------------------------------------------------------------------------------------
+INFO  : 
+INFO  : org.apache.tez.common.counters.DAGCounter:
+INFO  :    NUM_SUCCEEDED_TASKS: 3
+INFO  :    TOTAL_LAUNCHED_TASKS: 3
+INFO  :    DATA_LOCAL_TASKS: 1
+INFO  :    RACK_LOCAL_TASKS: 1
+INFO  :    AM_CPU_MILLISECONDS: 1350
+INFO  :    WALL_CLOCK_MILLIS: 4041
+INFO  :    AM_GC_TIME_MILLIS: 0
+INFO  :    INITIAL_HELD_CONTAINERS: 0
+INFO  :    TOTAL_CONTAINERS_USED: 2
+INFO  :    TOTAL_CONTAINER_ALLOCATION_COUNT: 2
+INFO  :    TOTAL_CONTAINER_LAUNCH_COUNT: 2
+INFO  :    TOTAL_CONTAINER_REUSE_COUNT: 1
+INFO  : File System Counters:
+INFO  :    FILE_BYTES_READ: 460
+INFO  :    FILE_BYTES_WRITTEN: 332
+INFO  :    FILE_READ_OPS: 0
+INFO  :    FILE_LARGE_READ_OPS: 0
+INFO  :    FILE_WRITE_OPS: 0
+INFO  :    HDFS_BYTES_READ: 6233632
+INFO  :    HDFS_BYTES_WRITTEN: 291
+INFO  :    HDFS_READ_OPS: 8
+INFO  :    HDFS_LARGE_READ_OPS: 0
+INFO  :    HDFS_WRITE_OPS: 2
+INFO  : org.apache.tez.common.counters.TaskCounter:
+INFO  :    REDUCE_INPUT_GROUPS: 8
+INFO  :    REDUCE_INPUT_RECORDS: 16
+INFO  :    COMBINE_INPUT_RECORDS: 0
+INFO  :    SPILLED_RECORDS: 32
+INFO  :    NUM_SHUFFLED_INPUTS: 2
+INFO  :    NUM_SKIPPED_INPUTS: 0
+INFO  :    NUM_FAILED_SHUFFLE_INPUTS: 0
+INFO  :    MERGED_MAP_OUTPUTS: 2
+INFO  :    GC_TIME_MILLIS: 184
+INFO  :    CPU_MILLISECONDS: 8900
+INFO  :    WALL_CLOCK_MILLISECONDS: 3812
+INFO  :    PHYSICAL_MEMORY_BYTES: 934805504
+INFO  :    VIRTUAL_MEMORY_BYTES: 6674939904
+INFO  :    COMMITTED_HEAP_BYTES: 934805504
+INFO  :    INPUT_RECORDS_PROCESSED: 200000
+INFO  :    INPUT_SPLIT_LENGTH_BYTES: 6213152
+INFO  :    OUTPUT_RECORDS: 16
+INFO  :    OUTPUT_LARGE_RECORDS: 0
+INFO  :    OUTPUT_BYTES: 216
+INFO  :    OUTPUT_BYTES_WITH_OVERHEAD: 260
+INFO  :    OUTPUT_BYTES_PHYSICAL: 268
+INFO  :    ADDITIONAL_SPILLS_BYTES_WRITTEN: 0
+INFO  :    ADDITIONAL_SPILLS_BYTES_READ: 268
+INFO  :    ADDITIONAL_SPILL_COUNT: 0
+INFO  :    SHUFFLE_CHUNK_COUNT: 2
+INFO  :    SHUFFLE_BYTES: 268
+INFO  :    SHUFFLE_BYTES_DECOMPRESSED: 260
+INFO  :    SHUFFLE_BYTES_TO_MEM: 0
+INFO  :    SHUFFLE_BYTES_TO_DISK: 0
+INFO  :    SHUFFLE_BYTES_DISK_DIRECT: 268
+INFO  :    NUM_MEM_TO_DISK_MERGES: 0
+INFO  :    NUM_DISK_TO_DISK_MERGES: 0
+INFO  :    SHUFFLE_PHASE_TIME: 913
+INFO  :    MERGE_PHASE_TIME: 918
+INFO  :    FIRST_EVENT_RECEIVED: 30
+INFO  :    LAST_EVENT_RECEIVED: 911
+INFO  : HIVE:
+INFO  :    CREATED_FILES: 1
+INFO  :    DESERIALIZE_ERRORS: 0
+INFO  :    RECORDS_IN_Map_1: 200000
+INFO  :    RECORDS_OUT_0: 8
+INFO  :    RECORDS_OUT_INTERMEDIATE_Map_1: 16
+INFO  :    RECORDS_OUT_INTERMEDIATE_Reducer_2: 0
+INFO  :    RECORDS_OUT_OPERATOR_FS_11: 8
+INFO  :    RECORDS_OUT_OPERATOR_GBY_10: 8
+INFO  :    RECORDS_OUT_OPERATOR_GBY_8: 16
+INFO  :    RECORDS_OUT_OPERATOR_MAP_0: 0
+INFO  :    RECORDS_OUT_OPERATOR_RS_9: 16
+INFO  :    RECORDS_OUT_OPERATOR_SEL_7: 200000
+INFO  :    RECORDS_OUT_OPERATOR_TS_0: 200000
+INFO  : Shuffle Errors:
+INFO  :    BAD_ID: 0
+INFO  :    CONNECTION: 0
+INFO  :    IO_ERROR: 0
+INFO  :    WRONG_LENGTH: 0
+INFO  :    WRONG_MAP: 0
+INFO  :    WRONG_REDUCE: 0
+INFO  : org.apache.hadoop.hive.ql.exec.tez.HiveInputCounters:
+INFO  :    GROUPED_INPUT_SPLITS_Map_1: 2
+INFO  :    INPUT_DIRECTORIES_Map_1: 1
+INFO  :    INPUT_FILES_Map_1: 1
+INFO  :    RAW_INPUT_SPLITS_Map_1: 6
+INFO  : Completed executing command(queryId=root_20261031235828_ddca955c-99f3-4003-9870-cf1e305837b8); Time taken: 9.31 seconds
+8 rows selected (9.415 seconds)
+Beeline version 4.0.0 by Apache Hive
+Closing: 0: jdbc:hive2://localhost:10000

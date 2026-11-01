@@ -6,7 +6,7 @@ Sirve para tres cosas: aprender el comando que corresponde a cada botón,
 diagnosticar un problema y copiar lo que hiciste para repetirlo en la
 terminal.
 
-[← 9. Configuración y compose](09-configuracion-y-compose.md) · [Índice de full](README.md) · Siguiente: [Referencia →](referencia.md)
+[← 9. Configuración y compose](09-configuracion-y-compose.md) · [Índice de full](README.md) · Siguiente: [11. Comparar →](11-comparar.md)
 
 Hay dos formas de verla: la pantalla **Consola** (`G O`) y el cajón que se
 abre abajo en cualquier pantalla con `Ctrl+J`.

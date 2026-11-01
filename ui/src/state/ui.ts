@@ -12,8 +12,11 @@ function store<T>(init: T) {
 }
 
 /* ---------- Rutas (#inicio, #hdfs/user/root…) ---------- */
-import { parseHash, routeHash, routeParts, type PageId } from '../lib/route';
+import { hashNuevo, parseHash, routeHash, routeParts, type PageId } from '../lib/route';
 export { PAGES, parseHash, routeHash, routeParts, type PageId } from '../lib/route';
+/** Una ruta vieja (#datos) queda escrita con la nueva, sin sumar un paso al historial */
+const reescribir = () => { const h = hashNuevo(location.hash); if (h) history.replaceState(history.state, '', h); };
+reescribir();
 /** #hdfs/user/root → ['hdfs', 'user/root']. Lo que no es una pantalla conocida va a Inicio */
 export const route = store<PageId>(parseHash(location.hash)[0]);
 /** Lo que sigue a la pantalla en la ruta (carpeta de HDFS, id de trabajo, práctica…) */
@@ -24,6 +27,7 @@ export const useRouteParts = () => routeParts(routeArgStore.use());
 /** Ruta actual: la pantalla y su sufijo, para leer fuera de React */
 export const currentRoute = (): [PageId, string] => [route.get(), routeArgStore.get()];
 addEventListener('hashchange', () => {
+  reescribir();
   const [p, a] = parseHash(location.hash);
   if (p !== route.get()) route.set(p);
   if (a !== routeArgStore.get()) routeArgStore.set(a);
@@ -51,6 +55,9 @@ export const consoleOpen = store(false);
 /** El panel de la terminal (bash adentro del contenedor). Una vez abierto queda montado: cerrarlo lo esconde */
 export const terminalOpen = store(false);
 export const helpOpen = store(false);
+/** La ayuda abierta en el glosario: '' arriba de todo, o el ancla de un término ('tez', 'réplica'…). null: en la pantalla */
+export const glosarioEn = store<string | null>(null);
+export function abrirGlosario(termino = '') { glosarioEn.set(termino); helpOpen.set(true); }
 export const paletteOpen = store(false);
 export const composeOpen = store(false);
 /** La configuración que muestra el docker-compose.yml (el borrador de Configuración, si hay) */

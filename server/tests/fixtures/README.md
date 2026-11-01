@@ -29,6 +29,7 @@ cuando el humo no pasó por ese estado.
 | `shs_stages.json`, `shs_jobs.json` | `:18080/api/v1/applications/<app>/stages` y `/jobs` | real |
 | `yarn_logs.txt`, `yarn_logs_info.txt` | `yarn logs -applicationId ... -containerId ...` y `-show_application_log_info` | real |
 | `beeline_tez.txt` | `beeline -u jdbc:hive2://localhost:10000 --outputformat=tsv2 -e "SELECT producto, COUNT(*) ... GROUP BY producto"` (con el avance de Tez) | real |
+| `beeline_tez_summary.txt` | `beeline -u jdbc:hive2://localhost:10000 --hiveconf hive.tez.exec.print.summary=true -e "SELECT producto, SUM(cantidad) FROM ventas GROUP BY producto;"`: el resumen y los contadores del DAG que imprime en stderr, sin los colores (tomado de un `:full` el 31/10/2026) | real |
 | `error_{hive,mysql,mongodb}.txt` | una consulta a una tabla que no existe en cada motor | real |
 | `ui_cluster.json` | lo que calcula la interfaz (`ui/src/lib/cluster.ts`) para comparar | generada con la interfaz |
 | `proc/` | un `/proc` de mentira para `scan_proc` | sintética |

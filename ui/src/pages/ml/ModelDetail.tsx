@@ -2,6 +2,8 @@
 import { Suspense, lazy } from 'react';
 import type { MlTask, ModelRun } from '../../api/types';
 import { SampleTable, TraceView } from '../../components/Trace';
+import { Camino } from '../../components/Camino';
+import { caminoDeModelo } from '../../lib/camino';
 import { Meter } from '../../components/ui';
 import { duration, mbLabel, nf } from '../../lib/format';
 
@@ -40,6 +42,8 @@ export function ModelDetail({ run, label }: { run: ModelRun; label: string }) {
         {run.reference && <RefTag />}
         <span className="mono muted md-id">{run.id}{run.appId ? ` · ${run.appId}` : ''}</span>
       </div>
+
+      <Camino c={caminoDeModelo(run, label)} />
 
       {run.state === 'running' && (
         <div className="md-run">
