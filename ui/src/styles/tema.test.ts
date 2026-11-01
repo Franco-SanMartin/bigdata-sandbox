@@ -1,5 +1,5 @@
-/* El tema es oscuro siempre: no sigue al del sistema operativo ni tiene interruptor, y no quedan
-   colores claros fijos que se vean como parches blancos sobre el fondo oscuro. */
+/* El tema es claro siempre (D-06): no sigue al del sistema operativo ni tiene interruptor, y no
+   quedan colores oscuros fijos que se vean como parches negros sobre el fondo blanco. */
 import { describe, expect, it } from 'vitest';
 import html from '../../index.html?raw';
 
@@ -15,32 +15,32 @@ function lum(hex: string): number {
 
 const tokens = Object.entries(css).find(([f]) => f.endsWith('/tokens.css'))![1];
 
-describe('tema oscuro siempre', () => {
-  it('los tokens y la página piden oscuro', () => {
-    expect(tokens).toMatch(/color-scheme:\s*dark/);
-    expect(html).toMatch(/name="color-scheme" content="dark"/);
+describe('tema claro siempre', () => {
+  it('los tokens y la página piden claro', () => {
+    expect(tokens).toMatch(/color-scheme:\s*light/);
+    expect(html).toMatch(/name="color-scheme" content="light"/);
     const n0 = /--n-0:\s*(#[0-9a-f]{6})/i.exec(tokens)![1];
     const n12 = /--n-12:\s*(#[0-9a-f]{6})/i.exec(tokens)![1];
-    expect(lum(n0)).toBeLessThan(0.1);
-    expect(lum(n12)).toBeGreaterThan(0.8);
+    expect(lum(n0)).toBeGreaterThan(0.9);
+    expect(lum(n12)).toBeLessThan(0.1);
   });
 
   it('nada sigue al tema del sistema', () => {
     for (const [f, s] of Object.entries({ ...css, ...code })) {
       expect(s, f).not.toMatch(/prefers-color-scheme/);
-      expect(s, f).not.toMatch(/color-scheme:\s*light/);
+      expect(s, f).not.toMatch(/color-scheme:\s*dark/);
     }
   });
 
-  it('fuera de los tokens no hay fondos ni bordes claros fijos', () => {
+  it('fuera de los tokens no hay fondos ni bordes oscuros fijos', () => {
     for (const [f, s] of Object.entries(css)) {
       if (f.endsWith('tokens.css')) continue;
       const clean = s.replace(/\/\*[\s\S]*?\*\//g, '');
       for (const m of clean.matchAll(/(background[\w-]*|border[\w-]*|box-shadow)\s*:[^;}]*?(#[0-9a-f]{3,6})\b/gi))
-        expect(lum(m[2]), `${f}: ${m[0]}`).toBeLessThan(0.5);
+        expect(lum(m[2]), `${f}: ${m[0]}`).toBeGreaterThan(0.5);
       expect(clean, f).not.toMatch(/background[\w-]*\s*:\s*(white|#fff\b|#ffffff)/i);
-      // sombras/velos con el negro tibio del tema claro
-      expect(clean, f).not.toMatch(/rgba\(\s*(28,\s*27,\s*25|250,\s*249,\s*247)/);
+      // velos blancos pensados para fondo oscuro: sobre blanco no se ven
+      expect(clean, f).not.toMatch(/rgba\(\s*255,\s*255,\s*255,\s*\.0\d\)/);
     }
   });
 });

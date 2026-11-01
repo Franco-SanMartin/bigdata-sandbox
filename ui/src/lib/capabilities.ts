@@ -34,17 +34,17 @@ export interface Capability {
 export type Capabilities = Record<CapId, Capability>;
 
 /** Lo que muestra Inicio de cada capacidad: para qué sirve, en qué pantalla se usa y qué guía la trabaja */
-export interface CapInfo { id: CapId; label: string; what: string; page: PageId; guide?: string }
+export interface CapInfo { id: CapId; label: string; what: string; page: PageId; arg?: string; guide?: string }
 
 export const CAP_INFO: CapInfo[] = [
   { id: 'hdfs.write', label: 'Subir y explorar HDFS', what: 'Subí archivos, mirá en qué DataNodes quedan sus bloques y cambiá la réplica.', page: 'hdfs', guide: '03' },
   { id: 'mapreduce', label: 'Trabajos MapReduce', what: 'Lanzá WordCount, Pi o tus ventas en YARN y seguí sus contenedores.', page: 'yarn', guide: '04' },
-  { id: 'pig', label: 'Pig Latin', what: 'LOAD, FILTER, GROUP y DUMP sobre archivos de HDFS.', page: 'datos', guide: '05' },
-  { id: 'hive', label: 'Consultas en Hive', what: 'SQL sobre HDFS con tablas externas; las consultas pesadas corren en Tez.', page: 'datos', guide: '06' },
-  { id: 'mysql', label: 'MariaDB (tienda)', what: 'La base relacional de origen: SELECT, JOIN y Sqoop hacia HDFS.', page: 'datos', guide: '07' },
+  { id: 'pig', label: 'Pig Latin', what: 'LOAD, FILTER, GROUP y DUMP sobre archivos de HDFS.', page: 'lenguajes', arg: 'pig', guide: '05' },
+  { id: 'hive', label: 'Consultas en Hive', what: 'SQL sobre HDFS con tablas externas; las consultas pesadas corren en Tez.', page: 'lenguajes', arg: 'hive', guide: '06' },
+  { id: 'mysql', label: 'MariaDB (tienda)', what: 'La base relacional de origen: SELECT, JOIN y Sqoop hacia HDFS.', page: 'bases', arg: 'mariadb', guide: '07' },
   { id: 'spark', label: 'Spark', what: 'El mismo cálculo en memoria: DAG de etapas y Spark History.', page: 'yarn', guide: '08' },
   { id: 'ha', label: 'Alta disponibilidad', what: 'Apagá el NameNode activo y mirá cómo ZooKeeper elige otro.', page: 'cluster', guide: '09' },
-  { id: 'mongodb', label: 'MongoDB', what: 'Documentos, find, aggregate e índices.', page: 'datos', guide: '10' },
+  { id: 'mongodb', label: 'MongoDB', what: 'Documentos, find, aggregate e índices.', page: 'bases', arg: 'mongodb', guide: '10' },
   { id: 'pipeline', label: 'Pipeline completo', what: 'De la base al tablero: ingesta, ETL, almacén, análisis y modelo.', page: 'pipeline' },
   { id: 'ml.sklearn', label: 'Machine Learning', what: 'Entrená regresión, clasificación o clustering y compará métricas.', page: 'ml', guide: '11' },
   { id: 'jupyter', label: 'JupyterLab', what: 'Notebooks con PySpark y pandas contra el cluster.', page: 'cluster' },

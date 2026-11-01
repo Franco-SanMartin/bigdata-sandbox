@@ -237,7 +237,7 @@ export async function runQuery(c: StepCtx, source: DataSource, text: string): Pr
     out: { kind: 'table', columns: r.columns, rows: r.rows },
     raw: queryRaw(c, r),
     trace: r.trace, vars: r.appId ? { [`app.${source}`]: r.appId } : undefined,
-    link: r.appId ? { label: 'Ver el trabajo', page: 'yarn', arg: r.appId } : { label: 'Abrir en Consultas', page: 'datos' },
+    link: r.appId ? { label: 'Ver el trabajo', page: 'yarn', arg: r.appId } : { label: 'Abrir en Lenguajes', page: 'lenguajes' },
   };
 }
 

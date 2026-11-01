@@ -44,7 +44,7 @@ from starlette.routing import Route
 from . import hdfs as hdfs_mod
 from .errors import ApiError
 from .events import EventBus
-from .yarn import APP_ID
+from .yarn import APP_ID, parse_tez_summary, sin_resumen_tez
 
 HIVE_URL = "jdbc:hive2://localhost:10000"
 MAX_ROWS = 1000
@@ -947,7 +947,8 @@ class Datos:
 
     @staticmethod
     def beeline(sql: str) -> list[str]:
-        return ["beeline", "-u", HIVE_URL, "--outputformat=tsv2", "-e", sql]
+        # print.summary: los contadores del DAG de Tez (lo leído de HDFS, el shuffle) al final de cada consulta
+        return ["beeline", "-u", HIVE_URL, "--outputformat=tsv2", "--hiveconf", "hive.tez.exec.print.summary=true", "-e", sql]
 
     @staticmethod
     def mysql(sql: str, db: str | None = "tienda") -> list[str]:
@@ -1358,7 +1359,14 @@ class Datos:
                 if rc != 0:
                     raise self.error_of("hive", rc, out, err)
                 cols, rows, total = table_from(out.splitlines())
-                raw = raw_lines(out, err)
+                # Si lanzó un DAG de Tez: sus contadores (Tez no los guarda sin Timeline Server); la salida, sin ese bloque
+                contadores = parse_tez_summary(err.splitlines())
+                raw = raw_lines(out, "\n".join(sin_resumen_tez(err.splitlines())))
+                if "INPUT_RECORDS_PROCESSED" in contadores:
+                    scanned = contadores["INPUT_RECORDS_PROCESSED"]
+                if "HDFS_BYTES_READ" in contadores:
+                    res["bytesRead"] = contadores["HDFS_BYTES_READ"]
+                    res["shuffleBytes"] = contadores.get("SHUFFLE_BYTES", 0)
                 if re.match(r"\s*(create|drop|alter|insert|msck|load)\b", one, re.I):
                     self.invalidate("hive")
             elif src == "mysql":

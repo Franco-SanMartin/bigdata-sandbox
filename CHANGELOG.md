@@ -11,6 +11,140 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Agregado
 
+- **Inicio con el mapa vivo del ecosistema** (`full`): las 20 herramientas
+  ordenadas por capa (desde dónde trabajás → cómo lo pedís → quién hace el
+  trabajo → quién reparte → dónde quedan los datos, más el puente y lo que
+  corre en una sola máquina), cada una con la lámpara de sus procesos reales y
+  flechas de quién le pide qué a quién. Las flechas de MapReduce, Tez y Spark
+  se mueven cuando hay un trabajo de ese motor corriendo en YARN.
+  - **Ficha de cada herramienta**: qué hace, una analogía, qué se puede hacer
+    ahí (la pantalla de la interfaz y sus UIs web), el comando de ejemplo
+    (los de bash se mandan a la terminal integrada), con qué no confundirla y
+    con quién habla.
+  - **Recorridos guiados** sobre el mapa ("De un CSV a un tablero" y "Una
+    consulta, tres motores"), paso a paso con el comando de cada paso.
+  - **¿Cuál uso?**: las seis preguntas (lenguajes, motores, almacenamiento,
+    una máquina contra el cluster, quién coordina, cómo entran los datos),
+    cada una abre su tabla en Comparar.
+  - El contenido sale de `docs/maquetas/ecosistema.html`.
+- **Pantalla Comparar** (`full`, `G K`): la misma cuenta de ventas por
+  producto en MapReduce a mano, Pig, Hive y PySpark, con el código real de
+  `datos/ejemplos` (la parte que hace la cuenta o el archivo entero). Arriba,
+  el flujo: el dato una sola vez en HDFS, cuatro lenguajes, tres motores y
+  cuatro resultados, con los cables que se mueven mientras corre cada versión.
+  Cada columna dice qué motor la ejecuta, cuántas líneas hacen la cuenta,
+  qué fases arma (las de la última corrida si YARN las trae) y cuánto tardó
+  la última vez, en la misma escala para las cuatro. MapReduce, Hive y Spark
+  se lanzan desde ahí (las mismas plantillas de Trabajos); las cuatro tienen
+  su comando para la terminal y uno final para ver que dieron lo mismo.
+  Abajo, las seis tablas de "¿Cuál uso?" (`#comparar/quien-hace-el-trabajo`).
+  - **Lo que movió cada corrida**, en la misma escala para las cuatro:
+    leído de HDFS, shuffle, disco local de los nodos y memoria × tiempo en
+    YARN (Pig suma sus varios trabajos). Debajo, "Qué muestran los números"
+    lo dice en palabras. Con las salidas reales: MapReduce a mano manda
+    3,2 MB por el shuffle y PySpark 3 KB, porque Spark suma antes de mandar; y
+    PySpark lee la entrada tres veces (inferSchema, show y write). Tez sin
+    Timeline Server no deja contadores: de Hive se ve el tiempo y la memoria.
+- **Comparar con más tareas** (las de la tabla 5 de D-05), cada una con el
+  código real, dónde corre, su comando y "Qué mirar": unir dos tablas (Hive,
+  Pig y PySpark), SQL sobre la misma tabla (Hive y Spark SQL), limpiar los
+  datos (pandas y PySpark), traer una tabla de MariaDB (Sqoop y Spark por
+  JDBC) y entrenar un modelo (scikit-learn y MLlib). CSV contra Parquet lleva
+  a Formatos. Probadas en un `:full`: las tres versiones del join dan lo mismo
+  (Hive hace map join y Spark `BroadcastHashJoin`), y Spark SQL devuelve una
+  fila de más porque no aplica `skip.header.line.count` de la tabla.
+- **Ejemplos nuevos** en `datos/comparar/` (se copian a
+  `/datos/ejemplos/comparar` en `full`): `categoria.pig`, `categoria.py` (el
+  join) y `jdbc.py` (Spark trae la tabla de MariaDB).
+- **Contadores de Tez**: el trabajo de Hive que lanza la interfaz y las
+  consultas de Hive corren con `hive.tez.exec.print.summary=true`, y el
+  servidor lee lo que imprime beeline (lo leído de HDFS, el shuffle, el disco
+  local). Comparar y Motores muestran lo que movió Hive, y Formatos cuánto
+  leyó cada formato. En un `:full` real, el shuffle de Hive fue de 268 bytes
+  contra 3,2 MB de MapReduce a mano.
+- **Publicar `:full` sin tocar `latest`**: `imagen.yml` saltea `base`,
+  `latest` y `ml` cuando un push a `main` solo cambia lo de `full`
+  (`pruebas/solo_full.sh` decide; en el `Dockerfile` mira las líneas de cada
+  etapa).
+- **Pantalla Motores** (`full`, `G E`, en Procesamiento): una ficha por
+  motor (MapReduce, Tez y Spark) con qué hace, una analogía, cómo trabaja,
+  cuándo conviene, quién lo usa en el sandbox y sus términos del glosario.
+  Al lado, el DAG de su último trabajo en YARN, tarea por tarea, con lo que
+  movió. Cada ficha lanza ventas por producto con su motor.
+- **Franja de camino de datos**: en el detalle de un trabajo, en el
+  resultado de una consulta, en cada paso del Pipeline y en cada modelo de ML,
+  de dónde → qué lo procesa → dónde queda. Cada
+  caja lleva el color de su capa, lleva a su pantalla (la carpeta en HDFS,
+  la tabla, el trabajo o el motor) y su `?` abre el glosario.
+- **Pantalla Formatos** (`full`, `G F`, en Almacenamiento): la misma tabla
+  de ventas en texto (CSV), Parquet y ORC.
+  - Un dibujo de fila contra columna, con las columnas que la consulta no
+    usa apagadas.
+  - **Crear las copias en Parquet y ORC**: Hive escribe dos tablas externas
+    en `/user/root/formatos` con un `INSERT OVERWRITE … SELECT * FROM ventas`.
+  - Cada copia muestra lo que ocupa en HDFS, cuántas veces menos que el CSV y
+    en cuántos bloques queda, leído del listado de su carpeta.
+  - La misma consulta corre en las tres, una por vez, con su tiempo y su
+    trabajo de YARN.
+  - Guía 12 y la sección en la referencia.
+- **Glosario único** (`guias/glosario.md`): las palabras del cluster por capa
+  (almacenamiento, recursos, motores, lenguajes, ingesta y alta
+  disponibilidad), más la tabla "la misma tarea, con varias herramientas".
+  - En `full`, el `?` de cada pantalla suma la pestaña **Glosario**, con
+    buscador y los términos de esa pantalla a un clic.
+  - En `Ctrl+K`, escribir una palabra lo abre en ella.
+  - La interfaz lee el mismo `.md` al armarse la imagen: hay un solo texto.
+- **Guía 11 de `full`: Comparar**, con los números reales de las cuatro
+  versiones. El índice de las guías de `full` queda ordenado por capas, y la
+  guía 5 suma la pantalla Tablas.
+- **`GET /api/yarn/metrics?apps=…`** (servidor): lo que costó cada trabajo,
+  igual para los tres motores. Tiempo, MB·s y vcores·s salen del RM; cuando
+  terminó, lo leído y escrito en HDFS, el shuffle, el disco local y las tareas
+  salen de JobHistory (MapReduce) o de Spark History (sin las etapas SKIPPED).
+  Hasta 12 trabajos por pedido; uno que no existe vuelve con `error`.
+- **La barra lateral sigue las capas del mapa**: Empezar, Almacenamiento
+  (HDFS, Tablas, Bases), Recursos (Trabajos), Procesamiento (Lenguajes,
+  Comparar, Machine Learning), Ingesta (Pipeline) y Operar, cada capa con su
+  color. Arriba de cada pantalla se ve en qué capa está (Almacenamiento › HDFS).
+- **Pantalla Tablas** (`full`, `G T`): lo que anota el Metastore de cada tabla
+  de Hive. Para la tabla elegida: adónde apunta en HDFS (con enlace a la
+  carpeta), si es externa o administrada y qué pasa con DROP TABLE, las
+  columnas, quién la puede leer (Hive y Spark por el nombre, Pig por la
+  carpeta, con el script que arma el esquema y saltea el encabezado), una
+  muestra y el CREATE TABLE. "Consultarla en Hive" y "Leerla con Pig" la abren
+  en Lenguajes.
+- **Vista Aula rehecha como plano del laboratorio** (`empresa`): el maestro
+  adelante, cada fila como un rack con sus PCs, y en cada PC su lámpara, la
+  memoria de YARN que presta y usa, sus bloques y sus contenedores. Arriba, el
+  aula en números y "¿Ya pueden apagar?"; al costado, los pasos para sumar PCs
+  por Veyon y el detalle de la PC elegida.
+
+### Cambiado
+
+- **Capturas nuevas** en `docs/capturas`, sacadas de la demo con la barra por
+  capas: Inicio con el mapa del ecosistema, Trabajos, Pipeline y Machine
+  Learning con su franja de camino de datos, y Cluster; más Comparar,
+  Formatos, Tablas y Motores (en el README y en las guías 11 y 12).
+- **Consultas se partió en Lenguajes y Bases** (`full`): Lenguajes (`G L`)
+  tiene Hive y Pig, que corren en el cluster; Bases (`G B`) tiene MariaDB y
+  MongoDB, de una sola máquina. Es el mismo editor (documentos, ejemplos,
+  plan, trace, historial y guardadas, que se conservan), con una explicación
+  arriba de qué tiene de distinto cada una. `#lenguajes/pig` o
+  `#bases/mongodb` abren directo ese motor (Comparar ya lleva a Pig), y
+  `#datos` sigue andando: lleva a Lenguajes, o a Bases si era MariaDB o
+  MongoDB.
+- **Prácticas por capa**: la lista se agrupa en Almacenamiento (HDFS y
+  MongoDB), Recursos (MapReduce), Procesamiento (Pig, Hive y Spark), Ingesta
+  (MariaDB y Sqoop) y Alta disponibilidad. Los ids y el avance guardado no
+  cambian. Las de procesamiento terminan con *Probalo también con las otras
+  herramientas*, que abre Comparar.
+- **Página pública en tema claro** (`docs/index.html`): la misma escala de
+  grises y los mismos colores de estado y de motores que la interfaz.
+- **Tema claro en toda la interfaz** (D-06): tokens nuevos (fondo blanco,
+  grises y estados con contraste ≥ 4,5:1 sobre blanco), la terminal integrada,
+  el editor del estudio de ML y los gráficos. `tema.test.ts` pasa a exigir
+  claro.
+
 - **`empresa` con las PCs del laboratorio** (etapa 2, rama `empresa-aula`),
   con lo que midió la sonda el 27/10:
   - `RED=wireguard`: túnel WireGuard con hub en la PC del profe (UDP 51820) e

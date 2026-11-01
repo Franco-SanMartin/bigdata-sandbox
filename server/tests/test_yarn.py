@@ -351,6 +351,39 @@ def test_detalle_errores(settings, tmp_path):
     asyncio.run(main())
 
 
+def test_metricas_de_los_tres_motores(settings, tmp_path):
+    """Lo que muestra Comparar, de las salidas reales: el mismo cálculo (ventas por producto)"""
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        mr, spark, tez, nada = await y.metrics_many([MR, SPARK, TEZ, "application_1_9999"])
+        # MapReduce Streaming, de JobHistory: sin combiner, los 200.000 pares viajan por el shuffle
+        assert mr == {"id": MR, "type": "MAPREDUCE", "state": "FINISHED", "elapsedMs": 18645, "mbSeconds": 19457,
+                      "vcoreSeconds": 36, "hdfsReadBytes": 6217505, "hdfsWrittenBytes": 188, "shuffleBytes": 3347314,
+                      "localDiskBytes": 7535908, "tasks": 3, "dataLocalTasks": 2, "source": "jobhistory"}
+        # Spark, de Spark History: suma antes del shuffle (3 KB) y lee la entrada más de una vez
+        # (inferSchema, show y write); las etapas SKIPPED no cuentan
+        assert spark == {"id": SPARK, "type": "SPARK", "state": "FINISHED", "elapsedMs": 27747, "mbSeconds": 74474,
+                         "vcoreSeconds": 71, "hdfsReadBytes": 18822508, "hdfsWrittenBytes": 216, "shuffleBytes": 3102,
+                         "localDiskBytes": 2214, "tasks": 11, "source": "spark-history"}
+        # Tez sin Timeline Server: solo lo que sabe el RM
+        assert tez == {"id": TEZ, "type": "TEZ", "state": "FINISHED", "elapsedMs": 17685, "mbSeconds": 24613,
+                       "vcoreSeconds": 29, "source": "rm"}
+        assert nada == {"id": "application_1_9999", "error": "No existe el trabajo application_1_9999"}
+        # Corriendo: todavía no hay contadores que pedir
+        corriendo = await y.metrics(CORRIENDO)
+        assert corriendo["state"] == "RUNNING" and corriendo["source"] == "rm" and "hdfsReadBytes" not in corriendo
+        assert not any("18080" in u and CORRIENDO in u for u in y.http.calls)
+        # Sin JobHistory: lo del RM igual sale
+        y.http.down.add("localhost:19888")
+        assert (await y.metrics(MR))["source"] == "rm"
+        # Sin RM no hay nada que mostrar
+        y.http.down.add("localhost:8088")
+        with pytest.raises(ApiError) as e:
+            await y.metrics_many([MR])
+        assert e.value.code == "service_down"
+    asyncio.run(main())
+
+
 def test_logs(settings, tmp_path, fake_bin):
     async def main():
         cl, y, _ = make(settings, tmp_path)
@@ -446,6 +479,12 @@ def test_rutas_yarn(settings, tmp_path, fake_bin):
         assert c.get(f"/api/yarn/apps/{MR}").json()["engine"] == "mr"
         r = c.get("/api/yarn/apps/application_1_1")
         assert r.status_code == 404 and r.json()["code"] == "not_found"
+        r = c.get("/api/yarn/metrics", params={"apps": f"{MR}, {TEZ},{MR}"})
+        assert r.status_code == 200 and [m["id"] for m in r.json()] == [MR, TEZ]
+        assert r.json()[0]["shuffleBytes"] == 3347314
+        assert c.get("/api/yarn/metrics").json()["code"] == "invalid"
+        muchas = ",".join(f"application_1_{i:04d}" for i in range(13))
+        assert c.get("/api/yarn/metrics", params={"apps": muchas}).status_code == 400
         cont = f"container_{CORRIENDO[12:]}_01_000002"
         r = c.get(f"/api/yarn/apps/{CORRIENDO}/logs", params={"container": cont})
         assert r.json()["container"] == cont
@@ -739,3 +778,31 @@ def test_ruta_plantillas(settings, tmp_path, fake_hadoop):
         assert r.status_code == 202 and r.json() == {"id": NUEVA}
         r = c.post("/api/yarn/apps", json={"template": "mr-pi", "params": {"maps": 200}})
         assert r.status_code == 400 and r.json()["code"] == "invalid"
+
+
+def test_resumen_de_tez_de_beeline():
+    """Con hive.tez.exec.print.summary=true, beeline imprime los contadores del DAG (salida real)"""
+    lines = fixture_text("beeline_tez_summary.txt").splitlines()
+    c = Y.parse_tez_summary(lines)
+    assert c["HDFS_BYTES_READ"] == 6233632 and c["SHUFFLE_BYTES"] == 268
+    assert c["INPUT_RECORDS_PROCESSED"] == 200000 and c["TOTAL_LAUNCHED_TASKS"] == 3 and c["DATA_LOCAL_TASKS"] == 1
+    assert c["FILE_BYTES_WRITTEN"] == 332 and c["HDFS_BYTES_WRITTEN"] == 291
+    # Dos consultas en el mismo script (dos DAG de la misma sesión): se suman
+    assert Y.parse_tez_summary(lines + lines)["HDFS_BYTES_READ"] == 2 * 6233632
+    # Lo de antes y después del bloque no cuenta, y sin el bloque no queda nada de él
+    assert Y.parse_tez_summary(["INFO  :    HDFS_BYTES_READ: 5"]) == {}
+    limpias = Y.sin_resumen_tez(["antes"] + lines + ["8 rows selected (9.4 seconds)"])
+    assert limpias[0] == "antes" and limpias[-1] == "8 rows selected (9.4 seconds)"
+    assert not any("HDFS_BYTES_READ" in l for l in limpias)
+
+
+def test_metricas_de_tez_desde_beeline(settings, tmp_path):
+    async def main():
+        cl, y, _ = make(settings, tmp_path)
+        lines = [{"t": 0, "stream": "stderr", "text": l} for l in fixture_text("beeline_tez_summary.txt").splitlines()]
+        y.submitted[TEZ] = {"example": "hive-ventas", "run": type("R", (), {"lines": lines})()}
+        m = await y.metrics(TEZ)
+        assert m["source"] == "hive-summary" and m["hdfsReadBytes"] == 6233632 and m["shuffleBytes"] == 268
+        assert m["localDiskBytes"] == 332 and m["tasks"] == 3 and m["elapsedMs"] == 17685
+        assert "--hiveconf hive.tez.exec.print.summary=true" in Y.JOBS["hive-ventas"]["run"]
+    asyncio.run(main())

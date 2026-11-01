@@ -51,7 +51,7 @@ apagado* y el texto "Prendelo para usar HDFS, YARN, Hive y el resto. Los
 datos de la vez anterior siguen en el volumen.". Abajo, el botón **Iniciar
 cluster** y el enlace *¿Querés otros nodos o servicios? Configuralo antes*.
 
-![Inicio: el estado del cluster y qué podés hacer ahora, con lo que falta y cómo activarlo](../../docs/capturas/inicio.png)
+![Inicio: el mapa del ecosistema por capas, cada pieza con su estado real](../../docs/capturas/inicio.png)
 
 **Qué significa.** La interfaz le pregunta al servidor `GET /api/status`. Si
 contesta en 1,5 s, trabaja contra el cluster de verdad; si no contesta (por
@@ -126,12 +126,16 @@ bloquea los botones en el resto de las pantallas.
 
 ## Paso 5. La barra lateral y la barra de arriba
 
-**Qué se ve.** A la izquierda, las pantallas en tres grupos:
+**Qué se ve.** A la izquierda, las pantallas agrupadas por las capas del mapa
+de Inicio, cada capa con su color:
 
 | Grupo | Pantallas | Atajo |
 |---|---|---|
 | Empezar | Inicio, Prácticas guiadas | `G I`, `G R` |
-| Trabajar | HDFS, Trabajos en YARN, Consultas, Pipeline, Machine Learning | `G H`, `G Y`, `G D`, `G P`, `G M` |
+| Almacenamiento | HDFS, Tablas (Metastore), Bases (MariaDB y MongoDB) | `G H`, `G T`, `G B` |
+| Recursos | Trabajos en YARN | `G Y` |
+| Procesamiento | Lenguajes (Hive y Pig), Comparar, Machine Learning | `G L`, `G K`, `G M` |
+| Ingesta | Pipeline | `G P` |
 | Operar | Cluster, Consola, Configuración | `G C`, `G O`, `G S` |
 
 Los atajos se escriben como dos teclas seguidas: `G` y después la letra.

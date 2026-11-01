@@ -2,7 +2,7 @@ import { route, navigate } from '../state/ui';
 import { useSnapshot } from '../state/store';
 import { api } from '../api';
 import { SPEED as DEMO_SPEED } from '../api/demo/speed';
-import { NAV_GROUPS, navVisible } from './nav';
+import { GROUP_CAPA, NAV_GROUPS, navVisible } from './nav';
 import { Dot, Tip } from '../components/ui';
 import { clusterHealth } from '../lib/cluster';
 
@@ -38,8 +38,10 @@ export function Sidebar() {
       <div className="side-brand"><span className="side-mark"><Mark /></span><b>BigData Sandbox</b><span className="tag">full</span></div>
       <nav className="side-nav">
         {NAV_GROUPS.map(g => (
-          <div className="nav-group" key={g} role="group" aria-label={g}>
-            <span className="nav-label">{g}</span>
+          <div className="nav-group" key={g} role="group" aria-label={g} data-capa={GROUP_CAPA[g]?.capa}>
+            {GROUP_CAPA[g]
+              ? <Tip content={GROUP_CAPA[g].tip} side="right"><span className="nav-label nav-capa">{g}</span></Tip>
+              : <span className="nav-label">{g}</span>}
             {navVisible(!!st?.aula).filter(n => n.group === g).map(n => (
               <Tip key={n.id} content={<>{n.label} <span style={{ opacity: .6 }}>· G {n.key.toUpperCase()}</span></>} side="right">
                 <a href={`#${n.id}`} className="nav-item" aria-current={cur === n.id ? 'page' : undefined} onClick={e => { e.preventDefault(); navigate(n.id); }}>
