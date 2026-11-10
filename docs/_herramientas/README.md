@@ -74,6 +74,7 @@ un solo `interactivo.html` (fuentes incrustadas, sin CDN, sin `fetch`). Tiene tr
 | Campo | Qué es |
 |---|---|
 | `tag`, `nombre`, `titulo`, `subtitulo` | Encabezado (`nombre` va antes del tag: "Versión `base`") |
+| `contenedor` | Nombre del contenedor para el rótulo "Adentro del contenedor (`docker exec -it <contenedor> bash`)"; por defecto `bigdata` |
 | `arranque` | `{ "texto", "cmd" }`: el comando de arranque, con botón Copiar arriba a la derecha |
 | `intro`, `pie` | Texto del panel de inicio y del pie |
 | `guia`, `readme` | `{ "md", "pdf" }`: links a la guía y al README de la versión |

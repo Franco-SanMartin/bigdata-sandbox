@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" width="960" height="680" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <title>Arquitectura de la versión ml: la base más Python para datos y JupyterLab</title>
+  <defs>
+    <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4B5563"/>
+    </marker>
+    <style>
+      .caja { stroke-width: 1.5; rx: 6; }
+      .t { font-weight: 600; fill: #111827; }
+      .s { fill: #374151; font-size: 11.5px; }
+      .capa { font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+      .l { stroke: #4B5563; stroke-width: 1.3; fill: none; marker-end: url(#f); }
+      .p { stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+  <rect width="960" height="680" fill="#FFFFFF"/>
+
+  <!-- tu compu -->
+  <rect x="20" y="12" width="920" height="84" rx="8" fill="#F3F4F6" stroke="#9CA3AF"/>
+  <text x="34" y="30" class="capa" fill="#6B7280">TU COMPU</text>
+  <rect x="34" y="40" width="200" height="48" class="caja" fill="#FFFFFF" stroke="#6B7280"/>
+  <text x="46" y="58" class="t">Terminal</text><text x="46" y="76" class="s">docker exec -it bigdata bash</text>
+  <rect x="250" y="40" width="250" height="48" class="caja" fill="#FFFFFF" stroke="#6B7280"/>
+  <text x="262" y="58" class="t">Navegador</text><text x="262" y="76" class="s">localhost:8888 (Jupyter), 9870…</text>
+  <rect x="516" y="40" width="200" height="48" class="caja" fill="#FFFFFF" stroke="#6B7280"/>
+  <text x="528" y="58" class="t">Carpeta datos/</text><text x="528" y="76" class="s">= /datos adentro</text>
+  <rect x="732" y="40" width="196" height="48" class="caja" fill="#FFFFFF" stroke="#6B7280"/>
+  <text x="744" y="58" class="t">DBeaver / Compass</text><text x="744" y="76" class="s">localhost:3306 y :27017</text>
+
+  <!-- contenedor -->
+  <rect x="20" y="104" width="920" height="556" rx="10" fill="#FBFBFD" stroke="#374151" stroke-width="1.5"/>
+  <text x="34" y="124" class="capa" fill="#374151">CONTENEDOR bigdata · franki678/bigdata-sandbox:ml · todo lo de base + Python para datos</text>
+
+  <!-- python (ml) -->
+  <text x="34" y="150" class="capa" fill="#B0527E">PYTHON PARA DATOS (lo que agrega ml)</text>
+  <rect x="34" y="158" width="190" height="46" class="caja" fill="#FAEEF4" stroke="#B0527E"/>
+  <text x="46" y="178" class="t">JupyterLab 4.6</text><text x="46" y="194" class="s">:8888 · notebooks en /datos</text>
+  <rect x="240" y="158" width="190" height="46" class="caja" fill="#FAEEF4" stroke="#B0527E"/>
+  <text x="252" y="178" class="t">pandas · numpy</text><text x="252" y="194" class="s">pyarrow · matplotlib</text>
+  <rect x="446" y="158" width="190" height="46" class="caja" fill="#FAEEF4" stroke="#B0527E"/>
+  <text x="458" y="178" class="t">scikit-learn · XGBoost</text><text x="458" y="194" class="s">modelos en una compu</text>
+  <rect x="652" y="158" width="130" height="46" class="caja" fill="#FAEEF4" stroke="#B0527E"/>
+  <text x="664" y="178" class="t">pymongo</text><text x="664" y="194" class="s">MongoDB → pandas</text>
+  <rect x="798" y="158" width="130" height="46" class="caja" fill="#FAEEF4" stroke="#B0527E"/>
+  <text x="810" y="178" class="t">sandbox_ml</text><text x="810" y="194" class="s">recetas · registro</text>
+  <path class="l" d="M129,204 L129,214 L440,214 L440,236"/>
+  <text x="448" y="228" class="s">import pyspark → Spark MLlib en YARN</text>
+
+  <!-- lenguajes -->
+  <text x="34" y="230" class="capa" fill="#7A5AB8">LENGUAJES Y CLIENTES (como en base)</text>
+  <rect x="34" y="238" width="160" height="46" class="caja" fill="#F3EEFA" stroke="#7A5AB8"/>
+  <text x="46" y="258" class="t">Pig 0.18</text><text x="46" y="274" class="s">Pig Latin → MapReduce</text>
+  <rect x="210" y="238" width="160" height="46" class="caja" fill="#F3EEFA" stroke="#7A5AB8"/>
+  <text x="222" y="258" class="t">beeline</text><text x="222" y="274" class="s">cliente SQL de Hive</text>
+  <rect x="386" y="238" width="170" height="46" class="caja" fill="#F3EEFA" stroke="#7A5AB8"/>
+  <text x="398" y="258" class="t">spark-submit</text><text x="398" y="274" class="s">pyspark · MLlib</text>
+  <rect x="572" y="238" width="160" height="46" class="caja" fill="#F3EEFA" stroke="#7A5AB8"/>
+  <text x="584" y="258" class="t">Sqoop 1.4.7</text><text x="584" y="274" class="s">MySQL ⇄ HDFS</text>
+  <rect x="748" y="238" width="180" height="46" class="caja" fill="#F3EEFA" stroke="#7A5AB8"/>
+  <text x="760" y="258" class="t">hadoop jar</text><text x="760" y="274" class="s">MapReduce y Streaming</text>
+
+  <!-- motores -->
+  <text x="34" y="318" class="capa" fill="#3D6FB6">MOTORES</text>
+  <rect x="210" y="326" width="200" height="50" class="caja" fill="#EAF1FA" stroke="#3D6FB6"/>
+  <text x="222" y="346" class="t">Hive 4.0 · Tez 0.10</text><text x="222" y="364" class="s">JDBC :10000 · Metastore</text>
+  <rect x="426" y="326" width="190" height="50" class="caja" fill="#EAF1FA" stroke="#3D6FB6"/>
+  <text x="438" y="346" class="t">Spark 3.5</text><text x="438" y="364" class="s">en YARN · History :18080</text>
+  <rect x="632" y="326" width="200" height="50" class="caja" fill="#EAF1FA" stroke="#3D6FB6"/>
+  <text x="644" y="346" class="t">MapReduce</text><text x="644" y="364" class="s">JobHistory :19888</text>
+
+  <!-- recursos -->
+  <text x="34" y="410" class="capa" fill="#A67C1E">RECURSOS</text>
+  <rect x="210" y="418" width="622" height="46" class="caja" fill="#FBF4E4" stroke="#A67C1E"/>
+  <text x="222" y="438" class="t">YARN (Hadoop 3.3.6)</text><text x="222" y="454" class="s">ResourceManager :8088 · NodeManager :8042 · reparte memoria y CPU entre los trabajos</text>
+
+  <!-- datos -->
+  <text x="34" y="498" class="capa" fill="#2F8A78">DATOS</text>
+  <rect x="34" y="506" width="440" height="64" class="caja" fill="#E8F4F1" stroke="#2F8A78"/>
+  <text x="46" y="526" class="t">HDFS (Hadoop 3.3.6)</text>
+  <text x="46" y="543" class="s">NameNode :9870 · DataNodes :9901-9909</text>
+  <text x="46" y="559" class="s">HA (2-3 NameNodes): ZooKeeper :2181</text>
+  <rect x="490" y="506" width="210" height="64" class="caja" fill="#E8F4F1" stroke="#2F8A78"/>
+  <text x="502" y="526" class="t">MySQL (MariaDB 10.11)</text><text x="502" y="543" class="s">:3306 · base tienda</text><text x="502" y="559" class="s">200.000 ventas</text>
+  <rect x="716" y="506" width="212" height="64" class="caja" fill="#E8F4F1" stroke="#2F8A78"/>
+  <text x="728" y="526" class="t">MongoDB 8.0</text><text x="728" y="543" class="s">:27017 · con MONGODB=si</text><text x="728" y="559" class="s">20.000 pedidos</text>
+
+  <!-- volumen -->
+  <rect x="34" y="590" width="894" height="54" rx="8" fill="#F8EEE8" stroke="#B8613F"/>
+  <text x="46" y="611" class="t">Volumen bigdata_hadoop → /hadoop</text>
+  <text x="46" y="630" class="s">bloques y metadatos de HDFS, metastore de Hive (Derby), bases de MySQL y MongoDB: sobreviven a docker stop y a docker rm</text>
+
+  <!-- flechas -->
+  <path class="l" d="M114,284 L114,306 L700,306 L700,324"/>
+  <path class="l" d="M290,284 L290,324"/>
+  <path class="l" d="M470,284 L500,324"/>
+  <path class="l" d="M652,284 L652,306 L720,306 L720,324"/>
+  <path class="l" d="M838,284 L838,306 L760,306 L760,324"/>
+  <path class="l" d="M310,376 L310,416"/>
+  <path class="l" d="M520,376 L520,416"/>
+  <path class="l" d="M730,376 L730,416"/>
+  <path class="l" d="M400,464 L330,504"/>
+  <path class="l p" d="M600,284 L600,294 L884,294 L884,490 L640,490 L640,504"/>
+  <text x="890" y="400" class="s">JDBC</text>
+</svg>

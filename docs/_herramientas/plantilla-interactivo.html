@@ -265,7 +265,7 @@ footer div { max-width: 1440px; margin: 0 auto; padding: 12px 24px; display: fle
   const bloqueCmd = (c) => {
     const cmd = typeof c === 'string' ? { cmd: c } : c;
     const boton = el('button', { class: 'btn btn-sm', type: 'button', onclick: (e) => copiar(cmd.cmd, e.currentTarget) }, 'Copiar');
-    const donde = cmd.donde ? ({ compu: 'En tu compu (terminal)', adentro: 'Adentro del contenedor (docker exec -it bigdata bash)' }[cmd.donde] || cmd.donde) : null;
+    const donde = cmd.donde ? ({ compu: 'En tu compu (terminal)', adentro: `Adentro del contenedor (docker exec -it ${D.contenedor || 'bigdata'} bash)` }[cmd.donde] || cmd.donde) : null;
     return el('div', { class: 'cmd' }, donde && el('span', { class: 'donde' }, donde), el('pre', {}, cmd.cmd), boton);
   };
   const enlaceGuia = (g) => {
