@@ -1,7 +1,8 @@
 # Borra UN tag de franki678/bigdata-sandbox en Docker Hub (a mano: pestaña
 # Actions > "Borrar tag" > "Run workflow"). Solo el tag: las imagenes que
 # apuntaba se siguen pudiendo bajar por digest (franki678/bigdata-sandbox@sha256:...).
-# No borra los tags que se publican (latest, base, ml, full).
+# No borra los tags que se publican (latest, base, ml, full, empresa y
+# empresa-trabajador).
 #
 # Usa el secreto DOCKERHUB_TOKEN; para borrar, el token tiene que tener
 # permiso "Read, Write, Delete". Si no lo tiene (401/403), se borra a mano en
@@ -33,7 +34,7 @@ jobs:
       - name: Borrar ${{ inputs.tag }}
         run: |
           case "$TAG" in
-            ''|latest|base|ml|full) echo "El tag '$TAG' no se borra desde aca" >&2; exit 1 ;;
+            ''|latest|base|ml|full|empresa|empresa-trabajador) echo "El tag '$TAG' no se borra desde aca" >&2; exit 1 ;;
           esac
           [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo "Tag invalido: $TAG" >&2; exit 1; }
           api=https://hub.docker.com/v2

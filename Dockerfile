@@ -446,7 +446,7 @@ EXPOSE 9864 9866 9867 8031 8041 10020 51820/udp 8099
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/sandbox/arranque-empresa.sh"]
 
 # ===========================================================================
-# Version "trabajador" (franki678/bigdata-sandbox:trabajador): la imagen
+# Version "trabajador" (franki678/bigdata-sandbox:empresa-trabajador): la imagen
 # chica de las PCs del aula. El reset del laboratorio borra todo cada dia y
 # la red es lenta (unos 50 Mbit/s hacia la PC del profe, medido el 27/10): la
 # empresa entera (1,6 GB comprimida) tardaria mas de una hora en llegar a 20

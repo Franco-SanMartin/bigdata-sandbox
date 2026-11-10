@@ -322,7 +322,7 @@ NET_ADMIN`.
 
 ## La imagen trabajador
 
-`franki678/bigdata-sandbox:trabajador`, target `trabajador` del Dockerfile:
+`franki678/bigdata-sandbox:empresa-trabajador`, target `trabajador` del Dockerfile:
 Java 8 (runtime), Hadoop recortado al DataNode y al NodeManager (101 MB),
 Python 3.12 con numpy (el mismo que el maestro), `wireguard-tools` y
 `wireguard-go`. Pesa unos 192 MB comprimida (la `empresa`, 1,6 GB). Spark y

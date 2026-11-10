@@ -1,14 +1,22 @@
-# Versión empresa: el cluster del aula (un maestro y varias PCs, cada una un
-# contenedor). Arma base, ml, empresa (target empresa del Dockerfile: full +
-# ROL=maestro/trabajador) y trabajador (la imagen chica de las PCs del aula) y
-# prueba:
+# Versión empresa: el paquete único del mini servidor del aula (un maestro en
+# la PC del profe y las PCs del laboratorio, cada una un contenedor). Este
+# workflow arma, prueba y publica todo lo de empresa en una sola corrida:
+#
+#   franki678/bigdata-sandbox:empresa             el maestro (target empresa del
+#                                                 Dockerfile: full + ROL=maestro)
+#   franki678/bigdata-sandbox:empresa-trabajador  la imagen chica de las PCs
+#                                                 (target trabajador)
+#   release aula-vN (prerelease)                  las dos en .tar.gz y los .cmd
+#                                                 del aula, para el pendrive
+#
+# Arma base, ml, empresa y trabajador y prueba:
 #
 #   aula, aula-caida        pruebas/aula.sh con RED=docker: maestro + 3 PCs en
 #                           una red de Docker; racks, réplicas, trabajos
 #                           repartidos, Hive, Spark, y una PC que se cae y vuelve
 #   aula-wg, aula-wg-caida, pruebas/aula.sh con RED=wireguard: cada PC (imagen
-#   aula-wg-cero            trabajador) en su propia red de Docker, unida al
-#                           maestro solo por el túnel y sin publicar puertos,
+#   aula-wg-cero            empresa-trabajador) en su propia red de Docker, unida
+#                           al maestro solo por el túnel y sin publicar puertos,
 #                           como el aula de verdad; PCs de distinta RAM, una PC
 #                           que se apaga, y el arranque de cero de cada clase
 #   humo-full               el humo de la API de la versión full, con la imagen
@@ -17,42 +25,58 @@
 #                           sobre base y ml: el modo de un solo contenedor no
 #                           cambia
 #
-# Además mide la imagen trabajador: el .tar.gz que se reparte en el aula y lo
+# Además mide la imagen de las PCs: el .tar.gz que se reparte en el aula y lo
 # que tarda docker load (en el resumen de la corrida).
 #
-# En push (ramas empresa y empresa-*) no publica nada: es la rama de trabajo.
-# Solo usa el cache de capas de ghcr.io (lee el de base, ml y full; escribe
-# solo el de empresa y el de trabajador).
+# En push (a main cuando cambia algo de empresa, y a las ramas empresa-*) solo
+# prueba: no publica nada. Solo usa el cache de capas de ghcr.io (lee el de
+# base, ml y full; escribe solo el de empresa y el de trabajador). Base y ml
+# se arman acá solo para probar: este workflow NUNCA sube latest, base, ml ni
+# full (eso es de Imagen y Full, con el control de pruebas/solo_full.sh).
 #
-# Publicar la beta: a mano (Run workflow) sobre la rama empresa con publicar
-# tildado. Si las pruebas dan bien en las dos arquitecturas, sube
-# franki678/bigdata-sandbox:empresa y :trabajador (amd64 + arm64) igual que
-# Full sube la full: se rearma del cache (fecha del commit fija, la imagen es
-# la que se probó), sube por digest sin tag y recién al final pone los tags.
-# No toca latest, base, ml ni full. Necesita lo mismo que Imagen: la variable
-# DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN.
+# Publicar: a mano (Actions > Empresa > Run workflow) desde main con publicar
+# tildado. Si las pruebas dan bien en las dos arquitecturas, sube :empresa y
+# :empresa-trabajador (amd64 + arm64) igual que Full sube la full: se rearma
+# del cache (fecha del commit fija, la imagen es la que se probó), sube por
+# digest sin tag y recién al final pone los tags. Necesita lo mismo que
+# Imagen: la variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN.
+# Conviene correrlo después de que Imagen y Full terminaron en main (así base,
+# ml y full salen del cache y no se rearman de cero).
 #
-# El release del aula (aula-v1, prerelease): a mano con release tildado, desde
-# cualquier rama de empresa. Si las pruebas dan bien, sube las imágenes ya
-# probadas como .tar.gz (trabajador amd64 y arm64, empresa amd64 para la PC
-# del profe) y los .cmd del aula, para llevarlos en un pendrive o dejarlos en
-# la carpeta compartida.
+# El release del aula: en la misma corrida, con release tildado (desde main).
+# Si las pruebas dan bien, sube las imágenes ya probadas como .tar.gz
+# (empresa-trabajador amd64 y arm64, empresa amd64 para la PC del profe) y los
+# .cmd del aula al prerelease que diga release_tag (aula-v2 por defecto; si ya
+# existe, lo reemplaza). Publicar y release se pueden tildar juntos.
+#
+# El .tar.gz de la imagen base para las clases de un solo contenedor (release
+# "imagen") no es de empresa: lo arma el workflow Aula (aula.yml).
 name: Empresa
 
 on:
   push:
-    branches: [empresa, 'empresa-*']
-    paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**', 'sonda/**', '.github/workflows/sonda.yml']
+    branches: [main, 'empresa-*']
+    # solo lo que es de empresa (los cambios de base, ml y full ya los prueban
+    # Imagen y Full; antes de publicar empresa se corre a mano)
+    paths:
+      - 'empresa/**'
+      - 'pruebas/aula.sh'
+      - 'server/sandbox_server/aula*.py'
+      - '.github/workflows/empresa.yml'
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar franki678/bigdata-sandbox:empresa y :trabajador (amd64 + arm64) si las pruebas dan bien'
+        description: 'Publicar franki678/bigdata-sandbox:empresa y :empresa-trabajador (amd64 + arm64) si las pruebas dan bien (solo desde main)'
         type: boolean
         default: false
       release:
-        description: 'Armar el release aula-v1 (imágenes en .tar.gz y los .cmd del aula) si las pruebas dan bien'
+        description: 'Armar el release del aula (imágenes en .tar.gz y los .cmd del aula) si las pruebas dan bien (solo desde main)'
         type: boolean
         default: false
+      release_tag:
+        description: 'Tag del release del aula (si ya existe, se reemplaza)'
+        type: string
+        default: aula-v2
 
 permissions:
   contents: read
@@ -90,6 +114,21 @@ jobs:
 
       - name: Fecha del commit
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      # Los .cmd del aula son PowerShell (después del bloque de cmd): que no
+      # vayan al release con un error de sintaxis. El runner trae pwsh
+      - name: Sintaxis de los .cmd del aula
+        if: matrix.arq == 'amd64'
+        shell: pwsh
+        run: |
+          $mal = 0
+          foreach ($f in 'empresa/empresa-profe.cmd', 'empresa/empresa-alumno.cmd') {
+            $errores = $null
+            [System.Management.Automation.Language.Parser]::ParseInput((Get-Content -Raw $f), [ref]$null, [ref]$errores) > $null
+            foreach ($e in $errores) { Write-Host "::error file=$f,line=$($e.Extent.StartLineNumber)::$($e.Message)"; $mal++ }
+            Write-Host "$f : $($errores.Count) errores"
+          }
+          if ($mal) { exit 1 }
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -152,14 +191,14 @@ jobs:
           platforms: linux/${{ matrix.arq }}
           load: true
           provenance: false
-          tags: ${{ env.LOCAL }}:trabajador
+          tags: ${{ env.LOCAL }}:empresa-trabajador
           cache-from: |
             type=registry,ref=${{ env.CACHE }}:base-${{ matrix.arq }}
             type=registry,ref=${{ env.CACHE }}:trabajador-${{ matrix.arq }}
           cache-to: type=registry,ref=${{ env.CACHE }}:trabajador-${{ matrix.arq }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
 
-      # Lo que se reparte en el aula: el .tar.gz de la imagen trabajador (con
-      # un solo nombre, franki678/bigdata-sandbox:trabajador) y cuánto tarda
+      # Lo que se reparte en el aula: el .tar.gz de la imagen de las PCs (con
+      # un solo nombre, franki678/bigdata-sandbox:empresa-trabajador) y cuánto tarda
       # docker load. Las PCs del aula son más lentas que este runner: el
       # número del aula sale de empresa-alumno.cmd (lo muestra y lo anota).
       - name: Medir la imagen trabajador (${{ matrix.arq }})
@@ -167,18 +206,18 @@ jobs:
           plataforma=
           docker save --help | grep -q -- --platform && plataforma="--platform linux/${{ matrix.arq }}"
           archivo=bigdata-sandbox-trabajador-${{ matrix.arq }}.tar.gz
-          docker save $plataforma "$LOCAL:trabajador" | gzip -9 > "$RUNNER_TEMP/$archivo"
+          docker save $plataforma "$LOCAL:empresa-trabajador" | gzip -9 > "$RUNNER_TEMP/$archivo"
           bytes=$(stat -c %s "$RUNNER_TEMP/$archivo")
-          sin_comprimir=$(docker image inspect -f '{{.Size}}' "$LOCAL:trabajador")
-          docker image rm "$LOCAL:trabajador" > /dev/null
+          sin_comprimir=$(docker image inspect -f '{{.Size}}' "$LOCAL:empresa-trabajador")
+          docker image rm "$LOCAL:empresa-trabajador" > /dev/null
           t0=$(date +%s%N)
           docker load -i "$RUNNER_TEMP/$archivo" | tee /tmp/load.txt
           carga=$(awk -v n="$(( $(date +%s%N) - t0 ))" 'BEGIN { printf "%.1f", n / 1e9 }')
-          [ "$(cat /tmp/load.txt)" = "Loaded image: $LOCAL:trabajador" ]
-          docker run --rm --entrypoint sh "$LOCAL:trabajador" -c 'java -version 2>&1 | head -1; hadoop version | head -1; python3 -c "import numpy; print(\"numpy\", numpy.__version__)"; wg --version; wireguard-go --version | head -1'
+          [ "$(cat /tmp/load.txt)" = "Loaded image: $LOCAL:empresa-trabajador" ]
+          docker run --rm --entrypoint sh "$LOCAL:empresa-trabajador" -c 'java -version 2>&1 | head -1; hadoop version | head -1; python3 -c "import numpy; print(\"numpy\", numpy.__version__)"; wg --version; wireguard-go --version | head -1'
           mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1048576 }')
           {
-            echo "### Imagen trabajador (${{ matrix.arq }})"
+            echo "### Imagen empresa-trabajador (${{ matrix.arq }})"
             echo
             echo "| | |"
             echo "|---|---|"
@@ -200,7 +239,7 @@ jobs:
       - name: Guardar las imagenes para las pruebas
         run: |
           docker image ls "$LOCAL"
-          docker save "$LOCAL:base" "$LOCAL:ml" "$LOCAL:empresa" "$LOCAL:trabajador" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
+          docker save "$LOCAL:base" "$LOCAL:ml" "$LOCAL:empresa" "$LOCAL:empresa-trabajador" | zstd -T0 -3 -q -o "$RUNNER_TEMP/imagenes.tar.zst"
           ls -lh "$RUNNER_TEMP/imagenes.tar.zst"
 
       - uses: actions/upload-artifact@v4
@@ -251,7 +290,7 @@ jobs:
         if: startsWith(matrix.prueba, 'aula')
         env:
           IMAGEN: ${{ env.LOCAL }}:empresa
-          IMAGEN_TRABAJADOR: ${{ env.LOCAL }}:trabajador
+          IMAGEN_TRABAJADOR: ${{ env.LOCAL }}:empresa-trabajador
           MEDIDAS: medidas.md
         run: bash pruebas/aula.sh ${{ matrix.prueba }}
 
@@ -298,8 +337,8 @@ jobs:
   # -------------------------------------------------------------------------
   subir:
     needs: [armar, pruebas]
-    # solo a mano, con publicar tildado y desde la rama empresa: nunca en push
-    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/empresa'
+    # solo a mano, con publicar tildado y desde main: nunca en push
+    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.arq == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 120
     strategy:
@@ -373,12 +412,12 @@ jobs:
           retention-days: 7
 
   # -------------------------------------------------------------------------
-  # 4. Los tags empresa y trabajador, con las dos arquitecturas ya subidas
+  # 4. Los tags empresa y empresa-trabajador, con las dos arquitecturas ya subidas
   # -------------------------------------------------------------------------
   publicar:
     needs: subir
-    # solo a mano, con publicar tildado y desde la rama empresa: nunca en push
-    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/empresa'
+    # solo a mano, con publicar tildado y desde main: nunca en push
+    if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -393,10 +432,12 @@ jobs:
           path: digests
           merge-multiple: true
 
-      - name: Tags empresa y trabajador, amd64 + arm64
+      # target empresa -> :empresa, target trabajador -> :empresa-trabajador
+      - name: Tags empresa y empresa-trabajador, amd64 + arm64
         run: |
           for t in empresa trabajador; do
-            docker buildx imagetools create -t "$REPO:$t" \
+            tag=empresa; [ "$t" = trabajador ] && tag=empresa-trabajador
+            docker buildx imagetools create -t "$REPO:$tag" \
               "$REPO@$(cat digests/$t-amd64)" "$REPO@$(cat digests/$t-arm64)"
           done
 
@@ -409,8 +450,9 @@ jobs:
             echo "|---|---|---|---|"
           } | tee -a "$GITHUB_STEP_SUMMARY"
           for t in empresa trabajador; do
-            m=$(docker buildx imagetools inspect "$REPO:$t" --format '{{json .Manifest}}')
-            jq -r --arg t "$t" --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
+            tag=empresa; [ "$t" = trabajador ] && tag=empresa-trabajador
+            m=$(docker buildx imagetools inspect "$REPO:$tag" --format '{{json .Manifest}}')
+            jq -r --arg t "$tag" --arg d "$(jq -r .digest <<< "$m")" '.manifests[] | select(.platform.os != "unknown")
               | "| \($t) | \($d) | \(.platform.os)/\(.platform.architecture) | \(.digest) |"' <<< "$m" \
               | tee -a "$GITHUB_STEP_SUMMARY"
             for a in amd64 arm64; do
@@ -419,13 +461,13 @@ jobs:
           done
 
   # -------------------------------------------------------------------------
-  # 5. El release del aula (prerelease aula-v1): las imágenes ya probadas en
+  # 5. El release del aula (prerelease aula-vN): las imágenes ya probadas en
   #    .tar.gz y los .cmd, para el pendrive o la carpeta compartida. Solo a
-  #    mano, con release tildado y con todas las pruebas en verde.
+  #    mano desde main, con release tildado y con todas las pruebas en verde.
   # -------------------------------------------------------------------------
   release-aula:
     needs: [armar, pruebas]
-    if: github.event_name == 'workflow_dispatch' && inputs.release
+    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -433,7 +475,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      TAG: aula-v1
+      TAG: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Lugar en disco
@@ -467,13 +509,16 @@ jobs:
           ls -l aula
           for f in aula/*.tar.gz; do [ "$(stat -c %s "$f")" -lt 2147483648 ]; done   # tope de GitHub: 2 GiB
 
-      - name: Prerelease aula-v1
+      - name: Prerelease del aula
         run: |
           mb() { awk -v b="$(stat -c %s "$1")" 'BEGIN { printf "%.0f", b / 1048576 }'; }
+          [[ "$TAG" =~ ^aula-v[0-9]+$ ]] || { echo "::error::release_tag tiene que ser aula-vN"; exit 1; }
           if gh release view "$TAG" > /dev/null 2>&1; then gh release delete "$TAG" --cleanup-tag -y; fi
           cat > notas.md <<EOF
-          El cluster del aula con las PCs de verdad (versión empresa, etapa 2): túnel WireGuard con
-          hub en la PC del profe, como midió la sonda el 27/10. Commit $GITHUB_SHA, rama ${GITHUB_REF_NAME}.
+          El mini servidor del aula (versión empresa): el maestro en la PC del profe y las PCs del
+          laboratorio unidas por un túnel WireGuard con hub en la PC del profe, como midió la sonda el
+          27/10. Incluye el aula en vivo (plano por racks, tráfico, caídas, YARN por PC) y la terminal
+          apagada de fábrica. Commit $GITHUB_SHA, rama ${GITHUB_REF_NAME}.
 
           | Archivo | Para qué | Tamaño |
           |---|---|---|
@@ -484,9 +529,10 @@ jobs:
           | \`empresa-alumno.cmd\` | Se corre en cada PC (por Veyon) | |
           | \`LEEME.md\` | El paso a paso de la clase (guía 3) | |
 
-          Las imágenes también están en Docker Hub cuando se publica la beta (\`:empresa\` y \`:trabajador\`).
+          Las mismas imágenes están en Docker Hub si se publicaron en la misma corrida
+          (\`franki678/bigdata-sandbox:empresa\` y \`:empresa-trabajador\`).
           EOF
-          gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Aula v1: el cluster con las PCs del laboratorio" \
+          gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Aula ${TAG#aula-v}: el mini servidor con las PCs del laboratorio" \
             --notes-file notas.md aula/*
       - name: Verificar lo subido
         run: |

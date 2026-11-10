@@ -20,7 +20,7 @@ exit /b %RC%
 
 # ---- Desde aca es PowerShell (el bloque de arriba es un comentario para PowerShell) ----
 $ErrorActionPreference = 'Continue'
-$imagen = 'franki678/bigdata-sandbox:trabajador'
+$imagen = 'franki678/bigdata-sandbox:empresa-trabajador'
 $contenedor = 'bigdata-trabajador'
 $archivoImagen = $(if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'bigdata-sandbox-trabajador-arm64.tar.gz' } else { 'bigdata-sandbox-trabajador.tar.gz' })
 
@@ -120,16 +120,21 @@ function Sumar {
     $carga = ''
     if (-not (ImagenCargada)) {
         $tar = BuscarImagen $extra
-        if (-not $tar) {
-            Decir "No esta la imagen cargada ni el archivo $archivoImagen (al lado de este .cmd, en $extra o en la carpeta del usuario)."
+        if ($tar) {
+            $mb = [math]::Round((Get-Item $tar).Length / 1MB)
+            Decir "Cargando la imagen ($mb MB) desde $tar ..."
+            $t = Measure-Command { docker load -i $tar | Out-Host }
+        } else {
+            # Plan B: sin el archivo, de Docker Hub (hace falta internet en la PC)
+            Decir "No esta el archivo $archivoImagen: pruebo bajar $imagen de Docker Hub (hace falta internet)..."
+            $t = Measure-Command { docker pull $imagen | Out-Host }
+        }
+        $carga = [math]::Round($t.TotalSeconds)
+        if (-not (ImagenCargada)) {
+            Decir "No esta la imagen cargada ni el archivo $archivoImagen (al lado de este .cmd, en $extra o en la carpeta del usuario), y no se pudo bajar de Docker Hub."
             Decir 'Pedile al profe que lo mande por Veyon a la misma carpeta que este .cmd.'
             exit 1
         }
-        $mb = [math]::Round((Get-Item $tar).Length / 1MB)
-        Decir "Cargando la imagen ($mb MB) desde $tar ..."
-        $t = Measure-Command { docker load -i $tar | Out-Host }
-        $carga = [math]::Round($t.TotalSeconds)
-        if (-not (ImagenCargada)) { Decir 'No se pudo cargar la imagen.'; exit 1 }
         Decir "Imagen cargada en $carga s"
     }
 

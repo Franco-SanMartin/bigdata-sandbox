@@ -1,12 +1,13 @@
 # Sonda del laboratorio (sonda/): arma la imagen chica, la prueba simulando PCs
 # aisladas (cada una en su red de Docker, llegando al profe por la IP del host)
-# y, si todo da bien en la rama empresa, publica el prerelease sonda-v1.
+# y, si todo da bien en main, publica el prerelease sonda-v1 (la rama empresa ya
+# no existe: empresa se trabaja en main o en ramas empresa-*).
 # La imagen NO va a Docker Hub: se reparte como .tar.gz por Veyon.
 name: sonda
 
 on:
   push:
-    branches: [empresa, 'empresa-*']
+    branches: [main, 'empresa-*']
     paths:
       - 'sonda/**'
       - '.github/workflows/sonda.yml'
@@ -135,7 +136,7 @@ jobs:
 
   publicar:
     needs: [armar, escenario, windows]
-    if: github.ref == 'refs/heads/empresa'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
