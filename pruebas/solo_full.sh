@@ -44,6 +44,9 @@ while IFS= read -r f; do
     # se corre imagen.yml a mano (workflow_dispatch): ahí no se mira esto
     .github/workflows/imagen.yml) ;;
     pruebas/enlaces.py | pruebas/tutoriales.py | pruebas/solo_full.sh | pruebas/probar_solo_full.sh) ;;
+    # El arranque y el aula de empresa: van a las etapas empresa y trabajador (después de interfaz) o al
+    # release del aula (los .cmd). No cambian base, ml ni full
+    empresa/*) ;;
     ml/* | conf/requirements-ml.txt | conf/jupyter_server_config.py | pruebas/probar_ml.sh) ml=1 ;;
     Dockerfile | .dockerignore | .gitignore) ;;   # se miran abajo
     *) no "$f es de base" ;;

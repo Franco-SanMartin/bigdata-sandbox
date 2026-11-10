@@ -138,13 +138,13 @@ Qué tiene el archivo:
 | Parte | Qué dice | Por qué |
 |---|---|---|
 | Comentarios de arriba | `docker compose up -d`, `logs -f` hasta "Cluster LISTO", `stop` | Cómo usarlo, sin abrir otra guía. |
-| `name: bigdata`, servicio `bigdata`, `container_name: bigdata` | El proyecto y el contenedor | El mismo nombre que usan las guías (`docker exec -it bigdata bash`). |
+| `name: bigdata-full`, servicio `bigdata`, `container_name: bigdata-full` | El proyecto y el contenedor | El mismo nombre que el `docker run` de estas guías (`docker exec -it bigdata-full bash`). Con `:empresa` es `bigdata-empresa`. |
 | `image:` | `franki678/bigdata-sandbox:full` (o la etiqueta que esté corriendo) | La misma imagen. |
 | `AUTOSTART: "1"` | Arranca solo con estas variables | Sin ella, la imagen espera **Iniciar** en la interfaz. |
 | `DATANODES` ... `JUPYTER` | Las variables de la pantalla | Con un comentario si las réplicas superan a los DataNodes o si hay alta disponibilidad. |
 | `PIG_HEAPSIZE` | Comentada si es 512 (el valor de fábrica) | Solo aparece si la cambiaste. |
 | `ports:` | 8080 (la interfaz), 9870, 9868 o los de los NameNodes y JournalNodes en HA, 9901-9909; 8088, 8042 y 19888 sin `hdfs`; 10000, 10002, 18080 y 4040 con `todo`; 27017 con MongoDB; 8888 siempre (JupyterLab se puede prender después) | Solo los puertos de lo que se prende, y todos en `127.0.0.1`. |
-| `volumes:` | `bigdata_hadoop:/hadoop` (HDFS, metastore, MySQL y MongoDB) y `./datos:/datos` | Los datos sobreviven al contenedor; la carpeta `datos/` de tu compu aparece adentro. |
+| `volumes:` | `bigdata_full:/hadoop` (HDFS, metastore, MySQL y MongoDB) y `./datos:/datos` | Los datos sobreviven al contenedor; la carpeta `datos/` de tu compu aparece adentro. Es el mismo volumen que el `docker run` de la [guía 1](01-arrancar-y-recorrido.md): con uno o con el otro se ven los mismos datos (no los dos a la vez). Con `:empresa`, `bigdata_empresa`. |
 | `stop_grace_period: 20s` | Tiempo para apagar en orden | Para que HDFS cierre bien al hacer `docker compose stop`. |
 
 La misma configuración sirve con `:base` y `:ml`, que no tienen interfaz:

@@ -39,3 +39,20 @@ describe('el aula del modo demo', () => {
     expect(fin.yarn.mb).toBe(8 * 2048 + 3 * 5120);
   });
 });
+
+describe('el plano del aula', () => {
+  it('arranca con las PCs por número y se edita', async () => {
+    const { planoInicial, moverEnPlano, sinUbicar, racksDelPlano, cambiarForma, leerPlano, sacarDelPlano } = await import('./aula');
+    const p = planoInicial(['pc03', 'pc01', 'pc07', 'otra'], 5);
+    expect(p.filas[0].slice(0, 3)).toEqual(['pc01', null, 'pc03']);
+    expect(p.filas[1][1]).toBe('pc07');
+    const q = moverEnPlano(p, 'pc07', 0, 1);
+    expect(q.filas[0][1]).toBe('pc07');
+    expect(q.filas[1].includes('pc07')).toBe(false);
+    expect(racksDelPlano(q)).toEqual({ pc01: '/fila1', pc07: '/fila1', pc03: '/fila1' });
+    expect(sinUbicar(sacarDelPlano(q, 'pc03'), ['pc01', 'pc03', 'pc07'])).toEqual(['pc03']);
+    expect(cambiarForma(q, 1, 2).filas).toEqual([['pc01', 'pc07']]);
+    expect(leerPlano('{"filas": [["pc01", null]]}').filas).toEqual([['pc01', null]]);
+    expect(() => leerPlano('{"filas": [["maestro"]]}')).toThrow(/no es un plano/);
+  });
+});
