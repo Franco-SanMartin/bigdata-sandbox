@@ -170,7 +170,7 @@ la imagen de verdad.
 | **Hive** (Metastore + HiveServer2, sobre Tez) | 4.0.0 (Tez 0.10.3) | SQL sobre archivos de HDFS |
 | **Spark** + PySpark + History Server | 3.5.9 | Procesamiento en memoria, sobre YARN; comparte las tablas con Hive |
 | **Sqoop** + **MySQL** (MariaDB) con la base `tienda` | 1.4.7 / MariaDB 10.11 | Copiar tablas entre una base relacional y HDFS |
-| **ZooKeeper** + JournalNodes + ZKFC | 3.8.7 | Alta disponibilidad del NameNode (con `NAMENODES=2` o `3`) |
+| **ZooKeeper** + JournalNodes + ZKFC | 3.8.8 | Alta disponibilidad del NameNode (con `NAMENODES=2` o `3`) |
 | **MongoDB** + `mongosh` con la base `tienda` | 8.0 | Base NoSQL de documentos (se prende con `MONGODB=si`) |
 
 Además: Java 8 y Python 3.12. Hive y Spark comparten el metastore: una tabla

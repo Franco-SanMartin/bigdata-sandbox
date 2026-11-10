@@ -569,7 +569,7 @@ const TOOLS = {
     ui: [["ResourceManager: todos los trabajos", "localhost:8088"], ["NodeManager: contenedores", "localhost:8042"]]
   },
   zookeeper: {
-    name: "ZooKeeper", layer: "recursos", version: "3.8.7", img: ALL,
+    name: "ZooKeeper", layer: "recursos", version: "3.8.8", img: ALL,
     sub: "árbitro de NameNodes", subN: "árbitro (HA)",
     frase: "Un servicio de coordinación: un registro chiquito y muy confiable que varios procesos consultan para ponerse de acuerdo. Acá lo usa HDFS para saber cuál NameNode es el activo.",
     analogia: "El árbitro que dice quién es el capitán del equipo. Si el capitán se lesiona, el árbitro nombra a otro en segundos (eso es el failover).",

@@ -26,7 +26,7 @@ ARG HADOOP_VERSION=3.3.6
 ARG HIVE_VERSION=4.0.0
 ARG TEZ_VERSION=0.10.3
 ARG SPARK_VERSION=3.5.9
-ARG ZOOKEEPER_VERSION=3.8.7
+ARG ZOOKEEPER_VERSION=3.8.8
 ARG PIG_VERSION=0.18.0
 ARG SQOOP_VERSION=1.4.7
 ARG MONGODB_VERSION=8.0
@@ -124,7 +124,13 @@ RUN apache-dl "spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.t
  && rm -rf /opt/spark/R /opt/spark/kubernetes /opt/spark/yarn
 
 # --- ZooKeeper (solo arranca con NAMENODES >= 2: elige el NameNode activo) ---
+# dlcdn solo tiene la ultima de cada rama: cuando sale una nueva, la anterior
+# queda solo en archive.apache.org, que desde los runners a veces no contesta
+# (asi se cayo el armado arm64 con la 3.8.7). Al subir de version, cambiar
+# tambien el sha512 (el .sha512 que publica Apache al lado del tarball).
+ARG ZOOKEEPER_SHA512=c8fea10468ce7f590bcf7e961ae20f4e969ddbc938cd9c32e48d2bc1e82b95e9d9186007f03877726584daf1655f93a23c23b501bab95c8e03d11324135dbc34
 RUN apache-dl "zookeeper/zookeeper-${ZOOKEEPER_VERSION}/apache-zookeeper-${ZOOKEEPER_VERSION}-bin.tar.gz" /tmp/zk.tgz \
+ && echo "${ZOOKEEPER_SHA512}  /tmp/zk.tgz" | sha512sum -c - \
  && tar -xzf /tmp/zk.tgz -C /opt \
  && mv /opt/apache-zookeeper-${ZOOKEEPER_VERSION}-bin /opt/zookeeper \
  && rm /tmp/zk.tgz \

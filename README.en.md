@@ -168,7 +168,7 @@ against the real image.
 | **Hive** (Metastore + HiveServer2, on Tez) | 4.0.0 (Tez 0.10.3) | SQL over HDFS files |
 | **Spark** + PySpark + History Server | 3.5.9 | In-memory processing, on YARN; shares its tables with Hive |
 | **Sqoop** + **MySQL** (MariaDB) with the `tienda` database | 1.4.7 / MariaDB 10.11 | Copy tables between a relational database and HDFS |
-| **ZooKeeper** + JournalNodes + ZKFC | 3.8.7 | NameNode high availability (with `NAMENODES=2` or `3`) |
+| **ZooKeeper** + JournalNodes + ZKFC | 3.8.8 | NameNode high availability (with `NAMENODES=2` or `3`) |
 | **MongoDB** + `mongosh` with the `tienda` database | 8.0 | NoSQL document database (enabled with `MONGODB=si`) |
 
 Also: Java 8 and Python 3.12. Hive and Spark share the metastore: a table
