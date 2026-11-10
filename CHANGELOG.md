@@ -9,6 +9,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Cambiado (base)
+
+- **Hive 4.0.0 con copia propia**: si archive.apache.org no contesta (la CDN
+  de Apache ya no lo tiene), el build lo baja del release `deps-hive-4.0.0` de
+  este repo. Venga de donde venga, se verifica el sha256 que publica Apache
+  (`HIVE_SHA256` en el `Dockerfile`).
+
 ### Cambiado (compose y empresa)
 
 - **El compose que genera la interfaz** usa el contenedor y el volumen del
