@@ -28,7 +28,7 @@ export function PasoModelo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | nu
 
   return (
     <div className="es-paso es-modelo">
-      <Panel title="Modelo" sub={`${modelos.length} para ${cat.tareas[receta.tarea].etiqueta.toLowerCase()}`} flush
+      <Panel title="Modelo" sub={`${modelos.length} para ${cat.tareas[receta.tarea].etiqueta.toLowerCase()}${receta.tarea === 'recomendacion' ? ' (solo Spark MLlib)' : ''}`} flush
         end={<Seg value={motor} onChange={cambiarMotor} label="Motor" options={[
           { value: 'sklearn', label: 'scikit-learn', tip: 'En una sola máquina (pandas en memoria): milisegundos con datos que entran en RAM' },
           { value: 'spark', label: 'Spark MLlib', tip: 'Repartido en los executors de YARN: para datos que no entran en una máquina. Arrancar Spark cuesta ~20 s' },
@@ -39,7 +39,8 @@ export function PasoModelo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | nu
               <h3>{f}</h3>
               <div className="es-modelos" role="radiogroup" aria-label={`Modelos: ${f}`}>
                 {modelos.filter(m => m.familia === f).map(m => (
-                  <button key={m.id} type="button" role="radio" aria-checked={m.id === receta.modelo.id} onClick={() => elegir(m.id)} className="es-mcard">
+                  <button key={m.id} type="button" role="radio" aria-checked={m.id === receta.modelo.id} onClick={() => elegir(m.id)} className="es-mcard"
+                    disabled={!!m.deshabilitado && m.id !== receta.modelo.id} title={m.deshabilitado}>
                     <b>{m.etiqueta}</b>
                     <span className="mono es-mclase">{m.clase.split('.').pop()}</span>
                     <span className="es-mque">{m.que}</span>
@@ -49,6 +50,7 @@ export function PasoModelo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | nu
                       {m.nulos && <span className="tag" title="Acepta nulos sin imputar">nulos ok</span>}
                       {m.binaria && <span className="tag" title="Solo dos clases">binaria</span>}
                       {m.extra && <span className="tag">{m.extra}</span>}
+                      {m.deshabilitado && <span className="tag" data-k="bad" title={m.deshabilitado}>no instalado</span>}
                     </span>
                   </button>
                 ))}

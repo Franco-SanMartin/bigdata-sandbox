@@ -8,6 +8,9 @@ Este módulo solo pone el servidor en el medio:
     GET  /api/ml/sources                 archivos de /datos y de HDFS (Parquet, ORC, Avro, JSON, CSV, texto,
                                          comprimidos, carpetas particionadas) y tablas de Hive
     POST /api/ml/sources/example         {ejemplo: senal | sucias} → genera el dataset de ejemplo en /datos
+    POST /api/ml/sources/generate        {dataset: clientes | calificaciones, filas, salida, formato?, suciedad?,
+                                         particionar?, recursos?} → 202 {id, run}: el generador a escala
+                                         (sandbox_ml/generar.py) con spark-submit en YARN escribe en HDFS
     POST /api/ml/profile                 {datos, objetivo?, motor?: pandas | spark, modo?: muestra | completo, filas?}
                                          → perfil de columnas (sandbox_ml.perfil con pandas, o perfil_spark.py
                                          con spark-submit en YARN)
@@ -20,7 +23,8 @@ Este módulo solo pone el servidor en el medio:
     POST /api/ml/code                    {receta, parte?: entrenamiento | perfil | limpieza} → el script de PySpark
                                          (o scikit-learn) que reproduce ese paso
     POST /api/ml/experiments             {receta} → 202 {id, run}: corre ese script como trabajo
-    POST /api/ml/runs                    {codigo, motor, receta?, minutos?, memoriaMb?} → 202: corre código editado
+    POST /api/ml/runs                    {codigo, motor, receta?, minutos?, memoriaMb?, recursos?} → 202: corre
+                                         código editado (recursos: executors, memoria y cores para YARN)
     GET  /api/ml/runs                    corridas recientes
     GET  /api/ml/runs/{id}?desde=N       estado, avance, ajustes de la búsqueda y las líneas de salida desde la N
     POST /api/ml/runs/{id}/cancel
@@ -32,8 +36,10 @@ Este módulo solo pone el servidor en el medio:
     POST /api/ml/experiments/{id}/predict   {filas: [...]} o {archivo: "/datos/..."}
 
 Cada corrida es el script generado (o el editado), corrido con python3
-(scikit-learn, en una máquina) o con spark-submit en YARN (Spark MLlib), con
-límite de tiempo y de memoria y una a la vez. El avance sale de las líneas
+(scikit-learn, en una máquina) o con spark-submit en YARN (Spark MLlib, con los
+executors, la memoria y los cores de la receta), con límite de tiempo y de
+memoria y una a la vez. Si un trabajo de Spark falla, el error de Spark o de
+YARN se explica en castellano (fuentes.explicar_error) y queda la línea original. El avance sale de las líneas
 '[ 40%] mensaje' que imprime el script y, en las búsquedas, de las líneas
 '[CV ...] END' de scikit-learn (cada entrenamiento de la búsqueda).
 """
@@ -58,6 +64,7 @@ import sandbox_ml
 from sandbox_ml import catalogo as cat
 from sandbox_ml import codigo as gen
 from sandbox_ml import fuentes
+from sandbox_ml import generar as gen_datos
 from sandbox_ml import limpieza as lz
 from sandbox_ml import perfil_spark
 from sandbox_ml import receta as rec
@@ -78,6 +85,7 @@ PERFIL = "@@perfil@@ "
 LIMPIEZA = "@@limpieza@@ "
 ERROR_SPARK = "@@error@@ "
 PREDICCION = "@@prediccion@@ "
+RESULTADO = "@@resultado@@ "
 EXP_ID = re.compile(r"^exp-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 MAX_CODIGO = 400_000
 MAX_CORRIDAS = 30
@@ -101,6 +109,13 @@ def _ruta_local(raw: object, base: Path) -> Path:
     except (OSError, ValueError):
         raise ApiError(f"{raw} no está dentro de {base}", "invalid") from None
     return real
+
+
+def _salida_spark(lineas: list[dict]) -> str:
+    """Lo que sirve para explicar un error de Spark: las dos salidas juntas (con spark-submit, el traceback de
+    Python sale por la estándar), sin los INFO de log4j ni sus líneas de continuación (el informe de YARN viene
+    en renglones con tabulador, como "\t user: root", que no dicen nada del error)."""
+    return "\n".join(l["text"] for l in lineas if " INFO " not in l["text"] and not l["text"].startswith("\t"))
 
 
 class Estudio:
@@ -153,7 +168,7 @@ class Estudio:
     # ------------------------------------------------------------ catálogo y fuentes
 
     def catalogo(self) -> dict:
-        return cat.como_json()
+        return cat.como_json(instalacion=True)
 
     async def fuentes(self) -> dict:
         base = self.c.s.datos_dir
@@ -212,6 +227,34 @@ class Estudio:
             raise ApiError(run.error or f"No se pudo generar {archivo}", "failed")
         return {"origen": "local", "ruta": str(base / archivo), "formato": "csv"}
 
+    async def generar(self, b: dict) -> dict:
+        """El generador a escala (sandbox_ml/generar.py) en YARN: un dataset sintético con señal y suciedad en HDFS."""
+        dataset, salida = b.get("dataset"), b.get("salida")
+        filas, formato = b.get("filas", 1_000_000), b.get("formato", "parquet")
+        suciedad, particionar = b.get("suciedad", 0.0), bool(b.get("particionar"))
+        errores = gen_datos.validar(dataset, filas, salida, formato, suciedad, None)
+        if errores:
+            raise ApiError(errores[0], "invalid")
+        recursos, err = rec.recursos(b.get("recursos"))
+        if err:
+            raise ApiError(f"{err[0]['campo']}: {err[0]['mensaje']}", "invalid", field=err[0]["campo"])
+        self.c.need_hdfs()
+        minutos = hdfs_mod.bounded_int(b.get("minutos"), "minutos", 1, 240, 60)
+        gen_id = time.strftime("gen-%Y%m%d-%H%M%S-") + os.urandom(2).hex()
+        args = [dataset, "--filas", str(filas), "--salida", salida, "--formato", formato, "--suciedad", str(suciedad)]
+        if particionar:
+            args.append("--particionar")
+        codigo = ("# El generador a escala del estudio (sandbox_ml/generar.py), con lo que se pidió en la pantalla\n"
+                  "from sandbox_ml import generar\n\n"
+                  f"generar.main({json.dumps(args, ensure_ascii=False)})\n")
+        comando = " ".join(["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos),
+                            "/opt/sandbox/ml/sandbox_ml/generar.py", *(shlex.quote(a) for a in args)])
+        info = {"carpeta": str(self.c.s.hadoop_dir / "ml" / "generados" / gen_id), "tipo": "generar",
+                "titulo": f"{dataset}: {filas:,} filas en {salida}", "entrada": f"{dataset} ({filas:,} filas)",
+                "dataset": dataset, "salida": {"tipo": "hdfs", "ruta": salida, "formato": formato}, "comando": comando}
+        return await self.lanzar(codigo, "spark", None, "generar", minutos=minutos, memoria_mb=self._memoria_driver(recursos),
+                                 exp_id=gen_id, editado=False, recursos=recursos, lote=info)
+
     # ------------------------------------------------------------ perfil
 
     def _datos_ok(self, d: object) -> dict:
@@ -260,7 +303,7 @@ class Estudio:
         if linea:
             e = json.loads(linea[len(ERROR_SPARK):])
         else:
-            err = "\n".join(l["text"] for l in run.lines[-200:] if l["stream"] == "err")
+            err = _salida_spark(run.lines[-200:])
             e = fuentes.explicar_error(err) if err.strip() else {"mensaje": run.error or "terminó sin resultado", "detalle": None}
             if run.error and "tardó" in run.error:
                 e = {"mensaje": f"tardó más que el límite ({run.error})", "detalle": e.get("detalle")}
@@ -447,7 +490,8 @@ class Estudio:
             raise ApiError("parte es entrenamiento, perfil o limpieza", "invalid")
         r = self.receta_valida(receta)
         return {"codigo": gen.generar(r, exp_id), "archivo": gen.nombre_archivo(r, exp_id), "motor": r["motor"],
-                "huella": rec.huella(r), "comando": self.comando_texto(r["motor"], gen.nombre_archivo(r, exp_id))}
+                "huella": rec.huella(r), "recursos": r.get("recursos"),
+                "comando": self.comando_texto(r["motor"], gen.nombre_archivo(r, exp_id), r.get("recursos"))}
 
     def codigo_parte(self, receta: object, parte: str, opciones: object) -> dict:
         """El PySpark del perfil o de la limpieza: alcanza con los datos (y la limpieza), sin modelo elegido."""
@@ -476,8 +520,10 @@ class Estudio:
                 "comando": f"spark-submit --master {master} {archivo}"}
 
     @staticmethod
-    def comando_texto(motor: str, archivo: str) -> str:
-        return f"spark-submit --master yarn {archivo}" if motor == "spark" else f"python3 {archivo}"
+    def comando_texto(motor: str, archivo: str, recursos: dict | None = None) -> str:
+        if motor != "spark":
+            return f"python3 {archivo}"
+        return " ".join(["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), archivo])
 
     # ------------------------------------------------------------ corridas
 
@@ -489,7 +535,15 @@ class Estudio:
         exp_id = nuevo_id()
         codigo = gen.generar(r, exp_id)
         return await self.lanzar(codigo, r["motor"], r, origen, minutos=r["busqueda"]["max_minutos"],
-                                 memoria_mb=4096, exp_id=exp_id, editado=False)
+                                 memoria_mb=self._memoria_driver(r.get("recursos")), exp_id=exp_id, editado=False,
+                                 recursos=r.get("recursos"))
+
+    @staticmethod
+    def _memoria_driver(recursos: dict | None) -> int:
+        """El límite de memoria del grupo de procesos de la corrida: el driver de Spark (JVM + Python) con margen."""
+        if not recursos:
+            return 4096
+        return max(4096, int(recursos.get("memoria_driver_mb", 1024)) + 2048)
 
     async def correr_codigo(self, b: dict) -> dict:
         codigo, motor = b.get("codigo"), b.get("motor", "sklearn")
@@ -506,11 +560,20 @@ class Estudio:
             r, errores, _ = rec.normalizar(b["receta"])
             if errores:
                 r = None
+        recursos = None
+        if motor == "spark":
+            recursos, errores = rec.recursos(b.get("recursos", (r or {}).get("recursos")))
+            if errores:
+                e = errores[0]
+                raise ApiError(f"{e['campo']}: {e['mensaje']}", "invalid", field=e["campo"])
+            memoria = max(memoria, self._memoria_driver(recursos))
         return await self.lanzar(codigo, motor, r, "código editado", minutos=minutos, memoria_mb=memoria,
-                                 exp_id=nuevo_id(), editado=True)
+                                 exp_id=nuevo_id(), editado=True, recursos=recursos)
 
     async def lanzar(self, codigo: str, motor: str, r: dict | None, origen: str, *, minutos: int, memoria_mb: int,
-                     exp_id: str, editado: bool) -> dict:
+                     exp_id: str, editado: bool, recursos: dict | None = None, lote: dict | None = None) -> dict:
+        """Corre el script como trabajo (uno a la vez). Con lote ({carpeta, titulo, entrada, ...}) es una predicción
+        por lotes de la biblioteca: va a su carpeta, sin experimento.json, y al terminar deja lote.json."""
         self.need_ml()
         if motor == "spark":
             self.c.need_proc("rm", "YARN (ResourceManager)")
@@ -519,9 +582,11 @@ class Estudio:
             raise ApiError("Ya hay una corrida de ML en curso: esperá a que termine o cancelala", "busy")
         if r is not None and r["datos"]["origen"] == "hdfs":
             self.c.need_hdfs()
-        d = self.raiz / exp_id
+        d = Path(lote["carpeta"]) if lote else self.raiz / exp_id
         d.mkdir(parents=True, exist_ok=True)
         (d / "codigo.py").write_text(codigo, encoding="utf-8")
+        if lote:
+            return self._lanzar_lote(d, lote, exp_id, minutos, memoria_mb, recursos)
         m = cat.MODELOS.get((r or {}).get("modelo", {}).get("id", ""))
         previo = {"id": exp_id, "estado": "corriendo", "origen": origen, "editado": editado, "motor": motor,
                   "creado": time.strftime("%Y-%m-%dT%H:%M:%S"), "receta": r, "huella": rec.huella(r) if r else None,
@@ -529,22 +594,27 @@ class Estudio:
                   "nombre": (r or {}).get("nombre"),
                   "modelo": {"id": m["id"], "etiqueta": m["etiqueta"], "clase": m["clase"],
                              "params": r["modelo"]["params"]} if m else None,
-                  "datos": (r or {}).get("datos"), "metricas": {}, "artefactos": ["codigo.py"]}
+                  "datos": (r or {}).get("datos"), "metricas": {}, "artefactos": ["codigo.py"], "recursos": recursos}
         (d / "experimento.json").write_text(json.dumps(previo, ensure_ascii=False, indent=1), encoding="utf-8")
         archivo = gen.nombre_archivo(r or {}, exp_id) if r else f"{exp_id}.py"
         if motor == "spark":
-            argv = ["spark-submit", "--master", "yarn", "--name", f"estudio-ml: {exp_id}", "codigo.py"]
+            argv = ["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), "--name", f"estudio-ml: {exp_id}",
+                    "codigo.py"]
         else:
             argv = [self.python, "codigo.py"]
         titulo = f"{m['etiqueta'] if m else 'Código editado'} ({'Spark MLlib' if motor == 'spark' else 'scikit-learn'})"
         run = self.runner.start(Action(
-            f"Estudio de ML: {titulo}", argv, display=self.comando_texto(motor, archivo),
+            f"Estudio de ML: {titulo}", argv, display=self.comando_texto(motor, archivo, recursos),
             input=(r or {}).get("datos", {}).get("ruta") or (r or {}).get("datos", {}).get("tabla") or "código editado",
             action=f"{titulo}, con un límite de {minutos} min y {memoria_mb} MB", source="ML",
             timeout=minutos * 60 + 30, env=self.env(d, origen), cwd=str(d)))
         c = {"id": run.id, "experimento": exp_id, "estado": "corriendo", "progreso": 0.0, "mensaje": "Arrancando",
              "motor": motor, "titulo": titulo, "origen": origen, "inicio": now_ms(), "ajustes": None,
-             "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None}
+             "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None, "recursos": recursos}
+        self._seguir_corrida(run, c, d, minutos, memoria_mb)
+        return {"id": exp_id, "run": run.id}
+
+    def _seguir_corrida(self, run, c: dict, d: Path, minutos: int, memoria_mb: int) -> None:
         self.corridas[run.id] = c
         while len(self.corridas) > MAX_CORRIDAS:
             self.corridas.popitem(last=False)
@@ -552,7 +622,26 @@ class Estudio:
         t = asyncio.get_running_loop().create_task(self._seguir(run, c, d, minutos, memoria_mb))
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
-        return {"id": exp_id, "run": run.id}
+
+    def _lanzar_lote(self, d: Path, lote: dict, lote_id: str, minutos: int, memoria_mb: int, recursos: dict | None) -> dict:
+        info = {k: v for k, v in lote.items() if k != "carpeta"}
+        info.update(id=lote_id, estado="corriendo", creado=time.strftime("%Y-%m-%dT%H:%M:%S"), recursos=recursos)
+        (d / "lote.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+        argv = ["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), "--name", f"estudio-ml: {lote_id}",
+                "codigo.py"]
+        titulo = lote["titulo"]
+        tipo = lote.get("tipo", "lote")
+        que = "Generar datos" if tipo == "generar" else "Predicción por lotes"
+        run = self.runner.start(Action(
+            f"{que}: {titulo}", argv, display=lote.get("comando") or self.comando_texto("spark", f"{lote_id}.py", recursos),
+            input=lote.get("entrada") or "datos nuevos", action=f"{titulo}, con un límite de {minutos} min",
+            source="ML", timeout=minutos * 60 + 30, env=self.env(None, tipo), cwd=str(d)))
+        c = {"id": run.id, "experimento": None, "tipo": tipo, "lote": lote_id, "estado": "corriendo", "progreso": 0.0,
+             "mensaje": "Arrancando", "motor": "spark", "titulo": titulo, "origen": tipo, "inicio": now_ms(),
+             "ajustes": None, "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None,
+             "recursos": recursos, "modelo": lote.get("modelo"), "version": lote.get("version")}
+        self._seguir_corrida(run, c, d, minutos, memoria_mb)
+        return {"id": lote_id, "run": run.id}
 
     def _leer(self, run, c: dict, estado: dict) -> bool:
         """Lee las líneas nuevas: avance, ajustes de la búsqueda y la app de YARN. True si algo cambió."""
@@ -651,6 +740,9 @@ class Estudio:
             (d / "salida.log").write_text("\n".join(l["text"] for l in run.lines) + "\n", encoding="utf-8")
         except OSError:
             pass
+        if c.get("tipo") in ("lote", "generar"):
+            await self._terminar_lote(run, c, d)
+            return
         exp = self._leer_json(d / "experimento.json") or {}
         ok = run.state == "done"
         if ok and exp.get("estado") == "listo":
@@ -663,8 +755,15 @@ class Estudio:
             err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()
                                      and not l["text"].startswith(("WARNING", "Warning", "  warnings.warn"))), None) \
                 or f"terminó con código {run.exitCode}"
-            exp.update(estado="falló", error=err[:500], terminado=time.strftime("%Y-%m-%dT%H:%M:%S"))
-            c.update(estado="falló", error=err[:500], mensaje=err[:200])
+            detalle = None
+            if c["motor"] == "spark" and not (run.error and run.error.startswith("cortado")):
+                # El error de Spark o de YARN, explicado (la excepción de Java o de Python, no la última línea del log)
+                e = self._explicar(run)
+                if e:
+                    err, detalle = e["mensaje"], e.get("detalle")
+            exp.update(estado="falló", error=err[:500], error_detalle=(detalle or "")[:800] or None,
+                       terminado=time.strftime("%Y-%m-%dT%H:%M:%S"))
+            c.update(estado="falló", error=err[:500], errorDetalle=(detalle or "")[:800] or None, mensaje=err[:200])
         # El script mide su propio pico (getrusage); el servidor, el de todo el grupo de procesos (con la JVM
         # del driver en Spark y los procesos de joblib): queda el mayor
         if c.get("memoriaPicoMb"):
@@ -683,6 +782,47 @@ class Estudio:
         level = "ok" if c["estado"] == "listo" else "error"
         self.bus.log("ML", level, f"{c['titulo']}: {c['mensaje']}", appId=c.get("appId"))
         self.emit(c)
+
+    async def _terminar_lote(self, run, c: dict, d: Path) -> None:
+        lote = self._leer_json(d / "lote.json") or {}
+        marca = RESULTADO if c.get("tipo") == "generar" else PREDICCION
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(marca)), None)
+        if run.state == "done" and linea:
+            res = json.loads(linea[len(marca):])
+            filas = res.get("filas")
+            if c.get("tipo") == "generar":
+                msg = f"{filas:,} filas en hdfs://{res.get('salida')}" if isinstance(filas, int) else "Listo"
+            else:
+                msg = f"{filas:,} predicciones en {res.get('destino')}" if isinstance(filas, int) else "Listo"
+            c.update(estado="listo", progreso=1.0, resultado=res, mensaje=msg)
+            lote.update(estado="listo", resumen=res)
+        else:
+            err = run.error or "terminó con código " + str(run.exitCode)
+            detalle = None
+            if not (run.error and run.error.startswith("cortado")):
+                e = self._explicar(run)
+                if e:
+                    err, detalle = e["mensaje"], e.get("detalle")
+            c.update(estado="falló", error=err[:500], errorDetalle=(detalle or "")[:800] or None, mensaje=err[:200])
+            lote.update(estado="falló", error=err[:500], error_detalle=(detalle or "")[:800] or None)
+        lote.update(terminado=time.strftime("%Y-%m-%dT%H:%M:%S"), app_id=c.get("appId"),
+                    memoria_pico_mb=c.get("memoriaPicoMb"))
+        if c.get("appId"):
+            lote["memoria_yarn_mb"] = await self.yarn_mb(c["appId"])
+        (d / "lote.json").write_text(json.dumps(lote, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        self.bus.log("ML", "ok" if c["estado"] == "listo" else "error", f"{c['titulo']}: {c['mensaje']}", appId=c.get("appId"))
+        self.emit(c)
+
+    @staticmethod
+    def _explicar(run) -> dict | None:
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(ERROR_SPARK)), None)
+        if linea:
+            try:
+                return json.loads(linea[len(ERROR_SPARK):])
+            except ValueError:
+                pass
+        err = _salida_spark(run.lines[-400:])
+        return fuentes.explicar_error(err) if err.strip() else None
 
     async def yarn_mb(self, app_id: str) -> float | None:
         try:
@@ -845,6 +985,10 @@ class Estudio:
         e = self._leer_json(d / "experimento.json") or {}
         if e.get("estado") != "listo":
             raise ApiError("Ese experimento no terminó bien: no tiene un modelo para predecir", "invalid")
+        return await self.predecir_en(d, e, b, exp_id)
+
+    async def predecir_en(self, d: Path, e: dict, b: dict, nombre: str) -> dict:
+        """Predice con el modelo de la carpeta d (un experimento o una versión de la biblioteca)."""
         if e.get("motor") == "spark":
             self.c.need_hdfs()
         argv = [self.python, "-m", "sandbox_ml.predecir", str(d)]
@@ -863,13 +1007,14 @@ class Estudio:
         else:
             raise ApiError("Mandá filas: [...] o archivo: /datos/...", "invalid")
         run = await self.runner.run(Action(
-            f"Predecir con {exp_id}", argv, display=f"python3 -m sandbox_ml.predecir {exp_id}", input=entra,
+            f"Predecir con {nombre}", argv, display=f"python3 -m sandbox_ml.predecir {nombre}", input=entra,
             action=f"Predice con {(e.get('modelo') or {}).get('etiqueta', 'el modelo')} guardado", source="ML",
             timeout=600, env=self.env(), cwd=str(d)))
         linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PREDICCION)), None)
         if run.state != "done" or linea is None:
-            err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()),
-                                    "falló")
+            err = run.error or next((l["text"] for l in reversed(run.lines) if l["text"].strip()
+                                     and not l["text"].startswith(("WARNING", "Warning", "  warnings.warn"))
+                                     and " INFO " not in l["text"] and " WARN " not in l["text"]), "falló")
             raise ApiError(f"No se pudo predecir: {err}", "failed")
         return json.loads(linea[len(PREDICCION):])
 
@@ -889,6 +1034,9 @@ class Estudio:
         async def example(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
             return JSONResponse(await self.ejemplo(b.get("ejemplo")))
+
+        async def generate(request: Request) -> JSONResponse:
+            return JSONResponse(await self.generar(await hdfs_mod._json(request)), status_code=202)
 
         async def profile(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
@@ -956,6 +1104,7 @@ class Estudio:
             Route("/api/ml/catalog", catalog, methods=["GET"]),
             Route("/api/ml/sources", sources, methods=["GET"]),
             Route("/api/ml/sources/example", example, methods=["POST"]),
+            Route("/api/ml/sources/generate", generate, methods=["POST"]),
             Route("/api/ml/profile", profile, methods=["POST"]),
             Route("/api/ml/cleaning/preview", cleaning_preview, methods=["POST"]),
             Route("/api/ml/cleaning", cleaning_get, methods=["GET"]),

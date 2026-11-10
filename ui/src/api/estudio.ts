@@ -2,8 +2,8 @@
    (server/sandbox_server/ml_estudio.py). Los nombres de los campos son los de sandbox_ml (ml/sandbox_ml),
    en castellano, tal cual: la receta que arma la pantalla es la misma que lee el código generado. */
 
-export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion';
-export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar';
+export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion' | 'recomendacion';
+export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar' | 'usuario' | 'item';
 export type MlMotor = 'sklearn' | 'spark';
 export type MlValor = string | number | boolean | null;
 
@@ -51,6 +51,10 @@ export interface MlModelo {
   predice?: boolean;
   max_filas?: number;
   extra?: string;
+  /** La librería de Python que necesita (xgboost) */
+  requiere?: string;
+  /** Por qué no se puede usar en esta instalación (lo agrega el servidor si falta la librería) */
+  deshabilitado?: string;
 }
 
 export interface MlMetrica {
@@ -75,7 +79,7 @@ export interface MlPreproceso {
   escalar: 'estandar' | 'minmax' | 'robusto' | 'ninguno';
   outliers: 'ninguno' | 'recortar_iqr' | 'recortar_pct' | 'eliminar_iqr';
   factor_iqr: number;
-  codificar: 'onehot' | 'ordinal';
+  codificar: 'onehot' | 'ordinal' | 'hashing';
   max_categorias: number;
   fecha: boolean;
   texto_max: number;
@@ -83,6 +87,8 @@ export interface MlPreproceso {
   k: number;
   umbral_varianza: number;
   pca: number | null;
+  /** FeatureHasher (solo Spark): en cuántas columnas caen las categorías */
+  hash_columnas: number;
 }
 
 export interface MlValidacion {
@@ -95,7 +101,14 @@ export interface MlValidacion {
   repeticiones: number;
   semilla: number;
   metrica: string;
+  /** Clasificación con Spark: el umbral de decisión se elige en la validación (f1, youden) o queda el del modelo */
+  umbral: MlCriterioUmbral;
 }
+
+export type MlCriterioUmbral = 'fijo' | 'f1' | 'youden';
+
+/** Lo que se le pide a YARN (spark-submit --num-executors, --executor-memory, --executor-cores, --driver-memory) */
+export interface MlRecursos { executors: number; memoria_executor_mb: number; cores: number; memoria_driver_mb: number }
 
 export type MlRango = { min: number; max: number; log?: boolean };
 
@@ -131,6 +144,8 @@ export interface MlCatalogo {
   particiones: Record<string, { etiqueta: string; ayuda: string }>;
   cv: Record<string, { etiqueta: string; ayuda: string }>;
   busquedas: Record<MlMotor, Record<string, { etiqueta: string; ayuda: string }>>;
+  recursos: Record<keyof MlRecursos, { etiqueta: string; flag: string; min: number; max: number; defecto: number; ayuda: string }>;
+  umbrales: Record<MlCriterioUmbral, { etiqueta: string; ayuda: string }>;
   limites: { max_ajustes: number; max_combinaciones: number; max_minutos: number; min_minutos: number; max_n_jobs: number };
   /** Los formatos que lee el estudio (sandbox_ml/fuentes.py) */
   formatos: Record<MlFormato, { etiqueta: string; ayuda: string }>;
@@ -346,6 +361,8 @@ export interface MlReceta {
   informe?: Partial<MlInformeOpciones>;
   /** La receta de limpieza, columna por columna (solo con modelos de Spark) */
   limpieza?: MlLimpieza;
+  /** Spark: lo que se le pide a YARN (executors, memoria y cores) */
+  recursos?: Partial<MlRecursos>;
   /** Lo completa el servidor (sale del modelo) */
   motor?: MlMotor;
   version?: number;
@@ -373,7 +390,18 @@ export interface MlLinea { n: number; stream: 'out' | 'err'; texto: string }
 export interface MlCorrida {
   /** Id de la acción del servidor */
   id: string;
-  experimento: string;
+  /** El experimento que registra (null en una predicción por lotes) */
+  experimento: string | null;
+  /** 'lote': una predicción por lotes de la biblioteca (POST /api/ml/library/{nombre}/batch);
+   *  'generar': el generador a escala (POST /api/ml/sources/generate) */
+  tipo?: 'lote' | 'generar';
+  lote?: string;
+  modelo?: string;
+  version?: number;
+  /** El resumen cuando terminó bien: el del lote, o lo que escribió el generador */
+  resultado?: MlResumenLote | MlGenerado;
+  errorDetalle?: string | null;
+  recursos?: MlRecursos | null;
   estado: 'corriendo' | 'listo' | 'falló';
   progreso: number;
   mensaje: string;
@@ -454,6 +482,12 @@ export interface MlInforme {
   predicho?: number[];
   residuo?: number[];
   histograma_residuos?: { bordes: number[]; cuentas: number[] };
+  /** Spark: el error según el valor real, por décimos (contado en los executors) */
+  error_por_rango?: { desde: number; hasta: number; filas: number; mae: number; rmse: number; sesgo: number }[];
+  /** Dónde se calcularon las curvas: 'cluster' = en los executors, con todas las filas de prueba */
+  calculado?: 'cluster';
+  // recomendación (ALS)
+  recomendaciones?: { usuario: string | number; items: { item: string | number; puntaje: number }[] }[];
   // clustering y reducción
   tamanos?: { grupo: number; filas: number }[];
   proyeccion?: { x: number[]; y: number[]; grupo?: number[]; referencia?: string[]; varianza?: number[]; centros?: { x: number[]; y: number[] } };
@@ -465,7 +499,7 @@ export interface MlInforme {
   curva_aprendizaje?: { filas: number[]; entrenamiento: number[][]; validacion: number[][] };
   curva_validacion?: { param: string; valores: string[]; entrenamiento?: number[][]; validacion?: number[][]; silhouette?: (number | null)[]; inercia?: (number | null)[] };
   permutacion?: { columnas: string[]; media: number[]; desvio: number[] };
-  importancia?: { tipo: 'impureza' | 'coeficientes'; columnas: string[]; valores: number[]; signo?: number[] };
+  importancia?: { tipo: 'impureza' | 'coeficientes' | 'ganancia'; columnas: string[]; valores: number[]; signo?: number[] };
   perdida?: { perdida: number[]; validacion: number[]; iteraciones: number; es_puntaje?: boolean };
   cv_tiempos?: { entrenar: number[]; medir: number[] };
   ejemplos?: { columnas: string[]; filas: MlValor[][] };
@@ -504,9 +538,213 @@ export interface MlExperimento {
   entorno?: Record<string, string | number>;
   clases?: string[] | null;
   error?: string;
+  /** Spark: el error de Spark o de YARN explicado (la línea original queda en error) */
+  error_detalle?: string | null;
+  /** Lo que se le pidió a YARN */
+  recursos?: MlRecursos | null;
+  /** Clasificación con Spark: el umbral elegido en la validación (y la nota con la que ganó) */
+  umbral?: { criterio: MlCriterioUmbral; valor: number; nota: number } | null;
+  /** Cómo se evaluó: entrenamiento, validación y prueba separados */
+  evaluacion?: string | null;
+  /** Las columnas que tienen que venir en los datos nuevos para predecir (con su tipo en el entrenamiento) */
+  entrada?: MlColumnaEntrada[] | null;
   informe: MlInforme | null;
   /** Id de la corrida si todavía está corriendo */
   corriendo: string | null;
 }
 
 export interface MlPrediccion { filas: number; columnas: string[]; muestra: MlValor[][]; archivo?: string }
+
+/* ---------- Biblioteca de modelos y predicción (etapa d) ---------- */
+
+export type MlEstadoVersion = 'candidato' | 'produccion' | 'archivado';
+export type MlNivelDeriva = 'estable' | 'moderada' | 'fuerte';
+
+/** Una columna que tiene que venir en los datos nuevos: su rol y su tipo en el entrenamiento */
+export interface MlColumnaEntrada { columna: string; rol: string; tipo: string | null }
+
+/** De dónde salió una versión */
+export interface MlLinaje {
+  experimento: string;
+  nombre_experimento?: string | null;
+  entrenado?: string | null;
+  datos: (MlDatos & { filas?: number; columnas?: number; hash?: string }) | null;
+  filas?: { entrenamiento: number; prueba: number; validacion?: number } | null;
+  limpieza: { nombre?: string | null; version?: number | null; pasos: number } | null;
+  huella_receta: string | null;
+  objetivo: string | null;
+  variables: Record<'numerica' | 'categorica' | 'fecha' | 'texto', string[]> | null;
+  validacion: Partial<Record<'particion' | 'prueba' | 'validacion' | 'cv' | 'k' | 'metrica' | 'umbral' | 'semilla', MlValor>>;
+  busqueda: { tipo: string; candidatos?: number; mejores_params?: Record<string, MlValor> } | null;
+  yarn: string | null;
+  recursos: MlRecursos | null;
+  entorno: Record<string, string | number> | null;
+  editado: boolean;
+}
+
+export interface MlVersion {
+  version: number;
+  estado: MlEstadoVersion;
+  creado: string;
+  promovida?: string;
+  nota: string;
+  experimento: string;
+  motor: MlMotor;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  modelo: { id: string; etiqueta: string; clase: string; params: Record<string, MlValor> };
+  metricas: Record<string, MlMetricaValores>;
+  umbral?: { criterio: MlCriterioUmbral; valor: number; nota: number } | null;
+  clases?: string[] | null;
+  entrada?: MlColumnaEntrada[] | null;
+  /** Si guardó la referencia del entrenamiento para medir la deriva */
+  deriva: boolean;
+  /** Dónde está el modelo: hdfs:///... (Spark) o el modelo.joblib del volumen */
+  artefacto: string;
+  copia_hdfs?: string;
+  modelo_bytes?: number | null;
+  linaje: MlLinaje;
+}
+
+export interface MlHistorialBiblioteca {
+  cuando: string;
+  accion: 'registrar' | 'promover' | 'archivar' | 'volver';
+  version: number;
+  nota: string;
+  detalle: string;
+}
+
+/** GET /api/ml/library: una fila por modelo */
+export interface MlModeloFila {
+  nombre: string;
+  descripcion: string | null;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  versiones: number;
+  produccion: number | null;
+  valor: number | null;
+  motor: MlMotor | null;
+  modeloEtiqueta: string | null;
+  candidatas: number;
+  creado: string;
+  actualizado: string;
+}
+
+export interface MlModeloBiblioteca {
+  nombre: string;
+  descripcion: string;
+  creado: string;
+  actualizado: string;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  versiones: MlVersion[];
+  historial: MlHistorialBiblioteca[];
+  /** Los últimos lotes de predicción con este modelo */
+  lotes: MlLote[];
+}
+
+export interface MlComparacionVersiones {
+  nombre: string;
+  metrica: string | null;
+  versiones: { version: number; estado: MlEstadoVersion; motor: MlMotor; modelo: string; experimento: string; creado: string; umbral?: MlVersion['umbral'] }[];
+  metricas: { metrica: string; etiqueta: string; mayor_mejor: boolean; valores: (number | null)[]; mejor: number[] | null; principal: boolean }[];
+  params: { param: string; valores: MlValor[]; cambia: boolean }[];
+  datos: { version: number; fuente: string | null; filas: MlLinaje['filas']; huella: string | null; limpieza: MlLinaje['limpieza'] }[];
+}
+
+export interface MlDerivaColumna {
+  columna: string;
+  tipo: 'numerica' | 'categorica';
+  /** null: la columna no vino en los datos nuevos */
+  psi: number | null;
+  nivel: MlNivelDeriva | null;
+  etiquetas: string[];
+  referencia: number[];
+  nuevo: number[] | null;
+}
+
+export interface MlDeriva {
+  nivel: MlNivelDeriva | null;
+  psi_max: number | null;
+  filas_referencia: number | null;
+  filas_nuevas: number | null;
+  columnas: MlDerivaColumna[];
+  explicacion: string;
+}
+
+export type MlSalidaLote =
+  | { tipo: 'hdfs'; ruta: string; formato: 'parquet' | 'orc' | 'csv' | 'json'; modo: 'overwrite' | 'append' | 'error' }
+  | { tipo: 'hive'; tabla: string; modo: 'overwrite' | 'append' | 'error' };
+
+/** Lo que imprime el script del lote al terminar (@@prediccion@@) */
+export interface MlResumenLote {
+  modelo: string;
+  version: number;
+  motor: MlMotor;
+  salida: MlSalidaLote;
+  destino: string;
+  app_id?: string;
+  filas: number;
+  columnas: string[];
+  nuevas: string[];
+  muestra: MlValor[][];
+  conteo?: Record<string, number>;
+  esquema: { faltan: string[]; sobran: string[]; convertidas: { columna: string; de: string; a: string; no_convertidos: number }[] };
+  deriva: MlDeriva | null;
+  avisos: string[];
+  tiempo: number;
+}
+
+/** Un lote de predicción (lote.json en /hadoop/ml/lotes) */
+export interface MlLote {
+  id: string;
+  modelo: string;
+  version: number;
+  estado_version?: MlEstadoVersion;
+  motor_modelo?: MlMotor;
+  titulo?: string;
+  datos: MlDatos;
+  salida: MlSalidaLote;
+  entrada?: string;
+  estado: 'corriendo' | 'listo' | 'falló';
+  creado: string;
+  terminado?: string;
+  resumen?: MlResumenLote;
+  error?: string;
+  error_detalle?: string | null;
+  app_id?: string | null;
+  recursos?: MlRecursos | null;
+  memoria_pico_mb?: number | null;
+  memoria_yarn_mb?: number | null;
+}
+
+/** El generador a escala (sandbox_ml/generar.py en YARN) */
+export interface MlPedidoGenerar {
+  dataset: 'clientes' | 'calificaciones';
+  filas: number;
+  salida: string;
+  formato?: 'parquet' | 'orc' | 'csv' | 'json';
+  /** De 0 a 0,5: la fracción de filas con cada problema (nulos, repetidas, extremos, texto desprolijo) */
+  suciedad?: number;
+  /** clientes: carpetas anio=/mes= */
+  particionar?: boolean;
+  recursos?: Partial<MlRecursos>;
+}
+
+/** Lo que imprime el generador al terminar (@@resultado@@) */
+export interface MlGenerado {
+  dataset: string; salida: string; formato: string; filas: number; pedidas: number; suciedad: number; archivos: number;
+  bytes: number; columnas: string[]; particionado: boolean; segundos: number; app_id: string; muestra: MlValor[][];
+}
+
+export interface MlPedidoLote {
+  version?: number | null;
+  datos: MlDatos;
+  salida: Partial<MlSalidaLote> & { tipo: 'hdfs' | 'hive' };
+  recursos?: Partial<MlRecursos>;
+  minutos?: number;
+}
+

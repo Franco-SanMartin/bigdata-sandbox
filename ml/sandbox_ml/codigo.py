@@ -454,10 +454,14 @@ class _Sklearn:
         if self.clasif and not self.m.get("proba"):
             nombres = [k for k in nombres if k != "log_loss"]   # sin predict_proba no hay log loss
         if self.clasif:
+            self.imp("sklearn.metrics", "average_precision_score", "make_scorer")
             fijas = {k: cat.METRICAS[k]["sklearn"] for k in nombres if k not in ("roc_auc", "pr_auc")}
             self.l(f"METRICAS = {lit(fijas)}",
                    "if BINARIA:",
-                   '    METRICAS.update(roc_auc="roc_auc", pr_auc="average_precision")',
+                   "    # La clase positiva es la segunda (como en scikit-learn): con etiquetas de texto (vuelve / no_vuelve),",
+                   "    # average_precision no puede suponer que es el 1",
+                   '    METRICAS.update(roc_auc="roc_auc", pr_auc=make_scorer(average_precision_score, pos_label=sorted(set(y))[1],',
+                   '                                                         response_method=("decision_function", "predict_proba")))',
                    "else:",
                    '    METRICAS["roc_auc"] = "roc_auc_ovr"')
             if "log_loss" not in nombres:
@@ -468,12 +472,17 @@ class _Sklearn:
                "METRICA = METRICAS[PRINCIPAL]",
                "",
                "",
+               "def negativa(scorer):",
+               '    """scikit-learn da los errores en negativo (neg_...): se dan vuelta para mostrarlos"""',
+               '    return isinstance(scorer, str) and scorer.startswith("neg_")',
+               "",
+               "",
                "def medir(modelo, X, y):",
                '    """Cada métrica sobre (X, y), con los errores en positivo (scikit-learn los da negativos)"""',
                "    out = {}",
                "    for nombre, scorer in METRICAS.items():",
                "        v = get_scorer(scorer)(modelo, X, y)",
-               '        out[nombre] = float(-v if scorer.startswith("neg_") else v)',
+               '        out[nombre] = float(-v if negativa(scorer) else v)',
                "    return out")
 
     def espacio(self) -> list[str]:
@@ -527,7 +536,7 @@ class _Sklearn:
                'resultado["tiempo_busqueda"] = time.perf_counter() - t0',
                "pipeline = busqueda.best_estimator_   # la mejor combinación, ya reentrenada con todo X_ent",
                'mejor = {k.removeprefix("modelo__"): v for k, v in busqueda.best_params_.items()}',
-               "puntaje = -busqueda.best_score_ if METRICA.startswith(\"neg_\") else busqueda.best_score_",
+               "puntaje = -busqueda.best_score_ if negativa(METRICA) else busqueda.best_score_",
                'print(f"Mejor: {mejor} → {PRINCIPAL} = {puntaje:.4f} ({resultado[\'tiempo_busqueda\']:.1f} s)")')
 
     def validacion_cruzada(self) -> None:
@@ -545,7 +554,7 @@ class _Sklearn:
                "cv = cross_validate(pipeline, X_ent, y_ent, cv=particiones, scoring=METRICAS, n_jobs=N_JOBS, return_train_score=True)",
                'resultado["tiempo_cv"] = time.perf_counter() - t0',
                "for nombre, scorer in METRICAS.items():",
-               "    signo = -1 if scorer.startswith(\"neg_\") else 1",
+               "    signo = -1 if negativa(scorer) else 1",
                '    cv[f"test_{nombre}"], cv[f"train_{nombre}"] = signo * cv[f"test_{nombre}"], signo * cv[f"train_{nombre}"]',
                '    print(f"  {nombre:>22}: {cv[f\'test_{nombre}\'].mean():.4f} ± {cv[f\'test_{nombre}\'].std():.4f}")')
 
@@ -590,7 +599,7 @@ class _Sklearn:
             self.imp("sklearn.model_selection", "learning_curve")
             self.l("tamanos, ent, val = learning_curve(",
                    f"    pipeline, X_ent, y_ent, cv={particiones}, scoring=METRICA, train_sizes=np.linspace(0.1, 1.0, 5), n_jobs=N_JOBS)",
-                   "signo = -1 if METRICA.startswith(\"neg_\") else 1",
+                   "signo = -1 if negativa(METRICA) else 1",
                    'resultado["curva_aprendizaje"] = {"filas": tamanos.tolist(), "entrenamiento": (signo * ent).tolist(),',
                    '                                  "validacion": (signo * val).tolist()}')
         if inf["curva_validacion"]:
@@ -601,7 +610,7 @@ class _Sklearn:
                    "ent, val = validation_curve(",
                    f"    pipeline, X_ent, y_ent, param_name=\"modelo__{cv['param']}\", param_range=VALORES, cv={particiones},",
                    "    scoring=METRICA, n_jobs=N_JOBS)",
-                   "signo = -1 if METRICA.startswith(\"neg_\") else 1",
+                   "signo = -1 if negativa(METRICA) else 1",
                    f'resultado["curva_validacion"] = {{"param": {lit(cv["param"])}, "valores": [str(v) for v in VALORES],',
                    '                                 "entrenamiento": (signo * ent).tolist(), "validacion": (signo * val).tolist()}')
         if inf["permutacion"]:

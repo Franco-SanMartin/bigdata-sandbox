@@ -4,7 +4,7 @@ Lo que suele fallar en la versión `ml` y cómo se arregla. Los problemas de
 Hadoop, Hive, Spark o MongoDB en general están en la
 [guía 11 de base](../11-problemas.md): todo eso vale igual acá.
 
-[← 6. MongoDB + pandas](06-mongodb-pandas.md) · [Índice de ml](README.md)
+[← 6. MongoDB + pandas](06-mongodb-pandas.md) · [Índice de ml](README.md) · Siguiente: [8. El estudio de ML desde JupyterLab →](08-estudio-desde-jupyter.md)
 
 ## Primero, mirar
 
@@ -104,4 +104,4 @@ rm -f ventas_sucias.csv ventas_limpias.parquet clientes_senal.csv \
 Para empezar de cero todo el cluster, ver la
 [guía 11 de base](../11-problemas.md).
 
-[← 6. MongoDB + pandas](06-mongodb-pandas.md) · [Índice de ml](README.md)
+[← 6. MongoDB + pandas](06-mongodb-pandas.md) · [Índice de ml](README.md) · Siguiente: [8. El estudio de ML desde JupyterLab →](08-estudio-desde-jupyter.md)

@@ -9,6 +9,7 @@ import { DemoData } from './datos';
 import { DemoMl } from './ml';
 import { DemoPipeline } from './pipeline';
 import { DemoEstudio } from './estudio';
+import { DemoBiblioteca } from './biblioteca';
 import { demoAula, demoCaidas, demoGuardarPlano, demoTrafico } from './aula';
 
 export { SPEED as DEMO_SPEED };
@@ -21,6 +22,7 @@ export function createDemoApi(): SandboxApi {
   const ml = new DemoMl(e);
   const pipe = new DemoPipeline(e, ml, data);
   const est = new DemoEstudio(e);
+  const bib = new DemoBiblioteca(e, est);
   const ok = <T>(v: T) => Promise.resolve(v);
   /** Los módulos nuevos tiran ApiFailure al validar: así llega como promesa rechazada, igual que del backend */
   const call = <T>(fn: () => T | Promise<T>) => Promise.resolve().then(fn);
@@ -94,6 +96,7 @@ export function createDemoApi(): SandboxApi {
     mlCatalog: () => call(() => est.catalog()),
     mlSources: () => call(() => est.sources()),
     mlExample: () => call(() => est.example()),
+    mlGenerate: () => call(() => fail('unsupported', 'En el modo demo no se generan datos: con la imagen full, el generador escribe en HDFS con Spark en YARN (de mil a miles de millones de filas)')),
     mlProfile: (d, o, op) => call(() => est.profile(d, o, op)),
     mlCleaningPreview: (d, l) => call(() => est.cleaningPreview(d, l)),
     mlCleanings: () => call(() => est.cleanings()),
@@ -112,5 +115,16 @@ export function createDemoApi(): SandboxApi {
     mlDownload: (id, f) => call(() => est.download(id, f)),
     mlToJupyter: () => call(() => fail('unsupported', 'En el modo demo no hay JupyterLab: con la imagen ml o full, el notebook se abre en el puerto 8888')),
     mlPredict: () => call(() => fail('unsupported', 'En el modo demo no hay modelos guardados para predecir: probalo con la imagen full')),
+    mlLibrary: () => call(() => bib.lista()),
+    mlLibraryModel: n => call(() => bib.modelo(n)),
+    mlLibraryRegister: r => call(() => bib.registrar(r)),
+    mlLibraryState: (n, r) => call(() => bib.estado(n, r)),
+    mlLibraryDescribe: (n, d) => call(() => bib.describir(n, d)),
+    mlLibraryCompare: (n, vs) => call(() => bib.comparar(n, vs)),
+    mlLibraryPredict: (n, r) => call(() => bib.predecir(n, r)),
+    mlLibraryBatchCode: (n, r) => call(() => bib.codigo(n, r)),
+    mlLibraryBatch: (n, r) => call(() => bib.lote(n, r)),
+    mlLibraryBatches: () => call(() => bib.lotes()),
+    mlLibraryExport: () => call(() => fail('unsupported', 'En el modo demo no se arma el .zip: con la imagen full se baja el modelo con su ficha, un servicio mínimo (servir.py) y su Dockerfile')),
   };
 }

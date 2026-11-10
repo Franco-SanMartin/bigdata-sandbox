@@ -1,12 +1,13 @@
 /* Paso 5, Validación y búsqueda: cómo se parte (holdout aleatorio, estratificado o temporal, con o sin
    validación aparte), la validación cruzada, la semilla, la métrica que decide, la búsqueda de
-   hiperparámetros con su espacio y su presupuesto, y qué curvas calcular. */
+   hiperparámetros con su espacio y su presupuesto, y qué curvas calcular. Con Spark, además: el umbral de
+   decisión que se elige en la validación y lo que se le pide a YARN (executors, memoria y cores). */
 import { Plus, Trash2 } from 'lucide-react';
-import type { MlBusqueda, MlCatalogo, MlParam, MlRango, MlRevision, MlValidacion, MlValor } from '../../../api/types';
+import type { MlBusqueda, MlCatalogo, MlCriterioUmbral, MlParam, MlRango, MlRecursos, MlRevision, MlValidacion, MlValor } from '../../../api/types';
 import { Panel } from '../../../components/base';
 import { Meter, Switch } from '../../../components/ui';
 import { Avisos, Campo, Numero, Opciones } from './comun';
-import { editar, modeloDe, textoValor, useEstudio } from './estado';
+import { editar, modeloDe, supervisada, textoValor, useEstudio } from './estado';
 import { AyudaParam } from './PasoModelo';
 import { HelpTip } from '../../../components/base';
 
@@ -14,7 +15,7 @@ export function PasoValidacion({ cat, rev }: { cat: MlCatalogo; rev: MlRevision 
   const { receta } = useEstudio();
   const modelo = modeloDe(cat, receta.modelo.id);
   const motor = modelo?.motor ?? 'sklearn';
-  const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
+  const sup = supervisada(receta.tarea);
   const val: MlValidacion = { ...(rev?.receta.validacion ?? {} as MlValidacion), ...stripUndef(receta.validacion) } as MlValidacion;
   const bus: MlBusqueda = { ...(rev?.receta.busqueda ?? {} as MlBusqueda), ...stripUndef(receta.busqueda) } as MlBusqueda;
   const setV = <K extends keyof MlValidacion>(k: K, v: MlValidacion[K]) => editar(r => ({ ...r, validacion: { ...r.validacion, [k]: v } }));
@@ -40,13 +41,14 @@ export function PasoValidacion({ cat, rev }: { cat: MlCatalogo; rev: MlRevision 
           </div>
         </Panel>
         <Curvas cat={cat} />
-        <Avisos rev={rev} prefijos={['validacion', 'busqueda', 'informe']} />
+        {motor === 'spark' && <Recursos cat={cat} rev={rev} />}
+        <Avisos rev={rev} prefijos={['validacion', 'busqueda', 'informe', 'recursos']} />
       </div>
     );
   }
 
   const particiones = Object.entries(cat.particiones).map(([k, p]) => ({ valor: k, etiqueta: p.etiqueta, ayuda: p.ayuda,
-    deshabilitada: k === 'estratificada' && receta.tarea !== 'clasificacion' ? 'Solo en clasificación' : undefined }));
+    deshabilitada: k === 'estratificada' && receta.tarea !== 'clasificacion' ? 'Solo en clasificación' : k === 'temporal' && receta.tarea === 'recomendacion' ? 'ALS no usa el orden en el tiempo' : undefined }));
   const cvs = Object.entries(cat.cv).map(([k, c]) => ({ valor: k, etiqueta: c.etiqueta, ayuda: c.ayuda,
     deshabilitada: motor === 'spark' && !['ninguna', 'kfold'].includes(k) ? 'Spark MLlib solo tiene KFold (CrossValidator)' : k === 'estratificada' && receta.tarea !== 'clasificacion' ? 'Solo en clasificación' : undefined }));
   const busquedas = Object.entries(cat.busquedas[motor]).map(([k, b]) => ({ valor: k, etiqueta: b.etiqueta, ayuda: b.ayuda }));
@@ -96,6 +98,13 @@ export function PasoValidacion({ cat, rev }: { cat: MlCatalogo; rev: MlRevision 
               </select>
             </Campo>
             <p className="es-nota">{cat.metricas[val.metrica]?.ayuda}</p>
+            {motor === 'spark' && receta.tarea === 'clasificacion' && (
+              <Campo label="Umbral de decisión" nombre="thresholds" ayuda={cat.umbrales[val.umbral ?? 'fijo']?.ayuda} error={rev?.errores.find(e => e.campo === 'validacion.umbral')?.mensaje}>
+                <select className="input" value={val.umbral ?? 'fijo'} onChange={e => setV('umbral', e.target.value as MlCriterioUmbral)} aria-label="Cómo se elige el umbral de decisión">
+                  {(Object.keys(cat.umbrales) as MlCriterioUmbral[]).map(k => <option key={k} value={k} disabled={k !== 'fijo' && !val.validacion}>{cat.umbrales[k].etiqueta}{k !== 'fijo' && !val.validacion ? ' (necesita validación aparte)' : ''}</option>)}
+                </select>
+              </Campo>
+            )}
           </div>
         </Panel>
       </div>
@@ -125,8 +134,32 @@ export function PasoValidacion({ cat, rev }: { cat: MlCatalogo; rev: MlRevision 
       </Panel>
 
       <Curvas cat={cat} />
-      <Avisos rev={rev} prefijos={['validacion', 'busqueda', 'informe']} />
+      {motor === 'spark' && <Recursos cat={cat} rev={rev} />}
+      <Avisos rev={rev} prefijos={['validacion', 'busqueda', 'informe', 'recursos']} />
     </div>
+  );
+}
+
+/** Lo que se le pide a YARN: spark-submit --num-executors, --executor-memory, --executor-cores y --driver-memory */
+function Recursos({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | null }) {
+  const { receta } = useEstudio();
+  const actual = { ...(rev?.receta.recursos ?? {}), ...stripUndef(receta.recursos ?? {}) } as Partial<MlRecursos>;
+  const set = (k: keyof MlRecursos, v: number) => editar(r => ({ ...r, recursos: { ...r.recursos, [k]: v } }));
+  const claves = Object.keys(cat.recursos) as (keyof MlRecursos)[];
+  const total = (actual.executors ?? 0) * ((actual.memoria_executor_mb ?? 0) + Math.max(384, 0.1 * (actual.memoria_executor_mb ?? 0)));
+  return (
+    <Panel title="Recursos de Spark en YARN" sub={<span className="mono">{claves.map(k => `${cat.recursos[k].flag} ${k.includes('memoria') ? `${actual[k] ?? cat.recursos[k].defecto}m` : actual[k] ?? cat.recursos[k].defecto}`).join(' ')}</span>}>
+      <div className="es-form">
+        <div className="es-form-fila">
+          {claves.map(k => (
+            <Campo key={k} label={cat.recursos[k].etiqueta} nombre={cat.recursos[k].flag} ayuda={cat.recursos[k].ayuda} error={rev?.errores.find(e => e.campo === `recursos.${k}`)?.mensaje}>
+              <Numero value={actual[k] ?? cat.recursos[k].defecto} onChange={v => v != null && set(k, Math.round(v))} min={cat.recursos[k].min} max={cat.recursos[k].max} label={cat.recursos[k].etiqueta} ancho={90} />
+            </Campo>
+          ))}
+        </div>
+        {total > 0 && <p className="es-nota">Los executors piden unos <b>{Math.round(total).toLocaleString('es-AR')} MB</b> de YARN en total (memoria + overhead de cada uno), más el ApplicationMaster. Si no entran en los NodeManagers, el trabajo queda esperando.</p>}
+      </div>
+    </Panel>
   );
 }
 
@@ -214,7 +247,7 @@ function Curvas({ cat }: { cat: MlCatalogo }) {
   const { receta } = useEstudio();
   const modelo = modeloDe(cat, receta.modelo.id);
   const inf = receta.informe ?? {};
-  const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
+  const sup = supervisada(receta.tarea);
   const spark = modelo?.motor === 'spark';
   const set = (k: string, v: unknown) => editar(r => ({ ...r, informe: { ...r.informe, [k]: v } }));
   const numericos = (modelo?.params ?? []).filter(p => p.tipo === 'int' || p.tipo === 'float' || p.tipo === 'choice');

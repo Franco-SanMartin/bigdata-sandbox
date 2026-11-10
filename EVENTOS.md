@@ -4,6 +4,40 @@ Lo que pasó en el proyecto, en orden, con lo más nuevo arriba: qué se hizo, q
 falló y en qué quedó. Las horas de GitHub están en UTC. Por qué se hizo cada cosa
 está en [DECISIONES.md](DECISIONES.md).
 
+## 2026-11-10
+
+- **Publicar `:ml` sin tocar `latest`** (PR #12, mergeado): `solo_full.sh`
+  contesta `si`, `ml` o `no`, y con `ml` `imagen.yml` publica solo ese tag.
+  `probar_solo_full.sh` lo prueba en el job `revisar`, con la historia de los
+  PRs #10 y #11.
+- **ML etapa (c) terminada** en `ui2-ml-etapa-c-fin`: los dos WIP de
+  `ui2-ml-etapa-c` más la interfaz (tarea recomendación, umbral, recursos,
+  error por rango) y las pruebas de los 19 modelos de Spark contra un `:full`
+  real. Salieron dos arreglos:
+  - BisectingKMeans con el estándar centrado devolvía un solo grupo: ahora se
+    escala sin centrar.
+  - El error de una corrida de Spark decía "user: root": el traceback de
+    Python sale por la salida estándar y el resumen leía solo la de error (se
+    quedaba con el informe de YARN). Ahora lee las dos.
+- Los fixtures de la demo se regeneraron con dos recetas nuevas de Spark
+  (logística con umbral por F1 y GLM para el gasto).
+- **PR #13** abierto con la etapa (c). `solo_full.sh` da `ml`: publica `:ml` y
+  `:full`, no `latest`.
+- **ML etapa (d)** en `ui2-ml-etapa-d` (PR #16): biblioteca de modelos, deriva,
+  lotes y exportar (D-08: registro propio, no MLflow). La demo salió de tres
+  lotes reales en YARN (Parquet, CSV y una tabla de Hive).
+- **ML etapa (e)** en `ui2-ml-etapa-e`: generador a escala, guías y humo. El
+  generador daba 60/36/4 en vez de 60/30/10: `rand()` adentro de un `CASE WHEN`
+  solo avanza en las filas que llegan a esa rama.
+- **PR #14** (compose con el volumen de cada versión y terminal apagada en
+  `empresa`) y **PR #15** (Hive 4.0.0 con copia propia en el release
+  `deps-hive-4.0.0`, verificado con el sha256 de Apache; toca `base`, queda sin
+  mergear).
+- El job `revisar` de Documentación fallaba desde el PR #12: los commits de
+  prueba de `probar_solo_full.sh` no tenían autor en el runner. La prueba del lote con
+  scikit-learn encontró un error de la (b): con clases de texto, la PR AUC
+  suponía que la clase positiva era el 1.
+
 ## 2026-10-30 al 2026-11-01
 
 - **Rediseño 360 de `full`** (rama `ui2-ecosistema`, PR #10): barra por capas,

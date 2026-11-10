@@ -9,7 +9,7 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
-### Cambiado
+### Cambiado (compose y empresa)
 
 - **El compose que genera la interfaz** usa el contenedor y el volumen del
   `docker run` de las guías de su versión: `bigdata-full` y `bigdata_full` con
@@ -300,6 +300,117 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     un paso nuevo, *Limpieza*; y *Código* muestra también el del perfil y el
     de la limpieza. La demo trae perfiles y una vista previa reales de
     `ventas_sucias` en HDFS.
+- Estudio de ML, etapa (c) (modelos, búsqueda y evaluación en Spark, `ml` y
+  `full`):
+  - Modelos nuevos de MLlib: GLM (familias y enlaces), XGBoost distribuido
+    (`xgboost.spark`, clasificación y regresión; si la librería no está, el
+    modelo aparece como "no instalado") y **ALS**, con una tarea nueva,
+    *recomendación*: roles usuario e ítem, la calificación como objetivo, RMSE
+    y las 5 mejores recomendaciones por usuario. Son 19 modelos de Spark y 52
+    en total.
+  - Con Spark, entrenamiento, validación y prueba quedan separados de entrada
+    (70 / 15 / 15). En clasificación binaria, el umbral se elige en la
+    validación (mejor F1 o índice de Youden) y se guarda en el modelo
+    (`setThreshold`), así la prueba lo mide sin haberlo visto. Sin validación
+    aparte, el umbral queda en el del modelo.
+  - Búsqueda con `CrossValidator` o `TrainValidationSplit` en paralelo, y los
+    recursos que se piden a YARN (executors, cores y memoria del executor y
+    del driver) van como flags de `spark-submit`. La pantalla estima la
+    memoria que va a pedir y avisa si no entra.
+  - Las curvas se calculan en los executors con 200 cubetas (ROC, PR, tabla de
+    umbrales, calibración, matriz de confusión, histograma de residuos y el
+    error por rango del valor real): al driver llegan resúmenes, no filas.
+  - Resultados: el detalle del error de Spark en una frase, la métrica de
+    validación al lado de la de prueba, el control del umbral arranca en el
+    elegido (con un botón para volver a él), el error por rango y la tabla de
+    recomendaciones.
+  - BisectingKMeans se escala sin centrar: con el centro en 0, Spark no puede
+    partir el primer grupo y devolvía uno solo.
+  - `test_estudio_modelos_spark.py` entrena los 19 modelos de Spark de punta a
+    punta en la imagen, más la búsqueda con validación cruzada y recursos.
+- Estudio de ML, etapa (d) (biblioteca de modelos, predicción y deriva, `ml` y
+  `full`):
+  - **Biblioteca de modelos** (`sandbox_ml/biblioteca.py`, en
+    `/hadoop/ml/biblioteca`): un experimento que terminó bien se guarda como
+    versión de un modelo con nombre (churn, gasto).
+    - Cada versión es candidato, en producción (una por modelo) o archivada.
+    - Promover archiva la que estaba en producción. Volver atrás promueve la que
+      estuvo antes. Cada cambio queda en el historial con su nota.
+    - La versión se copia: el modelo de Spark va a
+      `hdfs:///user/root/ml/biblioteca/<nombre>/v<N>` y el de scikit-learn, al
+      volumen (con una copia en HDFS). Borrar el experimento no la rompe.
+    - El linaje dice de dónde salió: datos y filas, limpieza, huella de la
+      receta, variables, validación, búsqueda, app de YARN, recursos y
+      versiones de las librerías.
+    - Comparar versiones muestra cada métrica con la mejor marcada, los
+      hiperparámetros que cambian y los datos.
+    - Es un registro propio y no MLflow (D-08).
+  - **Deriva** (`deriva.py`): cada experimento guarda al entrenar una
+    referencia de cada variable (`referencia.json`): los deciles y las
+    categorías más comunes, con los nulos. Al predecir por lotes, el PSI de cada
+    variable dice si los datos nuevos son estables (menos de 0,1), si cambiaron
+    algo (hasta 0,25) o si son otra población. Se cuenta con pandas o en los
+    executors de Spark.
+  - **Esquema de entrada**: cada experimento guarda las columnas que tienen que
+    venir en los datos nuevos, con su tipo en el entrenamiento, sin las que
+    crea la limpieza.
+  - **Predicción por lotes** (`lote.py`): un script de PySpark completo, con
+    `spark-submit` en YARN.
+    - Lee los datos nuevos de HDFS (cualquier formato) o de Hive.
+    - Para si falta una columna. Si una numérica llega como texto, la
+      convierte y cuenta los valores que no pudo convertir.
+    - Mide la deriva y predice. Con Spark usa el `PipelineModel`; con
+      scikit-learn, el Pipeline de joblib repartido con `mapInPandas`.
+    - Escribe las columnas originales más la predicción (y las
+      probabilidades) en HDFS (Parquet, ORC, CSV o JSON) o en una tabla de Hive.
+    - Corre con el mismo lanzador de las corridas del estudio: avance en vivo,
+      límite de tiempo y memoria, y cancelar.
+  - **Predicción al instante** con la versión en producción (o la elegida):
+    filas por formulario o en JSON.
+  - **Exportar** una versión como `.zip` con:
+    - el modelo y los pasos propios del sandbox;
+    - `servir.py`, un servicio HTTP de la librería estándar (`POST /predecir`,
+      `GET /`, `GET /salud`);
+    - la ficha, `requirements.txt` con las versiones del entrenamiento, un
+      `Dockerfile` y un `LEEME.md`.
+  - Rutas `/api/ml/library/...` (`ml_biblioteca.py`). Pestaña nueva
+    **Biblioteca** en Machine Learning: la lista de modelos y, para cada uno,
+    sus versiones, el linaje, comparar, predecir, los lotes (con la deriva por
+    tramos) y el historial. "Guardar en la biblioteca" está en el detalle de
+    cada experimento. La demo trae una biblioteca de corridas reales.
+  - Arreglado: en scikit-learn, con clases de texto (vuelve / no_vuelve), la
+    PR AUC fallaba porque suponía que la clase positiva era el 1.
+  - Pruebas: `test_biblioteca.py` (deriva, estados, comparar, el script del
+    lote y el paquete exportado, que se levanta y contesta predicciones) y
+    `test_biblioteca_spark.py` (lotes de punta a punta con un modelo de Spark y
+    uno de scikit-learn).
+- Estudio de ML, etapa (e) (generador a escala, guías y humo, `ml` y `full`):
+  - **Generador a escala** (`sandbox_ml/generar.py`): un trabajo de Spark en
+    YARN escribe en HDFS un dataset sintético del tamaño que se elija (de mil a
+    miles de millones de filas).
+    - `clientes` trae las reglas de `clientes_senal.csv` (segmentos 60/30/10,
+      gasto lineal, "vuelve" con el 10 % dado vuelta) y fecha de alta para
+      particionar por `anio=/mes=`.
+    - `calificaciones` trae usuario, ítem y nota de 1 a 5 a partir de factores
+      escondidos, para ALS.
+    - La suciedad pone nulos, extremos, texto desprolijo y filas repetidas.
+    - Cada executor genera su parte con `spark.range` y `rand(semilla)`. Los
+      números al azar que van en un `CASE WHEN` se guardan antes en una columna:
+      adentro del `CASE` la secuencia se corre y las proporciones salían mal
+      (60/36/4 en vez de 60/30/10).
+  - `POST /api/ml/sources/generate` y **Datos a escala en HDFS…** en el paso
+    Datos del estudio: corre con el mismo lanzador de las corridas y, al
+    terminar, elige la fuente nueva.
+  - Guías: [13 de `full`](guias/full/13-estudio-ml.md) (el estudio de punta a
+    punta: datos a escala, limpieza, YARN, biblioteca, lotes con deriva y
+    exportar) y [8 de `ml`](guias/ml/08-estudio-desde-jupyter.md) (lo mismo
+    con `sandbox_ml` desde JupyterLab).
+  - Humo de `full`: genera 200.000 clientes y entrena una logística de Spark
+    sobre ellos. La guarda en la biblioteca, la promueve, predice al instante y
+    por lotes (la deriva tiene que salir fuerte en la antigüedad corrida y
+    estable en las visitas) y la exporta.
+  - `test_generar.py`: lo que valida y, con Spark de verdad, las proporciones,
+    el 90 % de la regla, los nulos de la suciedad y las calificaciones.
   - Humo de `full`: datos de ejemplo en HDFS (`ml/preparar_demo_hdfs.py`),
     perfil en YARN de Parquet particionado, CSV con gzip, ORC y Avro, la vista
     previa y un entrenamiento con la limpieza adentro del modelo.
