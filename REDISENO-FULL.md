@@ -39,8 +39,11 @@ recorridos y "¿Cuál uso?").
 (`pruebas/solo_full.sh`): si un push a `main` solo toca lo de `full` (la
 interfaz, su servidor, la documentación, `datos/comparar` y las etapas
 `interfaz`/`full` del `Dockerfile`), no rearma ni publica `base`, `latest` ni
-`ml`; `:full` lo publica `full.yml`. Correr `imagen.yml` a mano sigue rearmando
-todo.
+`ml`; `:full` lo publica `full.yml`. Si cambia `ml` pero no `base` (el estudio de
+ML en `ml/`, sus librerías, la etapa `ml` del `Dockerfile`), arma y prueba todo
+pero publica solo `:ml`. Correr `imagen.yml` a mano sigue rearmando y publicando
+todo. `pruebas/probar_solo_full.sh` (en el job `revisar` de Documentación)
+prueba la decisión con un cambio en cada lugar y con la historia de los PR.
 
 **Capturas:** las de la documentación salen de la demo, como siempre (las
 mismas pantallas las saca el humo del CI contra la imagen). Con un `:full`
