@@ -84,8 +84,9 @@ export function modeloDe(cat: MlCatalogo | undefined, id: string): MlModelo | un
 
 /** El modelo recomendado para empezar en cada tarea y motor */
 export const MODELO_INICIAL: Record<'sklearn' | 'spark', Record<MlTarea, string>> = {
-  sklearn: { regresion: 'hgb_reg', clasificacion: 'bosque_clf', clustering: 'kmeans', reduccion: 'pca' },
-  spark: { regresion: 'bosque_reg_spark', clasificacion: 'bosque_clf_spark', clustering: 'kmeans_spark', reduccion: 'pca_spark' },
+  // Recomendación es solo de Spark (ALS): desde scikit-learn también lleva a ALS
+  sklearn: { regresion: 'hgb_reg', clasificacion: 'bosque_clf', clustering: 'kmeans', reduccion: 'pca', recomendacion: 'als_spark' },
+  spark: { regresion: 'bosque_reg_spark', clasificacion: 'bosque_clf_spark', clustering: 'kmeans_spark', reduccion: 'pca_spark', recomendacion: 'als_spark' },
 };
 
 export function iguales(a: MlValor | undefined, b: MlValor | undefined): boolean {
@@ -135,7 +136,11 @@ export function recetaParaDatos(r: MlReceta, perfil: MlPerfil): MlReceta {
 
 export const ROL_LABEL: Record<MlRol, string> = {
   numerica: 'numérica', categorica: 'categórica', fecha: 'fecha', texto: 'texto', id: 'id', ignorar: 'ignorar',
+  usuario: 'usuario', item: 'ítem',
 };
+
+/** Las tareas con una columna objetivo (las que se validan contra lo real) */
+export const supervisada = (t: MlTarea) => t === 'regresion' || t === 'clasificacion' || t === 'recomendacion';
 
 /** Formato de una métrica: porcentajes con 1 decimal salvo los errores, que van en la unidad del objetivo */
 export function fmtMetrica(v: number | null | undefined, digits = 4): string {

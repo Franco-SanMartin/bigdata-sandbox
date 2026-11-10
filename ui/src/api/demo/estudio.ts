@@ -7,7 +7,7 @@
 import type {
   ApiEvent, MlBusqueda, MlCatalogo, MlCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuente, MlFuentes, MlIssue,
   MlLimpieza, MlLimpiezaFila, MlLimpiezaGuardada, MlLinea, MlPaso, MlParteCodigo, MlPasoVista, MlPerfil, MlPerfilOpciones, MlReceta,
-  MlRevision, MlValor, MlVistaLimpieza,
+  MlRecursos, MlRevision, MlValor, MlVistaLimpieza,
 } from '../types';
 import { fail } from '../errors';
 import type { DemoEngine } from './engine';
@@ -75,20 +75,40 @@ export class DemoEstudio {
     const errores: MlIssue[] = [], avisos: MlIssue[] = [];
     const m = cat.modelos.find(x => x.id === receta.modelo.id);
     if (!m) { errores.push({ campo: 'modelo.id', mensaje: `no existe el modelo ${receta.modelo.id}` }); }
-    const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
+    const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion' || receta.tarea === 'recomendacion';
     if (sup && !receta.objetivo) errores.push({ campo: 'objetivo', mensaje: 'elegí la columna que querés predecir' });
     if (m && m.tarea !== receta.tarea) errores.push({ campo: 'modelo.id', mensaje: `${m.etiqueta} es para ${cat.tareas[m.tarea].etiqueta.toLowerCase()}` });
-    const vars = Object.entries(receta.columnas).filter(([c, r]) => c !== receta.objetivo && !['id', 'ignorar'].includes(r));
-    if (!vars.length) errores.push({ campo: 'columnas', mensaje: 'marcá al menos una columna como variable' });
+    if (receta.tarea === 'recomendacion') {
+      // Lo mismo que receta.normalizar: ALS necesita exactamente un usuario y un ítem
+      for (const rol of ['usuario', 'item'] as const) {
+        const n = Object.values(receta.columnas).filter(r => r === rol).length;
+        if (n !== 1) errores.push({ campo: 'columnas', mensaje: `ALS necesita exactamente una columna con el rol ${rol} (hay ${n})` });
+      }
+    } else {
+      const vars = Object.entries(receta.columnas).filter(([c, r]) => c !== receta.objetivo && !['id', 'ignorar', 'usuario', 'item'].includes(r));
+      if (!vars.length) errores.push({ campo: 'columnas', mensaje: 'marcá al menos una columna como variable' });
+    }
     const motor = m?.motor ?? 'sklearn';
     const params: Record<string, MlValor> = {};
     for (const p of m?.params ?? []) params[p.nombre] = p.nombre in receta.modelo.params ? receta.modelo.params[p.nombre] : p.defecto;
+    // Con Spark: entrenamiento, validación y prueba separados (70 / 15 / 15) y, en clasificación, el umbral por F1
+    const spark = motor === 'spark' && sup;
+    const elegidos = Object.fromEntries(Object.entries(receta.validacion).filter(([, v]) => v !== undefined));
     const val = {
-      particion: receta.tarea === 'clasificacion' && motor === 'sklearn' ? 'estratificada' : 'aleatoria', prueba: 0.2, validacion: 0,
+      particion: receta.tarea === 'clasificacion' && motor === 'sklearn' ? 'estratificada' : 'aleatoria',
+      prueba: spark ? 0.15 : 0.2, validacion: spark ? 0.15 : 0,
       columna_tiempo: null, cv: sup ? (receta.tarea === 'clasificacion' && motor === 'sklearn' ? 'estratificada' : 'kfold') : 'ninguna',
       k: 5, repeticiones: 2, semilla: 42, metrica: cat.metricaDefecto[motor][receta.tarea],
-      ...Object.fromEntries(Object.entries(receta.validacion).filter(([, v]) => v !== undefined)),
+      umbral: spark && receta.tarea === 'clasificacion' ? 'f1' : 'fijo',
+      ...elegidos,
     } as MlRevision['receta']['validacion'];
+    if (val.umbral !== 'fijo' && !val.validacion) {
+      if ('umbral' in elegidos) errores.push({ campo: 'validacion.umbral', mensaje: 'para elegir el umbral hace falta una validación aparte (subí la validación o dejá el umbral del modelo)' });
+      else val.umbral = 'fijo';
+    }
+    const recursos = motor === 'spark'
+      ? { ...Object.fromEntries(Object.entries(cat.recursos).map(([k, v]) => [k, v.defecto])), ...receta.recursos } as MlRecursos
+      : undefined;
     const bus = { tipo: 'ninguna', espacio: {}, iteraciones: 20, factor: 3, max_minutos: 15, n_jobs: 1,
       ...Object.fromEntries(Object.entries(receta.busqueda).filter(([, v]) => v !== undefined)) } as MlBusqueda;
     if (bus.tipo !== 'ninguna') {
@@ -101,7 +121,7 @@ export class DemoEstudio {
       if (bus.ajustes > cat.limites.max_ajustes) errores.push({ campo: 'busqueda.espacio', mensaje: `son ${bus.ajustes} entrenamientos: el máximo es ${cat.limites.max_ajustes}` });
     }
     avisos.push({ campo: 'datos', mensaje: 'Modo demo: la revisión completa (fugas, tipos, clases) la hace el servidor del contenedor', tipo: 'info' });
-    const r = { ...receta, motor, validacion: val, busqueda: bus, modelo: { id: receta.modelo.id, params },
+    const r = { ...receta, motor, validacion: val, busqueda: bus, modelo: { id: receta.modelo.id, params }, recursos,
       preproceso: { ...cat.preprocesoDefecto, ...receta.preproceso }, informe: { curva_aprendizaje: motor === 'sklearn' && sup, curva_validacion: null, permutacion: motor === 'sklearn' && sup, ...receta.informe } } as MlRevision['receta'];
     return { receta: r, errores, avisos, conPerfil: false, huella: errores.length ? null : huella(JSON.stringify(r)) };
   }
@@ -130,7 +150,7 @@ export class DemoEstudio {
     return { codigo: nota + f.codigo, archivo: `${f.experimento.id}.py`, motor: f.experimento.motor, huella: f.experimento.huella ?? '', comando: f.experimento.motor === 'spark' ? `spark-submit --master yarn ${f.experimento.id}.py` : `python3 ${f.experimento.id}.py` };
   }
 
-  private nuevaCorrida(titulo: string, motor: 'sklearn' | 'spark', exp: string): MlCorrida & { lineasTodas: MlLinea[] } {
+  private nuevaCorrida(titulo: string, motor: 'sklearn' | 'spark', exp: string | null): MlCorrida & { lineasTodas: MlLinea[] } {
     const id = `d${++this.seq}`;
     const c = { id, experimento: exp, estado: 'corriendo' as const, progreso: 0, mensaje: 'Arrancando', motor, titulo, origen: 'estudio',
       inicio: Date.now(), ajustes: null, limites: { minutos: 15, memoriaMb: 4096 }, memoriaMb: 0, lineasTodas: [] as MlLinea[] };
@@ -186,6 +206,25 @@ export class DemoEstudio {
     this.e.at(2, () => { this.linea(c, 'En el modo demo no hay Python: probalo con la imagen full.'); c.estado = 'falló'; c.error = 'Modo demo: no se puede correr código'; c.mensaje = c.error; c.fin = Date.now(); this.emitir(c); });
     this.emitir(c);
     return { id, run: c.id };
+  }
+
+  /** Una predicción por lotes de la biblioteca, simulada: los pasos del script y, al terminar, alTerminar (el resumen) */
+  simularLote(titulo: string, extra: Partial<MlCorrida>, alTerminar: (c: MlCorrida) => void): string {
+    if ([...this.corridas.values()].some(c => c.estado === 'corriendo')) fail('busy', 'Ya hay una corrida de ML en curso: esperá a que termine o cancelala');
+    const c = this.nuevaCorrida(titulo, 'spark', null);
+    Object.assign(c, extra, { origen: 'lote', tipo: 'lote' });
+    const pasos: [number, string][] = [[5, 'Leyendo los datos nuevos'], [15, 'Revisando el esquema contra el del entrenamiento'], [25, 'Midiendo la deriva contra el entrenamiento'],
+      [40, 'Prediciendo en los executors'], [70, 'Escribiendo las predicciones'], [90, 'Contando lo escrito'], [100, 'Listo']];
+    this.linea(c, `(demo) spark-submit --master yarn ${extra.lote ?? 'lote'}.py`);
+    pasos.forEach(([p, msg], i) => this.e.at((i + 1) * 3, () => {
+      if (c.estado !== 'corriendo') return;
+      this.linea(c, `[${String(p).padStart(3)}%] ${msg}`);
+      c.progreso = p / 100; c.mensaje = msg; c.memoriaMb = 420 + 40 * i; c.memoriaPicoMb = c.memoriaMb;
+      if (p === 100) { c.estado = 'listo'; c.fin = Date.now(); alTerminar(c); this.e.act('ML', 'ok', `${c.titulo}: listo (demo)`); }
+      this.emitir(c);
+    }));
+    this.emitir(c);
+    return c.id;
   }
 
   runs(): MlCorrida[] { return [...this.corridas.values()].reverse().map(({ lineasTodas: _l, ...c }) => { void _l; return clon(c); }); }

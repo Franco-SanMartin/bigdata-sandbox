@@ -5,7 +5,7 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { ArrowLeft, Columns3, Download, FlaskConical, NotebookPen, Pencil, Square, Trash2, Wand2 } from 'lucide-react';
 import { api } from '../../../api';
-import type { MlCatalogo, MlCorrida, MlExperimento, MlExperimentoFila, MlPrediccion, MlTarea, MlValor } from '../../../api/types';
+import type { MlCatalogo, MlCorrida, MlExperimento, MlExperimentoFila, MlGenerado, MlPrediccion, MlTarea, MlValor } from '../../../api/types';
 import { EmptyState, Panel, ResultTable, SkeletonLines } from '../../../components/base';
 import { Meter, Seg } from '../../../components/ui';
 import { confirm, navigate, toast } from '../../../state/ui';
@@ -13,6 +13,7 @@ import { useApi } from '../../../state/useApi';
 import { Consola } from './comun';
 import { fmtBytes, fmtMb, fmtMetrica, fmtSeg, modeloDe, setEstudio, textoValor } from './estado';
 import { Lineas, SERIE } from './graficos';
+import { GuardarEnBiblioteca } from './Biblioteca';
 import { Resultados } from './Resultados';
 
 const Editor = lazy(() => import('./Editor'));
@@ -156,7 +157,10 @@ function Corridas() {
                   <td className="r mono">{fmtSeg(((c.fin ?? ahora) - c.inicio) / 1000)}</td>
                   <td className="r mono">{fmtMb(c.memoriaPicoMb ?? c.memoriaMb)} <span className="muted">/ {fmtMb(c.limites.memoriaMb)}</span></td>
                   <td>{c.appId ? <a className="mono" href={`#yarn/${c.appId}`}>{c.appId}</a> : <span className="muted">—</span>}</td>
-                  <td>{corriendo ? <span className="mono muted">{c.experimento}</span> : <a className="mono" href={`#ml/experimentos/${c.experimento}`}>{c.experimento.replace(/^exp-/, '')}</a>}</td>
+                  <td>{c.tipo === 'generar' ? <span className="mono muted">{(c.resultado as MlGenerado | undefined)?.salida ?? 'datos a escala'}</span>
+                    : c.tipo === 'lote' ? <a className="mono" href={`#ml/biblioteca/${encodeURIComponent(c.modelo ?? '')}`}>{c.modelo} v{c.version}</a>
+                    : !c.experimento ? <span className="muted">—</span>
+                    : corriendo ? <span className="mono muted">{c.experimento}</span> : <a className="mono" href={`#ml/experimentos/${c.experimento}`}>{c.experimento.replace(/^exp-/, '')}</a>}</td>
                   <td className="r">{corriendo && <button type="button" className="btn btn-sm" disabled={cancelando === c.id} onClick={() => cancelar(c.id)}><Square size={11} aria-hidden="true" />Cancelar</button>}</td>
                 </tr>
               );
@@ -212,6 +216,7 @@ function Detalle({ cat, id, onBorrado }: { cat: MlCatalogo; id: string; onBorrad
           { value: 'predecir', label: 'predecir', disabled: e.estado !== 'listo' }, { value: 'salida', label: 'salida' },
         ]} />
         <span className="es-det-acc">
+          {e.estado === 'listo' && <GuardarEnBiblioteca exp={e} />}
           {e.receta && <button type="button" className="btn btn-sm" onClick={() => alEstudio(false)}><Wand2 size={13} aria-hidden="true" />Abrir la receta</button>}
           {e.receta && <button type="button" className="btn btn-sm" onClick={() => alEstudio(true)}><Pencil size={13} aria-hidden="true" />Editar el código</button>}
           <button type="button" className="btn btn-sm" onClick={() => bajar('py')}><Download size={13} aria-hidden="true" />.py</button>

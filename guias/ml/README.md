@@ -116,6 +116,7 @@ JupyterLab se prende solo (`JUPYTER=si` es el valor por defecto). Con
 | 5 | [Los mismos modelos con Spark MLlib](05-modelos-spark-mllib.md) | VectorAssembler, Estimator/Model, Pipeline, validación cruzada en el cluster |
 | 6 | [MongoDB + pandas](06-mongodb-pandas.md) | De documentos con campos variables a tablas |
 | 7 | [Problemas de `ml`](07-problemas.md) | JupyterLab que no abre, Spark que no arranca desde un notebook, memoria |
+| 8 | [El estudio de ML desde JupyterLab](08-estudio-desde-jupyter.md) | Datos a escala en HDFS, la receta y su PySpark, la biblioteca de modelos y la predicción por lotes con deriva, con `sandbox_ml` |
 
 ### Para consultar
 

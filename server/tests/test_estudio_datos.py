@@ -144,6 +144,10 @@ def test_codigo_lector_por_formato():
     ("java.lang.OutOfMemoryError: Java heap space", "sin memoria"),
     ("AnalysisException: [DATA_SOURCE_NOT_FOUND] Failed to find the data source: avro.", "spark-avro"),
     ("ValueError: algo raro\n", "ValueError: algo raro"),
+    # El script sube el CSV local a HDFS antes de leerlo: si el archivo no está, lo dice hdfs dfs -put
+    ("put: `/datos/clientes_senal.csv': No such file or directory\nTraceback (most recent call last):\n"
+     "subprocess.CalledProcessError: Command '['hdfs', 'dfs', '-put']' returned non-zero exit status 1.",
+     "No existe /datos/clientes_senal.csv"),
 ])
 def test_errores_explicados(texto, esperado):
     assert esperado in fuentes.explicar_error(texto)["mensaje"]

@@ -10,7 +10,7 @@ import { Meter } from '../../../components/ui';
 import { useCapabilities } from '../../../state/capabilities';
 import { toast } from '../../../state/ui';
 import { Avisos, Consola, useCorrida } from './comun';
-import { fmtMb, irA, modeloDe, PASO_LABEL, setEstudio, textoValor, useEstudio } from './estado';
+import { fmtMb, irA, modeloDe, PASO_LABEL, setEstudio, supervisada, textoValor, useEstudio } from './estado';
 
 export function PasoEntrenar({ cat, rev, revError }: { cat: MlCatalogo; rev: MlRevision | null; revError?: string | null }) {
   const { receta, corrida } = useEstudio();
@@ -48,11 +48,13 @@ export function PasoEntrenar({ cat, rev, revError }: { cat: MlCatalogo; rev: MlR
             ['preprocesamiento', preTexto(r)],
             ['modelo', <><b>{modelo.etiqueta}</b> <span className="mono muted">{modelo.clase}</span> · {spark ? 'Spark MLlib en YARN' : 'scikit-learn, en una máquina'}</>],
             ['hiperparámetros', <span className="mono es-hpres">{Object.entries(r.modelo.params).map(([k, v]) => `${k}=${textoValor(modelo.params.find(p => p.nombre === k), v)}`).join(' · ') || 'los de por defecto'}</span>],
-            ...(r.tarea === 'regresion' || r.tarea === 'clasificacion' ? [
+            ...(supervisada(r.tarea) ? [
               ['validación', `${cat.particiones[r.validacion.particion]?.etiqueta} (${Math.round(r.validacion.prueba * 100)} % prueba${r.validacion.validacion ? `, ${Math.round(r.validacion.validacion * 100)} % validación` : ''}) · ${cat.cv[r.validacion.cv]?.etiqueta}${r.validacion.cv !== 'ninguna' ? ` (${r.validacion.k}${r.validacion.cv === 'repetida' ? `×${r.validacion.repeticiones}` : ''})` : ''} · semilla ${r.validacion.semilla}`],
               ['búsqueda', r.busqueda.tipo === 'ninguna' ? 'ninguna' : `${cat.busquedas[r.motor][r.busqueda.tipo]?.etiqueta}: ${r.busqueda.candidatos} combinaciones, ${r.busqueda.ajustes} entrenamientos, hasta ${r.busqueda.max_minutos} min`],
             ] as [string, string][] : []),
             ['métrica principal', cat.metricas[r.validacion.metrica]?.etiqueta ?? r.validacion.metrica],
+            ...(spark && r.tarea === 'clasificacion' && r.validacion.umbral && r.validacion.umbral !== 'fijo' ? [['umbral', cat.umbrales[r.validacion.umbral]?.etiqueta ?? r.validacion.umbral]] as [string, string][] : []),
+            ...(spark && r.recursos ? [['recursos en YARN', `${r.recursos.executors} executors de ${r.recursos.memoria_executor_mb} MB y ${r.recursos.cores} core${r.recursos.cores === 1 ? '' : 's'}, driver de ${r.recursos.memoria_driver_mb} MB`]] as [string, string][] : []),
           ]} />
         ) : revError ? <EmptyState compact kind="error" title="No se pudo revisar la receta">{revError}</EmptyState>
           : <p className="muted">Revisando la receta…</p>}
