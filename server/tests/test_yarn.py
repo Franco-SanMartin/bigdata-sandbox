@@ -761,6 +761,32 @@ def test_plantilla_errores(settings, tmp_path, fake_hadoop):
     asyncio.run(main())
 
 
+def test_plantilla_en_una_cola(settings, tmp_path, fake_hadoop):
+    """La vista Aula manda trabajos a la cola de un grupo: -D después del programa (ToolRunner) o --queue."""
+    argv, shown = Y.template_argv("mr-pi", {"maps": 4, "samples": 100}, "grupo1")
+    assert argv[3:] == ["pi", "-Dmapreduce.job.queuename=grupo1", "4", "100"] and "queuename=grupo1" in shown
+    argv, shown = Y.template_argv("spark-pi", {"partitions": 3}, "grupo2")
+    assert argv[:3] == ["spark-submit", "--queue", "grupo2"] and argv[-1] == "3" and "--queue grupo2" in shown
+    assert Y.template_argv("mr-pi", {"maps": 4, "samples": 100})[0][3:] == ["pi", "4", "100"]
+
+    async def main():
+        cl, y, bus = make(settings, tmp_path)
+        y.hdfs = FakeHdfs()
+        assert await y.submit_template("mr-pi", {"maps": 2, "samples": 100}, queue="grupo1") == NUEVA
+        await y.runner.wait_all()
+        assert hadoop_args(fake_hadoop)[-1].endswith("[pi] [-Dmapreduce.job.queuename=grupo1] [2] [100]")
+        assert y.submitted[NUEVA]["queue"] == "grupo1"
+        with pytest.raises(ApiError) as e:
+            await y.submit_template("hive-ventas", {}, queue="grupo1")
+        assert e.value.code == "invalid"
+        # En el maestro del aula los NodeManagers son las PCs: no hace falta uno local
+        cl.processes = up("rm", "jh")
+        cl.aula = {"rol": "maestro", "red": "docker"}
+        assert await y.submit_template("mr-pi", {}) == NUEVA
+        await y.runner.wait_all()
+    asyncio.run(main())
+
+
 def test_ruta_plantillas(settings, tmp_path, fake_hadoop):
     ui = tmp_path / "ui"
     ui.mkdir()

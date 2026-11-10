@@ -41,6 +41,7 @@ from starlette.routing import Route
 
 from . import probes
 from .aula_vivo import Muestreador
+from .aula_yarn import YarnEnAula, colas as colas_de
 from .errors import ApiError
 from .hdfs import _json as leer_json_pedido
 
@@ -236,7 +237,8 @@ def guardar_plano(aula_dir: Path, plano: dict) -> dict:
 
 def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None, wg: dict[str, dict],
           ahora_s: float, eventos: list[str], env: dict[str, str], con_yarn: bool = True,
-          plano: dict | None = None, apps: dict[str, list[dict]] | None = None) -> dict:
+          plano: dict | None = None, apps: dict[str, list[dict]] | None = None,
+          colas: list[dict] | None = None) -> dict:
     """El estado del aula (AulaStatus de ui/src/api/types.ts). Función pura:
     todo lo que mira llega por parámetro."""
     dns, nms = datanodes(jmx), nodemanagers(rm)
@@ -351,6 +353,7 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
         "apagar": {"listo": listo, "bloquesEnMaestro": en_maestro, "bloques": total, "porque": porque},
         "eventos": eventos,
         "plano": plano,
+        "colas": colas,
         "ahora": int(ahora_s * 1000),
     }
 
@@ -358,13 +361,16 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
 class Aula:
     """GET /api/aula: el estado del aula, solo en el maestro (ROL=maestro)."""
 
-    def __init__(self, cluster, env: dict[str, str] | None = None) -> None:
+    def __init__(self, cluster, env: dict[str, str] | None = None, yarn=None) -> None:
         self.c = cluster
         self.env = dict(os.environ if env is None else env)
         self.modo = modo(self.env)
         self.dir = Path(self.env.get("AULA_DIR", str(cluster.s.hadoop_dir / "aula")))
         self._rm: tuple[float, dict | None] = (0.0, None)
+        self._sched: tuple[float, dict | None] = (0.0, None)
         self.vivo = Muestreador(self)
+        # Colas, localidad y escala (necesitan la vista YARN para leer el RM y mandar trabajos)
+        self.yarn = YarnEnAula(self, yarn) if yarn is not None else None
 
     def _rm_nodes(self) -> dict | None:
         t, doc = self._rm
@@ -372,6 +378,37 @@ class Aula:
             doc = probes.get_json("http://localhost:8088/ws/v1/cluster/nodes") if self.c.s.probe else None
             self._rm = (time.monotonic(), doc)
         return doc
+
+    def _colas(self) -> list[dict] | None:
+        t, doc = self._sched
+        if time.monotonic() - t > 1.5:
+            doc = probes.get_json("http://localhost:8088/ws/v1/cluster/scheduler") if self.c.s.probe else None
+            self._sched = (time.monotonic(), doc)
+        return colas_de(doc) if doc is not None else None
+
+    def rack_de(self):
+        """nodo → rack, como el script de topología: el plano, si no la fila por el número; el maestro, /profe."""
+        racks = racks_del_plano(leer_plano(self.dir))
+        por_fila = _entero(self.env.get("PCS_POR_FILA")) or 5
+
+        def rack(nodo: str | None) -> str | None:
+            if not nodo:
+                return None
+            if nodo == "maestro":
+                return "/profe"
+            m_ = _NODO_RE.match(nodo)
+            nodo = f"pc{int(m_.group(1)):02d}" if m_ else nodo
+            return racks.get(nodo) or (_fila(int(m_.group(1)), por_fila) if m_ else None)
+        return rack
+
+    def anotar(self, texto: str) -> None:
+        """Una línea en eventos.log (la misma lista que escribe la inscripción)."""
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            with open(self.dir / "eventos.log", "a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%H:%M:%S')} {texto}\n")
+        except OSError:
+            pass
 
     def _wg(self) -> dict[str, dict]:
         if self.modo is None or self.modo["red"] != "wireguard" or not self.c.s.probe:
@@ -391,7 +428,8 @@ class Aula:
         con_yarn = self.c.config.get("services", "todo") != "hdfs"
         jmx = self.c.nn_jmx if self.c.phase in ("starting", "running") else None
         return armar(self.modo, leer_hub(self.dir), leer_pcs(self.dir), jmx, self._rm_nodes(), self._wg(), time.time(),
-                     leer_eventos(self.dir), self.env, con_yarn, leer_plano(self.dir), self.vivo.apps())
+                     leer_eventos(self.dir), self.env, con_yarn, leer_plano(self.dir), self.vivo.apps(),
+                     self._colas() if con_yarn else None)
 
     async def estado(self) -> dict:
         self._maestro()
@@ -429,4 +467,4 @@ class Aula:
 
         return [Route("/api/aula", get), Route("/api/aula/plano", plano_get, methods=["GET"]),
                 Route("/api/aula/plano", plano_put, methods=["PUT"]), Route("/api/aula/trafico", trafico),
-                Route("/api/aula/caidas", caidas)]
+                Route("/api/aula/caidas", caidas), *(self.yarn.routes() if self.yarn else [])]
