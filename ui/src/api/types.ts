@@ -162,6 +162,46 @@ export interface AulaPc {
   prestaMb?: number | null;
   prestaVcores?: number | null;
   tunel?: { saludoHaceS: number | null; rxMb: number; txMb: number };
+  /** Dónde está en el plano (si el profe la ubicó) */
+  lugar?: { fila: number; lugar: number };
+  /** Los contenedores que corre, por trabajo (am: tiene el ApplicationMaster) */
+  apps?: { app: string; n: number; am: boolean }[];
+}
+
+/** El plano del aula: en qué fila y lugar está cada PC. Las filas son los racks de HDFS */
+export interface AulaPlano {
+  filas: (string | null)[][];
+  actualizado?: number | null;
+  /** Al guardar: las PCs que cambian de rack (se aplica al próximo arranque de cada una) */
+  cambianDeRack?: string[];
+}
+
+export type AulaClaseTrafico = 'hdfs' | 'shuffle' | 'yarn' | 'otro';
+
+/** GET /api/aula/trafico: lo que pasa por el wg0 del maestro, cada 2 s */
+export interface AulaTrafico {
+  /** nft: por par y para qué; wg: solo por PC (con el hub); ninguna: aula simulada */
+  fuente: 'nft' | 'wg' | 'ninguna';
+  motivo: string | null;
+  /** Lo que midió la sonda por PC (Mbit/s) */
+  techoMbps: number;
+  cadaS: number;
+  serie: { t: number; total: number; pcs: Record<string, { manda: number; recibe: number }> }[];
+  pares: { de: string; a: string; mbps: number; clases: Record<AulaClaseTrafico, number> }[];
+  porPc: { nodo: string; manda: number; recibe: number; usoTecho: number }[];
+}
+
+/** GET /api/aula/caidas: la línea de tiempo de una PC que dejó de contestar */
+export interface AulaCaida {
+  nodo: string;
+  desde: number;
+  hasta: number | null;
+  abierta: boolean;
+  serie: { s: number; estado: AulaLampara; sub: number; pend: number; contenedores: number }[];
+  resumen: {
+    contenedoresPerdidos: number; bloquesRecopiados: number; mbRecopiados: number | null; rojaALosS: number | null;
+    copiadoALosS: number | null; duracionS: number; cierre: string | null; texto: string;
+  };
 }
 
 export interface AulaStatus {
@@ -183,6 +223,8 @@ export interface AulaStatus {
   apagar: { listo: boolean; bloquesEnMaestro: number; bloques: number; porque: string };
   /** Lo último que pasó en la inscripción ("21:03:10 PC107 se sumó como pc01...") */
   eventos: string[];
+  /** El plano guardado en el maestro (null: las filas salen del número de cada PC) */
+  plano?: AulaPlano | null;
   ahora: number;
 }
 
@@ -1087,6 +1129,12 @@ export interface SandboxApi {
   yarnCluster(): Promise<YarnCluster>;
   /** GET /api/aula → el laboratorio visto desde el maestro (solo con ROL=maestro de la versión empresa) */
   aula(): Promise<AulaStatus>;
+  /** PUT /api/aula/plano { filas } → lo guarda en el maestro y escribe los racks */
+  aulaGuardarPlano(plano: AulaPlano): Promise<AulaPlano>;
+  /** GET /api/aula/trafico?desde= → el tráfico por PC y por par de los últimos 10 min */
+  aulaTrafico(desde?: number): Promise<AulaTrafico>;
+  /** GET /api/aula/caidas → las PCs que se cayeron, con su línea de tiempo */
+  aulaCaidas(): Promise<AulaCaida[]>;
   /** GET /api/yarn/apps/:id → detalle con el DAG (Tez, Spark o MapReduce), contadores y comando */
   app(id: string): Promise<YarnAppDetail>;
   /** GET /api/yarn/apps/:id/logs?container=… → stdout, stderr y syslog de un contenedor */

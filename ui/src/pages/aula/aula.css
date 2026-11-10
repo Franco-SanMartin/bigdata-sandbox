@@ -155,3 +155,60 @@
   .au-main { grid-template-columns: 1fr; }
   .au-side { position: static; }
 }
+
+/* ---------- El plano: lugares libres, contenedores por trabajo ---------- */
+.au-pc-libre { display: grid; place-items: center; min-height: 92px; height: 100%; border: 1.5px dashed var(--line); border-radius: var(--r-2); color: var(--text-4); font-size: var(--fs-xs); }
+.au-cont i[data-am] { outline: 2px solid var(--text); outline-offset: 0; }
+.au-leyenda-apps { margin-top: 4px; }
+.au-clase { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.au-aviso { margin: 0; padding: 8px 12px; border-radius: var(--r-2); background: var(--run-bg); color: var(--run-text); font-size: var(--fs-sm); }
+
+/* ---------- El editor del plano ---------- */
+.au-editor { display: flex; flex-direction: column; gap: 12px; }
+.au-editor-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.au-editor-h h3 { margin: 0; }
+.au-editor-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.au-editor-acc { display: flex; gap: 6px; margin-left: auto; }
+.au-forma { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-3); }
+.au-forma b { min-width: 18px; text-align: center; color: var(--text); }
+.au-frente-ed { padding: 8px 12px; border-radius: var(--r-2); background: var(--n-1); text-align: center; font: var(--t-label); color: var(--text-3); }
+.au-grilla { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+.au-grilla-f { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: center; }
+.au-grilla-n { display: flex; flex-direction: column; font: var(--t-label); color: var(--text-2); }
+.au-grilla-n small { color: var(--text-4); font-weight: 400; }
+.au-lugares { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.au-lugar { display: grid; place-items: center; min-height: 40px; border: 1.5px dashed var(--line); border-radius: var(--r-2); cursor: pointer; }
+.au-lugar[data-ocupado] { border-style: solid; border-color: var(--line-strong); background: var(--n-0); }
+.au-lugar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.au-libre { font-size: var(--fs-xs); color: var(--text-4); }
+.au-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border-radius: 12px; background: var(--accent-bg); border: 1px solid var(--accent-line); cursor: grab; }
+.au-chip[data-sel] { background: var(--accent); }
+.au-chip[data-sel] button { color: var(--on-accent, #fff); }
+.au-chip button { border: 0; background: none; padding: 0; font-size: var(--fs-sm); color: var(--text); cursor: pointer; }
+.au-chip-x { display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.au-bandeja { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--r-2); font-size: var(--fs-sm); }
+
+/* ---------- El aula en vivo: la red y las caídas ---------- */
+.au-vivo { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.au-red-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.au-red-h h3 { margin: 0; }
+.au-red-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; margin-top: 8px; }
+.au-red-svg { width: 100%; height: auto; }
+.au-red-t { font: 600 11px var(--f-mono); fill: var(--text); }
+.au-red-lado { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.au-red-total { display: flex; flex-direction: column; gap: 4px; }
+.au-red-total span { font: var(--t-label); color: var(--text-3); }
+.au-red-total b { font: 600 24px/1.1 var(--f-sans); }
+.au-red-total small { color: var(--text-4); font-size: var(--fs-xs); }
+.au-red-tbl { width: 100%; }
+.au-red-tbl td, .au-red-tbl th { font-size: var(--fs-xs); white-space: nowrap; padding-left: 6px; padding-right: 6px; }
+.au-leyenda-red { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--text-3); }
+.au-caidas { min-width: 0; overflow: hidden; }
+.au-caidas h3 { margin: 0 0 6px; }
+.au-caidas .au-leyenda-red { margin-top: 4px; }
+.au-caidas-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.au-caida-t { margin: 0 0 6px; font-size: var(--fs-sm); }
+.au-linea-t { width: 100%; height: auto; }
+.au-linea-eje { font: 10px var(--f-sans); fill: var(--text-4); }
+.au-caida-res { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; }
+@media (max-width: 1100px) { .au-vivo, .au-red-cuerpo { grid-template-columns: minmax(0, 1fr); } }

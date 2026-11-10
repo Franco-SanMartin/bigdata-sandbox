@@ -13,10 +13,22 @@ Junta lo que ya sabe cada parte, sin procesos nuevos:
 Cada PC es una lámpara: sumándose (ámbar), arriba (verde), sin respuesta
 (ámbar, el NameNode todavía no la dio por muerta) o caída (rojo). Y "ya
 pueden apagar" cuando el DataNode del maestro tiene una copia de cada bloque.
+
+El plano (`plano.json`, lo arma el editor de la vista Aula): en qué fila y en qué lugar está cada PC. Las filas
+son los racks de HDFS: al guardarlo se escribe `racks` (una línea "pc07 /fila2" por PC) y el script de topología
+del maestro lo lee cuando un DataNode se registra (al próximo arranque de esa PC, no en caliente). Sin plano,
+la fila sale del número (PCS_POR_FILA).
+
+    GET /api/aula                 el estado (con el plano y los contenedores de cada trabajo por PC)
+    GET /api/aula/plano           el plano guardado (o null)
+    PUT /api/aula/plano           {filas: [["pc01", null, "pc03"], ...]} → lo guarda y escribe los racks
+    GET /api/aula/trafico?desde=  el tráfico por PC (wg) y por par y tipo (nft), cada 2 s, de los últimos 10 min
+    GET /api/aula/caidas          la línea de tiempo de cada PC que se cayó, con su resumen
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import subprocess
@@ -28,13 +40,17 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from . import probes
+from .aula_vivo import Muestreador
 from .errors import ApiError
+from .hdfs import _json as leer_json_pedido
 
 MB = 1024 * 1024
 # Un NodeManager que no está RUNNING (LOST: no contesta; UNHEALTHY: disco lleno...)
 NM_CAIDO = {"LOST", "UNHEALTHY", "SHUTDOWN", "DECOMMISSIONED", "REBOOTED"}
 TUNEL_VIEJO_S = 180   # con persistent-keepalive 25, WireGuard saluda cada 2 min
 _NODO_RE = re.compile(r"^pc0*(\d+)$")
+PLANO_FILAS = 8          # filas de un laboratorio (racks)
+PLANO_LUGARES = 12       # lugares por fila
 
 
 def modo(env: dict[str, str] | None = None) -> dict | None:
@@ -150,8 +166,77 @@ def _fila(numero: int | None, por_fila: int) -> str | None:
     return f"/fila{(numero - 1) // max(1, por_fila) + 1}"
 
 
+# ---------------------------------------------------------------- el plano
+
+def normalizar_plano(b: object) -> tuple[dict | None, str | None]:
+    """{filas: [[nodo | null, ...], ...]} → (plano, error). Nodos pcNN, cada uno una sola vez; hasta 8 filas de 12."""
+    if not isinstance(b, dict) or not isinstance(b.get("filas"), list):
+        return None, "El plano es {filas: [[\"pc01\", null, ...], ...]}"
+    filas = b["filas"]
+    if not 1 <= len(filas) <= PLANO_FILAS:
+        return None, f"El plano tiene de 1 a {PLANO_FILAS} filas"
+    vistos: set[str] = set()
+    out = []
+    for i, f in enumerate(filas):
+        if not isinstance(f, list) or not 1 <= len(f) <= PLANO_LUGARES:
+            return None, f"La fila {i + 1} tiene de 1 a {PLANO_LUGARES} lugares"
+        fila = []
+        for x in f:
+            if x is None or x == "":
+                fila.append(None)
+                continue
+            if not isinstance(x, str) or not _NODO_RE.match(x):
+                return None, f"En la fila {i + 1}, {x!r} no es una PC (pc01, pc02...)"
+            nodo = f"pc{int(_NODO_RE.match(x).group(1)):02d}"
+            if nodo in vistos:
+                return None, f"{nodo} está dos veces en el plano"
+            vistos.add(nodo)
+            fila.append(nodo)
+        out.append(fila)
+    return {"filas": out}, None
+
+
+def racks_del_plano(plano: dict | None) -> dict[str, str]:
+    """{pc07: /fila2}: la fila del plano es el rack."""
+    out = {}
+    for i, f in enumerate((plano or {}).get("filas") or []):
+        for x in f:
+            if x:
+                out[x] = f"/fila{i + 1}"
+    return out
+
+
+def leer_plano(aula_dir: Path) -> dict | None:
+    try:
+        p = json.loads((aula_dir / "plano.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    plano, err = normalizar_plano(p)
+    if err:
+        return None
+    plano["actualizado"] = p.get("actualizado")
+    return plano
+
+
+def guardar_plano(aula_dir: Path, plano: dict) -> dict:
+    """plano.json y racks (lo que lee el script de topología). Devuelve el plano con lo que cambió de rack."""
+    aula_dir.mkdir(parents=True, exist_ok=True)
+    antes = racks_del_plano(leer_plano(aula_dir))
+    plano = {**plano, "actualizado": int(time.time() * 1000)}
+    tmp = aula_dir / "plano.json.tmp"
+    tmp.write_text(json.dumps(plano, indent=1), encoding="utf-8")
+    tmp.replace(aula_dir / "plano.json")
+    racks = racks_del_plano(plano)
+    tmp = aula_dir / "racks.tmp"
+    tmp.write_text("".join(f"{n} {r}\n" for n, r in sorted(racks.items())), encoding="utf-8")
+    tmp.replace(aula_dir / "racks")
+    plano["cambianDeRack"] = sorted(n for n, r in racks.items() if antes.get(n) and antes[n] != r)
+    return plano
+
+
 def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None, wg: dict[str, dict],
-          ahora_s: float, eventos: list[str], env: dict[str, str], con_yarn: bool = True) -> dict:
+          ahora_s: float, eventos: list[str], env: dict[str, str], con_yarn: bool = True,
+          plano: dict | None = None, apps: dict[str, list[dict]] | None = None) -> dict:
     """El estado del aula (AulaStatus de ui/src/api/types.ts). Función pura:
     todo lo que mira llega por parámetro."""
     dns, nms = datanodes(jmx), nodemanagers(rm)
@@ -166,6 +251,8 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
         m_ = _NODO_RE.match(nodo)
         return int(m_.group(1)) if m_ else None
 
+    racks = racks_del_plano(plano)
+    lugares = {x: (i, j) for i, f in enumerate((plano or {}).get("filas") or []) for j, x in enumerate(f) if x}
     out_pcs = []
     for nodo in sorted(nombres, key=lambda n: (numero(n) is None, numero(n) or 0, n)):
         p, dn, nm = inscriptas.get(nodo, {}), dns.get(nodo), nms.get(nodo)
@@ -196,7 +283,11 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
             elif saludo_hace is not None and saludo_hace > TUNEL_VIEJO_S:
                 estado, motivo = "sin-respuesta", f"el túnel no saluda hace {saludo_hace // 60} min"
         n = numero(nodo)
-        pc = {"nodo": nodo, "numero": n, "estado": estado, "fila": _fila(n, por_fila)}
+        pc = {"nodo": nodo, "numero": n, "estado": estado, "fila": racks.get(nodo) or _fila(n, por_fila)}
+        if nodo in lugares:
+            pc["lugar"] = {"fila": lugares[nodo][0], "lugar": lugares[nodo][1]}
+        if apps and apps.get(nodo):
+            pc["apps"] = apps[nodo]
         if motivo:
             pc["motivo"] = motivo
         if p:
@@ -259,6 +350,7 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
         "resumen": {e: sum(1 for x in out_pcs if x["estado"] == e) for e in ("sumandose", "arriba", "sin-respuesta", "caida")},
         "apagar": {"listo": listo, "bloquesEnMaestro": en_maestro, "bloques": total, "porque": porque},
         "eventos": eventos,
+        "plano": plano,
         "ahora": int(ahora_s * 1000),
     }
 
@@ -272,6 +364,7 @@ class Aula:
         self.modo = modo(self.env)
         self.dir = Path(self.env.get("AULA_DIR", str(cluster.s.hadoop_dir / "aula")))
         self._rm: tuple[float, dict | None] = (0.0, None)
+        self.vivo = Muestreador(self)
 
     def _rm_nodes(self) -> dict | None:
         t, doc = self._rm
@@ -289,18 +382,51 @@ class Aula:
             return {}
         return wg_dump(r.stdout) if r.returncode == 0 else {}
 
-    async def estado(self) -> dict:
+    def _maestro(self) -> None:
         if self.modo is None:
             raise ApiError("La vista Aula es del maestro (ROL=maestro de la versión empresa)", "unsupported")
-        pcs = await asyncio.to_thread(leer_pcs, self.dir)
-        rm = await asyncio.to_thread(self._rm_nodes)
-        wg = await asyncio.to_thread(self._wg)
-        eventos = await asyncio.to_thread(leer_eventos, self.dir)
+
+    def estado_sync(self) -> dict:
+        self._maestro()
         con_yarn = self.c.config.get("services", "todo") != "hdfs"
         jmx = self.c.nn_jmx if self.c.phase in ("starting", "running") else None
-        return armar(self.modo, leer_hub(self.dir), pcs, jmx, rm, wg, time.time(), eventos, self.env, con_yarn)
+        return armar(self.modo, leer_hub(self.dir), leer_pcs(self.dir), jmx, self._rm_nodes(), self._wg(), time.time(),
+                     leer_eventos(self.dir), self.env, con_yarn, leer_plano(self.dir), self.vivo.apps())
+
+    async def estado(self) -> dict:
+        self._maestro()
+        self.vivo.tocar()
+        return await asyncio.to_thread(self.estado_sync)
 
     def routes(self) -> list[Route]:
         async def get(_: Request) -> JSONResponse:
             return JSONResponse(await self.estado())
-        return [Route("/api/aula", get)]
+
+        async def plano_get(_: Request) -> JSONResponse:
+            self._maestro()
+            return JSONResponse(await asyncio.to_thread(leer_plano, self.dir))
+
+        async def plano_put(request: Request) -> JSONResponse:
+            self._maestro()
+            plano, err = normalizar_plano(await leer_json_pedido(request))
+            if err:
+                raise ApiError(err, "invalid")
+            return JSONResponse(await asyncio.to_thread(guardar_plano, self.dir, plano))
+
+        async def trafico(request: Request) -> JSONResponse:
+            self._maestro()
+            self.vivo.tocar()
+            try:
+                desde = int(request.query_params.get("desde") or 0) or None
+            except ValueError:
+                raise ApiError("desde es un tiempo en milisegundos", "invalid") from None
+            return JSONResponse(self.vivo.trafico(desde))
+
+        async def caidas(_: Request) -> JSONResponse:
+            self._maestro()
+            self.vivo.tocar()
+            return JSONResponse(self.vivo.caidas())
+
+        return [Route("/api/aula", get), Route("/api/aula/plano", plano_get, methods=["GET"]),
+                Route("/api/aula/plano", plano_put, methods=["PUT"]), Route("/api/aula/trafico", trafico),
+                Route("/api/aula/caidas", caidas)]

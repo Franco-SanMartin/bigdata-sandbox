@@ -211,6 +211,13 @@ apagada (`TERMINAL=0`) y `empresa-profe.cmd` la prende en el maestro
 llega a la interfaz. Si alguna vez se publica la interfaz para otras PCs
 (`SANDBOX_HOSTS`), conviene arrancar el maestro sin `TERMINAL=1`.
 
+- **El plano del aula**: en la vista Aula, *Editar el plano*. Se arrastra cada
+  PC a su lugar (o se toca la PC y después el lugar). **Cada fila es un rack**:
+  - al guardarlo, el maestro escribe los racks;
+  - el rack de una PC se lee cuando su DataNode se registra, así que si una PC
+    cambia de fila, el rack nuevo vale al próximo arranque de esa PC;
+  - *plano-aula.json* lo exporta: dejalo al lado de `empresa-profe.cmd` y la
+    próxima clase el maestro lo carga solo (el reset borra todo cada día).
 - **Dónde quedó cada bloque**: vista Aula (bloques por PC), o
   `hdfs fsck /aula/datos -files -blocks -racks` en la terminal: cada bloque
   con una copia en `/profe` y otra en una fila.
@@ -225,9 +232,29 @@ llega a la interfaz. Si alguna vez se publica la interfaz para otras PCs
   tareas en otras PCs. Si la PC vuelve a la clase (al prenderla el reset ya
   borró todo: otra vez la transferencia y la línea de Veyon en ella), se
   suma con el mismo nombre y la misma IP.
+
+  Abajo, en **Si una PC se cae**, queda su línea de tiempo:
+  - la lámpara;
+  - los bloques con copias de menos y los que HDFS está copiando, bajando
+    hasta 0.
+
+  También queda un resumen ("se perdieron 2 contenedores, HDFS re-copió 18
+  bloques en 56 s"). Ese resumen va al portafolio.
+- **La red del aula**: abajo de la vista Aula, lo que pasa por el túnel cada 2 s.
+  Todo lo que va de una PC a otra pasa por el `wg0` del maestro, y ahí se mide:
+  - una línea de cada PC al maestro, del grosor de lo que manda y recibe;
+  - con `nftables` en el maestro, también las líneas PC a PC con el color de
+    para qué: bloques de HDFS (9866), *shuffle* (13562) o control de YARN.
+
+  Al lado, el total, quién usa más y un aviso si una PC pasa el 80 % de lo que
+  da la red del aula (~50 Mbit/s, lo que midió la sonda): ahí el cuello de
+  botella es la red, no las PCs.
 - **Recursos**: *Memoria y Cores para trabajos* en la vista Aula, y en el
   ResourceManager (<http://localhost:8088> → *Nodes*) lo que presta y usa cada
-  PC. YARN reparte por memoria **y** por cores: una PC de 16 GB recibe más
+  PC. En cada PC del plano, un cuadradito por contenedor de YARN, con el color
+  de su trabajo (con borde, el ApplicationMaster):
+  - sale de `/ws/v1/node/containers` de cada NodeManager, por el túnel;
+  - se ve en qué PCs corre cada trabajo. YARN reparte por memoria **y** por cores: una PC de 16 GB recibe más
   contenedores que una de 8. Con dos trabajos a la vez se ve cómo se reparten.
 - **ML distribuido**: Spark MLlib sobre YARN, desde *Machine Learning* o con
   `spark-submit` en la terminal: los executors corren en las PCs (traen

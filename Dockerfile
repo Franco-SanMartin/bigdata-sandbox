@@ -413,16 +413,19 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH \
 FROM full AS empresa
 ARG DEBIAN_FRONTEND=noninteractive
 
-# El tunel del aula (RED=wireguard): wg para el hub e ip para la interfaz
+# El tunel del aula (RED=wireguard): wg para el hub e ip para la interfaz. nft para
+# medir el trafico entre las PCs en el maestro (todo pasa por su wg0)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends wireguard-tools iproute2 \
+ && apt-get install -y --no-install-recommends wireguard-tools iproute2 nftables \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=wireguard-go /usr/local/bin/wireguard-go /usr/local/bin/wireguard-go
 
 COPY empresa/arranque.sh /opt/sandbox/arranque-empresa.sh
 COPY empresa/aula/ /opt/sandbox/aula/
 RUN find /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula -type f -exec sed -i 's/\r$//' {} + \
- && chmod +x /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula/*.sh
+ && chmod +x /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula/*.sh \
+ && install -m 755 /opt/sandbox/aula/topologia /opt/sandbox/bin/topologia
+# Los racks del maestro salen del plano que arma la vista Aula (aula/topologia lee /hadoop/aula/racks)
 # La terminal de la interfaz es root en el contenedor: en empresa viene apagada. El maestro del aula
 # (empresa-profe.cmd) la prende con -e TERMINAL=1 porque publica todo solo en 127.0.0.1
 ENV SANDBOX_VERSION=empresa \

@@ -175,6 +175,13 @@ function Arrancar {
         & docker @dargs | Out-Null
         if ($LASTEXITCODE -ne 0) { Decir 'No se pudo crear el maestro (mira el mensaje de Docker arriba).'; exit 1 }
         Decir 'Maestro creado: arranca el tunel, la inscripcion y despues Hadoop.'
+        # El plano del aula de otra clase (lo exporta la vista Aula): sus filas son los racks de HDFS
+        $plano = Join-Path $carpeta 'plano-aula.json'
+        if (Test-Path $plano) {
+            docker exec $contenedor mkdir -p /hadoop/aula | Out-Null
+            docker cp $plano "$($contenedor):/hadoop/aula/plano.json" | Out-Null
+            if ($LASTEXITCODE -eq 0) { Decir 'Plano del aula: plano-aula.json (las filas son los racks).' }
+        }
     }
     # El codigo y la linea los guarda el contenedor (son los mismos aunque se corra esto otra vez)
     $codigo = ''
