@@ -6,6 +6,8 @@
 set -euo pipefail
 base=$(git rev-parse origin/main 2>/dev/null || git rev-parse HEAD)
 export GIT_INDEX_FILE=$(mktemp)
+# Los commits de prueba no se suben a ningún lado, pero git necesita un autor (el runner del CI no tiene)
+export GIT_AUTHOR_NAME=prueba GIT_AUTHOR_EMAIL=prueba@localhost GIT_COMMITTER_NAME=prueba GIT_COMMITTER_EMAIL=prueba@localhost
 mal=0
 
 commit_con() { # descripcion; despues pares archivo=contenido-nuevo (agrega una linea al final)
