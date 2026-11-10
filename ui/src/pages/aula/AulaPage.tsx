@@ -6,17 +6,25 @@
    costado, cómo sumar PCs por Veyon y el detalle de la PC elegida.
    Pensada para proyectarla con la Demostración de Veyon: pantalla completa y mucho contraste.
    Abajo, el aula en vivo: el tráfico entre las PCs (lo que pasa por el wg0 del maestro) y la línea de tiempo de
-   una PC que se cae. El plano (en qué fila y lugar está cada PC) se dibuja con el editor: sus filas son los racks. */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, LayoutGrid, Maximize2, Minimize2, MonitorSmartphone, Power, X } from 'lucide-react';
+   una PC que se cae. El plano (en qué fila y lugar está cada PC) se dibuja con el editor: sus filas son los racks.
+   Y lo que se ve de YARN en el aula: las colas por grupo, dónde corrió cada tarea (se marca en el plano) y el botón
+   «medir» de la escala. Desde el detalle de una PC se la puede apagar (lo hace su agente: para el DataNode y el
+   NodeManager, la PC sigue prendida) y volver a prender. */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, LayoutGrid, Maximize2, Minimize2, MonitorSmartphone, Power, PowerOff, X } from 'lucide-react';
+import { api } from '../../api';
 import { useSnapshot } from '../../state/store';
 import { useApi } from '../../state/useApi';
 import { EmptyState, PageHeader, type Tone } from '../../components/base';
 import { Meter } from '../../components/ui';
 import { mbLabel, nf, plural } from '../../lib/format';
-import { filasDelAula, LAMPARA } from '../../lib/aula';
-import type { AulaPc, AulaStatus } from '../../api/types';
+import { filasDelAula, LAMPARA, type Resalte } from '../../lib/aula';
+import type { AulaModoApagar, AulaPc, AulaStatus } from '../../api/types';
+import { toast } from '../../state/ui';
 import { Caidas } from './Caidas';
+import { Colas } from './Colas';
+import { Escala } from './Escala';
+import { Localidad } from './Localidad';
 import { EditorPlano } from './Plano';
 import { Red } from './Red';
 import './aula.css';
@@ -109,7 +117,9 @@ function Maestro({ a }: { a: AulaStatus }) {
   );
 }
 
-function Pc({ pc, sel, onSel, color }: { pc: AulaPc; sel: boolean; onSel: () => void; color: ColorDe }) {
+const RESALTE: Record<Resalte, string> = { bloque: 'tiene el bloque', corrio: 'corrió acá', ambos: 'tenía el bloque y corrió acá' };
+
+function Pc({ pc, sel, onSel, color, resalte }: { pc: AulaPc; sel: boolean; onSel: () => void; color: ColorDe; resalte?: Resalte }) {
   const l = LAMPARA[pc.estado];
   const nm = pc.nodemanager;
   const mb = nm?.mb ?? pc.prestaMb ?? null;
@@ -117,13 +127,16 @@ function Pc({ pc, sel, onSel, color }: { pc: AulaPc; sel: boolean; onSel: () => 
   const cont = nm?.contenedores ?? 0;
   return (
     <li>
-      <button type="button" className="au-pc" data-k={l.k} data-sel={sel || undefined} onClick={onSel} aria-pressed={sel}
-        aria-label={`${pc.nodo}${pc.nombre ? ` (${pc.nombre})` : ''}: ${l.label}${pc.motivo ? `, ${pc.motivo}` : ''}`}>
+      <button type="button" className="au-pc" data-k={l.k} data-sel={sel || undefined} data-resalte={resalte} data-apagada={pc.apagada ? true : undefined}
+        onClick={onSel} aria-pressed={sel}
+        aria-label={`${pc.nodo}${pc.nombre ? ` (${pc.nombre})` : ''}: ${l.label}${pc.motivo ? `, ${pc.motivo}` : ''}${resalte ? `, ${RESALTE[resalte]}` : ''}`}>
         <span className="au-pc-h">
           <span className="au-lamp" data-k={l.k} aria-hidden="true" />
           <b className="mono">{pc.nodo}</b>
           {pc.nombre && <span className="au-win">{pc.nombre}</span>}
+          {pc.apagada && <PowerOff size={13} className="au-pc-off" aria-hidden="true" />}
         </span>
+        {resalte && <span className="au-pc-resalte" data-r={resalte} aria-hidden="true">{RESALTE[resalte]}</span>}
         <span className="au-pc-st">{l.label}{pc.motivo && <small>{pc.motivo}</small>}</span>
         <span className="au-pc-mem">
           {nm && nm.mb > 0
@@ -144,7 +157,9 @@ function Pc({ pc, sel, onSel, color }: { pc: AulaPc; sel: boolean; onSel: () => 
   );
 }
 
-function Fila({ fila, lugares, sel, onSel, color }: { fila: string; lugares: (AulaPc | null)[]; sel: string | null; onSel: (n: string) => void; color: ColorDe }) {
+function Fila({ fila, lugares, sel, onSel, color, resalte }: {
+  fila: string; lugares: (AulaPc | null)[]; sel: string | null; onSel: (n: string) => void; color: ColorDe; resalte: Record<string, Resalte>;
+}) {
   const n = /^\/fila(\d+)$/.exec(fila)?.[1];
   const pcs = lugares.filter((p): p is AulaPc => !!p);
   const arriba = pcs.filter(p => p.estado === 'arriba').length;
@@ -157,7 +172,7 @@ function Fila({ fila, lugares, sel, onSel, color }: { fila: string; lugares: (Au
         <span className="au-lane-r">{arriba} de {plural(pcs.length, 'PC')} arriba · {mbLabel(mb)} para trabajos</span>
       </header>
       <ul className="au-pcs">{lugares.map((pc, i) => (pc
-        ? <Pc key={pc.nodo} pc={pc} sel={sel === pc.nodo} onSel={() => onSel(pc.nodo)} color={color} />
+        ? <Pc key={pc.nodo} pc={pc} sel={sel === pc.nodo} onSel={() => onSel(pc.nodo)} color={color} resalte={resalte[pc.nodo]} />
         : <li key={`libre-${i}`}><div className="au-pc-libre" aria-label="Lugar libre">lugar libre</div></li>))}</ul>
     </div>
   );
@@ -165,7 +180,60 @@ function Fila({ fila, lugares, sel, onSel, color }: { fila: string; lugares: (Au
 
 /* ---------- Al costado: el detalle de una PC y cómo sumar PCs ---------- */
 
-function Detalle({ pc, ahora, onClose }: { pc: AulaPc; ahora: number; onClose: () => void }) {
+/* Apagar una PC desde la vista: se lo pide a su agente (puerto 8098, solo acepta al maestro con el código de la clase).
+   Ordenado avisa a YARN y HDFS antes (se ve enseguida); de golpe es como desenchufarla (roja a los 40 s). La PC con
+   Windows sigue prendida: se apagan su DataNode y su NodeManager, y «Prender» los vuelve a levantar. */
+function Energia({ pc, onCambio }: { pc: AulaPc; onCambio: () => void }) {
+  const [pidiendo, setPidiendo] = useState(false);
+  const [modo, setModo] = useState<AulaModoApagar>('ordenado');
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => { setPidiendo(false); setModo('ordenado'); }, [pc.nodo]);
+  async function pedir(accion: 'apagar' | 'prender') {
+    setOcupado(true);
+    try {
+      const r = await api().aulaEnergia(pc.nodo, accion, modo);
+      toast({ kind: 'ok', title: accion === 'apagar' ? `${pc.nodo} apagada (${r.modo === 'golpe' ? 'de golpe' : 'ordenado'})` : `${pc.nodo} prendida`,
+        description: accion === 'apagar'
+          ? (r.modo === 'golpe' ? 'Ámbar ahora, roja a los 40 s: mirá la línea de tiempo abajo.' : 'YARN y HDFS ya saben: sus tareas se reintentan en otras PCs.')
+          : `DataNode ${r.datanode ? 'arriba' : 'sin arrancar'} · NodeManager ${r.nodemanager ? 'arriba' : 'sin arrancar'}: en unos segundos vuelve a verde.` });
+      setPidiendo(false);
+      onCambio();
+    } catch (e) {
+      toast({ kind: 'bad', title: `No se pudo ${accion} ${pc.nodo}`, description: e instanceof Error ? e.message : String(e) });
+    } finally { setOcupado(false); }
+  }
+  if (pc.apagada) {
+    return (
+      <div className="au-energia">
+        <p className="au-nota">Apagada desde acá ({pc.apagada.modo === 'golpe' ? 'de golpe' : 'ordenado'}) a las {new Date(pc.apagada.desde).toLocaleTimeString('es-AR', { hour12: false })}.</p>
+        <button type="button" className="btn btn-sm" onClick={() => void pedir('prender')} disabled={ocupado}><Power size={13} />Prender {pc.nodo}</button>
+      </div>
+    );
+  }
+  if (!pidiendo) {
+    return (
+      <div className="au-energia">
+        <button type="button" className="btn btn-sm btn-danger" onClick={() => setPidiendo(true)}><PowerOff size={13} />Apagar {pc.nodo}…</button>
+      </div>
+    );
+  }
+  return (
+    <fieldset className="au-energia au-energia-c" disabled={ocupado}>
+      <legend>¿Cómo apagar {pc.nodo}?</legend>
+      <label><input type="radio" name="au-modo" checked={modo === 'ordenado'} onChange={() => setModo('ordenado')} />
+        <span><b>Ordenado</b> (recomendado): avisa a YARN y a HDFS; sus tareas pasan a otras PCs enseguida.</span></label>
+      <label><input type="radio" name="au-modo" checked={modo === 'golpe'} onChange={() => setModo('golpe')} />
+        <span><b>De golpe</b>: como desenchufarla. Ámbar ya, roja a los 40 s, y HDFS copia sus bloques en otras PCs.</span></label>
+      <small className="au-nota">La PC sigue prendida (Windows y Docker): se apagan su DataNode y su NodeManager. Los contenedores que corría se pierden.</small>
+      <div>
+        <button type="button" className="btn btn-sm btn-danger-solid" onClick={() => void pedir('apagar')}><PowerOff size={13} />Apagar {pc.nodo}</button>
+        <button type="button" className="btn btn-sm" onClick={() => setPidiendo(false)}>Cancelar</button>
+      </div>
+    </fieldset>
+  );
+}
+
+function Detalle({ pc, ahora, onClose, onCambio }: { pc: AulaPc; ahora: number; onClose: () => void; onCambio: () => void }) {
   const l = LAMPARA[pc.estado];
   const nm = pc.nodemanager, dn = pc.datanode, t = pc.tunel;
   const filas: [string, string | null | undefined][] = [
@@ -190,6 +258,7 @@ function Detalle({ pc, ahora, onClose }: { pc: AulaPc; ahora: number; onClose: (
       </header>
       <p>{pc.motivo ?? l.que}</p>
       <dl>{filas.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      <Energia pc={pc} onCambio={onCambio} />
     </section>
   );
 }
@@ -237,6 +306,8 @@ export function AulaPage() {
   const [completa, setCompleta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
+  const [resalte, setResalteRaw] = useState<Record<string, Resalte>>({});
+  const setResalte = useCallback((r: Record<string, Resalte>) => setResalteRaw(r), []);
   useEffect(() => { const f = () => setCompleta(!!document.fullscreenElement); document.addEventListener('fullscreenchange', f); return () => document.removeEventListener('fullscreenchange', f); }, []);
   const apps = useMemo(() => [...new Set((a?.pcs ?? []).flatMap(p => (p.apps ?? []).map(x => x.app)))].sort(), [a?.pcs]);
   const color: ColorDe = x => COLORES[Math.max(0, apps.indexOf(x)) % COLORES.length];
@@ -278,7 +349,7 @@ export function AulaPage() {
         <section className="au-plano" aria-label="El plano del laboratorio">
           <Maestro a={a} />
           {filas.length === 0 && <EmptyState kind="empty" title="Todavía no se sumó ninguna PC">Mandá el .cmd por Veyon con la línea de al lado: cada PC aparece acá apenas se inscribe.</EmptyState>}
-          {filas.map(([fila, lugares]) => <Fila key={fila} fila={fila} lugares={lugares} sel={sel} onSel={n => setSel(s => (s === n ? null : n))} color={color} />)}
+          {filas.map(([fila, lugares]) => <Fila key={fila} fila={fila} lugares={lugares} sel={sel} onSel={n => setSel(s => (s === n ? null : n))} color={color} resalte={resalte} />)}
           {apps.length > 0 && (
             <ul className="au-leyenda au-leyenda-apps" aria-label="Los trabajos que corren en el aula">
               {apps.map(x => <li key={x}><span className="au-clase" style={{ background: color(x) }} /><span className="mono">{x.replace(/^application_\d+_/, 'app ')}</span></li>)}
@@ -290,7 +361,8 @@ export function AulaPage() {
           </ul>
         </section>
         <aside className="au-side">
-          {elegida && <Detalle pc={elegida} ahora={a.ahora} onClose={() => setSel(null)} />}
+          {elegida && <Detalle pc={elegida} ahora={a.ahora} onClose={() => setSel(null)} onCambio={reload} />}
+          <Localidad enAula={apps} onResalte={setResalte} />
           <Sumar a={a} />
           {a.eventos.length > 0 && (
             <section className="au-card au-eventos" aria-label="Lo último de la inscripción">
@@ -303,6 +375,10 @@ export function AulaPage() {
       <div className="au-vivo">
         <Red a={a} />
         <Caidas />
+      </div>
+      <div className="au-yarn">
+        <Colas a={a} onCambio={reload} />
+        <Escala a={a} />
       </div>
     </div>
   );

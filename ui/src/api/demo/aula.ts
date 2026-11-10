@@ -2,7 +2,11 @@
    van sumando de a una por el túnel. Sirve para ver la vista Aula sin el laboratorio: en el
    contenedor de verdad la arma el servidor (server/sandbox_server/aula.py y aula_vivo.py).
    El tráfico, los trabajos y la caída de pc07 son simulados, con la forma de lo que mide el maestro. */
-import type { AulaCaida, AulaPc, AulaPlano, AulaStatus, AulaTrafico } from '../types';
+import type {
+  AulaCaida, AulaCola, AulaColasGuardadas, AulaEnergia, AulaEscala, AulaLocalidad, AulaLocalidadTipo, AulaMedida, AulaModoApagar, AulaPc, AulaPlano,
+  AulaStatus, AulaTarea, AulaTrabajoEscala, AulaTrafico,
+} from '../types';
+import { leerGrupos } from '../../lib/aula';
 import { fail } from '../errors';
 
 /* El plano que guarda el profe: en la demo vive en memoria (en el maestro, en /hadoop/aula/plano.json) */
@@ -60,6 +64,17 @@ export function demoAula(abierta: number, now: number): AulaStatus {
       tunel: { saludoHaceS: Math.round((edad / 1000) % 25), rxMb: Math.round(bloques * 64 * 1.02), txMb: Math.round(bloques * 2) },
     };
   });
+  // Las que el profe apagó desde la vista: sin DataNode ni NodeManager (roja a los 40 s, como en el maestro)
+  for (const pc of pcs) {
+    const ap = apagadas.get(pc.nodo);
+    if (!ap) continue;
+    const s = (now - ap.desde) / 1000;
+    Object.assign(pc, {
+      apagada: ap, nodemanager: undefined, apps: undefined, estado: s < 40 && ap.modo === 'golpe' ? 'sin-respuesta' : 'caida',
+      motivo: `apagada desde la vista Aula (${ap.modo === 'golpe' ? 'de golpe' : 'ordenado'})`,
+      datanode: pc.datanode && { ...pc.datanode, estado: 'muerto', ultimoS: Math.round(s) },
+    });
+  }
   // Con plano, la fila (el rack) y el lugar salen de ahí
   if (plano) {
     plano.filas.forEach((f, fi) => f.forEach((x, li) => {
@@ -90,6 +105,7 @@ export function demoAula(abierta: number, now: number): AulaStatus {
     },
     eventos: pcs.map(p => `${new Date(p.inscriptaEn!).toLocaleTimeString('es-AR', { hour12: false })} ${p.nombre} se sumó como ${p.nodo} (${p.ipTunel}): Docker con ${p.dockerRamMb} MB y ${p.cores} cores, presta ${p.nodemanager?.mb ?? p.prestaMb} MB`),
     plano,
+    colas: demoColasAhora(corriendo.reduce((a, p) => a + p.nodemanager!.mbUsados, 0), corriendo.reduce((a, p) => a + p.nodemanager!.mb, 0)),
     ahora: now,
   };
 }
@@ -139,4 +155,137 @@ export function demoCaidas(abierta: number, now: number): AulaCaida[] {
       texto: 'pc07 dejó de contestar; el NameNode la dio por muerta a los 40 s; se perdieron 2 contenedores (YARN reintenta sus tareas en otras PCs); HDFS re-copió 18 bloques (~1152 MB) en 56 s; volvió a los 120 s.',
     },
   }];
+}
+
+/* ---------- Los opcionales: apagar desde la vista, colas por grupo, localidad y escala ---------- */
+
+const apagadas = new Map<string, { desde: number; modo: AulaModoApagar }>();
+
+export function demoEnergia(nodo: string, accion: 'apagar' | 'prender', modo: AulaModoApagar | undefined, now: number): AulaEnergia {
+  if (!/^pc\d{2}$/.test(nodo)) fail('invalid', `${nodo} no es una PC del aula (pc01, pc02...)`);
+  if (accion === 'apagar') {
+    const m = modo ?? 'ordenado';
+    if (m !== 'ordenado' && m !== 'golpe') fail('invalid', 'El modo es ordenado o golpe');
+    apagadas.set(nodo, { desde: now, modo: m });
+    return { nodo, accion, modo: m, datanode: false, nodemanager: false };
+  }
+  apagadas.delete(nodo);
+  return { nodo, accion, modo: null, datanode: true, nodemanager: true };
+}
+
+let grupos: string[] = [];
+
+function demoColasAhora(mbUsados: number, mb: number): AulaCola[] {
+  const parte = Math.floor(100 / (grupos.length + 1));
+  const usada = mb ? (mbUsados / mb) * 100 : 0;
+  const cola = (nombre: string, capacidad: number, u: number): AulaCola => ({
+    nombre, estado: 'RUNNING', capacidad, maxima: 100, usada: +u.toFixed(1), mb: Math.round((u / 100) * mb), vcores: Math.round(u / 10),
+    apps: u > 0 ? 1 : 0, pendientes: 0, contenedores: Math.round(u / 5),
+  });
+  // Los dos trabajos de la demo: uno en default y otro en el primer grupo
+  return [cola('default', 100 - parte * grupos.length, grupos.length ? usada / 2 : usada),
+    ...grupos.map((g, i) => cola(g, parte, i === 0 ? usada / 2 : 0))];
+}
+
+export function demoGuardarColas(gs: string[]): AulaColasGuardadas {
+  const r = leerGrupos(gs.join(' '));
+  if (r.error) fail('invalid', r.error);
+  const paradas = grupos.filter(g => !r.grupos.includes(g));
+  grupos = r.grupos;
+  return { grupos, paradas, colas: demoColasAhora(0, 0) };
+}
+
+export function demoTrabajoEnCola(cola: string, trabajo: string): { id: string; cola: string } {
+  if (cola !== 'default' && !grupos.includes(cola)) fail('not_found', `No hay una cola ${cola}`);
+  if (trabajo !== 'mr-pi' && trabajo !== 'spark-pi') fail('invalid', 'El trabajo de muestra es mr-pi o spark-pi');
+  return { id: `application_1794289929080_${String(20 + Math.floor(Math.random() * 70)).padStart(4, '0')}`, cola };
+}
+
+/* La localidad: 12 maps sobre las PCs que hay (bloques en dos PCs de distintas filas), como sale del .jhist */
+export function demoLocalidad(app: string, abierta: number, now: number): AulaLocalidad {
+  const a = demoAula(abierta, now);
+  const vivas = a.pcs.filter(p => p.nodemanager).map(p => p.nodo);
+  const fila = new Map(a.pcs.map(p => [p.nodo, p.fila]));
+  const spark = /_0012$/.test(app);
+  if (!vivas.length) {
+    return { app, tipo: spark ? 'SPARK' : 'MAPREDUCE', estado: 'RUNNING', soportado: true, fuente: 'en curso', tareas: [],
+      resumen: { 'data-local': 0, 'rack-local': 0, 'off-rack': 0 }, motivo: 'el ApplicationMaster todavía no escribió su historial' };
+  }
+  const todas = a.pcs.map(p => p.nodo);
+  const tareas: AulaTarea[] = Array.from({ length: 12 }, (_, i) => {
+    const bloque = spark ? null : [todas[(i * 3) % todas.length], todas[(i * 3 + 5) % todas.length]].filter((x, j, xs) => xs.indexOf(x) === j);
+    // 2 de cada 3 corren donde estaba el bloque; el resto, en otra PC (de la misma fila o de otra)
+    const corrio = bloque && i % 3 !== 2 && vivas.includes(bloque[0]) ? bloque[0] : vivas[(i * 7) % vivas.length];
+    const localidad: AulaLocalidadTipo = bloque == null ? (i % 4 ? 'data-local' : 'rack-local')
+      : bloque.includes(corrio) ? 'data-local' : bloque.some(b => fila.get(b) === fila.get(corrio)) ? 'rack-local' : 'off-rack';
+    return {
+      id: spark ? `s0.${i}` : `m${String(i).padStart(6, '0')}`, tipo: spark ? 'spark' : 'map', bloque, corrio, rack: fila.get(corrio) ?? null, localidad,
+      yarn: spark ? (localidad === 'data-local' ? 'NODE_LOCAL' : 'RACK_LOCAL') : null, estado: 'ok', intentos: 1, fallidos: 0,
+    };
+  });
+  tareas.push({ id: 'r000000', tipo: 'reduce', bloque: null, corrio: vivas[0], rack: fila.get(vivas[0]) ?? null, localidad: null, yarn: null, estado: 'ok', intentos: 1, fallidos: 0 });
+  const resumen = { 'data-local': 0, 'rack-local': 0, 'off-rack': 0 };
+  for (const t of tareas) if (t.localidad) resumen[t.localidad]++;
+  return {
+    app, tipo: spark ? 'SPARK' : 'MAPREDUCE', estado: 'FINISHED', nombre: spark ? 'PySpark ventas' : 'QuasiMonteCarlo', cola: 'default',
+    soportado: true, fuente: 'historial', tareas: spark ? tareas.slice(0, 12) : tareas, resumen,
+    ...(spark ? { motivo: 'Spark dice en qué PC corrió cada tarea y qué localidad logró, no dónde estaba el bloque' } : {}),
+  };
+}
+
+/* La escala: cada medición tarda lo que diría la ley de Amdahl con las PCs que hay (90 % paralelo) */
+const medidas: AulaMedida[] = [];
+let midiendo: AulaMedida | null = null;
+const BASE_S: Record<AulaTrabajoEscala, number> = { 'mr-pi': 96, 'spark-pi': 48, 'mr-wordcount': 140 };
+
+function cerrarMedicion(now: number) {
+  if (!midiendo) return;
+  const s = +(BASE_S[midiendo.trabajo] * (0.1 + 0.9 / midiendo.pcs)).toFixed(1);
+  if (now - midiendo.inicio >= (s / 10) * 1000) {   // en la demo, 10 veces más rápido
+    medidas.push({ ...midiendo, estado: 'ok', segundos: s, resultado: 'FINISHED', pcsAlFinal: midiendo.pcs, cambiaron: false });
+    midiendo = null;
+  }
+}
+
+export function demoEscala(abierta: number, now: number): AulaEscala {
+  cerrarMedicion(now);
+  const a = demoAula(abierta, now);
+  const vivas = a.pcs.filter(p => p.nodemanager);
+  const grupos = new Map<string, Map<number, number[]>>();
+  for (const m of medidas) {
+    if (m.estado !== 'ok' || !m.segundos) continue;
+    const g = grupos.get(m.trabajo) ?? new Map<number, number[]>();
+    g.set(m.pcs, [...(g.get(m.pcs) ?? []), m.segundos]);
+    grupos.set(m.trabajo, g);
+  }
+  const curva = [...grupos.entries()].map(([trabajo, g]) => {
+    const puntos = [...g.entries()].sort(([x], [y]) => x - y).map(([pcs, ss]) => ({ pcs, segundos: +(ss.reduce((x, y) => x + y, 0) / ss.length).toFixed(1), medidas: ss.length, aceleracion: 1 }));
+    for (const p of puntos) p.aceleracion = +(puntos[0].segundos / p.segundos).toFixed(2);
+    return { trabajo: trabajo as AulaTrabajoEscala, entrada: null, puntos };
+  });
+  return {
+    corriendo: midiendo, medidas: [...medidas].reverse(), curva,
+    ahora: { pcs: vivas.length, nodos: vivas.map(p => p.nodo), mb: a.yarn.mb, vcores: a.yarn.vcores },
+  };
+}
+
+export function demoMedir(trabajo: AulaTrabajoEscala, cola: string | null | undefined, abierta: number, now: number): AulaMedida {
+  if (!(trabajo in BASE_S)) fail('invalid', 'El trabajo a medir es uno de: mr-pi, spark-pi, mr-wordcount');
+  cerrarMedicion(now);
+  if (midiendo) fail('busy', `Ya se está midiendo ${midiendo.trabajo}: esperá a que termine`);
+  const e = demoEscala(abierta, now).ahora;
+  if (!e.pcs) fail('service_down', 'Ninguna PC le presta a YARN: no hay dónde correr el trabajo');
+  midiendo = { id: `m${now}`, trabajo, entrada: null, cola: cola ?? null, estado: 'corriendo', inicio: now,
+    app: `application_1794289929080_${String(100 + medidas.length).padStart(4, '0')}`, ...e };
+  return midiendo;
+}
+
+export function demoBorrarMedida(id: string | undefined, abierta: number, now: number): AulaEscala {
+  if (id == null) medidas.length = 0;
+  else {
+    const i = medidas.findIndex(m => m.id === id);
+    if (i < 0) fail('not_found', `No hay una medida ${id}`);
+    medidas.splice(i, 1);
+  }
+  return demoEscala(abierta, now);
 }

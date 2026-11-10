@@ -10,7 +10,10 @@ import { DemoMl } from './ml';
 import { DemoPipeline } from './pipeline';
 import { DemoEstudio } from './estudio';
 import { DemoBiblioteca } from './biblioteca';
-import { demoAula, demoCaidas, demoGuardarPlano, demoTrafico } from './aula';
+import {
+  demoAula, demoBorrarMedida, demoCaidas, demoEnergia, demoEscala, demoGuardarColas, demoGuardarPlano, demoLocalidad, demoMedir,
+  demoTrabajoEnCola, demoTrafico,
+} from './aula';
 
 export { SPEED as DEMO_SPEED };
 
@@ -71,6 +74,13 @@ export function createDemoApi(): SandboxApi {
     aulaGuardarPlano: p => call(() => demoGuardarPlano(p)),
     aulaTrafico: () => ok(demoTrafico(abierta, e.now())),
     aulaCaidas: () => ok(demoCaidas(abierta, e.now())),
+    aulaGuardarColas: g => call(() => demoGuardarColas(g)),
+    aulaTrabajoEnCola: (c, t) => call(() => demoTrabajoEnCola(c, t)),
+    aulaLocalidad: id => call(() => demoLocalidad(id, abierta, e.now())),
+    aulaEscala: () => ok(demoEscala(abierta, e.now())),
+    aulaMedir: (t, c) => call(() => demoMedir(t, c, abierta, e.now())),
+    aulaBorrarMedida: id => call(() => demoBorrarMedida(id, abierta, e.now())),
+    aulaEnergia: (n, a, m) => call(() => demoEnergia(n, a, m, e.now())),
     app: id => call(() => yarn.app(id)),
     appLogs: (id, c) => call(() => yarn.logs(id, c)),
     yarnMetrics: ids => call(() => yarn.metrics(ids)),
