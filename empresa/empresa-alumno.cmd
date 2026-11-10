@@ -1,4 +1,4 @@
-<# : empresa-alumno.cmd - BigData Sandbox, el cluster del aula: PC de alumno (ver guias/empresa/03-laboratorio.md)
+<# : empresa-alumno.cmd - BigData Sandbox, el cluster del aula: PC de alumno (ver docs/empresa/guia.md)
 @echo off
 rem Uso:
 rem   empresa-alumno.cmd IP_DEL_PROFE CODIGO [CARPETA]   suma esta PC al cluster del aula

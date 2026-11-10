@@ -3,7 +3,7 @@
 si apunta a una seccion (#algo), que exista ese titulo (con el mismo slug
 que arma GitHub) o ese id en el HTML. Los links a http(s) no se revisan.
 
-Uso: python3 pruebas/enlaces.py README.md guias/*.md docs/index.html
+Uso: python3 pruebas/enlaces.py README.md docs/*/guia.md docs/index.html
 """
 import html.parser
 import os

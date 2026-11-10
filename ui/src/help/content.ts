@@ -159,7 +159,7 @@ export const HELP: Record<PageId, Help> = {
   },
 };
 
-/** Los términos del glosario (guias/glosario.md) que van con cada pantalla, por su ancla */
+/** Los términos del glosario (docs/glosario.md) que van con cada pantalla, por su ancla */
 export const GLOSARIO_DE: Record<PageId, string[]> = {
   inicio: ['hdfs', 'yarn', 'motor', 'lenguaje', 'metastore', 'data-lake'],
   practicas: ['bloque', 'réplica', 'map', 'shuffle', 'reduce', 'metastore'],

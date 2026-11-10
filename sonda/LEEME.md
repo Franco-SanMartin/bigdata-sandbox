@@ -12,8 +12,8 @@ cluster del aula (la versión `empresa`):
 No instala nada en Windows ni pide permisos de administrador. Lo único que queda en las PCs es la imagen
 de la sonda (unos 18 MB; el `.tar.gz` pesa unos 8 MB) y una carpeta con los resultados.
 
-> En el repo: cómo encaja la sonda en el plan del aula en la [guía 3, el laboratorio](../guias/empresa/03-laboratorio.md);
-> qué mide y por qué, en [teoría, redes](../guias/empresa/teoria/06-redes.md).
+> En el repo: cómo encaja la sonda en el plan del aula en la [guía de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md);
+> la red del aula, en su [parte 9](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md#9-la-red-del-aula).
 
 ## Qué hay en el release `sonda-v1`
 

@@ -1,12 +1,13 @@
-# Documentacion: en cada cambio de README, guias o la pagina de docs/.
-#   revisar     links relativos (README, guias y docs/index.html), que cada
-#               bloque de comandos de las guias diga como se prueba y que el
+# Documentacion: en cada cambio de README, docs/<version>/ o la pagina de docs/.
+#   revisar     links relativos (README, docs/<version>/README.md y guia.md,
+#               docs/index.html), que cada bloque de comandos de las guias
+#               (docs/<version>/guia.md) diga como se prueba y que el
 #               control de publicacion (pruebas/solo_full.sh) decida bien que
 #               imagenes publica cada cambio. Rapido.
 #   demo        que docs/demo/ (la demo de la interfaz en GitHub Pages, bajo
 #               /demo/) sea la compilacion de ui/ de este commit: la arma con
 #               npm run build:demo y no tiene que cambiar nada.
-#   tutoriales  corre los comandos de las guias, en orden, contra la imagen
+#   tutoriales  corre los comandos de la guia de base (docs/base/guia.md), en orden, contra la imagen
 #               base YA PUBLICADA (escenario 'tutoriales' de
 #               pruebas/escenarios.sh). Asi un cambio solo de documentacion
 #               no rearma la imagen (el workflow "Imagen" lo ignora) y aun
@@ -19,7 +20,6 @@ on:
     branches: [main, ui2, 'ui2-*', 'empresa-*']
     paths:
       - '**.md'
-      - 'guias/**'
       - 'docs/**'
       - 'ui/**'
       - 'pruebas/tutoriales.py'
@@ -48,9 +48,9 @@ jobs:
       - name: Qué imágenes publica cada cambio (pruebas/solo_full.sh)
         run: bash pruebas/probar_solo_full.sh
       - name: Links
-        run: python3 -I pruebas/enlaces.py README.md README.en.md CHANGELOG.md datos/README.md guias/*.md docs/index.html
+        run: python3 -I pruebas/enlaces.py README.md README.en.md CHANGELOG.md datos/README.md docs/README.md docs/glosario.md docs/*/README.md docs/*/guia.md docs/index.html
       - name: Marcas de prueba de las guias
-        run: python3 -I pruebas/tutoriales.py --revisar guias/[0-9]*.md
+        run: python3 -I pruebas/tutoriales.py --revisar docs/*/guia.md
 
   demo:
     runs-on: ubuntu-latest

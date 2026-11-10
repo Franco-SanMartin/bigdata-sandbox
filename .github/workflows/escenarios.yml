@@ -2,7 +2,7 @@
 # con 'docker pull') en los escenarios de pruebas/escenarios.sh: reinicios,
 # alta disponibilidad, cada SERVICIOS, cambios de parametros, volumenes de
 # la imagen anterior, primeros arranques cortados, MongoDB, la version ml y
-# los comandos de las guias (tutoriales).
+# los comandos de la guia de base (tutoriales).
 # Cada escenario corre en una maquina aparte, en paralelo.
 # La imagen de cada commit ya se prueba entera antes de publicarse (workflow
 # "Imagen"); este es para volver a probar lo publicado, a mano desde la
@@ -45,7 +45,7 @@ jobs:
           docker image inspect -f '{{.Architecture}}' "$IMAGEN"
       - name: Escenario ${{ matrix.escenario }} (${{ matrix.arq }})
         run: |
-          # El escenario ml es solo para la version ml; las guias, para base
+          # El escenario ml es solo para la version ml; la guia de base (docs/base/guia.md), para base
           case "${{ matrix.escenario }}-${{ inputs.version }}" in
             ml-latest|ml-base|tutoriales-ml)
               echo "No aplica a la version ${{ inputs.version }}"; exit 0 ;;

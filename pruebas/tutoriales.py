@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Corre los comandos de las guias (guias/*.md), en orden, como los haria un
+"""Corre los comandos de las guias (docs/<version>/guia.md), en orden, como los haria un
 alumno: los de "tu compu" en la compu (necesita docker) y los de "adentro"
 en el contenedor 'bigdata'. Es el escenario 'tutoriales' de escenarios.sh.
 
@@ -25,8 +25,8 @@ Un bloque de comandos sin marca es un error: asi no queda nada sin probar
 por olvido.
 
 Uso:
-  python3 pruebas/tutoriales.py --revisar guias/*.md   solo revisa las marcas (sin docker)
-  python3 pruebas/tutoriales.py guias/*.md             corre todo
+  python3 pruebas/tutoriales.py --revisar docs/*/guia.md   solo revisa las marcas (sin docker)
+  python3 pruebas/tutoriales.py docs/base/guia.md      corre todo
 
 Usa el contenedor 'bigdata' y los volumenes de las guias: si ya existe un
 contenedor 'bigdata' no arranca, salvo con TUTORIALES_PISAR=si (en GitHub
