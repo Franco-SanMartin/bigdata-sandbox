@@ -12,6 +12,10 @@
     limpieza   la receta de limpieza columna por columna: validarla, su PySpark y la vista previa
     transformadores_spark   Limpiar, el paso del Pipeline de Spark que lleva la limpieza adentro del modelo
     predecir   predecir con un modelo guardado
+    biblioteca la biblioteca de modelos: versiones, estados (candidato, producción, archivado) y linaje
+    deriva     cuánto se parecen los datos nuevos al entrenamiento (PSI por variable, con pandas o Spark)
+    lote       el PySpark de la predicción por lotes (HDFS o Hive → HDFS o Hive, con esquema y deriva)
+    exportar   el .zip de una versión, con un servicio mínimo (servir.py) y su Dockerfile
 
 Un ejemplo desde JupyterLab (versión ml):
 

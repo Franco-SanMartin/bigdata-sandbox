@@ -150,7 +150,7 @@ export class DemoEstudio {
     return { codigo: nota + f.codigo, archivo: `${f.experimento.id}.py`, motor: f.experimento.motor, huella: f.experimento.huella ?? '', comando: f.experimento.motor === 'spark' ? `spark-submit --master yarn ${f.experimento.id}.py` : `python3 ${f.experimento.id}.py` };
   }
 
-  private nuevaCorrida(titulo: string, motor: 'sklearn' | 'spark', exp: string): MlCorrida & { lineasTodas: MlLinea[] } {
+  private nuevaCorrida(titulo: string, motor: 'sklearn' | 'spark', exp: string | null): MlCorrida & { lineasTodas: MlLinea[] } {
     const id = `d${++this.seq}`;
     const c = { id, experimento: exp, estado: 'corriendo' as const, progreso: 0, mensaje: 'Arrancando', motor, titulo, origen: 'estudio',
       inicio: Date.now(), ajustes: null, limites: { minutos: 15, memoriaMb: 4096 }, memoriaMb: 0, lineasTodas: [] as MlLinea[] };
@@ -206,6 +206,25 @@ export class DemoEstudio {
     this.e.at(2, () => { this.linea(c, 'En el modo demo no hay Python: probalo con la imagen full.'); c.estado = 'falló'; c.error = 'Modo demo: no se puede correr código'; c.mensaje = c.error; c.fin = Date.now(); this.emitir(c); });
     this.emitir(c);
     return { id, run: c.id };
+  }
+
+  /** Una predicción por lotes de la biblioteca, simulada: los pasos del script y, al terminar, alTerminar (el resumen) */
+  simularLote(titulo: string, extra: Partial<MlCorrida>, alTerminar: (c: MlCorrida) => void): string {
+    if ([...this.corridas.values()].some(c => c.estado === 'corriendo')) fail('busy', 'Ya hay una corrida de ML en curso: esperá a que termine o cancelala');
+    const c = this.nuevaCorrida(titulo, 'spark', null);
+    Object.assign(c, extra, { origen: 'lote', tipo: 'lote' });
+    const pasos: [number, string][] = [[5, 'Leyendo los datos nuevos'], [15, 'Revisando el esquema contra el del entrenamiento'], [25, 'Midiendo la deriva contra el entrenamiento'],
+      [40, 'Prediciendo en los executors'], [70, 'Escribiendo las predicciones'], [90, 'Contando lo escrito'], [100, 'Listo']];
+    this.linea(c, `(demo) spark-submit --master yarn ${extra.lote ?? 'lote'}.py`);
+    pasos.forEach(([p, msg], i) => this.e.at((i + 1) * 3, () => {
+      if (c.estado !== 'corriendo') return;
+      this.linea(c, `[${String(p).padStart(3)}%] ${msg}`);
+      c.progreso = p / 100; c.mensaje = msg; c.memoriaMb = 420 + 40 * i; c.memoriaPicoMb = c.memoriaMb;
+      if (p === 100) { c.estado = 'listo'; c.fin = Date.now(); alTerminar(c); this.e.act('ML', 'ok', `${c.titulo}: listo (demo)`); }
+      this.emitir(c);
+    }));
+    this.emitir(c);
+    return c.id;
   }
 
   runs(): MlCorrida[] { return [...this.corridas.values()].reverse().map(({ lineasTodas: _l, ...c }) => { void _l; return clon(c); }); }

@@ -763,6 +763,6 @@ class _Spark:
                'print(f"Modelo en hdfs://{MODELO}; todo tardó {resultado[\'tiempo_total\']:.1f} s")',
                "if estudio:",
                "    estudio.registrar_spark(RECETA, modelo_final, resultado, pred=pred" +
-               (", clases=CLASES" if self.clasif else "") + ", recursos=RECURSOS)",
+               (", clases=CLASES" if self.clasif else "") + ", recursos=RECURSOS, ent=ent)",
                "spark.stop()",
                'paso(100, "Listo")')

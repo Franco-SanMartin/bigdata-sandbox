@@ -21,6 +21,12 @@ está en [DECISIONES.md](DECISIONES.md).
     quedaba con el informe de YARN). Ahora lee las dos.
 - Los fixtures de la demo se regeneraron con dos recetas nuevas de Spark
   (logística con umbral por F1 y GLM para el gasto).
+- **PR #13** abierto con la etapa (c). `solo_full.sh` da `ml`: publica `:ml` y
+  `:full`, no `latest`.
+- **ML etapa (d)** en `ui2-ml-etapa-d`: biblioteca de modelos, deriva, lotes y
+  exportar (D-08: registro propio, no MLflow). La prueba del lote con
+  scikit-learn encontró un error de la (b): con clases de texto, la PR AUC
+  suponía que la clase positiva era el 1.
 
 ## 2026-10-30 al 2026-11-01
 

@@ -402,6 +402,8 @@ def registrar(receta: dict, pipeline, resultado: dict, *, datos=None, X_ent=None
             busq["resultados_ronda"] = _py(np.asarray(r["iter"])[orden])
 
     modelo_path = dest / "modelo.joblib"
+    ref_df = X_ent if X_ent is not None else X
+    esquema = _referencia(dest, receta, ref_df) if ref_df is not None and hasattr(ref_df, "dtypes") else None
     datos_info = dict(receta["datos"])
     if datos is not None:
         datos_info.update(filas=int(len(datos)), columnas=int(datos.shape[1]), hash=hash_datos(datos))
@@ -418,6 +420,7 @@ def registrar(receta: dict, pipeline, resultado: dict, *, datos=None, X_ent=None
         "modelo_bytes": modelo_path.stat().st_size if modelo_path.exists() else None,
         "artefactos": sorted(p.name for p in dest.iterdir() if p.is_file() and not p.name.endswith(".tmp")),
         "n_jobs": receta.get("busqueda", {}).get("n_jobs", 1),
+        "entrada": esquema or entrada(receta),
     })
     if tarea == "clasificacion":
         exp["clases"] = informe.get("clases")
@@ -522,7 +525,7 @@ def _importancia_spark(est, nombres_cols) -> dict | None:
 
 
 def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, clases=None,
-                    recursos: dict | None = None) -> Path:
+                    recursos: dict | None = None, ent=None) -> Path:
     import numpy as np
     dest = carpeta()
     tarea = receta["tarea"]
@@ -642,6 +645,7 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
             tam = int(out[0]) if out else None
         except (OSError, ValueError, subprocess.SubprocessError):
             tam = None
+    esquema = _referencia(dest, receta, ent, spark=True) if ent is not None else None
     exp = _base(receta, dest, "spark")
     exp.update({
         "modelo": {"id": modelo["id"], "etiqueta": modelo["etiqueta"], "clase": modelo["clase"], "params": params},
@@ -654,6 +658,7 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         "n_jobs": receta.get("busqueda", {}).get("n_jobs", 1),
         "recursos": recursos or receta.get("recursos"),
         "umbral": resultado.get("umbral"),
+        "entrada": esquema or entrada(receta),
         "evaluacion": "entrenamiento, validación y prueba separados; la prueba se usó una sola vez, al final"
                       if supervisada and (resultado.get("filas") or {}).get("validacion") is not None else None,
     })
@@ -661,6 +666,70 @@ def registrar_spark(receta: dict, modelo_final, resultado: dict, *, pred=None, c
         exp["clases"] = [str(c) for c in clases]
     _cerrar(dest, exp, informe)
     return dest
+
+
+# ---------------------------------------------------------------- lo que necesita la biblioteca
+
+_TIPOS_PANDAS = (("bool", "boolean"), ("int", "double"), ("float", "double"), ("datetime", "timestamp"))
+
+
+def entrada(receta: dict, tipos: dict[str, str] | None = None) -> list[dict]:
+    """Las columnas que tienen que venir en los datos nuevos para predecir: las variables del modelo, sin las
+    que crea la limpieza (derivadas, indicadoras de nulos) y con las que la limpieza lee. [{columna, rol, tipo}]"""
+    from . import limpieza as lz
+    obj = receta.get("objetivo")
+    creadas: set[str] = set()
+    leidas: list[str] = []
+    for _, p in lz.activos(receta.get("limpieza")):
+        if lz.fase(p, obj) == "entrenamiento":
+            continue
+        nuevas = set(lz.creadas(p))
+        if p["tipo"] == "derivada":
+            nuevas.add(p["nombre"])
+        elif p["tipo"] == "regex" and p.get("destino"):
+            nuevas.add(p["destino"])
+        c = p.get("columna")
+        if c and c not in creadas and c not in leidas and c != obj:
+            leidas.append(c)
+        creadas |= nuevas
+    v = variables(receta)
+    if receta["tarea"] == "recomendacion":
+        v = {rol: [c for c, r in receta["columnas"].items() if r == rol] for rol in ("usuario", "item")}
+    out, vistas = [], set()
+    for rol, cols in v.items():
+        for c in cols:
+            if c not in creadas and c not in vistas:
+                out.append({"columna": c, "rol": rol, "tipo": (tipos or {}).get(c)})
+                vistas.add(c)
+    for c in leidas:
+        if c not in vistas:
+            out.append({"columna": c, "rol": receta["columnas"].get(c, "limpieza"), "tipo": (tipos or {}).get(c)})
+            vistas.add(c)
+    return out
+
+
+def _tipos_pandas(df) -> dict[str, str]:
+    out = {}
+    for c, t in df.dtypes.items():
+        n = str(t)
+        out[str(c)] = next((s for k, s in _TIPOS_PANDAS if n.startswith(k)), "string")
+    return out
+
+
+def _referencia(dest: Path, receta: dict, df, spark: bool = False) -> list[dict] | None:
+    """referencia.json (para medir la deriva al predecir) y el esquema de entrada, sobre el entrenamiento.
+    Si algo falla, el experimento se registra igual (sin deriva)."""
+    from . import deriva
+    try:
+        tipos = dict(df.dtypes) if spark else _tipos_pandas(df)
+        esquema = entrada(receta, tipos)
+        v = variables(receta)
+        ref = deriva.referencia_spark(df, v) if spark else deriva.referencia_pandas(df, v)
+        _escribir(dest / "referencia.json", ref)
+        return esquema
+    except Exception as e:  # noqa: BLE001 - la deriva es un extra: no tiene que tirar el registro
+        print(f"AVISO: no se guardó la referencia para la deriva ({type(e).__name__}: {e})", flush=True)
+        return None
 
 
 # ---------------------------------------------------------------- para notebooks

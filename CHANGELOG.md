@@ -288,6 +288,62 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     partir el primer grupo y devolvía uno solo.
   - `test_estudio_modelos_spark.py` entrena los 19 modelos de Spark de punta a
     punta en la imagen, más la búsqueda con validación cruzada y recursos.
+- Estudio de ML, etapa (d) (biblioteca de modelos, predicción y deriva, `ml` y
+  `full`):
+  - **Biblioteca de modelos** (`sandbox_ml/biblioteca.py`, en
+    `/hadoop/ml/biblioteca`): un experimento que terminó bien se guarda como
+    versión de un modelo con nombre (churn, gasto).
+    - Cada versión es candidato, en producción (una por modelo) o archivada.
+    - Promover archiva la que estaba en producción. Volver atrás promueve la que
+      estuvo antes. Cada cambio queda en el historial con su nota.
+    - La versión se copia: el modelo de Spark va a
+      `hdfs:///user/root/ml/biblioteca/<nombre>/v<N>` y el de scikit-learn, al
+      volumen (con una copia en HDFS). Borrar el experimento no la rompe.
+    - El linaje dice de dónde salió: datos y filas, limpieza, huella de la
+      receta, variables, validación, búsqueda, app de YARN, recursos y
+      versiones de las librerías.
+    - Comparar versiones muestra cada métrica con la mejor marcada, los
+      hiperparámetros que cambian y los datos.
+    - Es un registro propio y no MLflow (D-08).
+  - **Deriva** (`deriva.py`): cada experimento guarda al entrenar una
+    referencia de cada variable (`referencia.json`): los deciles y las
+    categorías más comunes, con los nulos. Al predecir por lotes, el PSI de cada
+    variable dice si los datos nuevos son estables (menos de 0,1), si cambiaron
+    algo (hasta 0,25) o si son otra población. Se cuenta con pandas o en los
+    executors de Spark.
+  - **Esquema de entrada**: cada experimento guarda las columnas que tienen que
+    venir en los datos nuevos, con su tipo en el entrenamiento, sin las que
+    crea la limpieza.
+  - **Predicción por lotes** (`lote.py`): un script de PySpark completo, con
+    `spark-submit` en YARN.
+    - Lee los datos nuevos de HDFS (cualquier formato) o de Hive.
+    - Para si falta una columna. Si una numérica llega como texto, la
+      convierte y cuenta los valores que no pudo convertir.
+    - Mide la deriva y predice. Con Spark usa el `PipelineModel`; con
+      scikit-learn, el Pipeline de joblib repartido con `mapInPandas`.
+    - Escribe las columnas originales más la predicción (y las
+      probabilidades) en HDFS (Parquet, ORC, CSV o JSON) o en una tabla de Hive.
+    - Corre con el mismo lanzador de las corridas del estudio: avance en vivo,
+      límite de tiempo y memoria, y cancelar.
+  - **Predicción al instante** con la versión en producción (o la elegida):
+    filas por formulario o en JSON.
+  - **Exportar** una versión como `.zip` con:
+    - el modelo y los pasos propios del sandbox;
+    - `servir.py`, un servicio HTTP de la librería estándar (`POST /predecir`,
+      `GET /`, `GET /salud`);
+    - la ficha, `requirements.txt` con las versiones del entrenamiento, un
+      `Dockerfile` y un `LEEME.md`.
+  - Rutas `/api/ml/library/...` (`ml_biblioteca.py`). Pestaña nueva
+    **Biblioteca** en Machine Learning: la lista de modelos y, para cada uno,
+    sus versiones, el linaje, comparar, predecir, los lotes (con la deriva por
+    tramos) y el historial. "Guardar en la biblioteca" está en el detalle de
+    cada experimento. La demo trae una biblioteca de corridas reales.
+  - Arreglado: en scikit-learn, con clases de texto (vuelve / no_vuelve), la
+    PR AUC fallaba porque suponía que la clase positiva era el 1.
+  - Pruebas: `test_biblioteca.py` (deriva, estados, comparar, el script del
+    lote y el paquete exportado, que se levanta y contesta predicciones) y
+    `test_biblioteca_spark.py` (lotes de punta a punta con un modelo de Spark y
+    uno de scikit-learn).
   - Humo de `full`: datos de ejemplo en HDFS (`ml/preparar_demo_hdfs.py`),
     perfil en YARN de Parquet particionado, CSV con gzip, ORC y Avro, la vista
     previa y un entrenamiento con la limpieza adentro del modelo.

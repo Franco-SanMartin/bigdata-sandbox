@@ -17,7 +17,10 @@ publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
 1. **(c) Modelos, búsqueda y evaluación en Spark:** terminada en
    `ui2-ml-etapa-c-fin` (junta los dos WIP de `ui2-ml-etapa-c` con la interfaz
    y las pruebas de los 19 modelos de Spark). Publica `:ml` y `:full`.
-2. **(d) Biblioteca de modelos, predicción y deriva:** sin empezar.
+2. **(d) Biblioteca de modelos, predicción y deriva:** hecha en
+   `ui2-ml-etapa-d` (sobre la c): biblioteca con versiones, estados y linaje,
+   deriva con PSI, lotes en YARN, predicción al instante y exportar con
+   `servir.py`.
 3. **(e) Generador a escala, guías y pruebas de humo:** sin empezar.
 
 **`empresa` en el aula** (sección de abajo):
@@ -134,7 +137,13 @@ pruebas de humo.
       CrossValidator o TrainValidationSplit, recursos de YARN como flags de
       `spark-submit` y curvas calculadas en los executors. Lo prueba
       `test_estudio_modelos_spark.py` (los 19 de punta a punta, en la imagen).*
-- [ ] **(d)** Biblioteca de modelos, predicción y deriva (puntos 7 y 8).
+- [x] **(d) Biblioteca de modelos, predicción y deriva (puntos 7 y 8).**
+      *Rama `ui2-ml-etapa-d`: `biblioteca.py` (versiones, candidato /
+      producción / archivado, promover y volver atrás, linaje, comparar; registro
+      propio, D-08), `deriva.py` (PSI por variable contra la referencia de cada
+      experimento), `lote.py` (PySpark en YARN: esquema, deriva, PipelineModel o
+      scikit-learn con mapInPandas, salida a HDFS o Hive) y `exportar.py` (.zip
+      con `servir.py` y `Dockerfile`). Pestaña Biblioteca en la interfaz.*
 - [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).
 
 ## Pendientes de la revisión (2026-10-26 y 27)
