@@ -7,7 +7,7 @@ la misma consulta. Las palabras están en el glosario:
 [formato de archivo](../glosario.md#formato-de-archivo) y
 [Parquet y ORC](../glosario.md#parquet-y-orc).
 
-[← 11. Comparar](11-comparar.md) · [Índice de full](README.md)
+[← 11. Comparar](11-comparar.md) · [Índice de full](README.md) · Siguiente: [13. Estudio de ML →](13-estudio-ml.md)
 
 La pantalla es **Formatos** (`G F`), en el grupo *Almacenamiento*. Los
 comandos van **adentro** del contenedor, parado en `/datos`.

@@ -344,6 +344,33 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     lote y el paquete exportado, que se levanta y contesta predicciones) y
     `test_biblioteca_spark.py` (lotes de punta a punta con un modelo de Spark y
     uno de scikit-learn).
+- Estudio de ML, etapa (e) (generador a escala, guías y humo, `ml` y `full`):
+  - **Generador a escala** (`sandbox_ml/generar.py`): un trabajo de Spark en
+    YARN escribe en HDFS un dataset sintético del tamaño que se elija (de mil a
+    miles de millones de filas).
+    - `clientes` trae las reglas de `clientes_senal.csv` (segmentos 60/30/10,
+      gasto lineal, "vuelve" con el 10 % dado vuelta) y fecha de alta para
+      particionar por `anio=/mes=`.
+    - `calificaciones` trae usuario, ítem y nota de 1 a 5 a partir de factores
+      escondidos, para ALS.
+    - La suciedad pone nulos, extremos, texto desprolijo y filas repetidas.
+    - Cada executor genera su parte con `spark.range` y `rand(semilla)`. Los
+      números al azar que van en un `CASE WHEN` se guardan antes en una columna:
+      adentro del `CASE` la secuencia se corre y las proporciones salían mal
+      (60/36/4 en vez de 60/30/10).
+  - `POST /api/ml/sources/generate` y **Datos a escala en HDFS…** en el paso
+    Datos del estudio: corre con el mismo lanzador de las corridas y, al
+    terminar, elige la fuente nueva.
+  - Guías: [13 de `full`](guias/full/13-estudio-ml.md) (el estudio de punta a
+    punta: datos a escala, limpieza, YARN, biblioteca, lotes con deriva y
+    exportar) y [8 de `ml`](guias/ml/08-estudio-desde-jupyter.md) (lo mismo
+    con `sandbox_ml` desde JupyterLab).
+  - Humo de `full`: genera 200.000 clientes y entrena una logística de Spark
+    sobre ellos. La guarda en la biblioteca, la promueve, predice al instante y
+    por lotes (la deriva tiene que salir fuerte en la antigüedad corrida y
+    estable en las visitas) y la exporta.
+  - `test_generar.py`: lo que valida y, con Spark de verdad, las proporciones,
+    el 90 % de la regla, los nulos de la suciedad y las calificaciones.
   - Humo de `full`: datos de ejemplo en HDFS (`ml/preparar_demo_hdfs.py`),
     perfil en YARN de Parquet particionado, CSV con gzip, ORC y Avro, la vista
     previa y un entrenamiento con la limpieza adentro del modelo.

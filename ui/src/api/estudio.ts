@@ -392,13 +392,14 @@ export interface MlCorrida {
   id: string;
   /** El experimento que registra (null en una predicción por lotes) */
   experimento: string | null;
-  /** 'lote': una predicción por lotes de la biblioteca (POST /api/ml/library/{nombre}/batch) */
-  tipo?: 'lote';
+  /** 'lote': una predicción por lotes de la biblioteca (POST /api/ml/library/{nombre}/batch);
+   *  'generar': el generador a escala (POST /api/ml/sources/generate) */
+  tipo?: 'lote' | 'generar';
   lote?: string;
   modelo?: string;
   version?: number;
-  /** El resumen del lote cuando terminó bien */
-  resultado?: MlResumenLote;
+  /** El resumen cuando terminó bien: el del lote, o lo que escribió el generador */
+  resultado?: MlResumenLote | MlGenerado;
   errorDetalle?: string | null;
   recursos?: MlRecursos | null;
   estado: 'corriendo' | 'listo' | 'falló';
@@ -718,6 +719,25 @@ export interface MlLote {
   recursos?: MlRecursos | null;
   memoria_pico_mb?: number | null;
   memoria_yarn_mb?: number | null;
+}
+
+/** El generador a escala (sandbox_ml/generar.py en YARN) */
+export interface MlPedidoGenerar {
+  dataset: 'clientes' | 'calificaciones';
+  filas: number;
+  salida: string;
+  formato?: 'parquet' | 'orc' | 'csv' | 'json';
+  /** De 0 a 0,5: la fracción de filas con cada problema (nulos, repetidas, extremos, texto desprolijo) */
+  suciedad?: number;
+  /** clientes: carpetas anio=/mes= */
+  particionar?: boolean;
+  recursos?: Partial<MlRecursos>;
+}
+
+/** Lo que imprime el generador al terminar (@@resultado@@) */
+export interface MlGenerado {
+  dataset: string; salida: string; formato: string; filas: number; pedidas: number; suciedad: number; archivos: number;
+  bytes: number; columnas: string[]; particionado: boolean; segundos: number; app_id: string; muestra: MlValor[][];
 }
 
 export interface MlPedidoLote {

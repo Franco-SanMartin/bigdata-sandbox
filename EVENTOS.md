@@ -23,8 +23,18 @@ está en [DECISIONES.md](DECISIONES.md).
   (logística con umbral por F1 y GLM para el gasto).
 - **PR #13** abierto con la etapa (c). `solo_full.sh` da `ml`: publica `:ml` y
   `:full`, no `latest`.
-- **ML etapa (d)** en `ui2-ml-etapa-d`: biblioteca de modelos, deriva, lotes y
-  exportar (D-08: registro propio, no MLflow). La prueba del lote con
+- **ML etapa (d)** en `ui2-ml-etapa-d` (PR #16): biblioteca de modelos, deriva,
+  lotes y exportar (D-08: registro propio, no MLflow). La demo salió de tres
+  lotes reales en YARN (Parquet, CSV y una tabla de Hive).
+- **ML etapa (e)** en `ui2-ml-etapa-e`: generador a escala, guías y humo. El
+  generador daba 60/36/4 en vez de 60/30/10: `rand()` adentro de un `CASE WHEN`
+  solo avanza en las filas que llegan a esa rama.
+- **PR #14** (compose con el volumen de cada versión y terminal apagada en
+  `empresa`) y **PR #15** (Hive 4.0.0 con copia propia en el release
+  `deps-hive-4.0.0`, verificado con el sha256 de Apache; toca `base`, queda sin
+  mergear).
+- El job `revisar` de Documentación fallaba desde el PR #12: los commits de
+  prueba de `probar_solo_full.sh` no tenían autor en el runner. La prueba del lote con
   scikit-learn encontró un error de la (b): con clases de texto, la PR AUC
   suponía que la clase positiva era el 1.
 

@@ -7,7 +7,7 @@ import { ArrowLeft, Columns3, Download, History, Library, Play, RotateCcw, Rocke
 import { api } from '../../../api';
 import type {
   MlCatalogo, MlColumnaEntrada, MlDatos, MlDeriva, MlDerivaColumna, MlEstadoVersion, MlLote, MlModeloBiblioteca, MlModeloFila,
-  MlPedidoLote, MlPrediccion, MlValor, MlVersion,
+  MlPedidoLote, MlPrediccion, MlResumenLote, MlValor, MlVersion,
 } from '../../../api/types';
 import { EmptyState, KeyValue, Panel, ResultTable, SkeletonLines, Stat, StatRow } from '../../../components/base';
 import { Seg } from '../../../components/ui';
@@ -449,7 +449,7 @@ function PorLotes({ cat, mod, x, onLote }: { cat: MlCatalogo; mod: MlModeloBibli
     catch (e) { toast({ kind: 'bad', title: 'No se pudo lanzar el lote', description: errorTexto(e) }); }
   }
   const termino = corrida && corrida.estado !== 'corriendo';
-  const resumen = corrida?.resultado;
+  const resumen = corrida?.resultado as MlResumenLote | undefined;
   return (
     <div className="es-pila">
       <div className="es-graf-grid">

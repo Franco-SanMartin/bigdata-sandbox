@@ -11,6 +11,7 @@ import { Seg, Switch } from '../../../components/ui';
 import { toast } from '../../../state/ui';
 import { useApi } from '../../../state/useApi';
 import { Campo, Numero, olvidarPerfiles, pedirPerfil, usePerfil } from './comun';
+import { GenerarEscala } from './Generar';
 import { editar, fmtBytes, recetaParaDatos, ROL_LABEL, setEstudio, useEstudio, type PerfilOpciones } from './estado';
 import { MiniHist, fnum } from './graficos';
 
@@ -110,6 +111,7 @@ export function PasoDatos({ cat }: { cat?: MlCatalogo }) {
           <button type="button" className="btn btn-sm" disabled={!!generando} onClick={() => generar('sucias')}>
             <Sparkles size={13} aria-hidden="true" />{generando === 'sucias' ? 'Generando…' : 'Generar ventas_sucias.csv'}
           </button>
+          <GenerarEscala onListo={(ruta, formato) => { olvidarPerfiles(); fuentes.reload(); setOrigen('hdfs'); elegir({ origen: 'hdfs', ruta, formato, nombre: ruta } as MlFuente); }} />
         </div>
       </Panel>
 
