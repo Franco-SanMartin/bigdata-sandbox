@@ -6,7 +6,7 @@
 La imagen `franki678/bigdata-sandbox:empresa` es la `full` más un modo de
 cluster de verdad: cada compu del aula corre un contenedor y entre todas arman
 **un solo cluster** de Hadoop. Las PCs de los alumnos usan una imagen más
-chica, `franki678/bigdata-sandbox:trabajador` (192 MB comprimida, contra los
+chica, `franki678/bigdata-sandbox:empresa-trabajador` (192 MB comprimida, contra los
 1,6 GB de `empresa`), porque el reset del laboratorio borra todo cada día y
 hay que volver a cargarla en cada clase.
 
@@ -102,7 +102,7 @@ Con dos `.cmd` (para Windows, como los de la sonda):
 
 El paso a paso de la clase, con tiempos y qué mirar en la vista Aula: [guía 3](../guias/empresa/03-laboratorio.md).
 
-Los dos `.cmd` y las imágenes en `.tar.gz` están en el release `aula-v1`.
+Los dos `.cmd` y las imágenes en `.tar.gz` están en el release `aula-v2`.
 
 A mano (lo mismo que hacen los `.cmd`):
 
@@ -116,10 +116,10 @@ docker exec bigdata-maestro cat /hadoop/aula/codigo
 
 # Cada PC: primero el nombre, después el contenedor con ese nombre
 docker run --rm --entrypoint /opt/sandbox/aula/red.sh -e RED=wireguard -e MAESTRO=192.169.0.86 \
-  -e CODIGO=K7Q2 -e PC_NOMBRE=PC121 franki678/bigdata-sandbox:trabajador reservar      # -> NODO=pc03
+  -e CODIGO=K7Q2 -e PC_NOMBRE=PC121 franki678/bigdata-sandbox:empresa-trabajador reservar      # -> NODO=pc03
 docker run -d --name bigdata-trabajador --hostname pc03 --cap-add NET_ADMIN --device /dev/net/tun \
   --stop-timeout 20 -e RED=wireguard -e MAESTRO=192.169.0.86 -e CODIGO=K7Q2 -e PC_NOMBRE=PC121 \
-  franki678/bigdata-sandbox:trabajador
+  franki678/bigdata-sandbox:empresa-trabajador
 ```
 
 ## La imagen trabajador

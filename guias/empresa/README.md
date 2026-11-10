@@ -38,7 +38,7 @@ que falta:
 | Aula simulada: maestro y PCs como contenedores en **una sola compu** (`RED=docker`) | Anda: es lo que usan las guías 1 y 2 |
 | Sonda del laboratorio (mide si las PCs reales se pueden ver) | Corrida el 27/10: veredicto A (túnel WireGuard) |
 | Red entre PCs reales: túnel WireGuard con hub en la PC del profe (`RED=wireguard`) | Anda (etapa 2), probada en el CI con cada PC en su propia red; falta la primera clase |
-| Imagen chica para las PCs (`trabajador`, 192 MB) y los `.cmd` para Veyon | Anda (etapa 2): release `aula-v1` |
+| Imagen chica para las PCs (`trabajador`, 192 MB) y los `.cmd` para Veyon | Anda (etapa 2): release `aula-v2` |
 | Vista **Aula** en la interfaz web del maestro | Anda (etapa 2) |
 | Kafka, métricas, seguridad y almacenamiento tipo S3 | **No existen todavía** (etapas 3 a 6) |
 

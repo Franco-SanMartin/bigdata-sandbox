@@ -48,7 +48,7 @@ el hub de la PC del profe. Los detalles están en el [LEEME de
 
 | Paso | Quién | Qué | Cuánto tarda (medido en el CI y en una PC de prueba) |
 |---|---|---|---|
-| 0 | Profe, antes | Bajar el release `aula-v1` al pendrive | Una vez |
+| 0 | Profe, antes | Bajar el release `aula-v2` al pendrive | Una vez |
 | 1 | Profe | `empresa-profe.cmd`: carga la imagen del maestro y lo arranca | 2 a 4 min de `docker load` (1,6 GB) + 1 a 3 min de arranque |
 | 2 | Veyon | Transferir la imagen chica (192 MB) y `empresa-alumno.cmd` | 192 MB por PC: 20 PCs × 192 MB a ~50-90 Mbit/s ≈ **6 a 10 min**; desde la carpeta compartida, menos |
 | 3 | Veyon | Ejecutar `empresa-alumno.cmd` en todas | `docker load` (~20 s a 1 min) + **menos de 1 min** para sumarse |
@@ -65,7 +65,7 @@ sumarse, y `empresa-profe.cmd cargar` deja la velocidad de cada carga en
 
 ## 0. Antes de la clase (en casa, con internet)
 
-Del release [`aula-v1`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/aula-v1),
+Del release [`aula-v2`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/aula-v2),
 bajar a un pendrive:
 
 | Archivo | Para qué | Tamaño |
@@ -313,7 +313,7 @@ compu con Docker:
 
 <!-- prueba: no (corre varios minutos y arma 4 contenedores) -->
 ```bash
-IMAGEN=franki678/bigdata-sandbox:empresa IMAGEN_TRABAJADOR=franki678/bigdata-sandbox:trabajador \
+IMAGEN=franki678/bigdata-sandbox:empresa IMAGEN_TRABAJADOR=franki678/bigdata-sandbox:empresa-trabajador \
   bash pruebas/aula.sh aula-wg
 ```
 

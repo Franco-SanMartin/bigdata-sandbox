@@ -23,7 +23,7 @@
 #                                        reinicios del maestro y de una PC, una PC
 #                                        rearmada y un maestro nuevo con la misma PC
 #
-#   IMAGEN=franki678/bigdata-sandbox:empresa IMAGEN_TRABAJADOR=franki678/bigdata-sandbox:trabajador \
+#   IMAGEN=franki678/bigdata-sandbox:empresa IMAGEN_TRABAJADOR=franki678/bigdata-sandbox:empresa-trabajador \
 #     bash pruebas/aula.sh aula-wg
 # GitHub Actions las corre con las imagenes recien armadas (workflow "Empresa").
 # Con MEDIDAS=<archivo>, anota ahi la RAM de cada nodo.
@@ -31,7 +31,7 @@ set -eu   # sin pipefail: 'docker logs | grep -q' cortaria el pipe y daria error
 cd "$(dirname "$0")/.."
 
 IMAGEN=${IMAGEN:-franki678/bigdata-sandbox:empresa}
-IMAGEN_TRABAJADOR=${IMAGEN_TRABAJADOR:-franki678/bigdata-sandbox:trabajador}
+IMAGEN_TRABAJADOR=${IMAGEN_TRABAJADOR:-franki678/bigdata-sandbox:empresa-trabajador}
 RED=${RED_PRUEBA:-aula}
 PCS=(pc01 pc02 pc03)
 NODOS=(maestro "${PCS[@]}")

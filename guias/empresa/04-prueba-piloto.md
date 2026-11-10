@@ -2,14 +2,14 @@
 
 Antes de sumar las 20 PCs, armar el cluster con **la PC del profe y 2 o 3
 PCs de alumnos** y anotar lo que pasa. Es la [guía 3](03-laboratorio.md) en
-chico: los mismos `.cmd`, el mismo release `aula-v1`, la misma vista Aula.
+chico: los mismos `.cmd`, el mismo release `aula-v2`, la misma vista Aula.
 Lleva unos **30 a 40 minutos**.
 
 [← Índice de `empresa`](README.md) · [3. El laboratorio](03-laboratorio.md)
 
 ## Qué llevar
 
-- Pendrive con el release [`aula-v1`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/aula-v1):
+- Pendrive con el release [`aula-v2`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/aula-v2):
   `bigdata-sandbox-empresa.tar.gz`, `bigdata-sandbox-trabajador.tar.gz`,
   `empresa-profe.cmd` y `empresa-alumno.cmd`.
 - El dataset de prueba ya bajado: un año de NYC Taxi en Parquet, unos
