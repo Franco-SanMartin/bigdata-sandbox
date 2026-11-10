@@ -23,7 +23,8 @@
 #                 (la de este commit, no la publicada).
 #   3. resumen    tamaños y RAM medidos, en el resumen del run.
 #   4. publicar   solo en main y solo si pasaron TODOS los escenarios: pone
-#                 los tags base, latest y ml a lo que subio el paso 1.
+#                 los tags base, latest y ml a lo que subio el paso 1 (solo ml
+#                 si el push no cambio base: pruebas/solo_full.sh).
 #
 # El archivo del aula (Releases, guias/01-instalacion.md) NO se arma aca: es
 # el workflow "Aula", a mano, despues de que este publico.
@@ -77,20 +78,24 @@ jobs:
     steps:
       # Un push que solo cambia lo de full (la interfaz, su servidor, la documentacion y
       # las etapas interfaz/full del Dockerfile) no toca base ni ml: no se rearman ni se
-      # publican, asi latest (la imagen de la clase) queda como estaba. :full lo publica full.yml
+      # publican, asi latest (la imagen de la clase) queda como estaba. :full lo publica full.yml.
+      # Si cambia ml pero no base (el estudio de ML, sus librerias, la etapa ml del
+      # Dockerfile), se arma y se prueba todo, pero se publica solo :ml
       - uses: actions/checkout@v4
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
-      - name: Solo cambio lo de full?
+      - name: Que imagenes cambiaron?
         id: full
         if: github.event_name == 'push'
         run: |
           r=$(bash pruebas/solo_full.sh "${{ github.event.before }}" "$GITHUB_SHA")
           echo "solo_full=$r" >> "$GITHUB_OUTPUT"
-          if [ "$r" = si ]; then
-            echo "Este push solo cambia lo de full: base, latest y ml no se rearman ni se publican (:full lo publica full.yml)" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          case "$r" in
+            si) echo "Este push solo cambia lo de full: base, latest y ml no se rearman ni se publican (:full lo publica full.yml)" ;;
+            ml) echo "Este push cambia ml pero no base: se arma y se prueba todo, y se publica solo :ml (base y latest quedan como estaban)" ;;
+            *)  echo "Este push cambia base: se arma, se prueba y se publica todo" ;;
+          esac | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Run verde de este mismo commit en otra rama
         id: buscar
@@ -393,23 +398,31 @@ jobs:
           run-id: ${{ needs.previo.outputs.run || github.run_id }}
           github-token: ${{ github.token }}
 
+      # Con solo_full=ml (cambio ml pero no base), base y latest no se tocan: solo :ml
       - name: Tags base, latest (= base) y ml, amd64 + arm64
+        env:
+          SOLO: ${{ needs.previo.outputs.solo_full }}
         run: |
           ls digests
-          docker buildx imagetools create -t "$REPO:base" -t "$REPO:latest" \
-            "$REPO@$(cat digests/base-amd64)" "$REPO@$(cat digests/base-arm64)"
+          if [ "$SOLO" != ml ]; then
+            docker buildx imagetools create -t "$REPO:base" -t "$REPO:latest" \
+              "$REPO@$(cat digests/base-amd64)" "$REPO@$(cat digests/base-arm64)"
+          fi
           docker buildx imagetools create -t "$REPO:ml" \
             "$REPO@$(cat digests/ml-amd64)" "$REPO@$(cat digests/ml-arm64)"
 
       - name: Verificar lo publicado
+        env:
+          SOLO: ${{ needs.previo.outputs.solo_full }}
         run: |
           digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r .digest; }
+          if [ "$SOLO" = ml ]; then tags="ml"; else tags="base latest ml"; fi
           {
             echo "## Publicado"
             echo
             echo "| Tag | Digest | Arquitecturas |"
             echo "|---|---|---|"
-            for t in base latest ml; do
+            for t in $tags; do
               plataformas=$(docker buildx imagetools inspect "$REPO:$t" --format '{{json .Manifest}}' \
                 | jq -r '[.manifests[].platform | select(.os != "unknown") | .os + "/" + .architecture] | join(", ")')
               echo "| $t | $(digest "$REPO:$t") | $plataformas |"
