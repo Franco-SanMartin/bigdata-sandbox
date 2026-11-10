@@ -225,6 +225,20 @@ def test_localidad_de_mapreduce_desde_el_jhist():
     assert ay.resumen(t) == {"data-local": 2, "rack-local": 1, "off-rack": 1}
 
 
+def test_localidad_con_nombres_de_la_red():
+    """El DNS de Docker suma el dominio (pc03.aula) y en el túnel puede venir la IP: todo se lee como pcNN."""
+    texto = jhist(empezo(0, "pc01.aula,10.13.0.13"), corrio(0, "pc03.aula"), termino(0, "pc03.aula"),
+                  empezo(1, "/default-rack/pc01.aula"), corrio(1, "10.13.0.12"), termino(1, "10.13.0.12"))
+    t = ay.localidad_mr(ay.parse_jhist(texto), RACKS.get)
+    assert [(x["bloque"], x["corrio"], x["localidad"]) for x in t] == [
+        (["pc01", "pc03"], "pc03", "data-local"), (["pc01"], "pc02", "rack-local")]
+    s = ay.localidad_spark({0: [{"index": 0, "host": "pc04.aula", "taskLocality": "NODE_LOCAL", "status": "SUCCESS"}]},
+                           RACKS.get)
+    assert (s[0]["corrio"], s[0]["rack"]) == ("pc04", "/fila2")
+    assert ay.nodo_de("10.13.0.1") == "maestro" and ay.nodo_de("maestro.aula") == "maestro"
+    assert ay.nodo_de("192.168.0.7") == "192.168.0.7" and ay.nodo_de(None) is None
+
+
 def test_jhist_vacio_o_ajeno():
     assert ay.parse_jhist("") == {}
     assert ay.parse_jhist("no es un jhist\n{}\n") == {}
