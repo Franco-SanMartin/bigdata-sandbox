@@ -1,6 +1,8 @@
 # Documentacion: en cada cambio de README, guias o la pagina de docs/.
-#   revisar     links relativos (README, guias y docs/index.html) y que cada
-#               bloque de comandos de las guias diga como se prueba. Rapido.
+#   revisar     links relativos (README, guias y docs/index.html), que cada
+#               bloque de comandos de las guias diga como se prueba y que el
+#               control de publicacion (pruebas/solo_full.sh) decida bien que
+#               imagenes publica cada cambio. Rapido.
 #   demo        que docs/demo/ (la demo de la interfaz en GitHub Pages, bajo
 #               /demo/) sea la compilacion de ui/ de este commit: la arma con
 #               npm run build:demo y no tiene que cambiar nada.
@@ -22,7 +24,10 @@ on:
       - 'ui/**'
       - 'pruebas/tutoriales.py'
       - 'pruebas/enlaces.py'
+      - 'pruebas/solo_full.sh'
+      - 'pruebas/probar_solo_full.sh'
       - '.github/workflows/docs.yml'
+      - '.github/workflows/imagen.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +43,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # la prueba del control de publicación compara commits
+      - name: Qué imágenes publica cada cambio (pruebas/solo_full.sh)
+        run: bash pruebas/probar_solo_full.sh
       - name: Links
         run: python3 -I pruebas/enlaces.py README.md README.en.md CHANGELOG.md datos/README.md guias/*.md docs/index.html
       - name: Marcas de prueba de las guias
