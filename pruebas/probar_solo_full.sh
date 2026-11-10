@@ -40,6 +40,8 @@ ml_ini=$(linea '^FROM base AS ml$'); int_ini=$(linea 'AS interfaz$')
 
 espera "solo la interfaz" si "$(commit_con ui/src/main.tsx)"
 espera "el aula de empresa" si "$(commit_con empresa/empresa-profe.cmd empresa/arranque.sh)"
+espera "workflows de empresa y sonda" si "$(commit_con .github/workflows/empresa.yml .github/workflows/sonda.yml pruebas/aula.sh sonda/LEEME.md)"
+espera "workflow de empresa + base" no "$(commit_con .github/workflows/empresa.yml conf/core-site.xml)"
 espera "el estudio de ML" ml "$(commit_con ml/sandbox_ml/catalogo.py)"
 espera "ML + interfaz + servidor" ml "$(commit_con ml/sandbox_ml/catalogo.py ui/src/main.tsx server/sandbox_server/ml.py)"
 espera "librerías de ML" ml "$(commit_con conf/requirements-ml.txt)"

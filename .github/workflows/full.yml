@@ -24,7 +24,10 @@ name: Full
 on:
   push:
     branches: [full, main, ui2, 'ui2-*']
-    paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**']
+    # empresa/, la sonda y los workflows que no arman la full no la cambian: no se republica
+    paths-ignore: ['**.md', 'docs/**', 'guias/**', 'capturas/**', 'empresa/**', 'sonda/**', 'pruebas/aula.sh',
+                   '.github/workflows/empresa.yml', '.github/workflows/sonda.yml', '.github/workflows/aula.yml',
+                   '.github/workflows/borrar-tag.yml', '.github/workflows/release.yml', '.github/workflows/escenarios.yml']
   workflow_dispatch:
 
 permissions:
