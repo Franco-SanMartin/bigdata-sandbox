@@ -43,6 +43,11 @@ while IFS= read -r f; do
     # Cambiar este workflow no cambia las imágenes. Si hace falta rearmar base y ml a propósito,
     # se corre imagen.yml a mano (workflow_dispatch): ahí no se mira esto
     .github/workflows/imagen.yml) ;;
+    # Los workflows de empresa, la sonda, el aula, los releases y borrar tags no arman base ni ml
+    # (empresa.yml arma base y ml solo para probar y nunca los sube)
+    .github/workflows/empresa.yml | .github/workflows/sonda.yml | .github/workflows/aula.yml) ;;
+    .github/workflows/escenarios.yml | .github/workflows/borrar-tag.yml | .github/workflows/release.yml) ;;
+    sonda/* | pruebas/aula.sh) ;;
     pruebas/enlaces.py | pruebas/tutoriales.py | pruebas/solo_full.sh | pruebas/probar_solo_full.sh) ;;
     # El arranque y el aula de empresa: van a las etapas empresa y trabajador (después de interfaz) o al
     # release del aula (los .cmd). No cambian base, ml ni full

@@ -48,6 +48,13 @@ on:
       - '.github/workflows/aula.yml'
       - '.github/workflows/escenarios.yml'
       - '.github/workflows/borrar-tag.yml'
+      # empresa y la sonda tienen sus workflows (no tocan base ni ml)
+      - '.github/workflows/empresa.yml'
+      - '.github/workflows/sonda.yml'
+      - '.github/workflows/release.yml'
+      - 'empresa/**'
+      - 'sonda/**'
+      - 'pruebas/aula.sh'
   workflow_dispatch:
 
 permissions:
