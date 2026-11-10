@@ -1,0 +1,13 @@
+{
+  "name": "bigdata-sandbox-docs-herramientas",
+  "private": true,
+  "description": "Generadores de la documentacion: Markdown a PDF y el HTML interactivo de cada version",
+  "type": "module",
+  "scripts": {
+    "pdf": "node pdf.mjs",
+    "interactivo": "node interactivo.mjs"
+  },
+  "dependencies": {
+    "marked": "18.2.0"
+  }
+}
