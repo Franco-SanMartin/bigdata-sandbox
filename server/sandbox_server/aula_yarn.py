@@ -192,23 +192,41 @@ def parse_jhist(texto: str) -> dict[str, dict]:
         t = tareas.setdefault(ev["taskid"], {"tipo": str(_avro(ev.get("taskType")) or ""), "bloque": None,
                                              "intentos": {}})
         if tipo == "TASK_STARTED":
-            splits = [h.strip() for h in str(_avro(ev.get("splitLocations")) or "").split(",") if h.strip()]
-            t["bloque"] = splits or None
+            splits = [nodo_de(h) for h in str(_avro(ev.get("splitLocations")) or "").split(",") if h.strip()]
+            t["bloque"] = list(dict.fromkeys(splits)) or None
             continue
         aid = _avro(ev.get("attemptId"))
         if not isinstance(aid, str):
             continue
         i = t["intentos"].setdefault(aid, {"host": None, "estado": "corriendo", "yarn": None})
         if tipo.endswith("_ATTEMPT_STARTED"):
-            i["host"] = i["host"] or _avro(ev.get("trackerName"))
+            i["host"] = i["host"] or nodo_de(_avro(ev.get("trackerName")))
             i["yarn"] = _avro(ev.get("locality"))
         elif tipo.endswith("_ATTEMPT_FINISHED"):
-            i["host"] = _avro(ev.get("hostname")) or i["host"]
+            i["host"] = nodo_de(_avro(ev.get("hostname"))) or i["host"]
             i["estado"] = "ok"
         elif tipo.endswith(("_ATTEMPT_FAILED", "_ATTEMPT_KILLED")):
-            i["host"] = _avro(ev.get("hostname")) or i["host"]
+            i["host"] = nodo_de(_avro(ev.get("hostname"))) or i["host"]
             i["estado"] = ESTADO_INTENTO.get(str(_avro(ev.get("status"))), "fallo")
     return {k: v for k, v in tareas.items() if v["tipo"] in ("MAP", "REDUCE")}
+
+
+_IP_RE = re.compile(r"^\d+\.\d+\.\d+\.(\d+)$")
+
+
+def nodo_de(h: str | None, tunel: str = "10.13.0") -> str | None:
+    """El nombre en el aula (pcNN, maestro) de lo que anota Hadoop: pc03.aula (el DNS de Docker suma el dominio),
+    la IP del túnel (10.13.0.13 = pc03, .1 = maestro) o /rack/pc03. Lo que no es del aula queda como vino."""
+    if not h:
+        return None
+    h = h.strip().rsplit("/", 1)[-1]
+    m = _IP_RE.match(h)
+    if m:
+        if not h.startswith(tunel + "."):
+            return h
+        n = int(m.group(1))
+        return "maestro" if n == 1 else f"pc{n - 10:02d}" if 10 < n < 110 else h
+    return h.split(".", 1)[0]
 
 
 def clasificar(bloque: list[str] | None, host: str | None, rack) -> str | None:
@@ -251,7 +269,7 @@ def localidad_spark(etapas: dict[int, list[dict]], rack) -> list[dict]:
     out = []
     for sid in sorted(etapas):
         for t in sorted(etapas[sid], key=lambda x: (x.get("index", 0), x.get("taskId", 0))):
-            host = t.get("host") or None
+            host = nodo_de(t.get("host"))
             out.append({"id": f"s{sid}.{t.get('index', t.get('taskId', 0))}", "tipo": "spark", "bloque": None,
                         "corrio": host, "rack": rack(host) if host else None,
                         "localidad": LOCALIDAD_SPARK.get(t.get("taskLocality", "")),
