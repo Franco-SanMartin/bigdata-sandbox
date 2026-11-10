@@ -94,7 +94,10 @@ def test_el_entrenamiento_deja_la_referencia_y_el_esquema(tmp_path):
     (tmp_path / "entrenar.py").write_text(gen.generar(r, "exp", "hoy"), encoding="utf-8")
     dest = tmp_path / "exps" / "exp"
     dest.mkdir(parents=True)
-    env = {**os.environ, "SANDBOX_ML_EXPERIMENTOS": str(tmp_path / "exps"), "SANDBOX_ML_EXP": str(dest)}
+    # El script corre en otro proceso: sandbox_ml tiene que estar en su PYTHONPATH (en la imagen ya está)
+    ml = str(Path(gen.__file__).resolve().parents[1])
+    env = {**os.environ, "SANDBOX_ML_EXPERIMENTOS": str(tmp_path / "exps"), "SANDBOX_ML_EXP": str(dest),
+           "PYTHONPATH": os.pathsep.join(x for x in (ml, os.environ.get("PYTHONPATH")) if x)}
     out = subprocess.run([sys.executable, "entrenar.py"], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=300)
     assert out.returncode == 0, out.stdout[-2000:] + out.stderr[-2000:]
     exp = json.loads((dest / "experimento.json").read_text())
