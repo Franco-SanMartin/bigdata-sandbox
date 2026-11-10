@@ -87,10 +87,18 @@ ARG PIG_VERSION
 ARG SQOOP_VERSION
 
 # --- Hive ---
+# Hive 4.0.0 ya no esta en la CDN de Apache y el archivo historico a veces no
+# contesta: si falla, se baja la copia del release deps-hive-<version> de este
+# repo. Venga de donde venga, tiene que dar el sha256 que publica Apache.
 # Sin el driver JDBC suelto (es para clientes de afuera), sin los conectores a
 # Druid y Kudu (otros sistemas, que aca no hay) y sin un parquet de ejemplo
 # de 33 MB. Hive 4 trae un guava viejo que choca con el de Hadoop: alineamos.
-RUN apache-dl "hive/hive-${HIVE_VERSION}/apache-hive-${HIVE_VERSION}-bin.tar.gz" /tmp/hive.tgz \
+ARG HIVE_SHA256=83eb88549ae88d3df6a86bb3e2526c7f4a0f21acafe21452c18071cee058c666
+ARG HIVE_COPIA=https://github.com/Franco-SanMartin/bigdata-sandbox/releases/download
+RUN { apache-dl "hive/hive-${HIVE_VERSION}/apache-hive-${HIVE_VERSION}-bin.tar.gz" /tmp/hive.tgz \
+      || curl -fSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 30 \
+           "${HIVE_COPIA}/deps-hive-${HIVE_VERSION}/apache-hive-${HIVE_VERSION}-bin.tar.gz" -o /tmp/hive.tgz; } \
+ && echo "${HIVE_SHA256}  /tmp/hive.tgz" | sha256sum -c - \
  && tar -xzf /tmp/hive.tgz -C /opt \
  && mv /opt/apache-hive-${HIVE_VERSION}-bin /opt/hive \
  && rm /tmp/hive.tgz \

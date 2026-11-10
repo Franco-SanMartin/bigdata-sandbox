@@ -9,6 +9,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **Hive 4.0.0 con copia propia**: si archive.apache.org no contesta (la CDN
+  de Apache ya no lo tiene), el build lo baja del release `deps-hive-4.0.0` de
+  este repo. Venga de donde venga, se verifica el sha256 que publica Apache
+  (`HIVE_SHA256` en el `Dockerfile`).
+
 ### Agregado
 
 - **Comparar lanza Pig** (`full`): la plantilla `pig-ventas` corre
