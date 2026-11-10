@@ -6,3 +6,7 @@ datos/*
 # Interfaz web (ui/)
 ui/node_modules/
 ui/dist/
+
+# Herramientas de la documentacion (docs/_herramientas)
+docs/_herramientas/node_modules/
+docs/_herramientas/ejemplo.html
