@@ -594,6 +594,8 @@ def p2() -> None:
     with Chequeo("HDFS: cambiar la réplica") as c:
         codigo, r = pedir("PATCH", "/api/hdfs/files", {"path": movido, "replication": 1})
         assert codigo == 202 and r.get("id"), (codigo, r)
+        # El setrep corre como acción: leer la réplica antes de que termine da la vieja
+        esperar(lambda: pedir("GET", f"/api/actions/{r['id']}")[1]["state"] != "running", 60, "acción")
         codigo, d = pedir("GET", "/api/hdfs/file?path=" + q(movido))
         c.detalle = f"réplica {d.get('replication')}"
         assert d.get("replication") == 1, d
