@@ -2,8 +2,8 @@
 
 Las decisiones del proyecto: qué se decidió, por qué y qué cambia. Las nuevas van
 arriba. Una decisión que reemplaza a otra lo dice ("Reemplaza a D-NN") y la vieja
-queda tachada. Lo que pasó día a día está en [EVENTOS.md](EVENTOS.md) y el plan, en
-la [hoja de ruta](HOJA-DE-RUTA.md).
+queda tachada. El plan está en la [hoja de ruta](HOJA-DE-RUTA.md) y los cambios
+de cada versión, en el [CHANGELOG](CHANGELOG.md).
 
 ---
 

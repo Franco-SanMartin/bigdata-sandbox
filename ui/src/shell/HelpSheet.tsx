@@ -1,5 +1,5 @@
 /* La ayuda ("?"): qué es esta pantalla, sus conceptos y atajos, y el glosario único de las guías
-   (guias/glosario.md), ordenado por capa y con búsqueda. */
+   (docs/glosario.md), ordenado por capa y con búsqueda. */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from 'radix-ui';
 import { ArrowRight, BookOpen, Search, X } from 'lucide-react';

@@ -2,8 +2,8 @@
 # Escenarios que probar.sh no cubre: reinicios, alta disponibilidad, cada
 # valor de SERVICIOS, cambiar parametros sobre un volumen que ya existe,
 # parametros invalidos, volumenes de la imagen anterior, un primer
-# arranque cortado a la mitad, MongoDB, la version ml y los comandos de las
-# guias (tutoriales). Corre en la compu
+# arranque cortado a la mitad, MongoDB, la version ml y los comandos de la
+# guia de base (tutoriales). Corre en la compu
 # (necesita docker), con la imagen ya bajada o armada:
 #   bash pruebas/escenarios.sh <escenario>      (sin argumento: los lista)
 #   IMAGEN=franki678/bigdata-sandbox:ml bash pruebas/escenarios.sh ml
@@ -476,17 +476,17 @@ volumen_cortado() { # un volumen de la imagen anterior que se apago de golpe (si
   leer_ok
 }
 
-tutoriales() { # los comandos de las guias (guias/*.md), en orden, como los haria un alumno
-  [ "$VERSION" = base ] || no_aplica "las guias son de la version base"
-  # Las guias usan franki678/bigdata-sandbox:base y el contenedor 'bigdata'.
+tutoriales() { # los comandos de la guia de base (docs/base/guia.md), en orden, como los haria un alumno
+  [ "$VERSION" = base ] || no_aplica "la guia es de la version base"
+  # La guia usa franki678/bigdata-sandbox:base y el contenedor 'bigdata'.
   # Siempre con el tag: el archivo del aula trae solo ese nombre, y sin tag
   # Docker buscaria :latest en internet.
-  if grep -nE '(docker (run|pull|save|create) .*|^ +)franki678/bigdata-sandbox( |$)' guias/[0-9]*.md; then
-    falla "las guias tienen la imagen sin tag: va con :base"
+  if grep -nE '(docker (run|pull|save|create) .*|^ +)franki678/bigdata-sandbox( |$)' docs/base/guia.md; then
+    falla "la guia tiene la imagen sin tag: va con :base"
   fi
   docker tag "$IMAGEN" franki678/bigdata-sandbox:base
   local pisar=no; [ -n "${GITHUB_ACTIONS:-}" ] && pisar=si
-  TUTORIALES_PISAR=$pisar TUTORIALES_LIMPIAR=si python3 -I pruebas/tutoriales.py guias/[0-9]*.md
+  TUTORIALES_PISAR=$pisar TUTORIALES_LIMPIAR=si python3 -I pruebas/tutoriales.py docs/base/guia.md
 }
 
 # ---------------------------------------------------------------------------

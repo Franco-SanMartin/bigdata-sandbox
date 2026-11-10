@@ -3,7 +3,7 @@ import { PAGES } from '../lib/route';
 import { GLOSARIO_DE } from './content';
 import { GLOSARIO, TERMINOS, ancla, leerGlosario, piezas } from './glosario';
 
-describe('glosario único (guias/glosario.md)', () => {
+describe('glosario único (docs/glosario.md)', () => {
   it('lee las capas con sus términos', () => {
     expect(GLOSARIO.map(s => s.capa)).toEqual(['datos', 'recursos', 'motores', 'lenguajes', 'puente', undefined, undefined]);
     for (const s of GLOSARIO) {

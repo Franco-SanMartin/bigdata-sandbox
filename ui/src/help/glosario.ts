@@ -1,7 +1,7 @@
-/* El glosario único (guias/glosario.md), leído en el build: la interfaz muestra el mismo texto que se lee
+/* El glosario único (docs/glosario.md), leído en el build: la interfaz muestra el mismo texto que se lee
    en GitHub. Cada "##" es una capa, cada "###" un término y los párrafos de abajo su definición; una tabla
    va con su capa. */
-import texto from '../../../guias/glosario.md?raw';
+import texto from '../../../docs/glosario.md?raw';
 import type { CapaId } from '../lib/ecosistema';
 
 export interface Termino { id: string; t: string; parrafos: string[] }

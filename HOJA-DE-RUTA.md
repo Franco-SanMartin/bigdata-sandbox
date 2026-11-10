@@ -3,13 +3,13 @@
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
 actualización: 2026-11-10. Las decisiones están en [DECISIONES.md](DECISIONES.md)
-y lo que pasó día a día, en [EVENTOS.md](EVENTOS.md).
+y los cambios de cada versión, en el [CHANGELOG](CHANGELOG.md).
 
 ## Para seguir
 
 Todo lo que falta, por frente (al 2026-11-10):
 
-**Rediseño 360 de `full`** ([REDISENO-FULL.md](REDISENO-FULL.md)): hecho y
+**Rediseño 360 de `full`**: hecho y
 publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
 `vitest` sin vulnerabilidades).
 
@@ -26,9 +26,9 @@ publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
    de `ml`, y el estudio de punta a punta en el humo de `full`.
 
 **`empresa` en el aula** (sección de abajo):
-1. **Prueba piloto** con 2 o 3 PCs: [guía 4](guias/empresa/04-prueba-piloto.md)
-   y las hojas 5 a 9 de `guias/empresa/`, con el release `aula-v1`. Antes,
-   pasarle a sistemas la [hoja 7](guias/empresa/07-hoja-para-sistemas.md). Con
+1. **Prueba piloto** con 2 o 3 PCs: la [guía de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md)
+   con el release `aula-v1`. Antes, pasarle a sistemas lo que necesita el aula
+   (red, puertos y permisos, en la misma guía). Con
    lo que se anote, decidir la clase con las 20.
 2. **Aula 2D y tráfico real:** hecho en `ui2-aula-vivo` (sobre el PR #14):
    - el editor del plano, cuyas filas son los racks (la topología del maestro
@@ -81,7 +81,7 @@ Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
 | `empresa` | Beta | Varias compus arman un cluster real; la `sonda/` mide la red del aula para decidir cómo |
 | `ubuntu20` | Archivada | La imagen vieja de la clase, por si hay que volver |
 
-Documentación por versión en [`guias/`](guias/README.md); cambios en el [CHANGELOG](CHANGELOG.md).
+Documentación por versión en `docs/<versión>/` (README, guía y mapa interactivo; ver el [README](README.md)); cambios en el [CHANGELOG](CHANGELOG.md).
 
 ## En curso: ML distribuido sobre HDFS (versiones `ml` y `full`)
 

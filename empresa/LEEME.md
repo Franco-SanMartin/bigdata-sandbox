@@ -1,7 +1,7 @@
 # Versión empresa: el cluster del aula
 
-> Documentación completa (guías paso a paso, referencia, teoría y evaluación): [guías de `empresa`](../guias/empresa/README.md).
-> La clase con las PCs del laboratorio, paso a paso: [guía 3, el laboratorio](../guias/empresa/03-laboratorio.md).
+> Documentación completa (qué es, cómo se hizo, qué hace y qué no): [README de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/README.md).
+> La clase con las PCs del laboratorio, paso a paso: [guía de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md).
 
 La imagen `franki678/bigdata-sandbox:empresa` es la `full` más un modo de
 cluster de verdad: cada compu del aula corre un contenedor y entre todas arman
@@ -100,7 +100,7 @@ Con dos `.cmd` (para Windows, como los de la sonda):
 | [`empresa-profe.cmd`](empresa-profe.cmd) | La PC del profe | Abre Docker Desktop si está cerrado, carga la imagen del maestro (de `bigdata-sandbox-empresa.tar.gz` al lado, o de Docker Hub), arranca `bigdata-maestro` con el hub y muestra la IP del aula, el código y la línea para Veyon. `cargar RUTA [HDFS]` sube un dataset midiendo la velocidad; `estado`, `apagar` y `cero` |
 | [`empresa-alumno.cmd`](empresa-alumno.cmd) | Cada PC, por Veyon | `empresa-alumno.cmd IP CODIGO [CARPETA]`: carga la imagen trabajador (al lado del `.cmd` o en `CARPETA`, que puede ser `\\servidor\carpeta`), reserva su nombre, arranca `bigdata-trabajador` y espera a que esté en el cluster. `estado` y `salir` |
 
-El paso a paso de la clase, con tiempos y qué mirar en la vista Aula: [guía 3](../guias/empresa/03-laboratorio.md).
+El paso a paso de la clase, con tiempos y qué mirar en la vista Aula: [guía de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md).
 
 Los dos `.cmd` y las imágenes en `.tar.gz` están en el release `aula-v2`.
 

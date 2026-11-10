@@ -38,7 +38,7 @@ cambios=$(git diff --name-only "$desde" "$hasta")
 
 while IFS= read -r f; do
   case "$f" in
-    ui/* | server/* | datos/comparar/* | docs/* | guias/* | capturas/* | *.md) ;;
+    ui/* | server/* | datos/comparar/* | docs/* | capturas/* | *.md) ;;
     .github/workflows/full.yml | .github/workflows/server.yml | .github/workflows/docs.yml) ;;
     # Cambiar este workflow no cambia las imágenes. Si hace falta rearmar base y ml a propósito,
     # se corre imagen.yml a mano (workflow_dispatch): ahí no se mira esto
