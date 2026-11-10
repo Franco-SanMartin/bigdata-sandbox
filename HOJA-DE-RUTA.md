@@ -2,22 +2,21 @@
 
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
-actualización: 2026-11-01. Las decisiones están en [DECISIONES.md](DECISIONES.md)
+actualización: 2026-11-10. Las decisiones están en [DECISIONES.md](DECISIONES.md)
 y lo que pasó día a día, en [EVENTOS.md](EVENTOS.md).
 
 ## Para seguir
 
-Todo lo que falta, por frente (al 2026-11-01):
+Todo lo que falta, por frente (al 2026-11-10):
 
 **Rediseño 360 de `full`** ([REDISENO-FULL.md](REDISENO-FULL.md)): hecho y
-publicado en `:full` (PR #10). Queda mergear el **PR #11** (`ui2-cierre`):
-Comparar lanza Pig desde la pantalla y `vitest` sin vulnerabilidades. Publica
-solo `:full`.
+publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
+`vitest` sin vulnerabilidades).
 
 **ML sobre HDFS** (versiones `ml` y `full`, sección de abajo):
-1. **(c) Modelos, búsqueda y evaluación en Spark:** a medio hacer en la rama
-   `ui2-ml-etapa-c` (motor y catálogo de MLlib, sin interfaz ni pruebas; dos
-   commits WIP de una sesión cortada).
+1. **(c) Modelos, búsqueda y evaluación en Spark:** terminada en
+   `ui2-ml-etapa-c-fin` (junta los dos WIP de `ui2-ml-etapa-c` con la interfaz
+   y las pruebas de los 19 modelos de Spark). Publica `:ml` y `:full`.
 2. **(d) Biblioteca de modelos, predicción y deriva:** sin empezar.
 3. **(e) Generador a escala, guías y pruebas de humo:** sin empezar.
 
@@ -127,8 +126,14 @@ pruebas de humo.
       Pipeline. Tiene vista previa antes/después, y el PySpark del perfil y de
       la limpieza se puede correr con `spark-submit`. Lo prueban
       `test_estudio_spark.py` (Spark real, en la imagen) y el humo de `full`.*
-- [ ] **(c)** Modelos, búsqueda y evaluación distribuida (puntos 4 a 6). *A
-      medio hacer en `ui2-ml-etapa-c`.*
+- [x] **(c) Modelos, búsqueda y evaluación distribuida (puntos 4 a 6).**
+      *Rama `ui2-ml-etapa-c-fin`: GLM, XGBoost distribuido y ALS (tarea
+      recomendación) suman 19 modelos de Spark. Con Spark, entrenamiento,
+      validación y prueba separados (70/15/15), el umbral elegido en la
+      validación (F1 o Youden) y guardado en el modelo, búsqueda con
+      CrossValidator o TrainValidationSplit, recursos de YARN como flags de
+      `spark-submit` y curvas calculadas en los executors. Lo prueba
+      `test_estudio_modelos_spark.py` (los 19 de punta a punta, en la imagen).*
 - [ ] **(d)** Biblioteca de modelos, predicción y deriva (puntos 7 y 8).
 - [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).
 

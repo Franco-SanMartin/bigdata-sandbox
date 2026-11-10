@@ -47,6 +47,15 @@ RECETAS = [
      "modelo": {"id": "bosque_clf_spark", "params": {"numTrees": 30}},
      "validacion": {"particion": "aleatoria", "cv": "kfold", "k": 3, "metrica": "f1_ponderado"},
      "busqueda": {"tipo": "cv", "espacio": {"maxDepth": [4, 8]}}},
+    # Con los valores por defecto de Spark: entrenamiento, validación y prueba (70 / 15 / 15) y el umbral elegido
+    # en la validación; los recursos se piden a YARN con los flags de spark-submit
+    {"nombre": "demo: logística en Spark (umbral por F1)", "tarea": "clasificacion", "objetivo": "vuelve", "columnas": COLS,
+     "modelo": {"id": "logistica_spark", "params": {"regParam": 0.01}},
+     "validacion": {"metrica": "roc_auc", "umbral": "f1"},
+     "recursos": {"executors": 2, "memoria_executor_mb": 768, "cores": 1, "memoria_driver_mb": 768}},
+    {"nombre": "demo: GLM en Spark (gasto)", "tarea": "regresion", "objetivo": "gasto_mes_siguiente", "columnas": COLS,
+     "modelo": {"id": "glm_spark", "params": {"family": "gaussian", "regParam": 0.01}},
+     "recursos": {"executors": 2, "memoria_executor_mb": 768, "cores": 1, "memoria_driver_mb": 768}},
 ]
 
 

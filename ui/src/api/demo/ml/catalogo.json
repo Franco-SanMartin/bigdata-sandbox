@@ -16,6 +16,10 @@
   "reduccion": {
    "etiqueta": "Reducción de dimensión",
    "que": "Resumir muchas columnas en pocas (PCA)"
+  },
+  "recomendacion": {
+   "etiqueta": "Recomendación",
+   "que": "Predecir cuánto le va a gustar un ítem a un usuario (ALS, solo Spark)"
   }
  },
  "roles": {
@@ -24,7 +28,9 @@
   "fecha": "Fecha u hora: se separa en año, mes, día de la semana y hora",
   "texto": "Texto libre: se pasa a TF-IDF (palabras más informativas)",
   "id": "Identificador: no se usa para entrenar (memorizarlo no generaliza)",
-  "ignorar": "No se usa"
+  "ignorar": "No se usa",
+  "usuario": "Recomendación: quién califica (el id del usuario o cliente)",
+  "item": "Recomendación: qué se califica (el id del producto, la película...)"
  },
  "modelos": [
   {
@@ -4764,6 +4770,264 @@
       "efecto": "Dejalo prendido.",
       "rango": "Prendido."
      }
+    },
+    {
+     "nombre": "loss",
+     "tipo": "choice",
+     "defecto": "squaredError",
+     "ayuda": {
+      "que": "Qué error minimiza.",
+      "efecto": "huber trata los errores grandes como lineales: los outliers pesan menos.",
+      "rango": "squaredError; huber si hay extremos."
+     },
+     "opciones": [
+      {
+       "valor": "squaredError",
+       "etiqueta": "cuadrática"
+      },
+      {
+       "valor": "huber",
+       "etiqueta": "Huber (resiste outliers)"
+      }
+     ],
+     "grupo": "Pérdida"
+    },
+    {
+     "nombre": "epsilon",
+     "tipo": "float",
+     "defecto": 1.35,
+     "ayuda": {
+      "que": "Desde qué tamaño (en desvíos) un error se considera outlier en Huber.",
+      "efecto": "Más chico = más robusto; más grande = más parecido a la cuadrática.",
+      "rango": "1,35 (el clásico)."
+     },
+     "min": 1.0,
+     "max": 10.0,
+     "grupo": "Pérdida",
+     "si": {
+      "loss": [
+       "huber"
+      ]
+     }
+    },
+    {
+     "nombre": "tol",
+     "tipo": "float",
+     "defecto": 1e-06,
+     "ayuda": {
+      "que": "Tolerancia de convergencia.",
+      "efecto": "Más alto = corta antes.",
+      "rango": "1e-6."
+     },
+     "min": 0.0,
+     "max": 0.1,
+     "log": true,
+     "grupo": "Optimizador"
+    },
+    {
+     "nombre": "aggregationDepth",
+     "tipo": "int",
+     "defecto": 2,
+     "ayuda": {
+      "que": "Profundidad del treeAggregate que junta los gradientes de los executors.",
+      "efecto": "Subilo con muchas particiones o muchas columnas: alivia al driver.",
+      "rango": "2 a 4."
+     },
+     "min": 2,
+     "max": 10,
+     "grupo": "Recursos"
+    }
+   ],
+   "escala": false,
+   "importancia": "coef",
+   "costo": "arranque de Spark + bajo"
+  },
+  {
+   "id": "glm_spark",
+   "motor": "spark",
+   "tarea": "regresion",
+   "clase": "pyspark.ml.regression.GeneralizedLinearRegression",
+   "etiqueta": "Lineal generalizado (GLM)",
+   "familia": "Lineal",
+   "que": "La familia dice cómo se distribuye el objetivo (conteos con Poisson, montos positivos con Gamma, 0/1 con binomial) y el link cómo se conecta con la combinación lineal de las variables.",
+   "params": [
+    {
+     "nombre": "family",
+     "tipo": "choice",
+     "defecto": "gaussian",
+     "ayuda": {
+      "que": "La distribución del objetivo.",
+      "efecto": "gaussian es la regresión lineal de siempre; poisson para conteos; gamma para montos positivos sesgados.",
+      "rango": "Según el objetivo."
+     },
+     "opciones": [
+      {
+       "valor": "gaussian",
+       "etiqueta": "gaussiana (normal)"
+      },
+      {
+       "valor": "binomial",
+       "etiqueta": "binomial (0/1)"
+      },
+      {
+       "valor": "poisson",
+       "etiqueta": "Poisson (conteos)"
+      },
+      {
+       "valor": "gamma",
+       "etiqueta": "Gamma (montos > 0)"
+      },
+      {
+       "valor": "tweedie",
+       "etiqueta": "Tweedie (ceros y montos)"
+      }
+     ],
+     "grupo": "Modelo"
+    },
+    {
+     "nombre": "link",
+     "tipo": "choice",
+     "defecto": null,
+     "ayuda": {
+      "que": "Cómo se transforma la media antes de igualarla a la combinación lineal.",
+      "efecto": "log vuelve multiplicativos los efectos; cada familia acepta solo algunos.",
+      "rango": "El de la familia (gaussian: identidad, poisson: log, gamma: inversa)."
+     },
+     "opciones": [
+      {
+       "valor": null,
+       "etiqueta": "el de la familia"
+      },
+      {
+       "valor": "identity",
+       "etiqueta": "identidad"
+      },
+      {
+       "valor": "log",
+       "etiqueta": "log"
+      },
+      {
+       "valor": "inverse",
+       "etiqueta": "inversa"
+      },
+      {
+       "valor": "logit",
+       "etiqueta": "logit"
+      },
+      {
+       "valor": "probit",
+       "etiqueta": "probit"
+      },
+      {
+       "valor": "cloglog",
+       "etiqueta": "cloglog"
+      },
+      {
+       "valor": "sqrt",
+       "etiqueta": "raíz"
+      }
+     ],
+     "grupo": "Modelo",
+     "si": {
+      "family": [
+       "gaussian",
+       "binomial",
+       "poisson",
+       "gamma"
+      ]
+     }
+    },
+    {
+     "nombre": "variancePower",
+     "tipo": "float",
+     "defecto": 1.5,
+     "ayuda": {
+      "que": "Tweedie: la potencia de la varianza (0 normal, 1 Poisson, 2 Gamma).",
+      "efecto": "Entre 1 y 2 modela montos con muchos ceros.",
+      "rango": "1,2 a 1,8."
+     },
+     "min": 0.0,
+     "max": 10.0,
+     "grupo": "Modelo",
+     "si": {
+      "family": [
+       "tweedie"
+      ]
+     }
+    },
+    {
+     "nombre": "linkPower",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Tweedie: la potencia del link (0 = log, 1 = identidad).",
+      "efecto": "0 (log) es lo habitual con montos.",
+      "rango": "0."
+     },
+     "min": -10.0,
+     "max": 10.0,
+     "grupo": "Modelo",
+     "si": {
+      "family": [
+       "tweedie"
+      ]
+     }
+    },
+    {
+     "nombre": "regParam",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Regularización L2.",
+      "efecto": "Más alto = coeficientes más chicos.",
+      "rango": "0 a 1."
+     },
+     "min": 0.0,
+     "max": 1000.0,
+     "grupo": "Regularización",
+     "buscar": [
+      0.0,
+      0.01,
+      0.1
+     ]
+    },
+    {
+     "nombre": "maxIter",
+     "tipo": "int",
+     "defecto": 25,
+     "ayuda": {
+      "que": "Iteraciones máximas de IRLS (mínimos cuadrados reponderados).",
+      "efecto": "Subilo si no converge.",
+      "rango": "25 a 100."
+     },
+     "min": 1,
+     "max": 1000,
+     "grupo": "Optimizador"
+    },
+    {
+     "nombre": "tol",
+     "tipo": "float",
+     "defecto": 1e-06,
+     "ayuda": {
+      "que": "Tolerancia de convergencia.",
+      "efecto": "Más alto = corta antes.",
+      "rango": "1e-6."
+     },
+     "min": 0.0,
+     "max": 0.1,
+     "log": true,
+     "grupo": "Optimizador"
+    },
+    {
+     "nombre": "fitIntercept",
+     "tipo": "bool",
+     "defecto": true,
+     "ayuda": {
+      "que": "Término constante.",
+      "efecto": "Dejalo prendido.",
+      "rango": "Prendido."
+     },
+     "grupo": "Avanzado"
     }
    ],
    "escala": false,
@@ -4857,6 +5121,56 @@
       }
      ],
      "grupo": "Árbol"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -4938,6 +5252,17 @@
      "grupo": "Ensamble"
     },
     {
+     "nombre": "bootstrap",
+     "tipo": "bool",
+     "defecto": true,
+     "ayuda": {
+      "que": "Cada árbol entrena con una muestra con reposición.",
+      "efecto": "Apagado, todos ven las mismas filas (menos variedad entre árboles).",
+      "rango": "Prendido."
+     },
+     "grupo": "Ensamble"
+    },
+    {
      "nombre": "maxDepth",
      "tipo": "int",
      "defecto": 5,
@@ -5015,6 +5340,56 @@
       }
      ],
      "grupo": "Árbol"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5079,6 +5454,39 @@
      "min": 0.01,
      "max": 1.0,
      "grupo": "Ensamble"
+    },
+    {
+     "nombre": "featureSubsetStrategy",
+     "tipo": "choice",
+     "defecto": "all",
+     "ayuda": {
+      "que": "Columnas al azar que mira cada división.",
+      "efecto": "all = todas (el boosting clásico); menos agrega azar.",
+      "rango": "all."
+     },
+     "opciones": [
+      {
+       "valor": "all",
+       "etiqueta": "all"
+      },
+      {
+       "valor": "auto",
+       "etiqueta": "auto"
+      },
+      {
+       "valor": "onethird",
+       "etiqueta": "onethird"
+      },
+      {
+       "valor": "sqrt",
+       "etiqueta": "sqrt"
+      },
+      {
+       "valor": "log2",
+       "etiqueta": "log2"
+      }
+     ],
+     "grupo": "Árbol"
     },
     {
      "nombre": "lossType",
@@ -5162,12 +5570,258 @@
      "min": 0.0,
      "max": 1.0,
      "grupo": "Regularización"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
    "importancia": "arbol",
    "costo": "arranque de Spark + medio-alto",
    "semilla": "seed"
+  },
+  {
+   "id": "xgb_reg_spark",
+   "motor": "spark",
+   "tarea": "regresion",
+   "clase": "xgboost.spark.SparkXGBRegressor",
+   "etiqueta": "XGBoost distribuido",
+   "familia": "Ensambles",
+   "que": "XGBoost repartido en los executors con xgboost.spark.",
+   "params": [
+    {
+     "nombre": "n_estimators",
+     "tipo": "int",
+     "defecto": 100,
+     "ayuda": {
+      "que": "Cuántos árboles (rondas de boosting).",
+      "efecto": "Más rondas = aprende más; con learning_rate chico hacen falta más.",
+      "rango": "100 a 1000."
+     },
+     "min": 1,
+     "max": 5000,
+     "grupo": "Ensamble",
+     "buscar": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "nombre": "learning_rate",
+     "tipo": "float",
+     "defecto": 0.1,
+     "ayuda": {
+      "que": "Cuánto pesa cada árbol nuevo (eta).",
+      "efecto": "Más chico = más estable y necesita más árboles.",
+      "rango": "0,01 a 0,3."
+     },
+     "min": 0.001,
+     "max": 1.0,
+     "log": true,
+     "grupo": "Optimizador",
+     "buscar": [
+      0.03,
+      0.1,
+      0.3
+     ]
+    },
+    {
+     "nombre": "max_depth",
+     "tipo": "int",
+     "defecto": 6,
+     "ayuda": {
+      "que": "Profundidad máxima de cada árbol.",
+      "efecto": "Más profundo = más interacciones y más sobreajuste.",
+      "rango": "3 a 8."
+     },
+     "min": 1,
+     "max": 20,
+     "grupo": "Árbol",
+     "buscar": [
+      3,
+      6,
+      8
+     ]
+    },
+    {
+     "nombre": "min_child_weight",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Peso mínimo (≈ filas) en cada hoja.",
+      "efecto": "Más alto = árboles más conservadores.",
+      "rango": "1 a 10."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Árbol"
+    },
+    {
+     "nombre": "subsample",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Fracción de filas al azar por árbol.",
+      "efecto": "Menos de 1 agrega azar y suele generalizar mejor.",
+      "rango": "0,6 a 1."
+     },
+     "min": 0.1,
+     "max": 1.0,
+     "grupo": "Ensamble",
+     "buscar": [
+      0.7,
+      1.0
+     ]
+    },
+    {
+     "nombre": "colsample_bytree",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Fracción de columnas al azar por árbol.",
+      "efecto": "Menos = árboles más distintos.",
+      "rango": "0,5 a 1."
+     },
+     "min": 0.1,
+     "max": 1.0,
+     "grupo": "Ensamble",
+     "buscar": [
+      0.7,
+      1.0
+     ]
+    },
+    {
+     "nombre": "gamma",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Mejora mínima de la pérdida para dividir un nodo.",
+      "efecto": "Más alto = menos divisiones.",
+      "rango": "0 a 5."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "reg_alpha",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Regularización L1 de los pesos de las hojas.",
+      "efecto": "Más alto = modelo más simple.",
+      "rango": "0 a 1."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "reg_lambda",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Regularización L2 de los pesos de las hojas.",
+      "efecto": "Más alto = predicciones más suaves.",
+      "rango": "1 a 10."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "tree_method",
+     "tipo": "choice",
+     "defecto": "hist",
+     "ayuda": {
+      "que": "Cómo busca los cortes.",
+      "efecto": "hist es el rápido; exact solo con pocos datos.",
+      "rango": "hist."
+     },
+     "opciones": [
+      {
+       "valor": "hist",
+       "etiqueta": "histogramas"
+      },
+      {
+       "valor": "exact",
+       "etiqueta": "exacto"
+      },
+      {
+       "valor": "approx",
+       "etiqueta": "aproximado"
+      }
+     ],
+     "grupo": "Avanzado"
+    },
+    {
+     "nombre": "num_workers",
+     "tipo": "int",
+     "defecto": 1,
+     "ayuda": {
+      "que": "Cuántas tareas de Spark entrenan juntas (cada una con su parte de los datos).",
+      "efecto": "Más = más paralelo, pero todas necesitan un core libre en YARN a la vez.",
+      "rango": "Executors × cores pedidos."
+     },
+     "min": 1,
+     "max": 64,
+     "grupo": "Recursos"
+    }
+   ],
+   "escala": false,
+   "importancia": "arbol",
+   "costo": "arranque de Spark + medio",
+   "semilla": "random_state",
+   "extra": "xgboost",
+   "requiere": "xgboost"
   },
   {
    "id": "logistica_spark",
@@ -5270,6 +5924,44 @@
       "rango": "Prendido."
      },
      "grupo": "Avanzado"
+    },
+    {
+     "nombre": "fitIntercept",
+     "tipo": "bool",
+     "defecto": true,
+     "ayuda": {
+      "que": "Término constante.",
+      "efecto": "Dejalo prendido.",
+      "rango": "Prendido."
+     },
+     "grupo": "Avanzado"
+    },
+    {
+     "nombre": "tol",
+     "tipo": "float",
+     "defecto": 1e-06,
+     "ayuda": {
+      "que": "Tolerancia de convergencia.",
+      "efecto": "Más alto = corta antes.",
+      "rango": "1e-6."
+     },
+     "min": 0.0,
+     "max": 0.1,
+     "log": true,
+     "grupo": "Optimizador"
+    },
+    {
+     "nombre": "aggregationDepth",
+     "tipo": "int",
+     "defecto": 2,
+     "ayuda": {
+      "que": "Profundidad del treeAggregate que junta los gradientes de los executors.",
+      "efecto": "Subilo con muchas particiones o muchas columnas: alivia al driver.",
+      "rango": "2 a 4."
+     },
+     "min": 2,
+     "max": 10,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5368,6 +6060,56 @@
       }
      ],
      "grupo": "Árbol"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5447,6 +6189,17 @@
      },
      "min": 0.01,
      "max": 1.0,
+     "grupo": "Ensamble"
+    },
+    {
+     "nombre": "bootstrap",
+     "tipo": "bool",
+     "defecto": true,
+     "ayuda": {
+      "que": "Cada árbol entrena con una muestra con reposición.",
+      "efecto": "Apagado, todos ven las mismas filas (menos variedad entre árboles).",
+      "rango": "Prendido."
+     },
      "grupo": "Ensamble"
     },
     {
@@ -5531,6 +6284,56 @@
       }
      ],
      "grupo": "Árbol"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5593,6 +6396,39 @@
      "grupo": "Ensamble"
     },
     {
+     "nombre": "featureSubsetStrategy",
+     "tipo": "choice",
+     "defecto": "all",
+     "ayuda": {
+      "que": "Columnas al azar que mira cada división.",
+      "efecto": "all = todas (el boosting clásico); menos agrega azar.",
+      "rango": "all."
+     },
+     "opciones": [
+      {
+       "valor": "all",
+       "etiqueta": "all"
+      },
+      {
+       "valor": "auto",
+       "etiqueta": "auto"
+      },
+      {
+       "valor": "onethird",
+       "etiqueta": "onethird"
+      },
+      {
+       "valor": "sqrt",
+       "etiqueta": "sqrt"
+      },
+      {
+       "valor": "log2",
+       "etiqueta": "log2"
+      }
+     ],
+     "grupo": "Árbol"
+    },
+    {
      "nombre": "maxDepth",
      "tipo": "int",
      "defecto": 5,
@@ -5653,6 +6489,56 @@
      "min": 0.0,
      "max": 1.0,
      "grupo": "Regularización"
+    },
+    {
+     "nombre": "minWeightFractionPerNode",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Fracción mínima del peso total (≈ filas) en cada hijo.",
+      "efecto": "Como minInstancesPerNode pero relativo al tamaño de los datos.",
+      "rango": "0 a 0,05."
+     },
+     "min": 0.0,
+     "max": 0.5,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "maxMemoryInMB",
+     "tipo": "int",
+     "defecto": 256,
+     "ayuda": {
+      "que": "Memoria de cada executor para juntar los histogramas de un nivel.",
+      "efecto": "Más = procesa más nodos por pasada (más rápido) si el executor tiene memoria.",
+      "rango": "256 a 1024."
+     },
+     "min": 16,
+     "max": 8192,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "cacheNodeIds",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Guarda en caché a qué nodo cae cada fila entre niveles.",
+      "efecto": "Acelera árboles profundos a costa de memoria.",
+      "rango": "Apagado; prendelo con maxDepth alto."
+     },
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje con un checkpoint (-1 = nunca).",
+      "efecto": "Solo cuenta con cacheNodeIds y un directorio de checkpoint: evita linajes gigantes.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5661,6 +6547,203 @@
    "semilla": "seed",
    "proba": true,
    "binaria": true
+  },
+  {
+   "id": "xgb_clf_spark",
+   "motor": "spark",
+   "tarea": "clasificacion",
+   "clase": "xgboost.spark.SparkXGBClassifier",
+   "etiqueta": "XGBoost distribuido",
+   "familia": "Ensambles",
+   "que": "XGBoost repartido en los executors con xgboost.spark (binario y multiclase).",
+   "params": [
+    {
+     "nombre": "n_estimators",
+     "tipo": "int",
+     "defecto": 100,
+     "ayuda": {
+      "que": "Cuántos árboles (rondas de boosting).",
+      "efecto": "Más rondas = aprende más; con learning_rate chico hacen falta más.",
+      "rango": "100 a 1000."
+     },
+     "min": 1,
+     "max": 5000,
+     "grupo": "Ensamble",
+     "buscar": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "nombre": "learning_rate",
+     "tipo": "float",
+     "defecto": 0.1,
+     "ayuda": {
+      "que": "Cuánto pesa cada árbol nuevo (eta).",
+      "efecto": "Más chico = más estable y necesita más árboles.",
+      "rango": "0,01 a 0,3."
+     },
+     "min": 0.001,
+     "max": 1.0,
+     "log": true,
+     "grupo": "Optimizador",
+     "buscar": [
+      0.03,
+      0.1,
+      0.3
+     ]
+    },
+    {
+     "nombre": "max_depth",
+     "tipo": "int",
+     "defecto": 6,
+     "ayuda": {
+      "que": "Profundidad máxima de cada árbol.",
+      "efecto": "Más profundo = más interacciones y más sobreajuste.",
+      "rango": "3 a 8."
+     },
+     "min": 1,
+     "max": 20,
+     "grupo": "Árbol",
+     "buscar": [
+      3,
+      6,
+      8
+     ]
+    },
+    {
+     "nombre": "min_child_weight",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Peso mínimo (≈ filas) en cada hoja.",
+      "efecto": "Más alto = árboles más conservadores.",
+      "rango": "1 a 10."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Árbol"
+    },
+    {
+     "nombre": "subsample",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Fracción de filas al azar por árbol.",
+      "efecto": "Menos de 1 agrega azar y suele generalizar mejor.",
+      "rango": "0,6 a 1."
+     },
+     "min": 0.1,
+     "max": 1.0,
+     "grupo": "Ensamble",
+     "buscar": [
+      0.7,
+      1.0
+     ]
+    },
+    {
+     "nombre": "colsample_bytree",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Fracción de columnas al azar por árbol.",
+      "efecto": "Menos = árboles más distintos.",
+      "rango": "0,5 a 1."
+     },
+     "min": 0.1,
+     "max": 1.0,
+     "grupo": "Ensamble",
+     "buscar": [
+      0.7,
+      1.0
+     ]
+    },
+    {
+     "nombre": "gamma",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Mejora mínima de la pérdida para dividir un nodo.",
+      "efecto": "Más alto = menos divisiones.",
+      "rango": "0 a 5."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "reg_alpha",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Regularización L1 de los pesos de las hojas.",
+      "efecto": "Más alto = modelo más simple.",
+      "rango": "0 a 1."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "reg_lambda",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Regularización L2 de los pesos de las hojas.",
+      "efecto": "Más alto = predicciones más suaves.",
+      "rango": "1 a 10."
+     },
+     "min": 0.0,
+     "max": 100.0,
+     "grupo": "Regularización"
+    },
+    {
+     "nombre": "tree_method",
+     "tipo": "choice",
+     "defecto": "hist",
+     "ayuda": {
+      "que": "Cómo busca los cortes.",
+      "efecto": "hist es el rápido; exact solo con pocos datos.",
+      "rango": "hist."
+     },
+     "opciones": [
+      {
+       "valor": "hist",
+       "etiqueta": "histogramas"
+      },
+      {
+       "valor": "exact",
+       "etiqueta": "exacto"
+      },
+      {
+       "valor": "approx",
+       "etiqueta": "aproximado"
+      }
+     ],
+     "grupo": "Avanzado"
+    },
+    {
+     "nombre": "num_workers",
+     "tipo": "int",
+     "defecto": 1,
+     "ayuda": {
+      "que": "Cuántas tareas de Spark entrenan juntas (cada una con su parte de los datos).",
+      "efecto": "Más = más paralelo, pero todas necesitan un core libre en YARN a la vez.",
+      "rango": "Executors × cores pedidos."
+     },
+     "min": 1,
+     "max": 64,
+     "grupo": "Recursos"
+    }
+   ],
+   "escala": false,
+   "importancia": "arbol",
+   "costo": "arranque de Spark + medio",
+   "semilla": "random_state",
+   "proba": true,
+   "extra": "xgboost",
+   "requiere": "xgboost"
   },
   {
    "id": "naive_bayes_spark",
@@ -5756,6 +6839,33 @@
      "grupo": "Optimizador"
     },
     {
+     "nombre": "threshold",
+     "tipo": "float",
+     "defecto": 0.0,
+     "ayuda": {
+      "que": "Umbral sobre el puntaje (no es una probabilidad) para decir 'positivo'.",
+      "efecto": "Más bajo = más positivos.",
+      "rango": "0."
+     },
+     "min": -100.0,
+     "max": 100.0,
+     "grupo": "Decisión"
+    },
+    {
+     "nombre": "tol",
+     "tipo": "float",
+     "defecto": 1e-06,
+     "ayuda": {
+      "que": "Tolerancia de convergencia.",
+      "efecto": "Más alto = corta antes.",
+      "rango": "1e-6."
+     },
+     "min": 0.0,
+     "max": 0.1,
+     "log": true,
+     "grupo": "Optimizador"
+    },
+    {
      "nombre": "standardization",
      "tipo": "bool",
      "defecto": true,
@@ -5765,6 +6875,30 @@
       "rango": "Prendido."
      },
      "grupo": "Avanzado"
+    },
+    {
+     "nombre": "fitIntercept",
+     "tipo": "bool",
+     "defecto": true,
+     "ayuda": {
+      "que": "Término constante.",
+      "efecto": "Dejalo prendido.",
+      "rango": "Prendido."
+     },
+     "grupo": "Avanzado"
+    },
+    {
+     "nombre": "aggregationDepth",
+     "tipo": "int",
+     "defecto": 2,
+     "ayuda": {
+      "que": "Profundidad del treeAggregate que junta los gradientes.",
+      "efecto": "Subilo con muchas particiones.",
+      "rango": "2 a 4."
+     },
+     "min": 2,
+     "max": 10,
+     "grupo": "Recursos"
     }
    ],
    "escala": false,
@@ -5917,6 +7051,27 @@
      ]
     },
     {
+     "nombre": "distanceMeasure",
+     "tipo": "choice",
+     "defecto": "euclidean",
+     "ayuda": {
+      "que": "Cómo mide la distancia entre filas.",
+      "efecto": "cosine mira la dirección y no el tamaño (texto, perfiles).",
+      "rango": "euclidean."
+     },
+     "opciones": [
+      {
+       "valor": "euclidean",
+       "etiqueta": "euclídea"
+      },
+      {
+       "valor": "cosine",
+       "etiqueta": "coseno"
+      }
+     ],
+     "grupo": "Grupos"
+    },
+    {
      "nombre": "initMode",
      "tipo": "choice",
      "defecto": "k-means||",
@@ -5936,6 +7091,24 @@
       }
      ],
      "grupo": "Inicio"
+    },
+    {
+     "nombre": "initSteps",
+     "tipo": "int",
+     "defecto": 2,
+     "ayuda": {
+      "que": "Pasadas de k-means|| para elegir los centros iniciales.",
+      "efecto": "Más = mejores centros iniciales y más lento.",
+      "rango": "2 a 5."
+     },
+     "min": 1,
+     "max": 20,
+     "grupo": "Inicio",
+     "si": {
+      "initMode": [
+       "k-means||"
+      ]
+     }
     },
     {
      "nombre": "maxIter",
@@ -6023,6 +7196,27 @@
      "min": 0.0,
      "max": 100000.0,
      "grupo": "Grupos"
+    },
+    {
+     "nombre": "distanceMeasure",
+     "tipo": "choice",
+     "defecto": "euclidean",
+     "ayuda": {
+      "que": "Cómo mide la distancia entre filas.",
+      "efecto": "cosine mira la dirección y no el tamaño (texto, perfiles).",
+      "rango": "euclidean."
+     },
+     "opciones": [
+      {
+       "valor": "euclidean",
+       "etiqueta": "euclídea"
+      },
+      {
+       "valor": "cosine",
+       "etiqueta": "coseno"
+      }
+     ],
+     "grupo": "Grupos"
     }
    ],
    "escala": true,
@@ -6078,12 +7272,188 @@
      "max": 1.0,
      "log": true,
      "grupo": "Inicio"
+    },
+    {
+     "nombre": "aggregationDepth",
+     "tipo": "int",
+     "defecto": 2,
+     "ayuda": {
+      "que": "Profundidad del treeAggregate que junta las estadísticas.",
+      "efecto": "Subilo con muchas particiones.",
+      "rango": "2 a 4."
+     },
+     "min": 2,
+     "max": 10,
+     "grupo": "Recursos"
     }
    ],
    "escala": true,
    "costo": "arranque de Spark + medio",
    "semilla": "seed",
    "proba": true
+  },
+  {
+   "id": "als_spark",
+   "motor": "spark",
+   "tarea": "recomendacion",
+   "clase": "pyspark.ml.recommendation.ALS",
+   "etiqueta": "ALS (filtrado colaborativo)",
+   "familia": "Factorización",
+   "que": "Factoriza la matriz usuario × ítem en dos de rango chico, alternando mínimos cuadrados en los executors: recomienda por lo que calificaron usuarios parecidos.",
+   "params": [
+    {
+     "nombre": "rank",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cuántos factores latentes por usuario e ítem.",
+      "efecto": "Más = capta gustos más finos; demasiado sobreajusta y pesa más.",
+      "rango": "10 a 50."
+     },
+     "min": 1,
+     "max": 500,
+     "grupo": "Modelo",
+     "buscar": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "nombre": "maxIter",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Rondas de mínimos cuadrados alternados.",
+      "efecto": "Más = converge mejor (y tarda).",
+      "rango": "10 a 20."
+     },
+     "min": 1,
+     "max": 200,
+     "grupo": "Optimizador"
+    },
+    {
+     "nombre": "regParam",
+     "tipo": "float",
+     "defecto": 0.1,
+     "ayuda": {
+      "que": "Regularización L2 de los factores.",
+      "efecto": "Más alto = factores más chicos, menos sobreajuste.",
+      "rango": "0,01 a 0,2."
+     },
+     "min": 0.0,
+     "max": 10.0,
+     "grupo": "Regularización",
+     "buscar": [
+      0.01,
+      0.1,
+      0.2
+     ]
+    },
+    {
+     "nombre": "implicitPrefs",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Las calificaciones son implícitas (clics, compras, minutos) y no estrellas.",
+      "efecto": "Prendido, aprende la preferencia y la confianza en lugar del puntaje.",
+      "rango": "Apagado con estrellas."
+     },
+     "grupo": "Modelo"
+    },
+    {
+     "nombre": "alpha",
+     "tipo": "float",
+     "defecto": 1.0,
+     "ayuda": {
+      "que": "Implícito: cuánto crece la confianza con la cantidad observada.",
+      "efecto": "Más alto = los usuarios muy activos pesan más.",
+      "rango": "1 a 40."
+     },
+     "min": 0.0,
+     "max": 1000.0,
+     "grupo": "Modelo",
+     "si": {
+      "implicitPrefs": [
+       true
+      ]
+     }
+    },
+    {
+     "nombre": "nonnegative",
+     "tipo": "bool",
+     "defecto": false,
+     "ayuda": {
+      "que": "Factores no negativos.",
+      "efecto": "Más interpretables; a veces un poco peores.",
+      "rango": "Apagado."
+     },
+     "grupo": "Modelo"
+    },
+    {
+     "nombre": "coldStartStrategy",
+     "tipo": "choice",
+     "defecto": "drop",
+     "ayuda": {
+      "que": "Qué hace con usuarios o ítems que no vio al entrenar.",
+      "efecto": "drop los saca de la evaluación (con nan, el RMSE sale NaN).",
+      "rango": "drop."
+     },
+     "opciones": [
+      {
+       "valor": "drop",
+       "etiqueta": "sacarlos"
+      },
+      {
+       "valor": "nan",
+       "etiqueta": "dejar NaN"
+      }
+     ],
+     "grupo": "Decisión"
+    },
+    {
+     "nombre": "numUserBlocks",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "En cuántos bloques reparte a los usuarios entre los executors.",
+      "efecto": "Más bloques = más paralelismo y más mezcla de datos.",
+      "rango": "10, o cerca de las particiones."
+     },
+     "min": 1,
+     "max": 1000,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "numItemBlocks",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "En cuántos bloques reparte a los ítems.",
+      "efecto": "Igual que numUserBlocks.",
+      "rango": "10."
+     },
+     "min": 1,
+     "max": 1000,
+     "grupo": "Recursos"
+    },
+    {
+     "nombre": "checkpointInterval",
+     "tipo": "int",
+     "defecto": 10,
+     "ayuda": {
+      "que": "Cada cuántas iteraciones corta el linaje (-1 = nunca).",
+      "efecto": "Con maxIter alto evita un StackOverflowError; necesita directorio de checkpoint.",
+      "rango": "10."
+     },
+     "min": -1,
+     "max": 1000,
+     "grupo": "Recursos"
+    }
+   ],
+   "escala": false,
+   "costo": "arranque de Spark + medio",
+   "semilla": "seed"
   },
   {
    "id": "pca_spark",
@@ -6138,6 +7508,54 @@
   "aglomerativo": "bisecting_spark",
   "mezcla_gaussiana": "gmm_spark",
   "pca": "pca_spark"
+ },
+ "recursos": {
+  "executors": {
+   "etiqueta": "Executors",
+   "flag": "--num-executors",
+   "min": 1,
+   "max": 64,
+   "defecto": 2,
+   "ayuda": "Cuántos procesos de trabajo pide a YARN. Cada uno es un contenedor en un NodeManager: más executors = más tareas a la vez, si el cluster tiene lugar."
+  },
+  "memoria_executor_mb": {
+   "etiqueta": "Memoria por executor (MB)",
+   "flag": "--executor-memory",
+   "min": 512,
+   "max": 16384,
+   "defecto": 1024,
+   "ayuda": "El heap de cada executor. YARN le suma ~10 % (mínimo 384 MB) de overhead: si el contenedor no entra en un NodeManager, la aplicación queda esperando."
+  },
+  "cores": {
+   "etiqueta": "Cores por executor",
+   "flag": "--executor-cores",
+   "min": 1,
+   "max": 8,
+   "defecto": 1,
+   "ayuda": "Cuántas tareas corre cada executor a la vez. Con CrossValidator en paralelo conviene más de 1."
+  },
+  "memoria_driver_mb": {
+   "etiqueta": "Memoria del driver (MB)",
+   "flag": "--driver-memory",
+   "min": 512,
+   "max": 8192,
+   "defecto": 1024,
+   "ayuda": "El proceso que arma el plan y junta los resultados (las curvas, los mejores parámetros). Subilo con modelos grandes o muchas columnas."
+  }
+ },
+ "umbrales": {
+  "fijo": {
+   "etiqueta": "el del modelo",
+   "ayuda": "Usa el umbral del modelo (0,5 en probabilidad, o el parámetro threshold)."
+  },
+  "f1": {
+   "etiqueta": "el de mejor F1 en validación",
+   "ayuda": "Recorre los umbrales en la validación y se queda con el de mejor F1 de la clase positiva. La prueba no se mira para elegirlo."
+  },
+  "youden": {
+   "etiqueta": "el de Youden en validación",
+   "ayuda": "El umbral con más TPR − FPR en la validación: equilibra los dos errores aunque las clases estén desbalanceadas."
+  }
  },
  "metricas": {
   "r2": {
@@ -6306,13 +7724,15 @@
    "regresion": "r2",
    "clasificacion": "f1_macro",
    "clustering": "silhouette",
-   "reduccion": "varianza_acumulada"
+   "reduccion": "varianza_acumulada",
+   "recomendacion": "rmse"
   },
   "spark": {
    "regresion": "r2",
    "clasificacion": "f1_ponderado",
    "clustering": "silhouette",
-   "reduccion": "varianza_acumulada"
+   "reduccion": "varianza_acumulada",
+   "recomendacion": "rmse"
   }
  },
  "preproceso": {
@@ -6422,6 +7842,11 @@
      "valor": "ordinal",
      "etiqueta": "ordinal",
      "ayuda": "Un número por categoría. Alcanza para árboles y no multiplica columnas."
+    },
+    {
+     "valor": "hashing",
+     "etiqueta": "hashing (solo Spark)",
+     "ayuda": "FeatureHasher: cada categoría cae en una de N columnas por su hash. No guarda un diccionario: sirve con millones de categorías y con categorías nuevas al predecir; a cambio, dos categorías pueden chocar en la misma columna."
     }
    ]
   },
@@ -6477,7 +7902,8 @@
   "seleccion": "ninguna",
   "k": 10,
   "umbral_varianza": 0.0,
-  "pca": null
+  "pca": null,
+  "hash_columnas": 256
  },
  "particiones": {
   "aleatoria": {
@@ -6549,7 +7975,7 @@
    },
    "tvs": {
     "etiqueta": "TrainValidationSplit",
-    "ayuda": "Grilla con una sola partición entrenamiento/validación: k veces más barato que CrossValidator."
+    "ayuda": "Grilla con una sola partición interna del entrenamiento (80 % / 20 %): k veces más barato que CrossValidator."
    }
   }
  },

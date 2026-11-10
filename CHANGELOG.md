@@ -260,6 +260,34 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     un paso nuevo, *Limpieza*; y *Código* muestra también el del perfil y el
     de la limpieza. La demo trae perfiles y una vista previa reales de
     `ventas_sucias` en HDFS.
+- Estudio de ML, etapa (c) (modelos, búsqueda y evaluación en Spark, `ml` y
+  `full`):
+  - Modelos nuevos de MLlib: GLM (familias y enlaces), XGBoost distribuido
+    (`xgboost.spark`, clasificación y regresión; si la librería no está, el
+    modelo aparece como "no instalado") y **ALS**, con una tarea nueva,
+    *recomendación*: roles usuario e ítem, la calificación como objetivo, RMSE
+    y las 5 mejores recomendaciones por usuario. Son 19 modelos de Spark y 52
+    en total.
+  - Con Spark, entrenamiento, validación y prueba quedan separados de entrada
+    (70 / 15 / 15). En clasificación binaria, el umbral se elige en la
+    validación (mejor F1 o índice de Youden) y se guarda en el modelo
+    (`setThreshold`), así la prueba lo mide sin haberlo visto. Sin validación
+    aparte, el umbral queda en el del modelo.
+  - Búsqueda con `CrossValidator` o `TrainValidationSplit` en paralelo, y los
+    recursos que se piden a YARN (executors, cores y memoria del executor y
+    del driver) van como flags de `spark-submit`. La pantalla estima la
+    memoria que va a pedir y avisa si no entra.
+  - Las curvas se calculan en los executors con 200 cubetas (ROC, PR, tabla de
+    umbrales, calibración, matriz de confusión, histograma de residuos y el
+    error por rango del valor real): al driver llegan resúmenes, no filas.
+  - Resultados: el detalle del error de Spark en una frase, la métrica de
+    validación al lado de la de prueba, el control del umbral arranca en el
+    elegido (con un botón para volver a él), el error por rango y la tabla de
+    recomendaciones.
+  - BisectingKMeans se escala sin centrar: con el centro en 0, Spark no puede
+    partir el primer grupo y devolvía uno solo.
+  - `test_estudio_modelos_spark.py` entrena los 19 modelos de Spark de punta a
+    punta en la imagen, más la búsqueda con validación cruzada y recursos.
   - Humo de `full`: datos de ejemplo en HDFS (`ml/preparar_demo_hdfs.py`),
     perfil en YARN de Parquet particionado, CSV con gzip, ORC y Avro, la vista
     previa y un entrenamiento con la limpieza adentro del modelo.
