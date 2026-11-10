@@ -24,6 +24,8 @@ la fila sale del número (PCS_POR_FILA).
     PUT /api/aula/plano           {filas: [["pc01", null, "pc03"], ...]} → lo guarda y escribe los racks
     GET /api/aula/trafico?desde=  el tráfico por PC (wg) y por par y tipo (nft), cada 2 s, de los últimos 10 min
     GET /api/aula/caidas          la línea de tiempo de cada PC que se cayó, con su resumen
+    POST /api/aula/pcs/{nodo}/apagar   {modo: golpe|ordenado} → el agente de esa PC para su DataNode y su NodeManager
+    POST /api/aula/pcs/{nodo}/prender  → el agente los vuelve a arrancar
 """
 from __future__ import annotations
 
@@ -33,6 +35,8 @@ import os
 import re
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from starlette.requests import Request
@@ -52,6 +56,8 @@ TUNEL_VIEJO_S = 180   # con persistent-keepalive 25, WireGuard saluda cada 2 min
 _NODO_RE = re.compile(r"^pc0*(\d+)$")
 PLANO_FILAS = 8          # filas de un laboratorio (racks)
 PLANO_LUGARES = 12       # lugares por fila
+P_AGENTE = 8098          # el agente de apagado de cada PC (empresa/aula/agente.py)
+MODOS_APAGAR = ("golpe", "ordenado")
 
 
 def modo(env: dict[str, str] | None = None) -> dict | None:
@@ -235,10 +241,40 @@ def guardar_plano(aula_dir: Path, plano: dict) -> dict:
     return plano
 
 
+def destino_agente(nodo: str, m: dict, pcs: list[dict], env: dict[str, str]) -> tuple[str, str]:
+    """(nodo pcNN, host del agente de apagado de esa PC). Solo nombres pcNN: nada de pedirle a otra máquina."""
+    m_ = _NODO_RE.match(nodo or "")
+    if not m_ or not 1 <= int(m_.group(1)) <= 99:
+        raise ApiError(f"{nodo} no es una PC del aula (pc01, pc02...)", "invalid")
+    nodo = f"pc{int(m_.group(1)):02d}"
+    if m["red"] != "wireguard":
+        return nodo, nodo   # aula simulada: el nombre del contenedor en la red de Docker
+    p = next((x for x in pcs if x.get("nodo") == nodo), {})
+    return nodo, p.get("ip") or f"{env.get('RED_TUNEL', '10.13.0')}.{10 + int(m_.group(1))}"
+
+
+def pedir_agente(host: str, accion: str, datos: dict[str, str], puerto: int = P_AGENTE,
+                 timeout: float = 5.0) -> dict[str, str]:
+    """POST al agente de una PC (empresa/aula/agente.py, cuerpo clave=valor). Sus errores, como ApiError."""
+    cuerpo = "".join(f"{k}={v}\n" for k, v in datos.items()).encode()
+    pedido = urllib.request.Request(f"http://{host}:{puerto}/{accion}", data=cuerpo, method="POST")
+    try:
+        with urllib.request.urlopen(pedido, timeout=timeout) as r:
+            return _kv(r.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        r = _kv(e.read().decode("utf-8", "replace"))
+        motivo = r.get("error") or f"respondió {e.code}"
+        codigo = {403: "forbidden", 400: "invalid", 409: "busy"}.get(e.code, "failed")
+        raise ApiError(f"El agente de {host}: {motivo}", codigo) from None
+    except (OSError, ValueError) as e:
+        raise ApiError(f"El agente de apagado de {host} no responde (¿la PC arrancó con AGENTE=no o es una "
+                       f"imagen vieja?): {getattr(e, 'reason', e)}", "service_down") from None
+
+
 def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None, wg: dict[str, dict],
           ahora_s: float, eventos: list[str], env: dict[str, str], con_yarn: bool = True,
           plano: dict | None = None, apps: dict[str, list[dict]] | None = None,
-          colas: list[dict] | None = None) -> dict:
+          colas: list[dict] | None = None, apagadas: dict[str, dict] | None = None) -> dict:
     """El estado del aula (AulaStatus de ui/src/api/types.ts). Función pura:
     todo lo que mira llega por parámetro."""
     dns, nms = datanodes(jmx), nodemanagers(rm)
@@ -290,6 +326,8 @@ def armar(m: dict, hub: dict, pcs: list[dict], jmx: dict | None, rm: dict | None
             pc["lugar"] = {"fila": lugares[nodo][0], "lugar": lugares[nodo][1]}
         if apps and apps.get(nodo):
             pc["apps"] = apps[nodo]
+        if apagadas and nodo in apagadas:
+            pc["apagada"] = apagadas[nodo]
         if motivo:
             pc["motivo"] = motivo
         if p:
@@ -369,6 +407,9 @@ class Aula:
         self._rm: tuple[float, dict | None] = (0.0, None)
         self._sched: tuple[float, dict | None] = (0.0, None)
         self.vivo = Muestreador(self)
+        # Las PCs que se apagaron desde acá: nodo → {desde (ms), modo}. Hasta que se prendan desde acá
+        self.apagadas: dict[str, dict] = {}
+        self.pedir_agente = pedir_agente   # los tests lo reemplazan
         # Colas, localidad y escala (necesitan la vista YARN para leer el RM y mandar trabajos)
         self.yarn = YarnEnAula(self, yarn) if yarn is not None else None
 
@@ -429,7 +470,29 @@ class Aula:
         jmx = self.c.nn_jmx if self.c.phase in ("starting", "running") else None
         return armar(self.modo, leer_hub(self.dir), leer_pcs(self.dir), jmx, self._rm_nodes(), self._wg(), time.time(),
                      leer_eventos(self.dir), self.env, con_yarn, leer_plano(self.dir), self.vivo.apps(),
-                     self._colas() if con_yarn else None)
+                     self._colas() if con_yarn else None, self.apagadas)
+
+    def energia(self, nodo: str, accion: str, b: object) -> dict:
+        """Apaga (accion=apagar, b={modo}) o prende una PC con su agente. Bloqueante: va en un hilo."""
+        self._maestro()
+        b = b if isinstance(b, dict) else {}
+        modo_ = b.get("modo") or "golpe"
+        if accion == "apagar" and modo_ not in MODOS_APAGAR:
+            raise ApiError("modo es golpe (como cortar la luz) u ordenado (con los comandos de Hadoop)", "invalid")
+        nodo, host = destino_agente(nodo, self.modo, leer_pcs(self.dir), self.env)
+        codigo = leer_hub(self.dir).get("codigo") or re.sub(r"[^A-Za-z0-9_.-]", "", self.env.get("CODIGO", "")).upper()
+        if not codigo:
+            raise ApiError("Para apagar PCs desde acá el aula necesita un código de clase (CODIGO)", "unsupported")
+        datos = {"codigo": codigo, **({"modo": modo_} if accion == "apagar" else {})}
+        r = self.pedir_agente(host, accion, datos)
+        if accion == "apagar":
+            self.apagadas[nodo] = {"desde": int(time.time() * 1000), "modo": modo_}
+            self.anotar(f"{nodo} apagada desde la vista Aula ({modo_})")
+        else:
+            self.apagadas.pop(nodo, None)
+            self.anotar(f"{nodo} prendida desde la vista Aula")
+        return {"nodo": nodo, "accion": accion, "modo": modo_ if accion == "apagar" else None,
+                "datanode": r.get("datanode") == "si", "nodemanager": r.get("nodemanager") == "si"}
 
     async def estado(self) -> dict:
         self._maestro()
@@ -465,6 +528,17 @@ class Aula:
             self.vivo.tocar()
             return JSONResponse(self.vivo.caidas())
 
+        async def energia(request: Request) -> JSONResponse:
+            self._maestro()
+            accion = request.path_params["accion"]
+            if accion not in ("apagar", "prender"):
+                raise ApiError("Las acciones de una PC son apagar y prender", "not_found")
+            # sin cuerpo: apagar a golpe
+            b = await leer_json_pedido(request) if accion == "apagar" and await request.body() else {}
+            return JSONResponse(await asyncio.to_thread(self.energia, request.path_params["nodo"], accion, b))
+
         return [Route("/api/aula", get), Route("/api/aula/plano", plano_get, methods=["GET"]),
                 Route("/api/aula/plano", plano_put, methods=["PUT"]), Route("/api/aula/trafico", trafico),
-                Route("/api/aula/caidas", caidas), *(self.yarn.routes() if self.yarn else [])]
+                Route("/api/aula/caidas", caidas),
+                Route("/api/aula/pcs/{nodo}/{accion:str}", energia, methods=["POST"]),
+                *(self.yarn.routes() if self.yarn else [])]
