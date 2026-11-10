@@ -40,7 +40,7 @@ las imágenes de base):
 | **Spark** (build `bin-hadoop3`, con soporte Hive) | 3.5.9 | Procesamiento en memoria sobre YARN; comparte las tablas con Hive |
 | **Sqoop** | 1.4.7 (con el driver JDBC `mysql-connector-java` 5.1.49) | Copiar tablas entre una base relacional y HDFS |
 | **MySQL** (MariaDB) | 10.11 (el paquete de Ubuntu 24.04) | La base de ejemplo `tienda`, para Sqoop |
-| **ZooKeeper** | 3.8.7 | Elige el NameNode activo en alta disponibilidad (solo con `NAMENODES` 2 o 3) |
+| **ZooKeeper** | 3.8.8 | Elige el NameNode activo en alta disponibilidad (solo con `NAMENODES` 2 o 3) |
 | **MongoDB** y `mongosh` | 8.0 | Base NoSQL de documentos, con su propia base `tienda` (solo con `MONGODB=si`) |
 
 El detalle de cada uno (qué hace, dónde se usa, cómo se usa acá) está en la

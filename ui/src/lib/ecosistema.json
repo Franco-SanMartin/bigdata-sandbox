@@ -133,7 +133,7 @@
   "zookeeper": {
    "name": "ZooKeeper",
    "layer": "recursos",
-   "version": "3.8.7",
+   "version": "3.8.8",
    "sub": "árbitro de NameNodes",
    "subN": "árbitro (HA)",
    "frase": "Un servicio de coordinación: un registro chiquito y muy confiable que varios procesos consultan para ponerse de acuerdo. Acá lo usa HDFS para saber cuál NameNode es el activo.",

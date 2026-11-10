@@ -510,7 +510,7 @@ Hadoop: HA de HDFS y de YARN, HBase, Solr, y Kafka hasta que lo reemplazó por
 su propio protocolo (KRaft). Fuera de Hadoop, el mismo papel lo cumplen etcd
 (el de Kubernetes) y Consul.
 
-**En esta imagen.** ZooKeeper 3.8.7 de **un solo nodo** (en producción son 3
+**En esta imagen.** ZooKeeper 3.8.8 de **un solo nodo** (en producción son 3
 o 5), puerto 2181, datos en `/hadoop/zookeeper`, solo con `NAMENODES` 2 o 3.
 Admite las órdenes de cuatro letras `stat`, `ruok`, `srvr` y `mntr`. Como
 todos los NameNodes están en la misma máquina, no hay *fencing* real
