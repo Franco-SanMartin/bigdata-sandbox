@@ -74,6 +74,11 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   `latest` y `ml` cuando un push a `main` solo cambia lo de `full`
   (`pruebas/solo_full.sh` decide; en el `Dockerfile` mira las líneas de cada
   etapa).
+- **Publicar `:ml` sin tocar `latest`**: si un push cambia el estudio de ML
+  (`ml/`, `conf/requirements-ml.txt`, la etapa `ml` del `Dockerfile`) y no
+  `base`, `imagen.yml` arma y prueba todo pero publica solo `:ml`.
+  `pruebas/probar_solo_full.sh` prueba la decisión en CI (Documentación →
+  `revisar`).
 - **Pantalla Motores** (`full`, `G E`, en Procesamiento): una ficha por
   motor (MapReduce, Tez y Spark) con qué hace, una analogía, cómo trabaja,
   cuándo conviene, quién lo usa en el sandbox y sus términos del glosario.
@@ -263,6 +268,9 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Corregido
 
+- `pruebas/solo_full.sh` leía mal los tramos del `Dockerfile` que cambian una
+  sola línea (git no escribe la cantidad cuando es 1): el `read` corría los
+  campos y lo tomaba como un cambio de `base`. Ahora la completa.
 - Código de Spark del estudio: el recorte de extremos usaba
   `least`/`greatest`, que se saltean los nulos, así que un nulo terminaba en
   el borde de abajo antes de imputarse. Ahora es un `CASE` y el nulo sigue
