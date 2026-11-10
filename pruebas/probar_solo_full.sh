@@ -6,6 +6,8 @@
 set -euo pipefail
 base=$(git rev-parse origin/main 2>/dev/null || git rev-parse HEAD)
 export GIT_INDEX_FILE=$(mktemp)
+# Los commits de prueba no se suben a ningún lado, pero git necesita un autor (el runner del CI no tiene)
+export GIT_AUTHOR_NAME=prueba GIT_AUTHOR_EMAIL=prueba@localhost GIT_COMMITTER_NAME=prueba GIT_COMMITTER_EMAIL=prueba@localhost
 mal=0
 
 commit_con() { # descripcion; despues pares archivo=contenido-nuevo (agrega una linea al final)
@@ -37,6 +39,7 @@ linea() { git show "$base:Dockerfile" | grep -n "$1" | head -1 | cut -d: -f1; }
 ml_ini=$(linea '^FROM base AS ml$'); int_ini=$(linea 'AS interfaz$')
 
 espera "solo la interfaz" si "$(commit_con ui/src/main.tsx)"
+espera "el aula de empresa" si "$(commit_con empresa/empresa-profe.cmd empresa/arranque.sh)"
 espera "el estudio de ML" ml "$(commit_con ml/sandbox_ml/catalogo.py)"
 espera "ML + interfaz + servidor" ml "$(commit_con ml/sandbox_ml/catalogo.py ui/src/main.tsx server/sandbox_server/ml.py)"
 espera "librerías de ML" ml "$(commit_con conf/requirements-ml.txt)"
