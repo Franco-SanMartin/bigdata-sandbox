@@ -126,7 +126,7 @@ function Sumar {
             $t = Measure-Command { docker load -i $tar | Out-Host }
         } else {
             # Plan B: sin el archivo, de Docker Hub (hace falta internet en la PC)
-            Decir "No esta el archivo $archivoImagen: pruebo bajar $imagen de Docker Hub (hace falta internet)..."
+            Decir "No esta el archivo ${archivoImagen}: pruebo bajar $imagen de Docker Hub (hace falta internet)..."
             $t = Measure-Command { docker pull $imagen | Out-Host }
         }
         $carga = [math]::Round($t.TotalSeconds)
