@@ -26,9 +26,20 @@ solo `:full`.
    y las hojas 5 a 9 de `guias/empresa/`, con el release `aula-v1`. Antes,
    pasarle a sistemas la [hoja 7](guias/empresa/07-hoja-para-sistemas.md). Con
    lo que se anote, decidir la clase con las 20.
-2. **Aula 2D y tráfico real:** el editor de filas/racks, el tráfico medido en el
-   `wg0` del maestro, la línea de tiempo de una PC que se cae y YARN en vivo.
-   Solo diseño (sección 11 de `REDISENO-FULL.md`); el plano del aula ya está.
+2. **Aula 2D y tráfico real:** hecho en `ui2-aula-vivo` (sobre el PR #14):
+   - el editor del plano, cuyas filas son los racks (la topología del maestro
+     lee el plano);
+   - el tráfico en el `wg0` del maestro: por PC con `wg` y por par y tipo con
+     `nftables`;
+   - la línea de tiempo de una PC que se cae;
+   - los contenedores de cada trabajo por PC.
+
+   Faltan de la sección 11:
+   - el agente para apagar una PC desde la interfaz (11.3, opcional);
+   - las colas por grupo, la localidad al pasar el mouse y el botón "medir"
+     de la escala (11.4).
+
+   Probarlo con PCs reales es parte de la prueba piloto.
 3. **Terminal en `empresa`:** hecho, apagada de fábrica (`TERMINAL=0`); el
    maestro del aula la prende.
 4. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*

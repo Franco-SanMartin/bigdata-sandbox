@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Racks del aula (version empresa, en el maestro): el NameNode lo llama con las
+# IPs (o nombres) de los DataNodes y espera un rack por cada una, en orden.
+#   maestro                     -> /profe
+#   pcNN ubicada en el plano    -> la fila del plano ($AULA_DIR/racks, "pc07 /fila2",
+#                                  lo escribe la vista Aula al guardar el plano)
+#   pcNN sin ubicar             -> /filaK  (PCS_POR_FILA PCs por fila: con 5,
+#                                  pc01-pc05 son /fila1, pc06-pc10 /fila2...)
+#   cualquier otro              -> /default-rack
+# El rack se lee cuando el DataNode se registra: mover una PC de fila en el
+# plano cambia su rack al proximo arranque de esa PC, no en caliente.
+AULA_DIR=${AULA_DIR:-/hadoop/aula}
+PCS_POR_FILA=${PCS_POR_FILA:-5}
+[[ "$PCS_POR_FILA" =~ ^[1-9][0-9]*$ ]] || PCS_POR_FILA=5
+
+# El plano llega como plano.json (empresa-profe.cmd lo copia de plano-aula.json al arrancar, o lo guarda
+# la vista Aula): si racks falta o es mas viejo, se arma de ahi
+plano="$AULA_DIR/plano.json"
+if [ -r "$plano" ] && { [ ! -e "$AULA_DIR/racks" ] || [ "$plano" -nt "$AULA_DIR/racks" ]; }; then
+  python3 - "$plano" > "$AULA_DIR/racks.tmp" 2>/dev/null <<'PY' && mv -f "$AULA_DIR/racks.tmp" "$AULA_DIR/racks"
+import json, re, sys
+for i, fila in enumerate(json.load(open(sys.argv[1]))["filas"]):
+    for x in fila:
+        m = re.match(r"^pc0*([0-9]+)$", x or "")
+        if m:
+            print("pc%02d /fila%d" % (int(m.group(1)), i + 1))
+PY
+  rm -f "$AULA_DIR/racks.tmp"
+fi
+
+for a in "$@"; do
+  n=$a
+  # Una IP: el nombre sale de /etc/hosts o del DNS de la red
+  if [[ "$a" =~ ^[0-9.]+$ ]]; then
+    n=$(getent hosts "$a" | awk '{ print $2; exit }')
+  fi
+  n=${n%%.*}   # pc07.aula -> pc07
+  if [ "$n" = maestro ] || [ "$n" = "$(hostname)" ]; then   # lo corre el NameNode, en el maestro
+    echo /profe
+    continue
+  fi
+  if [[ "$n" =~ ^pc0*([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -ge 1 ]; then
+    num=${BASH_REMATCH[1]}
+    rack=""
+    if [ -r "$AULA_DIR/racks" ]; then
+      rack=$(awk -v n="$(printf 'pc%02d' "$num")" '$1 == n && $2 ~ /^\/fila[0-9]+$/ { print $2; exit }' "$AULA_DIR/racks")
+    fi
+    echo "${rack:-/fila$(( (num - 1) / PCS_POR_FILA + 1 ))}"
+  else
+    echo /default-rack
+  fi
+done

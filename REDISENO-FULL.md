@@ -338,7 +338,15 @@ entren las etapas de ML que estén abiertas, para no pelear con conflictos en
 
 ## 11. Empresa / aula
 
-**Solo diseño, nada de implementación.** Parte de lo que ya existe: la vista
+**Hecho en `ui2-aula-vivo` (2026-11-10)**:
+- 11.1: `aula_vivo.py`, con `wg` por PC y `nftables` por par y puerto, en la tabla `inet aula_trafico`;
+- 11.2: el editor del plano. Sus filas son los racks: `empresa/aula/topologia` lee `/hadoop/aula/racks` o
+  `plano.json`;
+- 11.3, con el apagado "de verdad": la línea de tiempo y el resumen;
+- 11.4: los contenedores de cada trabajo por PC.
+
+Quedan el agente de apagado (11.3.2) y, de 11.4, las colas, la localidad y el botón "medir". Lo de abajo es el
+diseño original. Parte de lo que ya existe: la vista
 Aula (`#aula`, `GET /api/aula`, que junta inscripción, NameNode, ResourceManager
 y `wg show wg0 dump`), el túnel en estrella con hub en la PC del profe (D-03) y la
 clase demo de la hoja de ruta (sección "empresa en el aula", punto 3).

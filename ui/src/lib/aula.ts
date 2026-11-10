@@ -21,3 +21,59 @@ export function filasDelAula(pcs: AulaPc[]): [string, AulaPc[]][] {
     .sort(([a], [b]) => n(a) - n(b) || a.localeCompare(b))
     .map(([f, xs]) => [f, [...xs].sort((a, b) => (a.numero ?? Infinity) - (b.numero ?? Infinity) || a.nodo.localeCompare(b.nodo))]);
 }
+
+/* ---------- El plano (el editor de la vista Aula) ---------- */
+
+export interface Plano { filas: (string | null)[][] }
+
+const numeroDe = (nodo: string) => Number(/^pc0*(\d+)$/.exec(nodo)?.[1] ?? NaN);
+
+/** El plano de arranque: las PCs por número, porFila por fila (lo mismo que hace el script de topología sin plano) */
+export function planoInicial(nodos: string[], porFila = 5, lugares = 6): Plano {
+  const pcs = nodos.filter(n => Number.isFinite(numeroDe(n))).sort((a, b) => numeroDe(a) - numeroDe(b));
+  const nFilas = Math.max(2, Math.ceil((Math.max(0, ...pcs.map(numeroDe)) || 1) / porFila));
+  const filas: (string | null)[][] = Array.from({ length: Math.min(8, nFilas) }, () => Array(Math.max(lugares, porFila)).fill(null));
+  for (const n of pcs) {
+    const i = Math.floor((numeroDe(n) - 1) / porFila);
+    if (i < filas.length) filas[i][(numeroDe(n) - 1) % porFila] = n;
+  }
+  return { filas };
+}
+
+/** Pone una PC en un lugar (sacándola de donde estaba); si el lugar estaba ocupado, la otra PC va a la bandeja */
+export function moverEnPlano(p: Plano, nodo: string, fila: number, lugar: number): Plano {
+  const filas = p.filas.map(f => f.map(x => (x === nodo ? null : x)));
+  if (fila >= 0 && fila < filas.length && lugar >= 0 && lugar < filas[fila].length) filas[fila][lugar] = nodo;
+  return { filas };
+}
+
+export const sacarDelPlano = (p: Plano, nodo: string): Plano => ({ filas: p.filas.map(f => f.map(x => (x === nodo ? null : x))) });
+
+export function cambiarForma(p: Plano, filas: number, lugares: number): Plano {
+  const f = Math.max(1, Math.min(8, filas)), l = Math.max(1, Math.min(12, lugares));
+  return { filas: Array.from({ length: f }, (_, i) => Array.from({ length: l }, (_, j) => p.filas[i]?.[j] ?? null)) };
+}
+
+/** Las PCs que están en el aula pero no en el plano (la bandeja "sin ubicar") */
+export function sinUbicar(p: Plano, nodos: string[]): string[] {
+  const en = new Set(p.filas.flat().filter(Boolean));
+  return nodos.filter(n => !en.has(n)).sort((a, b) => numeroDe(a) - numeroDe(b));
+}
+
+/** El rack de cada PC según el plano: { pc07: '/fila2' } */
+export function racksDelPlano(p: Plano | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  (p?.filas ?? []).forEach((f, i) => f.forEach(x => { if (x) out[x] = `/fila${i + 1}`; }));
+  return out;
+}
+
+/** Leer un plano-aula.json (exportado de otra clase): valida la forma, no las PCs */
+export function leerPlano(texto: string): Plano {
+  const v = JSON.parse(texto) as unknown;
+  const filas = (v as { filas?: unknown })?.filas;
+  if (!Array.isArray(filas) || !filas.length || filas.length > 8 || !filas.every(f => Array.isArray(f) && f.length >= 1 && f.length <= 12
+    && f.every(x => x === null || (typeof x === 'string' && /^pc\d{1,3}$/.test(x))))) {
+    throw new Error('no es un plano del aula: {"filas": [["pc01", null, ...], ...]} con hasta 8 filas de 12 lugares');
+  }
+  return { filas: filas as (string | null)[][] };
+}

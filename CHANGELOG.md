@@ -20,6 +20,35 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   contenedor. El maestro del aula la prende (`empresa-profe.cmd` pasa `-e
   TERMINAL=1`) porque publica todo solo en `127.0.0.1`.
 
+### Agregado (empresa)
+
+- **El aula en vivo** (vista Aula del maestro):
+  - **Plano del aula editable**: se arrastra cada PC a su fila y lugar; las
+    filas son los racks de HDFS.
+    - `PUT /api/aula/plano` lo guarda y escribe `/hadoop/aula/racks`, que lee
+      el script de topología del maestro (`empresa/aula/topologia`).
+    - Se exporta a `plano-aula.json`, y `empresa-profe.cmd` lo carga al
+      arrancar si está al lado.
+  - **Tráfico real** (`GET /api/aula/trafico`), cada 2 s, de los últimos
+    10 min:
+    - por PC, con `wg show wg0 dump`;
+    - por par y para qué (bloques de HDFS, shuffle, YARN), con contadores
+      dinámicos de `nftables` en el `wg0` del maestro.
+    - Las reglas se probaron en un contenedor con tráfico de verdad, y el JSON
+      de `nft -j` quedó como fixture.
+    - Se ve como líneas entre las PCs, la tabla de "más tráfico" y un aviso
+      cuando una PC pasa el 80 % del techo de la red.
+  - **Una PC que se cae** (`GET /api/aula/caidas`):
+    - la línea de tiempo desde que deja de contestar: la lámpara, los bloques
+      con copias de menos y los que se están copiando;
+    - el resumen: contenedores perdidos, bloques re-copiados y en cuánto
+      tiempo.
+  - **YARN en vivo**: los contenedores de cada PC con el color de su trabajo
+    (de `/ws/v1/node/containers` de cada NodeManager) y el ApplicationMaster
+    marcado.
+  - La imagen `empresa` suma `nftables`. La demo simula el tráfico, dos
+    trabajos y la caída de pc07.
+
 ### Agregado
 
 - **Comparar lanza Pig** (`full`): la plantilla `pig-ventas` corre

@@ -9,7 +9,7 @@ import { DemoData } from './datos';
 import { DemoMl } from './ml';
 import { DemoPipeline } from './pipeline';
 import { DemoEstudio } from './estudio';
-import { demoAula } from './aula';
+import { demoAula, demoCaidas, demoGuardarPlano, demoTrafico } from './aula';
 
 export { SPEED as DEMO_SPEED };
 
@@ -66,6 +66,9 @@ export function createDemoApi(): SandboxApi {
     submitJob: r => call(() => yarn.submit(r)),
     yarnCluster: () => call(() => yarn.cluster()),
     aula: () => ok(demoAula(abierta, e.now())),
+    aulaGuardarPlano: p => call(() => demoGuardarPlano(p)),
+    aulaTrafico: () => ok(demoTrafico(abierta, e.now())),
+    aulaCaidas: () => ok(demoCaidas(abierta, e.now())),
     app: id => call(() => yarn.app(id)),
     appLogs: (id, c) => call(() => yarn.logs(id, c)),
     yarnMetrics: ids => call(() => yarn.metrics(ids)),
