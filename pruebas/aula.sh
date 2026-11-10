@@ -6,6 +6,8 @@
 # (PCS_POR_FILA=2): pc01 y pc02 son /fila1, pc03 /fila2.
 #   bash pruebas/aula.sh aula            el cluster arma bien y reparte el trabajo
 #   bash pruebas/aula.sh aula-caida      se apaga una PC de golpe y vuelve
+#   bash pruebas/aula.sh aula-opcionales apagar y prender PCs desde la vista Aula,
+#                                        colas por grupo, localidad y medir la escala
 #
 # Con RED=wireguard (el aula de verdad), como la sonda en el CI: el maestro
 # publica UDP 51820 (el hub) y TCP 8099 (la inscripcion) en el host, y cada
@@ -246,6 +248,76 @@ esc_aula_caida() {
   echo "sin copias de mas a los $(( SECONDS - t0 )) s"
   fsck_sano || falla "fsck no da HEALTHY con pc02 de vuelta"
   echo; echo "OK aula-caida"
+}
+
+# -------------------------------------------------------- aula-opcionales
+api() { # $1=metodo $2=ruta [$3=JSON]: la respuesta de la interfaz del maestro, con el codigo HTTP al final
+  docker exec maestro curl -s -w '\n%{http_code}' -X "$1" -H 'Content-Type: application/json' ${3:+-d "$3"} \
+    "http://localhost:8080$2"
+}
+api_ok() { # como api, pero falla si no da 2xx; imprime solo el cuerpo
+  local r; r=$(api "$@")
+  case "${r##*$'\n'}" in 2??) printf '%s\n' "${r%$'\n'*}" ;; *) falla "$1 $2 dio ${r##*$'\n'}: ${r%$'\n'*}" ;; esac
+}
+dn_corre() { en "$1" "pgrep -f proc_datanode > /dev/null"; }
+
+esc_aula_opcionales() {
+  ESC=aula-opcionales
+  COMUN+=(-e CODIGO=SIMU)   # el codigo de la clase: el maestro se lo pasa al agente de cada PC
+  armar
+
+  paso "Apagar pc02 desde la vista Aula (ordenado): YARN la ve SHUTDOWN, HDFS la da por muerta"
+  api_ok POST /api/aula/pcs/pc02/apagar '{"modo":"ordenado"}'
+  esperar 30 "el NodeManager de pc02 sigue activo" igual 2 nms
+  t0=$SECONDS
+  esperar 120 "el NameNode no marco muerta a pc02" igual 1 nn NumDeadDataNodes
+  echo "pc02 muerta para HDFS a los $(( SECONDS - t0 )) s del apagado"
+  [ "$(docker inspect -f '{{.State.Running}}' pc02)" = true ] || falla "se apago el contenedor de pc02, no solo Hadoop"
+  [ "$(aula_api '[p.get("apagada", {}).get("modo") for p in a["pcs"] if p["nodo"] == "pc02"][0]')" = ordenado ] \
+    || falla "/api/aula no marca a pc02 como apagada"
+
+  paso "Prender pc02 desde la vista Aula: vuelve sola"
+  api_ok POST /api/aula/pcs/pc02/prender > /dev/null
+  esperar 120 "el NameNode no ve otra vez los 4 DataNodes" igual 4 nn NumLiveDataNodes
+  esperar 120 "el ResourceManager no ve otra vez los 3 NodeManagers" igual 3 nms
+
+  paso "Apagar pc03 a golpe: se mata Java y nada mas"
+  api_ok POST /api/aula/pcs/pc03/apagar '{"modo":"golpe"}' > /dev/null
+  dn_corre pc03 && falla "el DataNode de pc03 sigue corriendo"
+  api_ok POST /api/aula/pcs/pc03/prender > /dev/null
+  esperar 120 "pc03 no volvio" igual 4 nn NumLiveDataNodes
+
+  paso "El agente no atiende a una PC ni un codigo equivocado"
+  en pc01 "curl -s -o /dev/null -w '%{http_code}' -d 'codigo=SIMU' http://pc02:8098/apagar" | grep -qx 403 \
+    || falla "pc02 acepto un pedido de pc01"
+  en maestro "curl -s -o /dev/null -w '%{http_code}' -d 'codigo=OTRO' http://pc02:8098/apagar" | grep -qx 403 \
+    || falla "pc02 acepto un codigo equivocado"
+  dn_corre pc02 || falla "el DataNode de pc02 se apago con un pedido rechazado"
+
+  paso "Colas por grupo: grupo1 y grupo2, y un pi en grupo2"
+  api_ok PUT /api/aula/colas '{"grupos":["grupo1","grupo2"]}' > "$T/colas.json"
+  colas=$(api_ok GET /api/aula/colas | python3 -c 'import json,sys; print(" ".join(q["nombre"] for q in json.load(sys.stdin)))')
+  echo "colas: $colas"
+  [ "$colas" = "default grupo1 grupo2" ] || falla "las colas no quedaron armadas ($colas)"
+  app=$(api_ok POST /api/aula/colas/grupo2/trabajo '{"trabajo":"mr-pi"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  echo "trabajo $app"
+  cola_del() { en maestro "curl -s http://localhost:8088/ws/v1/cluster/apps/$1" \
+    | python3 -c 'import json,sys; a=json.load(sys.stdin)["app"]; print(a["queue"], a["state"])'; }
+  esperar 300 "el pi de grupo2 no termino" igual "grupo2 FINISHED" cola_del "$app"
+  api_ok PUT /api/aula/colas '{"grupos":[]}' > /dev/null
+  echo "grupos quitados: $(api_ok GET /api/aula/colas | python3 -c 'import json,sys; print([(q["nombre"], q["estado"]) for q in json.load(sys.stdin)])')"
+
+  paso "Localidad: cada map del pi con el lugar donde corrio"
+  esperar 120 "la localidad del pi no tiene tareas" bash -c "docker exec maestro curl -sf http://localhost:8080/api/aula/localidad/$app \
+    | python3 -c 'import json,sys; t=json.load(sys.stdin)[\"tareas\"]; sys.exit(0 if t and all(x[\"corrio\"] for x in t if x[\"tipo\"]==\"map\") else 1)'"
+  api_ok GET "/api/aula/localidad/$app" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["resumen"])'
+
+  paso "Medir la escala: un pi con las PCs de ahora"
+  api_ok POST /api/aula/escala '{"trabajo":"mr-pi"}' > /dev/null
+  hay_medida() { api_ok GET /api/aula/escala | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["medidas"] and not d["corriendo"] else 1)'; }
+  esperar 300 "la medicion no termino" hay_medida
+  api_ok GET /api/aula/escala | python3 -c 'import json,sys; m=json.load(sys.stdin)["medidas"][0]; print(m["pcs"], "PCs:", m["segundos"], "s", m["estado"])'
+  echo; echo "OK aula-opcionales"
 }
 
 # ============================================= red del aula: RED=wireguard
@@ -578,8 +650,9 @@ esc_aula_wg_cero() {
 case "${1:-}" in
   aula)          esc_aula ;;
   aula-caida)    esc_aula_caida ;;
+  aula-opcionales) esc_aula_opcionales ;;
   aula-wg)       esc_aula_wg ;;
   aula-wg-caida) esc_aula_wg_caida ;;
   aula-wg-cero)  esc_aula_wg_cero ;;
-  *) echo "Uso: bash pruebas/aula.sh aula|aula-caida|aula-wg|aula-wg-caida|aula-wg-cero" >&2; exit 2 ;;
+  *) echo "Uso: bash pruebas/aula.sh aula|aula-caida|aula-opcionales|aula-wg|aula-wg-caida|aula-wg-cero" >&2; exit 2 ;;
 esac

@@ -26,6 +26,7 @@ x-pc: &pc
     ROL: trabajador
     MAESTRO: maestro
     PCS_POR_FILA: "2"
+    CODIGO: SIMU
   networks: [aula]
   depends_on: [maestro]
   stop_grace_period: 20s
@@ -38,6 +39,8 @@ services:
     environment:
       ROL: maestro
       PCS_POR_FILA: "2"
+      # el codigo de la clase: con el, el maestro apaga y prende las PCs
+      CODIGO: SIMU
     ports:
       - "127.0.0.1:8080:8080"
       - "9870:9870"
