@@ -19,6 +19,11 @@ COLS = {"antiguedad_meses": "numerica", "visitas_mes": "numerica", "ticket_prome
 DATOS = {"origen": "local", "ruta": "/datos/clientes_senal.csv"}
 
 
+# ALS: quién califica, qué se califica y la calificación (con las columnas de clientes_senal.csv)
+RECOMENDACION = {"objetivo": "visitas_mes", "columnas": {**{c: "ignorar" for c in COLS}, "antiguedad_meses": "usuario",
+                                                         "edad": "item"}}
+
+
 def receta(**kw):
     base = {"datos": DATOS, "tarea": "clasificacion", "objetivo": "vuelve", "columnas": dict(COLS),
             "modelo": {"id": "arbol_clf"}}
@@ -95,7 +100,7 @@ def test_parametros_existen_en_spark(mid):
     for p in m["params"]:
         assert isinstance(getattr(est, p["nombre"], None), Param), f"{mid}: {p['nombre']} no es un parámetro de {clase}"
     if m.get("semilla"):
-        assert isinstance(getattr(est, "seed", None), Param)
+        assert isinstance(getattr(est, m["semilla"], None), Param), f"{mid}: {m['semilla']} no es un parámetro de {clase}"
 
 
 def test_catalogo_es_el_del_modo_demo():
@@ -218,6 +223,8 @@ def recetas_de_todos():
         kw = {"modelo": {"id": m["id"]}, "tarea": t}
         if t == "regresion":
             kw["objetivo"] = "gasto_mes_siguiente"
+        elif t == "recomendacion":
+            kw.update(RECOMENDACION)
         elif t != "clasificacion":
             kw["objetivo"] = None
         if m["motor"] == "spark" and t in ("regresion", "clasificacion"):
@@ -262,6 +269,73 @@ def test_codigo_spark():
     mlp = rec.validar(receta(modelo={"id": "mlp_spark", "params": {"layers": "8,4"}},
                              validacion={"particion": "aleatoria", "cv": "ninguna", "metrica": "exactitud"}))
     assert "layers=[n_entradas, 8, 4, n_salidas]" in gen.generar(mlp)
+
+
+def test_spark_separa_entrenamiento_validacion_y_prueba_y_elige_el_umbral():
+    """Por defecto, con Spark: 70 / 15 / 15, y en clasificación el umbral se elige en la validación (F1)."""
+    r = rec.validar(receta(modelo={"id": "logistica_spark"}))
+    assert (r["validacion"]["prueba"], r["validacion"]["validacion"], r["validacion"]["umbral"]) == (0.15, 0.15, "f1")
+    c = gen.generar(r, "exp-x", "hoy")
+    assert "elegir_umbral(tabla_umbrales(pos, neg), CRITERIO_UMBRAL)" in c and "est.setThreshold(UMBRAL)" in c
+    assert c.index('resultado["validacion"] = medir(pred_val)') < c.index('resultado["prueba"] = medir(pred)')
+    # Sin validación aparte no se puede elegir: error claro (y con umbral fijo, solo un aviso)
+    _, errores, _ = rec.normalizar(receta(modelo={"id": "logistica_spark"}, validacion={"validacion": 0.0, "umbral": "f1"}))
+    assert "validacion.umbral" in campos(errores)
+    _, errores, avisos = rec.normalizar(receta(modelo={"id": "logistica_spark"}, validacion={"validacion": 0.0}))
+    assert not errores and "validacion.validacion" in campos(avisos)
+    # En regresión o con scikit-learn el umbral no aplica: queda el del modelo
+    r = rec.validar(receta(modelo={"id": "arbol_clf"}, validacion={"umbral": "f1"}))
+    assert r["validacion"]["umbral"] == "fijo"
+
+
+def test_recursos_de_yarn():
+    r = rec.validar(receta(modelo={"id": "bosque_clf_spark"}, recursos={"executors": 3, "memoria_executor_mb": 2048}))
+    assert r["recursos"]["executors"] == 3 and r["recursos"]["cores"] == cat.RECURSOS_DEFECTO["cores"]
+    assert rec.argumentos_spark(r["recursos"])[:4] == ["--num-executors", "3", "--executor-cores", str(r["recursos"]["cores"])]
+    assert "--executor-memory 2048m" in " ".join(rec.argumentos_spark(r["recursos"]))
+    _, errores, _ = rec.normalizar(receta(modelo={"id": "bosque_clf_spark"}, recursos={"executors": 0, "turbo": 1}))
+    assert {"recursos.executors", "recursos.turbo"} <= campos(errores)
+
+
+def test_recomendacion_con_als():
+    r = rec.validar(receta(tarea="recomendacion", modelo={"id": "als_spark"}, **RECOMENDACION))
+    assert r["tarea"] == "recomendacion" and r["validacion"]["metrica"] == "rmse"
+    c = gen.generar(r, "exp-x", "hoy")
+    assert "ALS(" in c and "recommendForAllUsers(5)" in c and 'coldStartStrategy="drop"' in c
+    # Hace falta exactamente un usuario y un ítem; y esos roles no sirven fuera de recomendación
+    sin_item = {**RECOMENDACION["columnas"], "edad": "ignorar"}
+    _, errores, _ = rec.normalizar(receta(tarea="recomendacion", modelo={"id": "als_spark"},
+                                          objetivo="visitas_mes", columnas=sin_item))
+    assert "columnas" in campos(errores)
+    _, errores, _ = rec.normalizar(receta(columnas={**COLS, "edad": "usuario"}))
+    assert "columnas" in campos(errores)
+
+
+def test_bisectante_escala_sin_centrar():
+    """BisectingKMeans no parte un grupo con el centro en 0: el estándar va sin centrar (con los demás, centrado)."""
+    cols = {**{c: "ignorar" for c in COLS}, "visitas_mes": "numerica", "ticket_promedio": "numerica"}
+    bis = gen.generar(rec.validar(receta(tarea="clustering", objetivo=None, columnas=cols, modelo={"id": "bisecting_spark"})))
+    km = gen.generar(rec.validar(receta(tarea="clustering", objetivo=None, columnas=cols, modelo={"id": "kmeans_spark"})))
+    assert "withMean=False" in bis and "withMean=True" not in bis
+    assert "withMean=True" in km
+    assert 'resultado["prueba"] = {"silhouette": None}' in km   # un solo grupo: avisa en vez de fallar
+
+
+def test_error_de_spark_con_el_traceback_en_la_salida_estandar():
+    """Con spark-submit el traceback de Python sale por la estándar y el informe de YARN, por la de error en
+    renglones con tabulador: el resumen tiene que ser la excepción, no "user: root"."""
+    from sandbox_ml import fuentes
+    from sandbox_server.ml_estudio import _salida_spark
+    lineas = [{"stream": "err", "text": "26/11/10 05:58:17 INFO Client: Application report for application_1 (state: RUNNING)"},
+              {"stream": "err", "text": "\t user: root"},
+              {"stream": "out", "text": "put: `/datos/clientes_senal.csv': No such file or directory"},
+              {"stream": "out", "text": "Traceback (most recent call last):"},
+              {"stream": "out", "text": "subprocess.CalledProcessError: Command '['hdfs', 'dfs', '-put']' returned non-zero exit status 1."},
+              {"stream": "err", "text": "26/11/10 05:58:29 INFO SparkContext: Successfully stopped SparkContext"},
+              {"stream": "err", "text": "\t final status: UNDEFINED"}]
+    texto = _salida_spark(lineas)
+    assert "user: root" not in texto and " INFO " not in texto
+    assert fuentes.explicar_error(texto)["mensaje"].startswith("No existe /datos/clientes_senal.csv")
 
 
 # ------------------------------------------------------------------ servidor, de punta a punta

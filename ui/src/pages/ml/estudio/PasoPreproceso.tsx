@@ -5,7 +5,7 @@ import type { MlCatalogo, MlPreproceso, MlRevision } from '../../../api/types';
 import { Panel } from '../../../components/base';
 import { Switch } from '../../../components/ui';
 import { Avisos, Campo, Numero, Opciones } from './comun';
-import { editar, modeloDe, useEstudio } from './estado';
+import { editar, modeloDe, supervisada, useEstudio } from './estado';
 
 export function PasoPreproceso({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | null }) {
   const { receta } = useEstudio();
@@ -15,8 +15,18 @@ export function PasoPreproceso({ cat, rev }: { cat: MlCatalogo; rev: MlRevision 
   const n = (rol: string) => roles.filter(([, r]) => r === rol).length;
   const ops = (k: string) => (cat.preproceso[k]?.opciones ?? []).map(o => ({ valor: o.valor, etiqueta: o.etiqueta, ayuda: o.ayuda }));
   const modelo = modeloDe(cat, receta.modelo.id);
-  const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
+  const sup = supervisada(receta.tarea);
   const spark = modelo?.motor === 'spark';
+
+  if (receta.tarea === 'recomendacion') {
+    return (
+      <div className="es-paso es-pre">
+        <Panel title="Preprocesamiento">
+          <p className="es-nota">ALS no usa columnas de variables: aprende solo de quién calificó (usuario), qué calificó (ítem) y con qué nota. Los ids se pasan a índices con <span className="mono">StringIndexer</span> y lo que no se vio al entrenar (un usuario nuevo) no recibe predicción (<span className="mono">coldStartStrategy=drop</span>).</p>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
     <div className="es-paso es-pre">

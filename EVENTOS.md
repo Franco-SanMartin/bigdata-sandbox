@@ -4,6 +4,24 @@ Lo que pasó en el proyecto, en orden, con lo más nuevo arriba: qué se hizo, q
 falló y en qué quedó. Las horas de GitHub están en UTC. Por qué se hizo cada cosa
 está en [DECISIONES.md](DECISIONES.md).
 
+## 2026-11-10
+
+- **Publicar `:ml` sin tocar `latest`** (PR #12, mergeado): `solo_full.sh`
+  contesta `si`, `ml` o `no`, y con `ml` `imagen.yml` publica solo ese tag.
+  `probar_solo_full.sh` lo prueba en el job `revisar`, con la historia de los
+  PRs #10 y #11.
+- **ML etapa (c) terminada** en `ui2-ml-etapa-c-fin`: los dos WIP de
+  `ui2-ml-etapa-c` más la interfaz (tarea recomendación, umbral, recursos,
+  error por rango) y las pruebas de los 19 modelos de Spark contra un `:full`
+  real. Salieron dos arreglos:
+  - BisectingKMeans con el estándar centrado devolvía un solo grupo: ahora se
+    escala sin centrar.
+  - El error de una corrida de Spark decía "user: root": el traceback de
+    Python sale por la salida estándar y el resumen leía solo la de error (se
+    quedaba con el informe de YARN). Ahora lee las dos.
+- Los fixtures de la demo se regeneraron con dos recetas nuevas de Spark
+  (logística con umbral por F1 y GLM para el gasto).
+
 ## 2026-10-30 al 2026-11-01
 
 - **Rediseño 360 de `full`** (rama `ui2-ecosistema`, PR #10): barra por capas,

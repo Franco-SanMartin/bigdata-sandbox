@@ -5,15 +5,17 @@ import { ShieldAlert, Wand2 } from 'lucide-react';
 import type { MlCatalogo, MlColumnaPerfil, MlPerfil, MlRevision, MlRol, MlTarea } from '../../../api/types';
 import { EmptyState, Panel, SkeletonLines } from '../../../components/base';
 import { Avisos, Campo, usePerfil } from './comun';
-import { conLimpieza, editar, MODELO_INICIAL, modeloDe, ROL_LABEL, rolesSugeridos, useEstudio } from './estado';
+import { conLimpieza, editar, MODELO_INICIAL, modeloDe, ROL_LABEL, rolesSugeridos, supervisada, useEstudio } from './estado';
 import { Barras, Histograma, SERIE, fnum } from './graficos';
 
 const ROLES: MlRol[] = ['numerica', 'categorica', 'fecha', 'texto', 'id', 'ignorar'];
-const TAREAS: MlTarea[] = ['regresion', 'clasificacion', 'clustering', 'reduccion'];
+// Recomendación (ALS) usa dos columnas de ids: quién califica y qué se califica
+const ROLES_RECOMENDACION: MlRol[] = ['usuario', 'item', 'ignorar'];
+const TAREAS: MlTarea[] = ['regresion', 'clasificacion', 'clustering', 'reduccion', 'recomendacion'];
 
 export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | null }) {
   const { receta } = useEstudio();
-  const sup = receta.tarea === 'regresion' || receta.tarea === 'clasificacion';
+  const sup = supervisada(receta.tarea);
   const perfil = usePerfil(receta.datos, sup ? receta.objetivo : null);
   // Con las columnas que crea la limpieza (indicadoras de nulos, partes de fechas, derivadas) al final
   const p = perfil.data ? conLimpieza(perfil.data, receta.limpieza) : perfil.data;
@@ -25,8 +27,11 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
     editar(r => {
       const m = modeloDe(cat, r.modelo.id);
       const modelo = m?.tarea === t ? r.modelo : { id: MODELO_INICIAL[m?.motor ?? 'sklearn'][t], params: {} };
-      const objetivo = t === 'regresion' || t === 'clasificacion' ? r.objetivo : null;
-      return { ...r, tarea: t, objetivo, modelo, validacion: { ...r.validacion, metrica: undefined, particion: undefined, cv: undefined }, busqueda: { tipo: 'ninguna' }, informe: {} };
+      const objetivo = supervisada(t) ? r.objetivo : null;
+      // Al pasar a recomendación, los roles de antes no sirven (ALS usa usuario e ítem); al salir, vuelven los sugeridos
+      const columnas = t === 'recomendacion' ? Object.fromEntries(Object.keys(r.columnas).map(c => [c, 'ignorar' as MlRol]))
+        : r.tarea === 'recomendacion' && p ? rolesSugeridos(p, objetivo) : r.columnas;
+      return { ...r, tarea: t, objetivo, columnas, modelo, validacion: { ...r.validacion, metrica: undefined, particion: undefined, cv: undefined }, busqueda: { tipo: 'ninguna' }, informe: {} };
     });
   }
 
@@ -39,7 +44,8 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
       // Con un objetivo nuevo, el tipo de problema que conviene: número con muchos valores → regresión
       let tarea = r.tarea;
       if (col && info) tarea = (info.tipo === 'int' || info.tipo === 'float') && info.unicos > 20 ? 'regresion' : 'clasificacion';
-      if (!col && (tarea === 'regresion' || tarea === 'clasificacion')) tarea = 'clustering';
+      if (col && info && r.tarea === 'recomendacion') tarea = 'recomendacion';
+      if (!col && supervisada(tarea)) tarea = 'clustering';
       const m = modeloDe(cat, r.modelo.id);
       const modelo = m?.tarea === tarea ? r.modelo : { id: MODELO_INICIAL[m?.motor ?? 'sklearn'][tarea], params: {} };
       return { ...r, objetivo: col, columnas, tarea, modelo, ...(tarea !== r.tarea ? { validacion: {}, busqueda: { tipo: 'ninguna' as const }, informe: {} } : {}) };
@@ -64,7 +70,7 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
             nota={sugerida && sup ? (sugerida === receta.tarea ? `Detectado: ${p.objetivo?.por_que}` : <>El objetivo parece de <b>{cat.tareas[sugerida].etiqueta.toLowerCase()}</b> ({p.objetivo?.por_que}). <button type="button" className="es-link" onClick={() => cambiarTarea(sugerida)}>Usar {cat.tareas[sugerida].etiqueta.toLowerCase()}</button></>) : undefined}>
             <div className="es-ops" role="radiogroup" aria-label="Tipo de problema">
               {TAREAS.map(t => {
-                const necesita = (t === 'regresion' || t === 'clasificacion') && !receta.objetivo;
+                const necesita = supervisada(t) && !receta.objetivo;
                 return (
                   <button key={t} type="button" role="radio" aria-checked={receta.tarea === t} disabled={necesita}
                     title={necesita ? 'Elegí primero una columna objetivo' : cat.tareas[t].que} onClick={() => cambiarTarea(t)}>
@@ -74,6 +80,9 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
               })}
             </div>
           </Campo>
+          {receta.tarea === 'recomendacion' && (
+            <p className="es-nota">ALS (solo Spark) aprende de una tabla de calificaciones: el objetivo es la nota y, en la tabla de abajo, una columna es el <b>usuario</b> (quién califica) y otra el <b>ítem</b> (qué califica). El resto no se usa.</p>
+          )}
           {receta.tarea === 'clustering' && (
             <Campo label="Columna para comparar" nombre="referencia" ayuda="Opcional. No se usa para entrenar: al final se compara cuánto se parecen los grupos a esta columna (índice de Rand ajustado).">
               <select className="input mono" value={receta.referencia ?? ''} onChange={e => editar(r => ({ ...r, referencia: e.target.value || null, columnas: e.target.value ? { ...r.columnas, [e.target.value]: 'ignorar' } : r.columnas }))}>
@@ -88,7 +97,7 @@ export function PasoObjetivo({ cat, rev }: { cat: MlCatalogo; rev: MlRevision | 
 
       <Panel title="Variables" sub={`${usadas} de ${p.columnas.length - (receta.objetivo ? 1 : 0)} entran al modelo`} flush
         end={<button type="button" className="btn btn-sm" onClick={() => editar(r => ({ ...r, columnas: rolesSugeridos(p, r.objetivo) }))}><Wand2 size={13} aria-hidden="true" />Roles sugeridos</button>}>
-        <TablaRoles perfil={p} rolDe={rolDe} objetivo={receta.objetivo} referencia={receta.referencia ?? null} />
+        <TablaRoles perfil={p} rolDe={rolDe} objetivo={receta.objetivo} referencia={receta.referencia ?? null} roles={receta.tarea === 'recomendacion' ? ROLES_RECOMENDACION : ROLES} />
         <div className="es-pad"><Avisos rev={rev} prefijos={['objetivo', 'columnas', 'referencia', 'tarea']} /></div>
       </Panel>
     </div>
@@ -118,7 +127,7 @@ function Objetivo({ info, tarea }: { info: MlColumnaPerfil; tarea: MlTarea }) {
   return null;
 }
 
-function TablaRoles({ perfil, rolDe, objetivo, referencia }: { perfil: MlPerfil; rolDe: (c: MlColumnaPerfil) => MlRol; objetivo: string | null; referencia: string | null }) {
+function TablaRoles({ perfil, rolDe, objetivo, referencia, roles }: { perfil: MlPerfil; rolDe: (c: MlColumnaPerfil) => MlRol; objetivo: string | null; referencia: string | null; roles: MlRol[] }) {
   const hayAsoc = perfil.columnas.some(c => c.asociacion);
   return (
     <div className="tbl-wrap">
@@ -138,7 +147,7 @@ function TablaRoles({ perfil, rolDe, objetivo, referencia }: { perfil: MlPerfil;
                   {esObj ? <span className="badge" data-k="ok">objetivo</span> : esRef ? <span className="badge">para comparar</span> : (
                     <select className="input select-sm" value={rol} aria-label={`Rol de ${c.nombre}`}
                       onChange={e => editar(r => ({ ...r, columnas: { ...r.columnas, [c.nombre]: e.target.value as MlRol } }))}>
-                      {ROLES.map(x => <option key={x} value={x}>{ROL_LABEL[x]}{x === c.rol ? ' (sugerido)' : ''}</option>)}
+                      {(roles.includes(rol) ? roles : [rol, ...roles]).map(x => <option key={x} value={x}>{ROL_LABEL[x]}{x === c.rol ? ' (sugerido)' : ''}</option>)}
                     </select>
                   )}
                 </td>

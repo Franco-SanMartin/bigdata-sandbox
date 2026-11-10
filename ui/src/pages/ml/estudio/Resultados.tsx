@@ -1,7 +1,8 @@
 /* Resultados de un experimento: métricas con su desvío y, según el problema, matriz de confusión, ROC, PR,
    umbral y calibración (clasificación); predicho contra real y residuos (regresión); tamaños, silhouette y
    proyección 2D (clustering); varianza y cargas (PCA). Para todos: curvas de aprendizaje y de validación,
-   importancia y permutación, la pérdida de la red, la búsqueda y el costo. */
+   importancia y permutación, la pérdida de la red, la búsqueda y el costo. Con Spark: la validación aparte, el
+   umbral elegido en ella, el error por rango y las recomendaciones (ALS), contados en el cluster. */
 import { useMemo, useState, type ReactNode } from 'react';
 import type { MlCatalogo, MlExperimento, MlInforme } from '../../../api/types';
 import { KeyValue, Panel, ResultTable, Stat, StatRow } from '../../../components/base';
@@ -23,7 +24,7 @@ export function Resultados({ exp, cat, acciones }: { exp: MlExperimento; cat: Ml
     <div className="es-res">
       <Panel title={<>{exp.modelo?.etiqueta ?? 'Código editado'} <span className={exp.motor === 'spark' ? 'eng eng-spark' : 'eng eng-uno'}>{exp.motor === 'spark' ? 'Spark MLlib' : 'scikit-learn'}</span></>}
         sub={<span className="mono">{exp.id}{exp.editado ? ' · código editado' : ''}</span>} end={acciones}>
-        {exp.estado === 'falló' && <div className="callout" data-k="bad" role="alert"><span><b>Falló.</b> <span className="mono">{exp.error}</span></span></div>}
+        {exp.estado === 'falló' && <div className="callout" data-k="bad" role="alert"><span><b>Falló.</b> {exp.error_detalle ? <>{exp.error} <span className="mono muted">{exp.error_detalle}</span></> : <span className="mono">{exp.error}</span>}</span></div>}
         {exp.estado === 'sin informe' && <div className="callout"><span>El código terminó bien pero no llamó a <span className="mono">estudio.registrar</span>: no hay métricas ni gráficos. La salida está en el log.</span></div>}
         {exp.estado === 'corriendo' && <div className="callout" data-k="run"><span>Todavía está corriendo.</span></div>}
         {filasMetricas.length > 0 && (
@@ -31,6 +32,7 @@ export function Resultados({ exp, cat, acciones }: { exp: MlExperimento; cat: Ml
             <Stat label={<>{met?.etiqueta ?? principal}{m.cv != null ? ' · validación cruzada' : ' · prueba'}</>}
               value={fmtMetrica(m.cv ?? m.prueba)} sub={m.cv_desvio != null ? `± ${fmtMetrica(m.cv_desvio)} entre particiones` : met?.ayuda} />
             {m.cv != null && <Stat label="en la prueba" value={fmtMetrica(m.prueba)} sub="filas que no vio" />}
+            {m.validacion != null && <Stat label="en la validación" value={fmtMetrica(m.validacion)} sub={exp.umbral ? `ahí se eligió el umbral (${fmtUmbral(exp.umbral.valor)})` : 'el modelo elegido, antes de la prueba'} />}
             {m.entrenamiento != null && <Stat label="en el entrenamiento" value={fmtMetrica(m.entrenamiento)}
               sub={m.prueba != null && met && Math.abs(m.entrenamiento - m.prueba) > 0.05 * Math.max(Math.abs(m.prueba), 1e-9) ? 'lejos de la prueba: sobreajusta' : 'cerca de la prueba'}
               k={m.prueba != null && met && Math.abs(m.entrenamiento - m.prueba) > 0.05 * Math.max(Math.abs(m.prueba), 1e-9) ? 'run' : undefined} />}
@@ -38,6 +40,7 @@ export function Resultados({ exp, cat, acciones }: { exp: MlExperimento; cat: Ml
             <Stat label="memoria pico" value={fmtMb(exp.memoria_pico_mb)} sub={exp.yarn?.memoria_mb ? `YARN ${fmtMb(exp.yarn.memoria_mb)} en promedio` : 'el proceso y sus hijos'} />
           </StatRow>
         )}
+        {exp.evaluacion && <p className="es-nota">Evaluación: {exp.evaluacion}.</p>}
       </Panel>
 
       {filasMetricas.length > 1 && (
@@ -83,13 +86,21 @@ function Graficos({ inf, exp }: { inf: MlInforme; exp: MlExperimento }) {
   const metrica = exp.metrica ?? 'puntaje';
   return (
     <>
-      {inf.tarea === 'clasificacion' && <Clasificacion inf={inf} />}
-      {inf.tarea === 'regresion' && inf.real && (
+      {inf.tarea === 'clasificacion' && <Clasificacion inf={inf} umbral={exp.umbral} />}
+      {(inf.tarea === 'regresion' || inf.tarea === 'recomendacion') && inf.real && (
         <div className="es-graf-grid">
           <Panel title="Predicho contra real" sub="sobre la diagonal = acierto exacto"><Dispersion x={inf.real} y={inf.predicho!} diagonal xLabel={`real (${exp.objetivo ?? 'y'})`} yLabel="predicho" titulo="Predicho contra real" /></Panel>
           <Panel title="Residuos" sub="real − predicho, contra lo predicho: sin forma = bien"><Dispersion x={inf.predicho!} y={inf.residuo!} cero xLabel="predicho" yLabel="residuo" titulo="Residuos contra predicho" /></Panel>
-          {inf.histograma_residuos && <Panel title="Distribución de los residuos" sub="centrada en 0 y simétrica = sin sesgo"><Histograma bordes={inf.histograma_residuos.bordes} cuentas={inf.histograma_residuos.cuentas} xLabel="residuo" titulo="Histograma de residuos" marca={0} /></Panel>}
+          {inf.histograma_residuos && <Panel title="Distribución de los residuos" sub={inf.calculado === 'cluster' ? 'contada en el cluster, con todas las filas de prueba' : 'centrada en 0 y simétrica = sin sesgo'}><Histograma bordes={inf.histograma_residuos.bordes} cuentas={inf.histograma_residuos.cuentas} xLabel="residuo" titulo="Histograma de residuos" marca={0} /></Panel>}
+          {inf.error_por_rango && inf.error_por_rango.length > 0 && <ErrorPorRango filas={inf.error_por_rango} objetivo={exp.objetivo ?? 'y'} />}
         </div>
+      )}
+      {inf.recomendaciones && inf.recomendaciones.length > 0 && (
+        <Panel title="Recomendaciones" sub="los 5 ítems con mejor nota predicha, para algunos usuarios (entran también los que todavía no calificaron)" flush>
+          <ResultTable columns={['usuario', ...inf.recomendaciones[0].items.map((_, i) => `${i + 1}.º`)]}
+            rows={inf.recomendaciones.map(r => [String(r.usuario), ...r.items.map(x => `${x.item} (${fnum(x.puntaje, 2)})`)])}
+            label="Recomendaciones por usuario" fileName={`${exp.id}-recomendaciones`} />
+        </Panel>
       )}
       {inf.tarea === 'clustering' && <Grupos inf={inf} />}
       {inf.tarea === 'reduccion' && inf.varianza && (
@@ -141,7 +152,7 @@ function Graficos({ inf, exp }: { inf: MlInforme; exp: MlExperimento }) {
             </Panel>
           )}
           {inf.importancia && (
-            <Panel title={inf.importancia.tipo === 'coeficientes' ? 'Coeficientes (en valor absoluto)' : 'Importancia del modelo'} sub={inf.importancia.tipo === 'coeficientes' ? 'con columnas escaladas, comparables entre sí' : 'reducción de impureza en los árboles'}>
+            <Panel title={inf.importancia.tipo === 'coeficientes' ? 'Coeficientes (en valor absoluto)' : 'Importancia del modelo'} sub={inf.importancia.tipo === 'coeficientes' ? 'con columnas escaladas, comparables entre sí' : inf.importancia.tipo === 'ganancia' ? 'cuánto mejoran los cortes que usan cada columna (XGBoost)' : 'reducción de impureza en los árboles'}>
               <Barras titulo="Importancia del modelo" items={inf.importancia.columnas.slice(0, 20).map((c, i) => ({ etiqueta: c, valor: inf.importancia!.valores[i], nota: inf.importancia!.signo ? (inf.importancia!.signo[i] < 0 ? 'resta' : 'suma') : undefined }))} />
             </Panel>
           )}
@@ -157,9 +168,23 @@ function bandas(nombre: string, x: number[], porParticion: number[][]): { nombre
   return { nombre, x, y: ys, lo: ys.map((y, i) => y - ds[i]), hi: ys.map((y, i) => y + ds[i]) };
 }
 
-function Clasificacion({ inf }: { inf: MlInforme }) {
+/** El error de la regresión por décimos del valor real: si se equivoca más con los valores altos o bajos */
+function ErrorPorRango({ filas, objetivo }: { filas: NonNullable<MlInforme['error_por_rango']>; objetivo: string }) {
+  return (
+    <Panel title="Error según el valor real" sub="por décimos de las filas de prueba: ¿se equivoca más en los extremos?">
+      <Barras titulo="Error medio absoluto por rango del valor real" items={filas.map(f => ({ etiqueta: `${fnum(f.desde)} a ${fnum(f.hasta)}`, valor: f.mae, nota: `${f.filas.toLocaleString('es-AR')} filas · sesgo ${f.sesgo >= 0 ? '+' : ''}${fnum(f.sesgo)}` }))} fmt={v => fnum(v)} />
+      <p className="es-nota">MAE de cada rango de <span className="mono">{objetivo}</span>. El sesgo es real − predicho en promedio: positivo = se queda corto, negativo = se pasa.</p>
+    </Panel>
+  );
+}
+
+const fmtUmbral = (v: number) => v.toFixed(2).replace('.', ',');
+
+function Clasificacion({ inf, umbral }: { inf: MlInforme; umbral?: MlExperimento['umbral'] }) {
   const [norm, setNorm] = useState<'filas' | 'conteo'>('conteo');
-  const [u, setU] = useState(50);
+  // Arranca en el umbral elegido en la validación (si lo hubo): es el que quedó guardado en el modelo
+  const elegido = umbral ? Math.round(umbral.valor * 50) * 2 : 50;
+  const [u, setU] = useState(elegido);
   const umb = inf.umbrales?.[Math.round(u / 2)];
   const stats = useMemo(() => {
     if (!umb) return null;
@@ -185,6 +210,7 @@ function Clasificacion({ inf }: { inf: MlInforme }) {
               <Stat label="exactitud" value={fmtMetrica(stats.exactitud, 3)} />
             </StatRow>
             <Matriz clases={['otra', inf.positiva]} valores={[[umb.vn, umb.fp], [umb.fn, umb.vp]]} normalizar={false} titulo="Matriz de confusión con el umbral elegido" />
+            {umbral && <p className="es-nota">El modelo quedó guardado con umbral <b className="mono">{fmtUmbral(umbral.valor)}</b>: el de {umbral.criterio === 'youden' ? 'Youden (TPR − FPR)' : 'mejor F1'} en la validación ({fmtMetrica(umbral.nota, 3)}). La prueba no se miró para elegirlo.{u !== elegido && <> <button type="button" className="es-link" onClick={() => setU(elegido)}>Volver a ese umbral</button></>}</p>}
             <p className="es-nota">Bajar el umbral encuentra más positivos (sube el recall) a cambio de más falsas alarmas (baja la precisión).</p>
           </div>
         </Panel>
@@ -282,6 +308,7 @@ function Costo({ exp }: { exp: MlExperimento }) {
           ['tiempo total', fmtSeg(t.total)],
           ['memoria pico', `${fmtMb(exp.memoria_pico_mb)} (proceso y sus hijos)`],
           ...(exp.yarn?.app_id ? [['YARN', <><a className="mono" href={`#yarn/${exp.yarn.app_id}`}>{exp.yarn.app_id}</a>{exp.yarn.memoria_mb ? ` · ${fmtMb(exp.yarn.memoria_mb)} en promedio en los contenedores` : ''}</>] as [string, ReactNode]] : []),
+          ...(exp.recursos ? [['pedido a YARN', `${exp.recursos.executors} executors de ${exp.recursos.memoria_executor_mb} MB y ${exp.recursos.cores} core${exp.recursos.cores === 1 ? '' : 's'} · driver ${exp.recursos.memoria_driver_mb} MB`] as [string, ReactNode]] : []),
           ['tamaño del modelo', exp.modelo_hdfs ? <>{fmtBytes(exp.modelo_bytes)} en <span className="mono">hdfs://{exp.modelo_hdfs}</span></> : fmtBytes(exp.modelo_bytes)],
           ['datos', <span className="mono">{exp.datos?.ruta ?? exp.datos?.tabla} {exp.datos?.filas != null ? `· ${exp.datos.filas.toLocaleString('es-AR')} filas` : ''}{exp.datos?.hash ? ` · hash ${exp.datos.hash}` : ''}</span>],
           ['filas', exp.filas ? `${exp.filas.entrenamiento.toLocaleString('es-AR')} entrenamiento · ${exp.filas.prueba.toLocaleString('es-AR')} prueba${exp.filas.validacion ? ` · ${exp.filas.validacion.toLocaleString('es-AR')} validación` : ''}` : '—'],

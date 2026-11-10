@@ -2,8 +2,8 @@
    (server/sandbox_server/ml_estudio.py). Los nombres de los campos son los de sandbox_ml (ml/sandbox_ml),
    en castellano, tal cual: la receta que arma la pantalla es la misma que lee el código generado. */
 
-export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion';
-export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar';
+export type MlTarea = 'regresion' | 'clasificacion' | 'clustering' | 'reduccion' | 'recomendacion';
+export type MlRol = 'numerica' | 'categorica' | 'fecha' | 'texto' | 'id' | 'ignorar' | 'usuario' | 'item';
 export type MlMotor = 'sklearn' | 'spark';
 export type MlValor = string | number | boolean | null;
 
@@ -51,6 +51,10 @@ export interface MlModelo {
   predice?: boolean;
   max_filas?: number;
   extra?: string;
+  /** La librería de Python que necesita (xgboost) */
+  requiere?: string;
+  /** Por qué no se puede usar en esta instalación (lo agrega el servidor si falta la librería) */
+  deshabilitado?: string;
 }
 
 export interface MlMetrica {
@@ -75,7 +79,7 @@ export interface MlPreproceso {
   escalar: 'estandar' | 'minmax' | 'robusto' | 'ninguno';
   outliers: 'ninguno' | 'recortar_iqr' | 'recortar_pct' | 'eliminar_iqr';
   factor_iqr: number;
-  codificar: 'onehot' | 'ordinal';
+  codificar: 'onehot' | 'ordinal' | 'hashing';
   max_categorias: number;
   fecha: boolean;
   texto_max: number;
@@ -83,6 +87,8 @@ export interface MlPreproceso {
   k: number;
   umbral_varianza: number;
   pca: number | null;
+  /** FeatureHasher (solo Spark): en cuántas columnas caen las categorías */
+  hash_columnas: number;
 }
 
 export interface MlValidacion {
@@ -95,7 +101,14 @@ export interface MlValidacion {
   repeticiones: number;
   semilla: number;
   metrica: string;
+  /** Clasificación con Spark: el umbral de decisión se elige en la validación (f1, youden) o queda el del modelo */
+  umbral: MlCriterioUmbral;
 }
+
+export type MlCriterioUmbral = 'fijo' | 'f1' | 'youden';
+
+/** Lo que se le pide a YARN (spark-submit --num-executors, --executor-memory, --executor-cores, --driver-memory) */
+export interface MlRecursos { executors: number; memoria_executor_mb: number; cores: number; memoria_driver_mb: number }
 
 export type MlRango = { min: number; max: number; log?: boolean };
 
@@ -131,6 +144,8 @@ export interface MlCatalogo {
   particiones: Record<string, { etiqueta: string; ayuda: string }>;
   cv: Record<string, { etiqueta: string; ayuda: string }>;
   busquedas: Record<MlMotor, Record<string, { etiqueta: string; ayuda: string }>>;
+  recursos: Record<keyof MlRecursos, { etiqueta: string; flag: string; min: number; max: number; defecto: number; ayuda: string }>;
+  umbrales: Record<MlCriterioUmbral, { etiqueta: string; ayuda: string }>;
   limites: { max_ajustes: number; max_combinaciones: number; max_minutos: number; min_minutos: number; max_n_jobs: number };
   /** Los formatos que lee el estudio (sandbox_ml/fuentes.py) */
   formatos: Record<MlFormato, { etiqueta: string; ayuda: string }>;
@@ -346,6 +361,8 @@ export interface MlReceta {
   informe?: Partial<MlInformeOpciones>;
   /** La receta de limpieza, columna por columna (solo con modelos de Spark) */
   limpieza?: MlLimpieza;
+  /** Spark: lo que se le pide a YARN (executors, memoria y cores) */
+  recursos?: Partial<MlRecursos>;
   /** Lo completa el servidor (sale del modelo) */
   motor?: MlMotor;
   version?: number;
@@ -454,6 +471,12 @@ export interface MlInforme {
   predicho?: number[];
   residuo?: number[];
   histograma_residuos?: { bordes: number[]; cuentas: number[] };
+  /** Spark: el error según el valor real, por décimos (contado en los executors) */
+  error_por_rango?: { desde: number; hasta: number; filas: number; mae: number; rmse: number; sesgo: number }[];
+  /** Dónde se calcularon las curvas: 'cluster' = en los executors, con todas las filas de prueba */
+  calculado?: 'cluster';
+  // recomendación (ALS)
+  recomendaciones?: { usuario: string | number; items: { item: string | number; puntaje: number }[] }[];
   // clustering y reducción
   tamanos?: { grupo: number; filas: number }[];
   proyeccion?: { x: number[]; y: number[]; grupo?: number[]; referencia?: string[]; varianza?: number[]; centros?: { x: number[]; y: number[] } };
@@ -465,7 +488,7 @@ export interface MlInforme {
   curva_aprendizaje?: { filas: number[]; entrenamiento: number[][]; validacion: number[][] };
   curva_validacion?: { param: string; valores: string[]; entrenamiento?: number[][]; validacion?: number[][]; silhouette?: (number | null)[]; inercia?: (number | null)[] };
   permutacion?: { columnas: string[]; media: number[]; desvio: number[] };
-  importancia?: { tipo: 'impureza' | 'coeficientes'; columnas: string[]; valores: number[]; signo?: number[] };
+  importancia?: { tipo: 'impureza' | 'coeficientes' | 'ganancia'; columnas: string[]; valores: number[]; signo?: number[] };
   perdida?: { perdida: number[]; validacion: number[]; iteraciones: number; es_puntaje?: boolean };
   cv_tiempos?: { entrenar: number[]; medir: number[] };
   ejemplos?: { columnas: string[]; filas: MlValor[][] };
@@ -504,6 +527,14 @@ export interface MlExperimento {
   entorno?: Record<string, string | number>;
   clases?: string[] | null;
   error?: string;
+  /** Spark: el error de Spark o de YARN explicado (la línea original queda en error) */
+  error_detalle?: string | null;
+  /** Lo que se le pidió a YARN */
+  recursos?: MlRecursos | null;
+  /** Clasificación con Spark: el umbral elegido en la validación (y la nota con la que ganó) */
+  umbral?: { criterio: MlCriterioUmbral; valor: number; nota: number } | null;
+  /** Cómo se evaluó: entrenamiento, validación y prueba separados */
+  evaluacion?: string | null;
   informe: MlInforme | null;
   /** Id de la corrida si todavía está corriendo */
   corriendo: string | null;
