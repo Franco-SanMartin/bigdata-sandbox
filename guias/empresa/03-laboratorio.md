@@ -205,6 +205,12 @@ el *shuffle* (los resultados intermedios entre PCs) y la re-replicación.
 Todo esto se hace desde la PC del profe, en la interfaz
 (<http://localhost:8080>) o en su terminal integrada (``Ctrl+` ``).
 
+La terminal integrada es root en el contenedor: la imagen `empresa` la trae
+apagada (`TERMINAL=0`) y `empresa-profe.cmd` la prende en el maestro
+(`-e TERMINAL=1`), que publica todo solo en `127.0.0.1`: nadie más del aula
+llega a la interfaz. Si alguna vez se publica la interfaz para otras PCs
+(`SANDBOX_HOSTS`), conviene arrancar el maestro sin `TERMINAL=1`.
+
 - **Dónde quedó cada bloque**: vista Aula (bloques por PC), o
   `hdfs fsck /aula/datos -files -blocks -racks` en la terminal: cada bloque
   con una copia en `/profe` y otra en una fila.

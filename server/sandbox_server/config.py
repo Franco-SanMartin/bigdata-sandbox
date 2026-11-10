@@ -163,24 +163,35 @@ def estimate_ram(c: dict, limit_mb: int = DOCKER_LIMIT_MB) -> dict:
     return {"totalMb": sum(p["mb"] for p in parts), "parts": parts, "limitMb": limit_mb}
 
 
+def nombres_compose(tag: str) -> tuple[str, str]:
+    """(contenedor, volumen) de cada versión: los mismos que el docker run de sus guías (como nombresCompose de la
+    interfaz): bigdata-full y bigdata_full con :full, bigdata-empresa y bigdata_empresa con :empresa."""
+    t = tag if re.fullmatch(r"[a-z0-9]+", tag or "") else "full"
+    if t in ("base", "latest"):
+        return "bigdata", "bigdata_hadoop"
+    return f"bigdata-{t}", f"bigdata_{t}"
+
+
 def compose_yaml(c: dict) -> str:
     """El docker-compose.yml equivalente (mismo texto que genera la interfaz)."""
     yn = lambda b: "si" if b else "no"  # noqa: E731
     nn, dn, rep = c["namenodes"], c["datanodes"], c["replication"]
     tag = os.environ.get("SANDBOX_VERSION", "full")  # la empresa sin ROL se usa igual que la full
+    contenedor, volumen = nombres_compose(tag)
     L = [
         f"# BigData Sandbox :{tag}, generado desde la interfaz (localhost:8080)",
         "#   docker compose up -d        crear y prender",
         '#   docker compose logs -f      seguir el arranque hasta "Cluster LISTO"',
         "#   docker compose stop         apagar en orden (los datos quedan)",
         "# Las mismas variables sirven con :base y :ml (sin interfaz): esas arrancan siempre solas.",
+        f"# Contenedor {contenedor} y volumen {volumen}: los mismos que el docker run de las guías de :{tag}.",
         "",
-        "name: bigdata",
+        f"name: {contenedor}",
         "",
         "services:",
         "  bigdata:",
         f"    image: franki678/bigdata-sandbox:{tag}",
-        "    container_name: bigdata",
+        f"    container_name: {contenedor}",
         "    environment:",
         '      AUTOSTART: "1"                 # arranca solo con estas variables; sin ella espera «Iniciar» en la interfaz',
         f'      DATANODES: "{dn}"',
@@ -215,9 +226,9 @@ def compose_yaml(c: dict) -> str:
     # Siempre: si después se prende JupyterLab desde la interfaz, el puerto ya está publicado
     L.append('      - "127.0.0.1:8888:8888"             # JupyterLab' + ("" if c["jupyter"] else " (con JUPYTER: \"si\")"))
     L += ["    volumes:",
-          "      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB",
+          f"      - {(volumen + ':/hadoop').ljust(36)}# HDFS, metastore, MySQL y MongoDB",
           "      - ./datos:/datos                      # tu carpeta datos/ adentro",
-          "    stop_grace_period: 20s", "", "volumes:", "  bigdata_hadoop:", "    name: bigdata_hadoop", ""]
+          "    stop_grace_period: 20s", "", "volumes:", f"  {volumen}:", f"    name: {volumen}", ""]
     return "\n".join(L)
 
 

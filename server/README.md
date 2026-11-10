@@ -328,7 +328,7 @@ Todo lo que no es `/api` sirve la interfaz compilada (`UI_DIR`), con
 | `SANDBOX_DATOS` | `/datos` | Donde están los ejemplos (`ejemplos/`, `ventas_grandes.csv`...) |
 | `SANDBOX_UPLOADS` | `$TMPDIR/sandbox-subidas` | Carpeta temporal de las subidas desde la compu |
 | `SANDBOX_MAX_UPLOAD_MB` | `2048` | Tamaño máximo de una subida |
-| `TERMINAL` | `1` | `0`: apaga la terminal de la interfaz (`/api/terminal`) |
+| `TERMINAL` | `1` (`0` en `empresa`) | `0`: apaga la terminal de la interfaz (`/api/terminal`). La imagen `empresa` la trae apagada; el maestro del aula la prende con `-e TERMINAL=1` (publica solo en `127.0.0.1`) |
 | `SANDBOX_HOSTS` / `TERMINAL_HOSTS` | (vacío) | Otros nombres desde los que se aceptan la interfaz, la API y la terminal, separados por coma (además de `localhost`, `127.0.0.1` y `::1`). Las dos variables suman a la misma lista (`seguridad.py`). Ojo: quien llegue por ese nombre tiene una terminal de root |
 | `TERMINAL_CWD` | `/datos` | Dónde arranca la terminal |
 | `SANDBOX_SQOOP_USER` / `SANDBOX_SQOOP_PASS` | los de `ejemplos/sqoop.sh` | Usuario y clave de MySQL para `sqoop import`/`export`. Le llegan a sqoop por variables de entorno, no en el comando que se muestra |

@@ -423,7 +423,10 @@ COPY empresa/arranque.sh /opt/sandbox/arranque-empresa.sh
 COPY empresa/aula/ /opt/sandbox/aula/
 RUN find /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula -type f -exec sed -i 's/\r$//' {} + \
  && chmod +x /opt/sandbox/arranque-empresa.sh /opt/sandbox/aula/*.sh
-ENV SANDBOX_VERSION=empresa
+# La terminal de la interfaz es root en el contenedor: en empresa viene apagada. El maestro del aula
+# (empresa-profe.cmd) la prende con -e TERMINAL=1 porque publica todo solo en 127.0.0.1
+ENV SANDBOX_VERSION=empresa \
+    TERMINAL=0
 
 # DataNode 9866/9867, NodeManager 8041/8031 (RPC entre nodos del aula)
 # Con RED=wireguard, en el maestro: UDP 51820 (el hub) y TCP 8099 (inscripcion)

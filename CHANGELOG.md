@@ -9,6 +9,17 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **El compose que genera la interfaz** usa el contenedor y el volumen del
+  `docker run` de las guías de su versión: `bigdata-full` y `bigdata_full` con
+  `:full` y `bigdata-empresa` y `bigdata_empresa` con `:empresa`. Antes era
+  `bigdata` y `bigdata_hadoop`, el de `base`, y no veía los datos del `docker
+  run`. Los textos de la interfaz que nombraban el volumen dicen el de la versión.
+- **Terminal apagada de fábrica en `empresa`** (`TERMINAL=0`): es root en el
+  contenedor. El maestro del aula la prende (`empresa-profe.cmd` pasa `-e
+  TERMINAL=1`) porque publica todo solo en `127.0.0.1`.
+
 ### Agregado
 
 - **Comparar lanza Pig** (`full`): la plantilla `pig-ventas` corre

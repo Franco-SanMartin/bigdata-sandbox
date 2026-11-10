@@ -170,7 +170,7 @@ function Arrancar {
             '--sysctl', 'net.ipv4.ip_forward=1', '--stop-timeout', '20',
             '-p', '51820:51820/udp', '-p', '8099:8099') + $local + @(
             '-v', "$($volumen):/hadoop", '-v', "$($datos):/datos",
-            '-e', 'ROL=maestro', '-e', 'RED=wireguard', '-e', "CODIGO=$codigo", '-e', "IP_AULA=$ip",
+            '-e', 'ROL=maestro', '-e', 'RED=wireguard', '-e', "CODIGO=$codigo", '-e', "IP_AULA=$ip", '-e', 'TERMINAL=1',
             '-e', "PC_NOMBRE=$($d.nombre)", '-e', "CARPETA_VEYON=$(CarpetaParaVeyon)", $imagen)
         & docker @dargs | Out-Null
         if ($LASTEXITCODE -ne 0) { Decir 'No se pudo crear el maestro (mira el mensaje de Docker arriba).'; exit 1 }
