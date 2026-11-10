@@ -84,22 +84,31 @@ export function processSpecs(c: ClusterConfig): ProcSpec[] {
 /** Tag de la imagen cuando no se sabe cuál corre: el mismo default que SANDBOX_VERSION en el backend */
 export const DEFAULT_IMAGE_TAG = 'full';
 
+/** El contenedor y el volumen de cada versión, los mismos que el `docker run` de sus guías: bigdata-full y
+ *  bigdata_full con :full, bigdata-empresa y bigdata_empresa con :empresa (base usa bigdata y bigdata_hadoop) */
+export function nombresCompose(tag: string = DEFAULT_IMAGE_TAG): { contenedor: string; volumen: string } {
+  const t = /^[a-z0-9]+$/.test(tag) ? tag : DEFAULT_IMAGE_TAG;
+  return t === 'base' || t === 'latest' ? { contenedor: 'bigdata', volumen: 'bigdata_hadoop' } : { contenedor: `bigdata-${t}`, volumen: `bigdata_${t}` };
+}
+
 /** `tag` = SANDBOX_VERSION de la imagen que corre (status().image.tag); la empresa sin ROL se usa igual que la full */
 export function composeYaml(c: ClusterConfig, tag: string = DEFAULT_IMAGE_TAG): string {
   const yn = (b: boolean) => (b ? 'si' : 'no');
+  const { contenedor, volumen } = nombresCompose(tag);
   const L: string[] = [
     `# BigData Sandbox :${tag}, generado desde la interfaz (localhost:8080)`,
     '#   docker compose up -d        crear y prender',
     '#   docker compose logs -f      seguir el arranque hasta "Cluster LISTO"',
     '#   docker compose stop         apagar en orden (los datos quedan)',
     '# Las mismas variables sirven con :base y :ml (sin interfaz): esas arrancan siempre solas.',
+    `# Contenedor ${contenedor} y volumen ${volumen}: los mismos que el docker run de las guías de :${tag}.`,
     '',
-    'name: bigdata',
+    `name: ${contenedor}`,
     '',
     'services:',
     '  bigdata:',
     `    image: franki678/bigdata-sandbox:${tag}`,
-    '    container_name: bigdata',
+    `    container_name: ${contenedor}`,
     '    environment:',
     '      AUTOSTART: "1"                 # arranca solo con estas variables; sin ella espera «Iniciar» en la interfaz',
     `      DATANODES: "${c.datanodes}"`,
@@ -124,7 +133,7 @@ export function composeYaml(c: ClusterConfig, tag: string = DEFAULT_IMAGE_TAG): 
   if (c.mongodb) L.push('      - "127.0.0.1:27017:27017"           # MongoDB');
   // Siempre: si después se prende JupyterLab desde la interfaz, el puerto ya está publicado
   L.push(`      - "127.0.0.1:8888:8888"             # JupyterLab${c.jupyter ? '' : ' (con JUPYTER: "si")'}`);
-  L.push('    volumes:', '      - bigdata_hadoop:/hadoop              # HDFS, metastore, MySQL y MongoDB', '      - ./datos:/datos                      # tu carpeta datos/ adentro', '    stop_grace_period: 20s', '', 'volumes:', '  bigdata_hadoop:', '    name: bigdata_hadoop', '');
+  L.push('    volumes:', `      - ${`${volumen}:/hadoop`.padEnd(36)}# HDFS, metastore, MySQL y MongoDB`, '      - ./datos:/datos                      # tu carpeta datos/ adentro', '    stop_grace_period: 20s', '', 'volumes:', `  ${volumen}:`, `    name: ${volumen}`, '');
   return L.join('\n');
 }
 

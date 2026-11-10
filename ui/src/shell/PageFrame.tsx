@@ -43,7 +43,7 @@ function NoStatus() {
   return (
     <div className="page-in">
       <EmptyState kind="error" title="No hay conexión con el contenedor"
-        list={['Fijate que el contenedor esté corriendo: docker ps', 'Si lo acabás de levantar, la interfaz tarda unos segundos en contestar', 'Los datos no se pierden: están en el volumen bigdata_hadoop']}
+        list={['Fijate que el contenedor esté corriendo: docker ps', 'Si lo acabás de levantar, la interfaz tarda unos segundos en contestar', 'Los datos no se pierden: están en el volumen del contenedor (bigdata_full con :full, bigdata_empresa con :empresa)']}
         actions={<button type="button" className="btn btn-primary" onClick={retryNow}><RefreshCw size={15} />Reintentar ahora</button>}
         foot={error}>
         La interfaz no recibe el estado del cluster. Vuelve sola cuando el contenedor conteste.

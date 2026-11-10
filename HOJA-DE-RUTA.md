@@ -26,10 +26,22 @@ solo `:full`.
    y las hojas 5 a 9 de `guias/empresa/`, con el release `aula-v1`. Antes,
    pasarle a sistemas la [hoja 7](guias/empresa/07-hoja-para-sistemas.md). Con
    lo que se anote, decidir la clase con las 20.
-2. **Aula 2D y tráfico real:** el editor de filas/racks, el tráfico medido en el
-   `wg0` del maestro, la línea de tiempo de una PC que se cae y YARN en vivo.
-   Solo diseño (sección 11 de `REDISENO-FULL.md`); el plano del aula ya está.
-3. **Terminal en `empresa`:** decidir si va apagada de fábrica (`TERMINAL=0`).
+2. **Aula 2D y tráfico real:** hecho en `ui2-aula-vivo` (sobre el PR #14):
+   - el editor del plano, cuyas filas son los racks (la topología del maestro
+     lee el plano);
+   - el tráfico en el `wg0` del maestro: por PC con `wg` y por par y tipo con
+     `nftables`;
+   - la línea de tiempo de una PC que se cae;
+   - los contenedores de cada trabajo por PC.
+
+   Faltan de la sección 11:
+   - el agente para apagar una PC desde la interfaz (11.3, opcional);
+   - las colas por grupo, la localidad al pasar el mouse y el botón "medir"
+     de la escala (11.4).
+
+   Probarlo con PCs reales es parte de la prueba piloto.
+3. **Terminal en `empresa`:** hecho, apagada de fábrica (`TERMINAL=0`); el
+   maestro del aula la prende.
 4. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*
    con publicar tildado (~2 h). Hoy `:empresa` es del 27/10 y `:trabajador` no
    existe; para el aula alcanza con el release `aula-v1`. Decide Franki.
@@ -44,8 +56,9 @@ solo `:full`.
    `practicas`, `empresa-aula` y las `ui2-*` de PRs mergeados. Quedan
    `empresa` (la usa su workflow), `ui2-ml-etapa-c` (la etapa c) y
    `ui2-ml-pro` (respaldo).
-4. El compose que genera la interfaz usa el volumen `bigdata_hadoop`, no
-   `bigdata_full`: decidir si se unifican.
+4. El compose que genera la interfaz usa el contenedor y el volumen de las
+   guías de su versión (`bigdata-full` y `bigdata_full`; con `empresa`,
+   `bigdata-empresa` y `bigdata_empresa`). Hecho.
 5. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
    reescribiendo `main` con force-push: no hacerlo sin que Franki lo decida.
 
@@ -180,9 +193,11 @@ pruebas de humo.
 - [x] Tema: ¿oscuro por defecto **con selector** de claro? *Decidido el
       2026-10-29 ([D-06](DECISIONES.md)): **todas las interfaces en claro**, sin
       selector. Hecho en el rediseño 360 (PR #10).*
-- [ ] Terminal en `empresa`: si el servidor se publica para otras PCs y se
+- [x] Terminal en `empresa`: si el servidor se publica para otras PCs y se
       suma su nombre a `TERMINAL_HOSTS`, cualquiera que llegue tiene root en el
-      contenedor. Decidir si en `empresa` va apagada de fábrica (`TERMINAL=0`).
+      contenedor. *Hecho: la imagen `empresa` trae `TERMINAL=0`; el maestro del
+      aula la prende (`empresa-profe.cmd`, `-e TERMINAL=1`) porque publica todo
+      solo en `127.0.0.1`.*
 - [x] Rearmar la demo (`docs/demo`) con la autoevaluación y exportar/importar
       (la terminal no anda en la demo: no hay contenedor; el panel lo explica).
       Ojo: el CI (Documentación → `demo`) falla si `docs/demo` no es la
@@ -195,8 +210,11 @@ pruebas de humo.
       que genera la interfaz. *Hecho: README, README.en y guías de `full` con los
       dos; el compose generado publica 8888 aunque JupyterLab esté apagado (se
       puede prender después desde la interfaz).*
-- [ ] El compose que genera la interfaz usa el volumen `bigdata_hadoop` (el de
+- [x] El compose que genera la interfaz usa el volumen `bigdata_hadoop` (el de
       `base`), no `bigdata_full` como el `docker run`: decidir si se unifican.
+      *Hecho: el compose usa el contenedor y el volumen del `docker run` de las
+      guías de su versión (`nombresCompose` en `cluster.ts` y
+      `nombres_compose` en `config.py`).*
 - [x] Seguridad de la API: `TrustedHostMiddleware`, rechazar POST/PUT/PATCH/DELETE
       de otro origen y exigir `application/json`. *Hecho en el PR #4 (rama
       `ui2-seguridad`), que la etapa (a) del ML trae adentro: mismo criterio de

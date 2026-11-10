@@ -117,3 +117,15 @@ def test_compose_de_la_version_full(nn, services):
         assert "8088" not in y
     else:
         assert "9868:9868" in y and "8088:8088" in y
+
+
+@pytest.mark.parametrize("tag, contenedor, volumen", [("full", "bigdata-full", "bigdata_full"),
+                                                     ("empresa", "bigdata-empresa", "bigdata_empresa"),
+                                                     ("base", "bigdata", "bigdata_hadoop")])
+def test_compose_con_el_volumen_de_cada_version(tag, contenedor, volumen, monkeypatch):
+    """El mismo contenedor y volumen que el docker run de las guías de cada versión (antes era el de base)."""
+    monkeypatch.setenv("SANDBOX_VERSION", tag)
+    y = cfg.compose_yaml(cfg.normalize({}))
+    assert f"    container_name: {contenedor}\n" in y and f"name: {contenedor}\n" in y
+    assert f"volumes:\n  {volumen}:\n    name: {volumen}\n" in y and f"      - {volumen}:/hadoop " in y
+

@@ -16,6 +16,7 @@ cuando el humo no pasó por ese estado.
 | `fsck_dn_muerto.txt` | lo mismo, con dn2 apagado y ya dado por muerto | real |
 | `dfsadmin_report.txt` | `hdfs dfsadmin -report` | real |
 | `jps.txt` | `jps -l` | real |
+| `nft_set_hdfs.json` | `nft -j list set inet aula_trafico hdfs` (nftables 1.0.9, las reglas de `aula_vivo.reglas_nft` sobre `lo` con 2 MB al puerto 9866) | real, con las IPs cambiadas a las del túnel |
 | `nn_jmx.json` | `:9870/jmx?qry=Hadoop:service=NameNode,name=` `FSNamesystemState`, `FSNamesystem` y `NameNodeInfo` (los tres `beans` juntos en uno) | real |
 | `nn_jmx_dn_muerto.json` | `NameNodeInfo` con dn2 muerto | real |
 | `nn_status_active.json` | `name=NameNodeStatus` | real |

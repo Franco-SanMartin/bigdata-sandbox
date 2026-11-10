@@ -4,9 +4,11 @@
    si dejó de contestar y roja caída; adentro, cuánta memoria de YARN presta y usa, sus bloques
    y sus contenedores. Arriba, el aula en números y cuándo se puede apagar sin perder nada; al
    costado, cómo sumar PCs por Veyon y el detalle de la PC elegida.
-   Pensada para proyectarla con la Demostración de Veyon: pantalla completa y mucho contraste. */
-import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Maximize2, Minimize2, MonitorSmartphone, Power, X } from 'lucide-react';
+   Pensada para proyectarla con la Demostración de Veyon: pantalla completa y mucho contraste.
+   Abajo, el aula en vivo: el tráfico entre las PCs (lo que pasa por el wg0 del maestro) y la línea de tiempo de
+   una PC que se cae. El plano (en qué fila y lugar está cada PC) se dibuja con el editor: sus filas son los racks. */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, LayoutGrid, Maximize2, Minimize2, MonitorSmartphone, Power, X } from 'lucide-react';
 import { useSnapshot } from '../../state/store';
 import { useApi } from '../../state/useApi';
 import { EmptyState, PageHeader, type Tone } from '../../components/base';
@@ -14,7 +16,14 @@ import { Meter } from '../../components/ui';
 import { mbLabel, nf, plural } from '../../lib/format';
 import { filasDelAula, LAMPARA } from '../../lib/aula';
 import type { AulaPc, AulaStatus } from '../../api/types';
+import { Caidas } from './Caidas';
+import { EditorPlano } from './Plano';
+import { Red } from './Red';
 import './aula.css';
+
+/* Un color por trabajo de YARN, el mismo en todas las PCs (el ApplicationMaster va con borde) */
+const COLORES = ['var(--viz-1)', 'var(--viz-3)', 'var(--viz-5)', 'var(--viz-2)', 'var(--viz-4)', 'var(--viz-6)'];
+type ColorDe = (app: string) => string;
 
 function Copiar({ texto, label }: { texto: string; label: string }) {
   const [ok, setOk] = useState(false);
@@ -100,7 +109,7 @@ function Maestro({ a }: { a: AulaStatus }) {
   );
 }
 
-function Pc({ pc, sel, onSel }: { pc: AulaPc; sel: boolean; onSel: () => void }) {
+function Pc({ pc, sel, onSel, color }: { pc: AulaPc; sel: boolean; onSel: () => void; color: ColorDe }) {
   const l = LAMPARA[pc.estado];
   const nm = pc.nodemanager;
   const mb = nm?.mb ?? pc.prestaMb ?? null;
@@ -124,15 +133,20 @@ function Pc({ pc, sel, onSel }: { pc: AulaPc; sel: boolean; onSel: () => void })
         </span>
         <span className="au-pc-f">
           <span className="num">{pc.datanode ? `${nf(pc.datanode.bloques)} bloques` : 'sin DataNode'}</span>
-          {cont > 0 && <span className="au-cont" title={plural(cont, 'contenedor', 'contenedores') + ' corriendo'}>{Array.from({ length: Math.min(cont, 8) }, (_, i) => <i key={i} />)}{cont > 8 && <em>+{cont - 8}</em>}</span>}
+          {pc.apps?.length
+            ? <span className="au-cont" title={pc.apps.map(x => `${x.app}: ${plural(x.n, 'contenedor', 'contenedores')}${x.am ? ' (con el ApplicationMaster)' : ''}`).join('\n')}>
+                {pc.apps.flatMap(x => Array.from({ length: Math.min(x.n, 6) }, (_, i) => <i key={`${x.app}-${i}`} style={{ background: color(x.app) }} data-am={x.am && i === 0 || undefined} />))}
+              </span>
+            : cont > 0 && <span className="au-cont" title={plural(cont, 'contenedor', 'contenedores') + ' corriendo'}>{Array.from({ length: Math.min(cont, 8) }, (_, i) => <i key={i} />)}{cont > 8 && <em>+{cont - 8}</em>}</span>}
         </span>
       </button>
     </li>
   );
 }
 
-function Fila({ fila, pcs, sel, onSel }: { fila: string; pcs: AulaPc[]; sel: string | null; onSel: (n: string) => void }) {
+function Fila({ fila, lugares, sel, onSel, color }: { fila: string; lugares: (AulaPc | null)[]; sel: string | null; onSel: (n: string) => void; color: ColorDe }) {
   const n = /^\/fila(\d+)$/.exec(fila)?.[1];
+  const pcs = lugares.filter((p): p is AulaPc => !!p);
   const arriba = pcs.filter(p => p.estado === 'arriba').length;
   const mb = pcs.reduce((s, p) => s + (p.nodemanager?.mb ?? p.prestaMb ?? 0), 0);
   return (
@@ -142,7 +156,9 @@ function Fila({ fila, pcs, sel, onSel }: { fila: string; pcs: AulaPc[]; sel: str
         <span className="mono">rack {fila}</span>
         <span className="au-lane-r">{arriba} de {plural(pcs.length, 'PC')} arriba · {mbLabel(mb)} para trabajos</span>
       </header>
-      <ul className="au-pcs">{pcs.map(pc => <Pc key={pc.nodo} pc={pc} sel={sel === pc.nodo} onSel={() => onSel(pc.nodo)} />)}</ul>
+      <ul className="au-pcs">{lugares.map((pc, i) => (pc
+        ? <Pc key={pc.nodo} pc={pc} sel={sel === pc.nodo} onSel={() => onSel(pc.nodo)} color={color} />
+        : <li key={`libre-${i}`}><div className="au-pc-libre" aria-label="Lugar libre">lugar libre</div></li>))}</ul>
     </div>
   );
 }
@@ -220,7 +236,10 @@ export function AulaPage() {
   const caja = useRef<HTMLDivElement>(null);
   const [completa, setCompleta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  const [editando, setEditando] = useState(false);
   useEffect(() => { const f = () => setCompleta(!!document.fullscreenElement); document.addEventListener('fullscreenchange', f); return () => document.removeEventListener('fullscreenchange', f); }, []);
+  const apps = useMemo(() => [...new Set((a?.pcs ?? []).flatMap(p => (p.apps ?? []).map(x => x.app)))].sort(), [a?.pcs]);
+  const color: ColorDe = x => COLORES[Math.max(0, apps.indexOf(x)) % COLORES.length];
 
   if (!a) {
     return (
@@ -236,21 +255,36 @@ export function AulaPage() {
   }
   const total = a.pcs.length;
   const tono: Tone = a.resumen.caida ? 'bad' : a.resumen.sumandose || a.resumen['sin-respuesta'] ? 'run' : total ? 'ok' : 'off';
-  const filas = filasDelAula(a.pcs);
+  // Con plano: las filas y los lugares del profe (con los lugares libres); las PCs sin ubicar, al final
+  const por = new Map(a.pcs.map(p => [p.nodo, p]));
+  const filas: [string, (AulaPc | null)[]][] = a.plano
+    ? [...a.plano.filas.map((f, i) => [`/fila${i + 1}`, f.map(x => (x ? por.get(x) ?? null : null))] as [string, (AulaPc | null)[]]),
+       ...(a.pcs.some(p => !p.lugar) ? [['sin ubicar', a.pcs.filter(p => !p.lugar)] as [string, (AulaPc | null)[]]] : [])]
+    : filasDelAula(a.pcs);
   const elegida = a.pcs.find(p => p.nodo === sel) ?? null;
   return (
     <div className="page-in au" ref={caja}>
       <PageHeader title="El aula"
         sub={<>Las PCs del laboratorio armando un solo cluster: cada fila es un rack de HDFS{demo && ' · demo: así se ve con las 11 PCs del 27/10'}</>}
         status={{ k: tono, label: total ? `${a.resumen.arriba} de ${plural(total, 'PC')} arriba` : 'Ninguna PC todavía' }}
-        actions={<button type="button" className="btn btn-sm" onClick={() => completa ? document.exitFullscreen() : caja.current?.requestFullscreen()}>
-          {completa ? <Minimize2 size={13} /> : <Maximize2 size={13} />}{completa ? 'Salir' : 'Pantalla completa'}</button>} />
+        actions={<>
+          <button type="button" className="btn btn-sm" aria-pressed={editando} onClick={() => setEditando(e => !e)}><LayoutGrid size={13} />{editando ? 'Ver el aula' : 'Editar el plano'}</button>
+          <button type="button" className="btn btn-sm" onClick={() => completa ? document.exitFullscreen() : caja.current?.requestFullscreen()}>
+            {completa ? <Minimize2 size={13} /> : <Maximize2 size={13} />}{completa ? 'Salir' : 'Pantalla completa'}</button>
+        </>} />
       <Numeros a={a} />
+      {editando && <EditorPlano a={a} onCerrar={() => setEditando(false)} onGuardado={() => { setEditando(false); reload(); }} />}
       <div className="au-main">
         <section className="au-plano" aria-label="El plano del laboratorio">
           <Maestro a={a} />
           {filas.length === 0 && <EmptyState kind="empty" title="Todavía no se sumó ninguna PC">Mandá el .cmd por Veyon con la línea de al lado: cada PC aparece acá apenas se inscribe.</EmptyState>}
-          {filas.map(([fila, pcs]) => <Fila key={fila} fila={fila} pcs={pcs} sel={sel} onSel={n => setSel(s => (s === n ? null : n))} />)}
+          {filas.map(([fila, lugares]) => <Fila key={fila} fila={fila} lugares={lugares} sel={sel} onSel={n => setSel(s => (s === n ? null : n))} color={color} />)}
+          {apps.length > 0 && (
+            <ul className="au-leyenda au-leyenda-apps" aria-label="Los trabajos que corren en el aula">
+              {apps.map(x => <li key={x}><span className="au-clase" style={{ background: color(x) }} /><span className="mono">{x.replace(/^application_\d+_/, 'app ')}</span></li>)}
+              <li><small>cada cuadradito es un contenedor de YARN; con borde, el ApplicationMaster</small></li>
+            </ul>
+          )}
           <ul className="au-leyenda" aria-label="Qué quiere decir cada color">
             {(['sumandose', 'arriba', 'sin-respuesta', 'caida'] as const).map(e => <li key={e}><span className="au-lamp" data-k={LAMPARA[e].k} aria-hidden="true" /><b>{LAMPARA[e].label}</b><small>{LAMPARA[e].que}</small></li>)}
           </ul>
@@ -265,6 +299,10 @@ export function AulaPage() {
             </section>
           )}
         </aside>
+      </div>
+      <div className="au-vivo">
+        <Red a={a} />
+        <Caidas />
       </div>
     </div>
   );

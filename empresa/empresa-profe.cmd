@@ -170,11 +170,18 @@ function Arrancar {
             '--sysctl', 'net.ipv4.ip_forward=1', '--stop-timeout', '20',
             '-p', '51820:51820/udp', '-p', '8099:8099') + $local + @(
             '-v', "$($volumen):/hadoop", '-v', "$($datos):/datos",
-            '-e', 'ROL=maestro', '-e', 'RED=wireguard', '-e', "CODIGO=$codigo", '-e', "IP_AULA=$ip",
+            '-e', 'ROL=maestro', '-e', 'RED=wireguard', '-e', "CODIGO=$codigo", '-e', "IP_AULA=$ip", '-e', 'TERMINAL=1',
             '-e', "PC_NOMBRE=$($d.nombre)", '-e', "CARPETA_VEYON=$(CarpetaParaVeyon)", $imagen)
         & docker @dargs | Out-Null
         if ($LASTEXITCODE -ne 0) { Decir 'No se pudo crear el maestro (mira el mensaje de Docker arriba).'; exit 1 }
         Decir 'Maestro creado: arranca el tunel, la inscripcion y despues Hadoop.'
+        # El plano del aula de otra clase (lo exporta la vista Aula): sus filas son los racks de HDFS
+        $plano = Join-Path $carpeta 'plano-aula.json'
+        if (Test-Path $plano) {
+            docker exec $contenedor mkdir -p /hadoop/aula | Out-Null
+            docker cp $plano "$($contenedor):/hadoop/aula/plano.json" | Out-Null
+            if ($LASTEXITCODE -eq 0) { Decir 'Plano del aula: plano-aula.json (las filas son los racks).' }
+        }
     }
     # El codigo y la linea los guarda el contenedor (son los mismos aunque se corra esto otra vez)
     $codigo = ''

@@ -3,7 +3,7 @@ import { api } from '../api';
 import type { ClusterConfig, ExampleJob, Process, StepRequest, TrainRequest, UploadRequest } from '../api/types';
 import { getSnapshot } from './store';
 import { confirm, navigate, toast } from './ui';
-import { configSummary } from '../lib/cluster';
+import { configSummary, nombresCompose } from '../lib/cluster';
 import { plural } from '../lib/format';
 
 async function run(p: Promise<unknown>, ok?: { title: string; description?: string; kind?: 'ok' | 'run' }) {
@@ -49,7 +49,7 @@ export async function resetVolume() {
   const ok = await confirm({
     title: 'Borrar el volumen', danger: true, confirmLabel: 'Borrar todo',
     description: 'Se pierde todo HDFS, las tablas de Hive, la base tienda de MySQL y MongoDB. El próximo arranque formatea de cero. No se puede deshacer.',
-    facts: [['Volumen', 'bigdata_hadoop'], ['Equivale a', 'docker compose down -v']],
+    facts: [['Volumen', nombresCompose(getSnapshot().status?.image.tag).volumen], ['Equivale a', 'docker compose down -v']],
   });
   if (ok) await run(api().resetVolume(), { title: 'Volumen borrado', kind: 'ok' });
 }

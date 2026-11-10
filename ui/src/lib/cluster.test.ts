@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClusterStatus, DataNode, Process } from '../api/types';
-import { DEFAULT_CONFIG, clusterHealth, composeYaml, configDiff } from './cluster';
+import { DEFAULT_CONFIG, clusterHealth, composeYaml, configDiff, nombresCompose } from './cluster';
 
 const proc = (id: string, kind: Process['kind'], state: Process['state'] = 'up'): Process =>
   ({ id, kind, name: id === 'rm' ? 'ResourceManager' : kind === 'datanode' ? `DataNode ${id.slice(2)}` : id, layer: 'hdfs', state, ports: [], controllable: true });
@@ -72,6 +72,17 @@ describe('composeYaml', () => {
       expect(y).toContain('"127.0.0.1:8888:8888"');
     }
     expect(composeYaml({ ...DEFAULT_CONFIG, jupyter: false })).toContain('# JupyterLab (con JUPYTER: "si")');
+  });
+
+  it('usa el contenedor y el volumen de las guías de cada versión', () => {
+    const full = composeYaml(DEFAULT_CONFIG);
+    expect(full).toContain('    container_name: bigdata-full\n');
+    expect(full).toContain('      - bigdata_full:/hadoop ');
+    expect(full).toContain('volumes:\n  bigdata_full:\n    name: bigdata_full\n');
+    expect(full).not.toContain('bigdata_hadoop');
+    expect(composeYaml(DEFAULT_CONFIG, 'empresa')).toContain('    container_name: bigdata-empresa\n');
+    expect(nombresCompose('base')).toEqual({ contenedor: 'bigdata', volumen: 'bigdata_hadoop' });
+    expect(nombresCompose('../x')).toEqual({ contenedor: 'bigdata-full', volumen: 'bigdata_full' });
   });
 
   it('toma el tag de la imagen que corre', () => {
