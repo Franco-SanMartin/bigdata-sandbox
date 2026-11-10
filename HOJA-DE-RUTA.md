@@ -51,9 +51,11 @@ publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
    existe; para el aula alcanza con el release `aula-v1`. Decide Franki.
 
 **`base`, `latest` y mantenimiento:**
-1. **Hive 4.0.0 ya no está en dlcdn** (404): el build baja de
-   archive.apache.org con reintentos y falla si se cae. Guardar el tarball en un
-   release propio lo resuelve.
+1. **Hive 4.0.0 ya no está en dlcdn** (404): el tarball quedó en el release
+   [`deps-hive-4.0.0`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/deps-hive-4.0.0)
+   (verificado con el sha256 de Apache). La rama `ui2-hive-release` (PR abierto)
+   lo usa cuando archive.apache.org no contesta y verifica el sha256 siempre.
+   **Toca `base`: mergearlo republica `latest`.** Decide Franki cuándo.
 2. Correr el workflow **aula** para que el `.tar.gz` del release coincida con
    `latest`.
 3. Borrar las ramas que ya están en `main`: `full`, `versiones`, `ui`, `ui2`,
