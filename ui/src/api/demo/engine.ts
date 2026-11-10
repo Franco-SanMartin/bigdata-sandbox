@@ -179,7 +179,7 @@ export class DemoEngine {
   stop(then?: () => void) {
     if (this.phase !== 'running') return;
     this.phase = 'stopping';
-    this.act('Vos', 'info', 'Apagando el cluster en orden', { command: 'docker compose stop', input: `${this.procs.size} procesos`, action: 'Apaga MySQL, Hive, YARN y al final HDFS, para que nada quede a medio escribir', output: 'Los datos quedan en el volumen bigdata_hadoop' });
+    this.act('Vos', 'info', 'Apagando el cluster en orden', { command: 'docker compose stop', input: `${this.procs.size} procesos`, action: 'Apaga MySQL, Hive, YARN y al final HDFS, para que nada quede a medio escribir', output: 'Los datos quedan en el volumen bigdata_full' });
     this.jobs.filter(a => a.state === 'RUNNING' || a.state === 'ACCEPTED').forEach(a => { a.state = 'KILLED'; a.end = this.now(); a.conts = []; });
     const order = ['ui', 'jupyter', 'mongodb', 'hiveserver2', 'metastore', 'sparkhistory', 'mysql', 'jh', 'nm', 'rm'];
     const ids = [...this.procs.keys()].sort((a, b) => { const ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
@@ -199,7 +199,7 @@ export class DemoEngine {
   resetVolume() {
     if (this.phase !== 'stopped') return;
     this.files = []; this.dirs.clear(); this.dirsReady = false; this.transfers = []; this.libs = false; this.volumeNN = null; this.applied = null; this.dns = []; this.jobs = [];
-    this.act('Vos', 'warn', 'Volumen borrado', { command: 'docker compose down -v', input: 'volumen bigdata_hadoop', action: 'Borra HDFS, el metastore de Hive, MySQL y MongoDB', output: 'El próximo arranque formatea todo de cero. Ya podés cambiar la cantidad de NameNodes.' });
+    this.act('Vos', 'warn', 'Volumen borrado', { command: 'docker compose down -v', input: 'volumen bigdata_full', action: 'Borra HDFS, el metastore de Hive, MySQL y MongoDB', output: 'El próximo arranque formatea todo de cero. Ya podés cambiar la cantidad de NameNodes.' });
     this.emit();
   }
 
