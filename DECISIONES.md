@@ -7,6 +7,27 @@ la [hoja de ruta](HOJA-DE-RUTA.md).
 
 ---
 
+## D-08 · ML: biblioteca de modelos propia, no MLflow (2026-11-10)
+
+**Decisión:** la biblioteca de modelos de la etapa (d) es un registro propio. Son
+archivos JSON en el volumen (`/hadoop/ml/biblioteca`) y el modelo copiado en HDFS.
+No se usa MLflow con MariaDB. Toma las ideas del Model Registry de MLflow:
+- versiones;
+- estados (candidato, en producción, archivado);
+- linaje;
+- promover y volver atrás.
+
+La deriva se mide con el PSI por variable, contra una referencia que cada
+experimento guarda al entrenar.
+
+**Por qué:** MLflow suma un servidor más, una base y unos 100 MB de librerías.
+Guardaría lo mismo que el estudio ya escribe en `experimento.json`, y a la imagen
+le cuesta memoria en las PCs del aula. Con archivos se ve todo desde la terminal,
+y `exportar` arma un paquete (`servir.py`, `Dockerfile`, ficha) para usar el modelo
+fuera del sandbox.
+
+---
+
 ## D-07 · El hub maneja git y el CI de noche, con poco desarrollo (2026-10-29)
 
 **Decisión:** mientras Franki duerme o no está con la compu, el *hub* (la sesión de

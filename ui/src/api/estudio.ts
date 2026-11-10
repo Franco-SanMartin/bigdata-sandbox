@@ -390,7 +390,17 @@ export interface MlLinea { n: number; stream: 'out' | 'err'; texto: string }
 export interface MlCorrida {
   /** Id de la acción del servidor */
   id: string;
-  experimento: string;
+  /** El experimento que registra (null en una predicción por lotes) */
+  experimento: string | null;
+  /** 'lote': una predicción por lotes de la biblioteca (POST /api/ml/library/{nombre}/batch) */
+  tipo?: 'lote';
+  lote?: string;
+  modelo?: string;
+  version?: number;
+  /** El resumen del lote cuando terminó bien */
+  resultado?: MlResumenLote;
+  errorDetalle?: string | null;
+  recursos?: MlRecursos | null;
   estado: 'corriendo' | 'listo' | 'falló';
   progreso: number;
   mensaje: string;
@@ -535,9 +545,186 @@ export interface MlExperimento {
   umbral?: { criterio: MlCriterioUmbral; valor: number; nota: number } | null;
   /** Cómo se evaluó: entrenamiento, validación y prueba separados */
   evaluacion?: string | null;
+  /** Las columnas que tienen que venir en los datos nuevos para predecir (con su tipo en el entrenamiento) */
+  entrada?: MlColumnaEntrada[] | null;
   informe: MlInforme | null;
   /** Id de la corrida si todavía está corriendo */
   corriendo: string | null;
 }
 
 export interface MlPrediccion { filas: number; columnas: string[]; muestra: MlValor[][]; archivo?: string }
+
+/* ---------- Biblioteca de modelos y predicción (etapa d) ---------- */
+
+export type MlEstadoVersion = 'candidato' | 'produccion' | 'archivado';
+export type MlNivelDeriva = 'estable' | 'moderada' | 'fuerte';
+
+/** Una columna que tiene que venir en los datos nuevos: su rol y su tipo en el entrenamiento */
+export interface MlColumnaEntrada { columna: string; rol: string; tipo: string | null }
+
+/** De dónde salió una versión */
+export interface MlLinaje {
+  experimento: string;
+  nombre_experimento?: string | null;
+  entrenado?: string | null;
+  datos: (MlDatos & { filas?: number; columnas?: number; hash?: string }) | null;
+  filas?: { entrenamiento: number; prueba: number; validacion?: number } | null;
+  limpieza: { nombre?: string | null; version?: number | null; pasos: number } | null;
+  huella_receta: string | null;
+  objetivo: string | null;
+  variables: Record<'numerica' | 'categorica' | 'fecha' | 'texto', string[]> | null;
+  validacion: Partial<Record<'particion' | 'prueba' | 'validacion' | 'cv' | 'k' | 'metrica' | 'umbral' | 'semilla', MlValor>>;
+  busqueda: { tipo: string; candidatos?: number; mejores_params?: Record<string, MlValor> } | null;
+  yarn: string | null;
+  recursos: MlRecursos | null;
+  entorno: Record<string, string | number> | null;
+  editado: boolean;
+}
+
+export interface MlVersion {
+  version: number;
+  estado: MlEstadoVersion;
+  creado: string;
+  promovida?: string;
+  nota: string;
+  experimento: string;
+  motor: MlMotor;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  modelo: { id: string; etiqueta: string; clase: string; params: Record<string, MlValor> };
+  metricas: Record<string, MlMetricaValores>;
+  umbral?: { criterio: MlCriterioUmbral; valor: number; nota: number } | null;
+  clases?: string[] | null;
+  entrada?: MlColumnaEntrada[] | null;
+  /** Si guardó la referencia del entrenamiento para medir la deriva */
+  deriva: boolean;
+  /** Dónde está el modelo: hdfs:///... (Spark) o el modelo.joblib del volumen */
+  artefacto: string;
+  copia_hdfs?: string;
+  modelo_bytes?: number | null;
+  linaje: MlLinaje;
+}
+
+export interface MlHistorialBiblioteca {
+  cuando: string;
+  accion: 'registrar' | 'promover' | 'archivar' | 'volver';
+  version: number;
+  nota: string;
+  detalle: string;
+}
+
+/** GET /api/ml/library: una fila por modelo */
+export interface MlModeloFila {
+  nombre: string;
+  descripcion: string | null;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  versiones: number;
+  produccion: number | null;
+  valor: number | null;
+  motor: MlMotor | null;
+  modeloEtiqueta: string | null;
+  candidatas: number;
+  creado: string;
+  actualizado: string;
+}
+
+export interface MlModeloBiblioteca {
+  nombre: string;
+  descripcion: string;
+  creado: string;
+  actualizado: string;
+  tarea: MlTarea;
+  objetivo: string | null;
+  metrica: string | null;
+  versiones: MlVersion[];
+  historial: MlHistorialBiblioteca[];
+  /** Los últimos lotes de predicción con este modelo */
+  lotes: MlLote[];
+}
+
+export interface MlComparacionVersiones {
+  nombre: string;
+  metrica: string | null;
+  versiones: { version: number; estado: MlEstadoVersion; motor: MlMotor; modelo: string; experimento: string; creado: string; umbral?: MlVersion['umbral'] }[];
+  metricas: { metrica: string; etiqueta: string; mayor_mejor: boolean; valores: (number | null)[]; mejor: number[] | null; principal: boolean }[];
+  params: { param: string; valores: MlValor[]; cambia: boolean }[];
+  datos: { version: number; fuente: string | null; filas: MlLinaje['filas']; huella: string | null; limpieza: MlLinaje['limpieza'] }[];
+}
+
+export interface MlDerivaColumna {
+  columna: string;
+  tipo: 'numerica' | 'categorica';
+  /** null: la columna no vino en los datos nuevos */
+  psi: number | null;
+  nivel: MlNivelDeriva | null;
+  etiquetas: string[];
+  referencia: number[];
+  nuevo: number[] | null;
+}
+
+export interface MlDeriva {
+  nivel: MlNivelDeriva | null;
+  psi_max: number | null;
+  filas_referencia: number | null;
+  filas_nuevas: number | null;
+  columnas: MlDerivaColumna[];
+  explicacion: string;
+}
+
+export type MlSalidaLote =
+  | { tipo: 'hdfs'; ruta: string; formato: 'parquet' | 'orc' | 'csv' | 'json'; modo: 'overwrite' | 'append' | 'error' }
+  | { tipo: 'hive'; tabla: string; modo: 'overwrite' | 'append' | 'error' };
+
+/** Lo que imprime el script del lote al terminar (@@prediccion@@) */
+export interface MlResumenLote {
+  modelo: string;
+  version: number;
+  motor: MlMotor;
+  salida: MlSalidaLote;
+  destino: string;
+  app_id?: string;
+  filas: number;
+  columnas: string[];
+  nuevas: string[];
+  muestra: MlValor[][];
+  conteo?: Record<string, number>;
+  esquema: { faltan: string[]; sobran: string[]; convertidas: { columna: string; de: string; a: string; no_convertidos: number }[] };
+  deriva: MlDeriva | null;
+  avisos: string[];
+  tiempo: number;
+}
+
+/** Un lote de predicción (lote.json en /hadoop/ml/lotes) */
+export interface MlLote {
+  id: string;
+  modelo: string;
+  version: number;
+  estado_version?: MlEstadoVersion;
+  motor_modelo?: MlMotor;
+  titulo?: string;
+  datos: MlDatos;
+  salida: MlSalidaLote;
+  entrada?: string;
+  estado: 'corriendo' | 'listo' | 'falló';
+  creado: string;
+  terminado?: string;
+  resumen?: MlResumenLote;
+  error?: string;
+  error_detalle?: string | null;
+  app_id?: string | null;
+  recursos?: MlRecursos | null;
+  memoria_pico_mb?: number | null;
+  memoria_yarn_mb?: number | null;
+}
+
+export interface MlPedidoLote {
+  version?: number | null;
+  datos: MlDatos;
+  salida: Partial<MlSalidaLote> & { tipo: 'hdfs' | 'hive' };
+  recursos?: Partial<MlRecursos>;
+  minutos?: number;
+}
+

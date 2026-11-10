@@ -116,6 +116,20 @@ export function createHttpApi(): SandboxApi {
     }),
     mlToJupyter: id => req('POST', `/ml/experiments/${encodeURIComponent(id)}/jupyter`),
     mlPredict: (id, r) => req('POST', `/ml/experiments/${encodeURIComponent(id)}/predict`, r),
+    mlLibrary: () => req('GET', '/ml/library'),
+    mlLibraryModel: n => req('GET', `/ml/library/${encodeURIComponent(n)}`),
+    mlLibraryRegister: r => req('POST', '/ml/library', r),
+    mlLibraryState: (n, r) => req('POST', `/ml/library/${encodeURIComponent(n)}/state`, r),
+    mlLibraryDescribe: (n, descripcion) => req('POST', `/ml/library/${encodeURIComponent(n)}/describe`, { descripcion }),
+    mlLibraryCompare: (n, vs) => req('GET', `/ml/library/${encodeURIComponent(n)}/compare?${q({ versiones: vs.join(',') })}`),
+    mlLibraryPredict: (n, r) => req('POST', `/ml/library/${encodeURIComponent(n)}/predict`, r),
+    mlLibraryBatchCode: (n, r) => req('POST', `/ml/library/${encodeURIComponent(n)}/code`, r),
+    mlLibraryBatch: (n, r) => req('POST', `/ml/library/${encodeURIComponent(n)}/batch`, r),
+    mlLibraryBatches: () => req('GET', '/ml/library/batches'),
+    mlLibraryExport: async (n, v) => ({
+      url: `./api/ml/library/${encodeURIComponent(n)}/export?${q({ version: v == null ? undefined : String(v) })}`,
+      name: `${n}${v == null ? '' : `-v${v}`}.zip`,
+    }),
   };
 }
 

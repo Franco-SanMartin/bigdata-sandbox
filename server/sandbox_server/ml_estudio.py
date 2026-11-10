@@ -538,7 +538,9 @@ class Estudio:
                                  exp_id=nuevo_id(), editado=True, recursos=recursos)
 
     async def lanzar(self, codigo: str, motor: str, r: dict | None, origen: str, *, minutos: int, memoria_mb: int,
-                     exp_id: str, editado: bool, recursos: dict | None = None) -> dict:
+                     exp_id: str, editado: bool, recursos: dict | None = None, lote: dict | None = None) -> dict:
+        """Corre el script como trabajo (uno a la vez). Con lote ({carpeta, titulo, entrada, ...}) es una predicción
+        por lotes de la biblioteca: va a su carpeta, sin experimento.json, y al terminar deja lote.json."""
         self.need_ml()
         if motor == "spark":
             self.c.need_proc("rm", "YARN (ResourceManager)")
@@ -547,9 +549,11 @@ class Estudio:
             raise ApiError("Ya hay una corrida de ML en curso: esperá a que termine o cancelala", "busy")
         if r is not None and r["datos"]["origen"] == "hdfs":
             self.c.need_hdfs()
-        d = self.raiz / exp_id
+        d = Path(lote["carpeta"]) if lote else self.raiz / exp_id
         d.mkdir(parents=True, exist_ok=True)
         (d / "codigo.py").write_text(codigo, encoding="utf-8")
+        if lote:
+            return self._lanzar_lote(d, lote, exp_id, minutos, memoria_mb, recursos)
         m = cat.MODELOS.get((r or {}).get("modelo", {}).get("id", ""))
         previo = {"id": exp_id, "estado": "corriendo", "origen": origen, "editado": editado, "motor": motor,
                   "creado": time.strftime("%Y-%m-%dT%H:%M:%S"), "receta": r, "huella": rec.huella(r) if r else None,
@@ -574,6 +578,10 @@ class Estudio:
         c = {"id": run.id, "experimento": exp_id, "estado": "corriendo", "progreso": 0.0, "mensaje": "Arrancando",
              "motor": motor, "titulo": titulo, "origen": origen, "inicio": now_ms(), "ajustes": None,
              "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None, "recursos": recursos}
+        self._seguir_corrida(run, c, d, minutos, memoria_mb)
+        return {"id": exp_id, "run": run.id}
+
+    def _seguir_corrida(self, run, c: dict, d: Path, minutos: int, memoria_mb: int) -> None:
         self.corridas[run.id] = c
         while len(self.corridas) > MAX_CORRIDAS:
             self.corridas.popitem(last=False)
@@ -581,7 +589,24 @@ class Estudio:
         t = asyncio.get_running_loop().create_task(self._seguir(run, c, d, minutos, memoria_mb))
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
-        return {"id": exp_id, "run": run.id}
+
+    def _lanzar_lote(self, d: Path, lote: dict, lote_id: str, minutos: int, memoria_mb: int, recursos: dict | None) -> dict:
+        info = {k: v for k, v in lote.items() if k != "carpeta"}
+        info.update(id=lote_id, estado="corriendo", creado=time.strftime("%Y-%m-%dT%H:%M:%S"), recursos=recursos)
+        (d / "lote.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+        argv = ["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), "--name", f"estudio-ml: {lote_id}",
+                "codigo.py"]
+        titulo = lote["titulo"]
+        run = self.runner.start(Action(
+            f"Predicción por lotes: {titulo}", argv, display=self.comando_texto("spark", f"{lote_id}.py", recursos),
+            input=lote.get("entrada") or "datos nuevos", action=f"{titulo}, con un límite de {minutos} min",
+            source="ML", timeout=minutos * 60 + 30, env=self.env(None, "lote"), cwd=str(d)))
+        c = {"id": run.id, "experimento": None, "tipo": "lote", "lote": lote_id, "estado": "corriendo", "progreso": 0.0,
+             "mensaje": "Arrancando", "motor": "spark", "titulo": titulo, "origen": "lote", "inicio": now_ms(),
+             "ajustes": None, "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None,
+             "recursos": recursos, "modelo": lote.get("modelo"), "version": lote.get("version")}
+        self._seguir_corrida(run, c, d, minutos, memoria_mb)
+        return {"id": lote_id, "run": run.id}
 
     def _leer(self, run, c: dict, estado: dict) -> bool:
         """Lee las líneas nuevas: avance, ajustes de la búsqueda y la app de YARN. True si algo cambió."""
@@ -680,6 +705,9 @@ class Estudio:
             (d / "salida.log").write_text("\n".join(l["text"] for l in run.lines) + "\n", encoding="utf-8")
         except OSError:
             pass
+        if c.get("tipo") == "lote":
+            await self._terminar_lote(run, c, d)
+            return
         exp = self._leer_json(d / "experimento.json") or {}
         ok = run.state == "done"
         if ok and exp.get("estado") == "listo":
@@ -718,6 +746,32 @@ class Estudio:
         self._resumen.pop(d.name, None)
         level = "ok" if c["estado"] == "listo" else "error"
         self.bus.log("ML", level, f"{c['titulo']}: {c['mensaje']}", appId=c.get("appId"))
+        self.emit(c)
+
+    async def _terminar_lote(self, run, c: dict, d: Path) -> None:
+        lote = self._leer_json(d / "lote.json") or {}
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PREDICCION)), None)
+        if run.state == "done" and linea:
+            res = json.loads(linea[len(PREDICCION):])
+            filas = res.get("filas")
+            c.update(estado="listo", progreso=1.0, resultado=res,
+                     mensaje=f"{filas:,} predicciones en {res.get('destino')}" if isinstance(filas, int) else "Listo")
+            lote.update(estado="listo", resumen=res)
+        else:
+            err = run.error or "terminó con código " + str(run.exitCode)
+            detalle = None
+            if not (run.error and run.error.startswith("cortado")):
+                e = self._explicar(run)
+                if e:
+                    err, detalle = e["mensaje"], e.get("detalle")
+            c.update(estado="falló", error=err[:500], errorDetalle=(detalle or "")[:800] or None, mensaje=err[:200])
+            lote.update(estado="falló", error=err[:500], error_detalle=(detalle or "")[:800] or None)
+        lote.update(terminado=time.strftime("%Y-%m-%dT%H:%M:%S"), app_id=c.get("appId"),
+                    memoria_pico_mb=c.get("memoriaPicoMb"))
+        if c.get("appId"):
+            lote["memoria_yarn_mb"] = await self.yarn_mb(c["appId"])
+        (d / "lote.json").write_text(json.dumps(lote, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        self.bus.log("ML", "ok" if c["estado"] == "listo" else "error", f"{c['titulo']}: {c['mensaje']}", appId=c.get("appId"))
         self.emit(c)
 
     @staticmethod
@@ -892,6 +946,10 @@ class Estudio:
         e = self._leer_json(d / "experimento.json") or {}
         if e.get("estado") != "listo":
             raise ApiError("Ese experimento no terminó bien: no tiene un modelo para predecir", "invalid")
+        return await self.predecir_en(d, e, b, exp_id)
+
+    async def predecir_en(self, d: Path, e: dict, b: dict, nombre: str) -> dict:
+        """Predice con el modelo de la carpeta d (un experimento o una versión de la biblioteca)."""
         if e.get("motor") == "spark":
             self.c.need_hdfs()
         argv = [self.python, "-m", "sandbox_ml.predecir", str(d)]
@@ -910,13 +968,14 @@ class Estudio:
         else:
             raise ApiError("Mandá filas: [...] o archivo: /datos/...", "invalid")
         run = await self.runner.run(Action(
-            f"Predecir con {exp_id}", argv, display=f"python3 -m sandbox_ml.predecir {exp_id}", input=entra,
+            f"Predecir con {nombre}", argv, display=f"python3 -m sandbox_ml.predecir {nombre}", input=entra,
             action=f"Predice con {(e.get('modelo') or {}).get('etiqueta', 'el modelo')} guardado", source="ML",
             timeout=600, env=self.env(), cwd=str(d)))
         linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PREDICCION)), None)
         if run.state != "done" or linea is None:
-            err = run.error or next((l["text"] for l in reversed(run.lines) if l["stream"] == "err" and l["text"].strip()),
-                                    "falló")
+            err = run.error or next((l["text"] for l in reversed(run.lines) if l["text"].strip()
+                                     and not l["text"].startswith(("WARNING", "Warning", "  warnings.warn"))
+                                     and " INFO " not in l["text"] and " WARN " not in l["text"]), "falló")
             raise ApiError(f"No se pudo predecir: {err}", "failed")
         return json.loads(linea[len(PREDICCION):])
 

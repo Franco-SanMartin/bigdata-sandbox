@@ -8,8 +8,9 @@
  * La correspondencia con las rutas HTTP está al lado de cada método.
  */
 import type {
-  MlCatalogo, MlCodigo, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes, MlLimpieza, MlLimpiezaFila,
-  MlLimpiezaGuardada, MlParteCodigo, MlPerfil, MlPerfilOpciones, MlPrediccion, MlReceta, MlRevision, MlVistaLimpieza,
+  MlCatalogo, MlCodigo, MlComparacionVersiones, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes,
+  MlLimpieza, MlLimpiezaFila, MlLimpiezaGuardada, MlLote, MlModeloBiblioteca, MlModeloFila, MlParteCodigo, MlPedidoLote, MlPerfil,
+  MlPerfilOpciones, MlPrediccion, MlReceta, MlRevision, MlVistaLimpieza,
 } from './estudio';
 export type * from './estudio';
 
@@ -1171,4 +1172,28 @@ export interface SandboxApi {
   mlToJupyter(id: string): Promise<{ ruta: string; jupyter: boolean; url: string }>;
   /** POST /api/ml/experiments/{id}/predict { filas } o { archivo } */
   mlPredict(id: string, req: { filas?: Record<string, unknown>[]; archivo?: string }): Promise<MlPrediccion>;
+
+  /* Biblioteca de modelos (etapa d): versiones, estados, linaje y predicción */
+  /** GET /api/ml/library → los modelos guardados */
+  mlLibrary(): Promise<MlModeloFila[]>;
+  /** GET /api/ml/library/{nombre} → versiones, linaje, historial y los últimos lotes */
+  mlLibraryModel(nombre: string): Promise<MlModeloBiblioteca>;
+  /** POST /api/ml/library { nombre, experimento, nota?, descripcion? } → versión nueva (candidato) */
+  mlLibraryRegister(req: { nombre: string; experimento: string; nota?: string; descripcion?: string }): Promise<MlModeloBiblioteca>;
+  /** POST /api/ml/library/{nombre}/state { accion, version?, nota? } */
+  mlLibraryState(nombre: string, req: { accion: 'promover' | 'archivar' | 'volver'; version?: number; nota?: string }): Promise<MlModeloBiblioteca>;
+  /** POST /api/ml/library/{nombre}/describe { descripcion } */
+  mlLibraryDescribe(nombre: string, descripcion: string): Promise<MlModeloBiblioteca>;
+  /** GET /api/ml/library/{nombre}/compare?versiones=1,2 */
+  mlLibraryCompare(nombre: string, versiones: number[]): Promise<MlComparacionVersiones>;
+  /** POST /api/ml/library/{nombre}/predict { filas | archivo, version? } → al instante */
+  mlLibraryPredict(nombre: string, req: { filas?: Record<string, unknown>[]; archivo?: string; version?: number | null }): Promise<MlPrediccion & { version: number; estado: string }>;
+  /** POST /api/ml/library/{nombre}/code { version?, datos, salida } → el PySpark del lote */
+  mlLibraryBatchCode(nombre: string, req: MlPedidoLote): Promise<{ codigo: string; comando: string }>;
+  /** POST /api/ml/library/{nombre}/batch → 202 { id (lote), run (corrida) }; avanza por SSE mlrun */
+  mlLibraryBatch(nombre: string, req: MlPedidoLote): Promise<{ id: string; run: string }>;
+  /** GET /api/ml/library/batches → los lotes corridos */
+  mlLibraryBatches(): Promise<MlLote[]>;
+  /** GET /api/ml/library/{nombre}/export?version=N: la URL del .zip */
+  mlLibraryExport(nombre: string, version?: number | null): Promise<{ url: string; name: string }>;
 }
