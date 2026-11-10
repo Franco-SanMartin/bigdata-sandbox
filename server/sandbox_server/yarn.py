@@ -242,8 +242,9 @@ def spark_jar() -> str:
     return found[-1] if found else f"{home}/examples/jars/{SPARK_JAR}"
 
 
-def template_argv(tid: str, v: dict) -> tuple[list[str], str]:
-    """(argv, cómo se muestra) de una plantilla con sus valores ya validados."""
+def template_argv(tid: str, v: dict, queue: str | None = None) -> tuple[list[str], str]:
+    """(argv, cómo se muestra) de una plantilla con sus valores ya validados. Con `queue`, a esa cola de YARN
+    (la vista Aula la pasa ya validada: las colas por grupo)."""
     if tid == "mr-wordcount":
         rest = ["wordcount", v["in"], v["out"]]
     elif tid == "mr-pi":
@@ -251,10 +252,15 @@ def template_argv(tid: str, v: dict) -> tuple[list[str], str]:
     elif tid == "mr-grep":
         rest = ["grep", v["in"], v["out"], v["regex"]]
     elif tid == "spark-pi":
-        argv = ["spark-submit", "--class", "org.apache.spark.examples.SparkPi", spark_jar(), str(v["partitions"])]
-        return argv, f"spark-submit --class org.apache.spark.examples.SparkPi {SPARK_JAR} {v['partitions']}"
+        cola = ["--queue", queue] if queue else []
+        argv = ["spark-submit", *cola, "--class", "org.apache.spark.examples.SparkPi", spark_jar(), str(v["partitions"])]
+        return argv, shlex.join(["spark-submit", *cola, "--class", "org.apache.spark.examples.SparkPi", SPARK_JAR,
+                                 str(v["partitions"])])
     else:
         raise ApiError(f"No hay una plantilla {tid}", "invalid")
+    if queue:
+        # Los ejemplos usan ToolRunner: las opciones -D van después del nombre del programa
+        rest.insert(1, f"-Dmapreduce.job.queuename={queue}")
     return ["hadoop", "jar", examples_jar(), *rest], f"hadoop jar {EXAMPLES_JAR} {shlex.join(rest)}"
 
 
@@ -965,7 +971,7 @@ class Yarn:
         job = JOBS[str(example)]
         self.c.need_hdfs()
         self._need_rm()
-        self.c.need_proc("nm", "El NodeManager")
+        self._need_nm()
         if job["type"] == "TEZ":
             self.c.need_proc(*job["proc"])
         datos = self.c.s.datos_dir
@@ -1040,18 +1046,26 @@ class Yarn:
         self.bus.publish("yarn", {"appId": app_id})
         return app_id
 
-    async def submit_template(self, template: object, params: object) -> str:
-        """POST /api/yarn/apps {template, params}: una plantilla con sus valores."""
+    def _need_nm(self) -> None:
+        """Un NodeManager donde corran los contenedores. En el maestro del aula los NodeManagers son las PCs:
+        el del maestro es opcional (MAESTRO_NM)."""
+        if not getattr(self.c, "aula", None):
+            self.c.need_proc("nm", "El NodeManager")
+
+    async def submit_template(self, template: object, params: object, queue: str | None = None) -> str:
+        """POST /api/yarn/apps {template, params}: una plantilla con sus valores (la vista Aula pasa la cola)."""
         tpl = TEMPLATE.get(str(template)) if isinstance(template, str) else None
         if tpl is None:
             raise ApiError(f"La plantilla es una de: {', '.join(TEMPLATE)}", "invalid")
         if template in JOBS:
+            if queue:
+                raise ApiError("Las colas son para las plantillas de MapReduce y SparkPi", "invalid")
             validate_params(tpl, params)
             return await self.submit(template)
         v = validate_params(tpl, params)
         self.c.need_hdfs()
         self._need_rm()
-        self.c.need_proc("nm", "El NodeManager")
+        self._need_nm()
         h = self.hdfs
         assert h is not None
         src, dst = v.get("in"), v.get("out")
@@ -1078,9 +1092,9 @@ class Yarn:
             else:
                 up = dst.rsplit("/", 1)[0] or "/"
                 await self._step(f"Crear {up}", ["hdfs", "dfs", "-mkdir", "-p", up], "La carpeta donde va la salida")
-        argv, shown = template_argv(tpl["id"], v)
+        argv, shown = template_argv(tpl["id"], v, queue)
         typ = {"mr": "MAPREDUCE", "spark": "SPARK"}[tpl["engine"]]
-        info = {"template": tpl["id"], "shown": shown, "out": dst, "params": v,
+        info = {"template": tpl["id"], "shown": shown, "out": dst, "params": v, "queue": queue,
                 "input": src or ", ".join(f"{p['label']}: {v[p['name']]}" for p in tpl["params"])}
         return await self._launch(Action(f"{typ}: {tpl['id']}", argv, display=shown, input=info["input"],
                                          action=TEMPLATE_ACTION[tpl["id"]], timeout=3600), typ, dst, info)
