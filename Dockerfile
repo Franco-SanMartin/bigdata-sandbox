@@ -19,7 +19,7 @@
 #   trabajador  la imagen chica de las PCs del aula (empresa con RED=wireguard):
 #            solo Java, el DataNode y el NodeManager, Python con numpy y el
 #            tunel. Spark y Tez le llegan desde HDFS (los sube el maestro)
-#            docker build --target trabajador -t franki678/bigdata-sandbox:trabajador .
+#            docker build --target trabajador -t franki678/bigdata-sandbox:empresa-trabajador .
 # Sin --target se arma la base.
 
 ARG HADOOP_VERSION=3.3.6
