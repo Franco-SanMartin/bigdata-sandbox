@@ -95,6 +95,7 @@ export function createHttpApi(): SandboxApi {
     mlCatalog: () => req('GET', '/ml/catalog'),
     mlSources: () => req('GET', '/ml/sources'),
     mlExample: ejemplo => req('POST', '/ml/sources/example', { ejemplo }),
+    mlGenerate: r => req('POST', '/ml/sources/generate', r),
     mlProfile: (datos, objetivo, opciones) => req('POST', '/ml/profile', { datos, objetivo: objetivo ?? null, ...opciones }),
     mlCleaningPreview: (datos, limpieza, objetivo, filas) => req('POST', '/ml/cleaning/preview', { datos, limpieza, objetivo: objetivo ?? null, filas }),
     mlCleanings: () => req('GET', '/ml/cleaning'),

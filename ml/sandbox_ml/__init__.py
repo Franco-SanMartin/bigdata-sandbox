@@ -16,6 +16,7 @@
     deriva     cuánto se parecen los datos nuevos al entrenamiento (PSI por variable, con pandas o Spark)
     lote       el PySpark de la predicción por lotes (HDFS o Hive → HDFS o Hive, con esquema y deriva)
     exportar   el .zip de una versión, con un servicio mínimo (servir.py) y su Dockerfile
+    generar    el generador a escala: un dataset con señal (y suciedad) escrito en HDFS por Spark
 
 Un ejemplo desde JupyterLab (versión ml):
 

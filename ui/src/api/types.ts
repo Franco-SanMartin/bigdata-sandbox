@@ -9,7 +9,7 @@
  */
 import type {
   MlCatalogo, MlCodigo, MlComparacionVersiones, MlCorrerCodigo, MlCorrida, MlDatos, MlExperimento, MlExperimentoFila, MlFuentes,
-  MlLimpieza, MlLimpiezaFila, MlLimpiezaGuardada, MlLote, MlModeloBiblioteca, MlModeloFila, MlParteCodigo, MlPedidoLote, MlPerfil,
+  MlLimpieza, MlLimpiezaFila, MlLimpiezaGuardada, MlLote, MlModeloBiblioteca, MlModeloFila, MlParteCodigo, MlPedidoGenerar, MlPedidoLote, MlPerfil,
   MlPerfilOpciones, MlPrediccion, MlReceta, MlRevision, MlVistaLimpieza,
 } from './estudio';
 export type * from './estudio';
@@ -1135,6 +1135,8 @@ export interface SandboxApi {
   mlSources(): Promise<MlFuentes>;
   /** POST /api/ml/sources/example { ejemplo: senal | sucias } → genera el dataset de ejemplo en /datos y devuelve sus datos */
   mlExample(ejemplo: 'senal' | 'sucias'): Promise<MlDatos>;
+  /** POST /api/ml/sources/generate { dataset, filas, salida, ... } → 202 { id, run }: el generador a escala en YARN */
+  mlGenerate(req: MlPedidoGenerar): Promise<{ id: string; run: string }>;
   /** POST /api/ml/profile { datos, objetivo?, motor?, modo?, filas? } → perfil de columnas con pandas o con Spark en YARN
    *  (con el objetivo: balance y, con pandas, la asociación de cada columna) */
   mlProfile(datos: MlDatos, objetivo?: string | null, opciones?: MlPerfilOpciones): Promise<MlPerfil>;

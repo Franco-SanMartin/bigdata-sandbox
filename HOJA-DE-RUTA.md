@@ -21,7 +21,9 @@ publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
    `ui2-ml-etapa-d` (sobre la c): biblioteca con versiones, estados y linaje,
    deriva con PSI, lotes en YARN, predicción al instante y exportar con
    `servir.py`.
-3. **(e) Generador a escala, guías y pruebas de humo:** sin empezar.
+3. **(e) Generador a escala, guías y pruebas de humo:** hecha en
+   `ui2-ml-etapa-e` (sobre la d): `generar.py` en YARN, guías 13 de `full` y 8
+   de `ml`, y el estudio de punta a punta en el humo de `full`.
 
 **`empresa` en el aula** (sección de abajo):
 1. **Prueba piloto** con 2 o 3 PCs: [guía 4](guias/empresa/04-prueba-piloto.md)
@@ -144,7 +146,11 @@ pruebas de humo.
       experimento), `lote.py` (PySpark en YARN: esquema, deriva, PipelineModel o
       scikit-learn con mapInPandas, salida a HDFS o Hive) y `exportar.py` (.zip
       con `servir.py` y `Dockerfile`). Pestaña Biblioteca en la interfaz.*
-- [ ] **(e)** Generador a escala, guías y pruebas de humo (puntos 10 y 11).
+- [x] **(e) Generador a escala, guías y pruebas de humo (puntos 10 y 11).**
+      *Rama `ui2-ml-etapa-e`: `generar.py` (clientes con señal y suciedad, y
+      calificaciones para ALS, escritos por los executors), la ruta y el panel
+      "Datos a escala", las guías 13 de `full` y 8 de `ml`, y el humo de `full`
+      con generar, entrenar, biblioteca, lote con deriva y exportar.*
 
 ## Pendientes de la revisión (2026-10-26 y 27)
 

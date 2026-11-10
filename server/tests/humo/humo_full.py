@@ -1284,6 +1284,100 @@ def estudio_datos() -> None:
         c.detalle = f"{TIEMPOS['ML estudio con limpieza (Spark)']} s; exactitud {exp['metricas'].get('exactitud')}; primer paso del modelo: Limpiar"
 
 
+def estudio_biblioteca() -> None:
+    """El estudio de punta a punta en la imagen: el generador escribe clientes con señal en HDFS (Spark en YARN), se
+    entrena una logística de Spark, se guarda en la biblioteca, se promueve, predice al instante y por lotes (con la
+    validación del esquema y la deriva contra el entrenamiento) y se exporta con su servicio mínimo."""
+    def corrida(run: str, que: str, segundos=1800) -> dict:
+        return esperar(lambda: (lambda x: x if x["estado"] != "corriendo" else None)(pedir("GET", f"/api/ml/runs/{run}")[1]),
+                       segundos, que, 3)
+
+    with Chequeo("estudio ML: generar 200.000 clientes con señal y suciedad en HDFS (Spark en YARN)") as c:
+        t0 = time.time()
+        codigo, r = pedir("POST", "/api/ml/sources/generate", {"dataset": "clientes", "filas": 200000, "suciedad": 0.05,
+                                                                "salida": "/user/root/ml/generado/humo_200k", "particionar": True})
+        assert codigo == 202, (codigo, r)
+        g = corrida(r["run"], "el generador")
+        TIEMPOS["generar 200k clientes (Spark)"] = round(time.time() - t0, 1)
+        guardar("estudio_generar", g)
+        assert g["estado"] == "listo", g.get("error")
+        res = g["resultado"]
+        assert res["filas"] >= 200000 and res["particionado"] and res["app_id"].startswith("application_"), res
+        c.detalle = f"{res['filas']:,} filas, {res['bytes']:,} bytes en {res['archivos']} archivos, {res['segundos']} s"
+
+    with Chequeo("estudio ML: entrenar en YARN sobre lo generado y guardarlo en la biblioteca") as c:
+        receta = {"nombre": "humo: churn generado", "datos": {"origen": "hdfs", "ruta": "/user/root/ml/generado/humo_200k", "formato": "parquet"},
+                  "tarea": "clasificacion", "objetivo": "vuelve",
+                  "columnas": {"cliente_id": "id", "antiguedad_meses": "numerica", "visitas_mes": "numerica", "ticket_promedio": "numerica",
+                               "reclamos": "numerica", "edad": "numerica", "segmento_real": "categorica",
+                               "gasto_mes_siguiente": "ignorar", "anio": "ignorar", "mes": "ignorar"},
+                  "modelo": {"id": "logistica_spark", "params": {}}, "validacion": {"cv": "ninguna", "metrica": "roc_auc"},
+                  "limpieza": {"pasos": [{"tipo": "nulos", "columna": "edad", "estrategia": "mediana", "indicador": False},
+                                         {"tipo": "texto", "columna": "segmento_real", "ops": ["recortar", "minusculas"]}]}}
+        codigo, r = pedir("POST", "/api/ml/experiments", {"receta": receta})
+        assert codigo == 202, (codigo, r)
+        x = corrida(r["run"], "el entrenamiento")
+        assert x["estado"] == "listo", x.get("error")
+        codigo, exp = pedir("GET", f"/api/ml/experiments/{r['id']}")
+        assert exp["entrada"] and exp["umbral"] and exp["metricas"]["roc_auc"]["prueba"] > 0.8, exp.get("metricas")
+        codigo, m = pedir("POST", "/api/ml/library", {"nombre": "humo-churn", "experimento": r["id"], "nota": "humo"}, timeout=300)
+        assert codigo == 201 and m["versiones"][-1]["deriva"], (codigo, m)
+        v = m["versiones"][-1]["version"]
+        codigo, m = pedir("POST", "/api/ml/library/humo-churn/state", {"accion": "promover", "version": v})
+        assert codigo == 200 and [x_["estado"] for x_ in m["versiones"] if x_["version"] == v] == ["produccion"], m
+        rc, out, _ = en_contenedor(f"hdfs dfs -test -d {m['versiones'][-1]['artefacto']}/stages && echo esta", 120)
+        assert "esta" in out, out
+        c.detalle = f"AUC {exp['metricas']['roc_auc']['prueba']:.3f}, umbral {exp['umbral']['valor']}; v{v} en producción en {m['versiones'][-1]['artefacto']}"
+
+    with Chequeo("estudio ML: predecir al instante con la versión en producción") as c:
+        fila = {"antiguedad_meses": 40, "visitas_mes": 6, "ticket_promedio": 9000, "reclamos": 0, "edad": 35, "segmento_real": "frecuente"}
+        codigo, p_ = pedir("POST", "/api/ml/library/humo-churn/predict", {"filas": [fila]}, timeout=600)
+        assert codigo == 200 and "prediccion" in p_["columnas"] and p_["estado"] == "produccion", (codigo, p_)
+        c.detalle = str(dict(zip(p_["columnas"], p_["muestra"][0])))
+
+    with Chequeo("estudio ML: predicción por lotes en YARN con esquema y deriva (datos corridos)") as c:
+        codigo, r = pedir("POST", "/api/ml/sources/generate", {"dataset": "clientes", "filas": 50000, "suciedad": 0.0,
+                                                                "salida": "/user/root/ml/generado/humo_nuevos"})
+        assert codigo == 202, (codigo, r)
+        assert corrida(r["run"], "los datos nuevos")["estado"] == "listo"
+        # Los mismos clientes, con la antigüedad corrida 30 meses: la deriva tiene que dar fuerte en esa variable
+        rc, out, err = en_contenedor("cat > /tmp/correr.py <<'EOF'\nfrom pyspark.sql import SparkSession, functions as F\n"
+                                     "s = SparkSession.builder.getOrCreate()\n"
+                                     "d = s.read.parquet('/user/root/ml/generado/humo_nuevos')\n"
+                                     "d.withColumn('antiguedad_meses', F.col('antiguedad_meses') + 30).write.mode('overwrite').parquet('/user/root/ml/generado/humo_corridos')\n"
+                                     "EOF\nspark-submit --master local[2] /tmp/correr.py", 600)
+        assert rc == 0, (out + err)[-1500:]
+        pedido = {"datos": {"origen": "hdfs", "ruta": "/user/root/ml/generado/humo_corridos", "formato": "parquet"},
+                  "salida": {"tipo": "hdfs", "ruta": "/user/root/ml/predicciones/humo", "formato": "parquet"}}
+        codigo, cod = pedir("POST", "/api/ml/library/humo-churn/code", pedido)
+        assert codigo == 200 and "PipelineModel.load" in cod["codigo"], cod
+        t0 = time.time()
+        codigo, r = pedir("POST", "/api/ml/library/humo-churn/batch", pedido)
+        assert codigo == 202, (codigo, r)
+        lote = corrida(r["run"], "el lote")
+        TIEMPOS["lote 50k (Spark)"] = round(time.time() - t0, 1)
+        guardar("estudio_lote", lote)
+        assert lote["estado"] == "listo", lote.get("error")
+        res = lote["resultado"]
+        por = {x_["columna"]: x_ for x_ in res["deriva"]["columnas"]}
+        assert res["filas"] == 50000 and "prediccion" in res["columnas"], res
+        # visitas y reclamos no cambian (el ticket sí algo: el entrenamiento tenía 5 % de nulos y extremos y los nuevos no)
+        assert por["antiguedad_meses"]["nivel"] == "fuerte" and por["visitas_mes"]["nivel"] == "estable", por
+        codigo, ls = pedir("GET", "/api/ml/library/batches")
+        assert ls and ls[0]["estado"] == "listo"
+        c.detalle = f"{res['filas']:,} filas en {res['destino']}; deriva {res['deriva']['nivel']} (antigüedad PSI {por['antiguedad_meses']['psi']})"
+
+    with Chequeo("estudio ML: exportar la versión (.zip con servir.py)") as c:
+        import io
+        import zipfile
+        req = urllib.request.Request(URL + "/api/ml/library/humo-churn/export", headers={"Origin": URL})
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            z = zipfile.ZipFile(io.BytesIO(resp.read()))
+        nombres = z.namelist()
+        assert any(n.endswith("/servir.py") for n in nombres) and any("/modelo/metadata/" in n for n in nombres), nombres[:20]
+        c.detalle = f"{len(nombres)} archivos"
+
+
 # ---------------------------------------------------------------- resumen
 
 def resumen() -> int:
@@ -1320,6 +1414,7 @@ def main() -> int:
         datos()
         ml()
         estudio_datos()
+        estudio_biblioteca()
         with Chequeo("actividad: sin errores inesperados") as c:
             _, acts = pedir("GET", "/api/activity?limit=500")
             guardar("activity", acts)

@@ -341,3 +341,4 @@
   .es-hist li { grid-template-columns: minmax(0, 1fr); }
   .es-hist-nota { grid-column: 1; }
 }
+.es-generar { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }

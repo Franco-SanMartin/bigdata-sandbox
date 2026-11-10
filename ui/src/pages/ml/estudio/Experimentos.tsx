@@ -5,7 +5,7 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { ArrowLeft, Columns3, Download, FlaskConical, NotebookPen, Pencil, Square, Trash2, Wand2 } from 'lucide-react';
 import { api } from '../../../api';
-import type { MlCatalogo, MlCorrida, MlExperimento, MlExperimentoFila, MlPrediccion, MlTarea, MlValor } from '../../../api/types';
+import type { MlCatalogo, MlCorrida, MlExperimento, MlExperimentoFila, MlGenerado, MlPrediccion, MlTarea, MlValor } from '../../../api/types';
 import { EmptyState, Panel, ResultTable, SkeletonLines } from '../../../components/base';
 import { Meter, Seg } from '../../../components/ui';
 import { confirm, navigate, toast } from '../../../state/ui';
@@ -157,7 +157,8 @@ function Corridas() {
                   <td className="r mono">{fmtSeg(((c.fin ?? ahora) - c.inicio) / 1000)}</td>
                   <td className="r mono">{fmtMb(c.memoriaPicoMb ?? c.memoriaMb)} <span className="muted">/ {fmtMb(c.limites.memoriaMb)}</span></td>
                   <td>{c.appId ? <a className="mono" href={`#yarn/${c.appId}`}>{c.appId}</a> : <span className="muted">—</span>}</td>
-                  <td>{c.tipo === 'lote' ? <a className="mono" href={`#ml/biblioteca/${encodeURIComponent(c.modelo ?? '')}`}>{c.modelo} v{c.version}</a>
+                  <td>{c.tipo === 'generar' ? <span className="mono muted">{(c.resultado as MlGenerado | undefined)?.salida ?? 'datos a escala'}</span>
+                    : c.tipo === 'lote' ? <a className="mono" href={`#ml/biblioteca/${encodeURIComponent(c.modelo ?? '')}`}>{c.modelo} v{c.version}</a>
                     : !c.experimento ? <span className="muted">—</span>
                     : corriendo ? <span className="mono muted">{c.experimento}</span> : <a className="mono" href={`#ml/experimentos/${c.experimento}`}>{c.experimento.replace(/^exp-/, '')}</a>}</td>
                   <td className="r">{corriendo && <button type="button" className="btn btn-sm" disabled={cancelando === c.id} onClick={() => cancelar(c.id)}><Square size={11} aria-hidden="true" />Cancelar</button>}</td>

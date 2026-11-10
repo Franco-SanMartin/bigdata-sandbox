@@ -2,7 +2,7 @@
    de sandbox_ml/biblioteca.py (promover archiva la anterior, volver atrás, comparar, guardar un experimento). */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDemoApi } from './index';
-import type { SandboxApi } from '../types';
+import type { MlResumenLote, SandboxApi } from '../types';
 
 let api: SandboxApi;
 
@@ -66,7 +66,7 @@ describe('Biblioteca del demo', () => {
     const c = await api.mlRun(run);
     expect(c.estado).toBe('listo');
     expect(c.resultado?.filas).toBeGreaterThan(0);
-    expect(c.resultado?.avisos[0]).toMatch(/demo/);
+    expect((c.resultado as MlResumenLote | undefined)?.avisos[0]).toMatch(/demo/);
     expect((await api.mlLibraryBatches())[0].estado).toBe('listo');
   });
 });

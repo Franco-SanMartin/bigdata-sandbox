@@ -8,6 +8,9 @@ Este módulo solo pone el servidor en el medio:
     GET  /api/ml/sources                 archivos de /datos y de HDFS (Parquet, ORC, Avro, JSON, CSV, texto,
                                          comprimidos, carpetas particionadas) y tablas de Hive
     POST /api/ml/sources/example         {ejemplo: senal | sucias} → genera el dataset de ejemplo en /datos
+    POST /api/ml/sources/generate        {dataset: clientes | calificaciones, filas, salida, formato?, suciedad?,
+                                         particionar?, recursos?} → 202 {id, run}: el generador a escala
+                                         (sandbox_ml/generar.py) con spark-submit en YARN escribe en HDFS
     POST /api/ml/profile                 {datos, objetivo?, motor?: pandas | spark, modo?: muestra | completo, filas?}
                                          → perfil de columnas (sandbox_ml.perfil con pandas, o perfil_spark.py
                                          con spark-submit en YARN)
@@ -61,6 +64,7 @@ import sandbox_ml
 from sandbox_ml import catalogo as cat
 from sandbox_ml import codigo as gen
 from sandbox_ml import fuentes
+from sandbox_ml import generar as gen_datos
 from sandbox_ml import limpieza as lz
 from sandbox_ml import perfil_spark
 from sandbox_ml import receta as rec
@@ -81,6 +85,7 @@ PERFIL = "@@perfil@@ "
 LIMPIEZA = "@@limpieza@@ "
 ERROR_SPARK = "@@error@@ "
 PREDICCION = "@@prediccion@@ "
+RESULTADO = "@@resultado@@ "
 EXP_ID = re.compile(r"^exp-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 MAX_CODIGO = 400_000
 MAX_CORRIDAS = 30
@@ -221,6 +226,34 @@ class Estudio:
         if run.state != "done":
             raise ApiError(run.error or f"No se pudo generar {archivo}", "failed")
         return {"origen": "local", "ruta": str(base / archivo), "formato": "csv"}
+
+    async def generar(self, b: dict) -> dict:
+        """El generador a escala (sandbox_ml/generar.py) en YARN: un dataset sintético con señal y suciedad en HDFS."""
+        dataset, salida = b.get("dataset"), b.get("salida")
+        filas, formato = b.get("filas", 1_000_000), b.get("formato", "parquet")
+        suciedad, particionar = b.get("suciedad", 0.0), bool(b.get("particionar"))
+        errores = gen_datos.validar(dataset, filas, salida, formato, suciedad, None)
+        if errores:
+            raise ApiError(errores[0], "invalid")
+        recursos, err = rec.recursos(b.get("recursos"))
+        if err:
+            raise ApiError(f"{err[0]['campo']}: {err[0]['mensaje']}", "invalid", field=err[0]["campo"])
+        self.c.need_hdfs()
+        minutos = hdfs_mod.bounded_int(b.get("minutos"), "minutos", 1, 240, 60)
+        gen_id = time.strftime("gen-%Y%m%d-%H%M%S-") + os.urandom(2).hex()
+        args = [dataset, "--filas", str(filas), "--salida", salida, "--formato", formato, "--suciedad", str(suciedad)]
+        if particionar:
+            args.append("--particionar")
+        codigo = ("# El generador a escala del estudio (sandbox_ml/generar.py), con lo que se pidió en la pantalla\n"
+                  "from sandbox_ml import generar\n\n"
+                  f"generar.main({json.dumps(args, ensure_ascii=False)})\n")
+        comando = " ".join(["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos),
+                            "/opt/sandbox/ml/sandbox_ml/generar.py", *(shlex.quote(a) for a in args)])
+        info = {"carpeta": str(self.c.s.hadoop_dir / "ml" / "generados" / gen_id), "tipo": "generar",
+                "titulo": f"{dataset}: {filas:,} filas en {salida}", "entrada": f"{dataset} ({filas:,} filas)",
+                "dataset": dataset, "salida": {"tipo": "hdfs", "ruta": salida, "formato": formato}, "comando": comando}
+        return await self.lanzar(codigo, "spark", None, "generar", minutos=minutos, memoria_mb=self._memoria_driver(recursos),
+                                 exp_id=gen_id, editado=False, recursos=recursos, lote=info)
 
     # ------------------------------------------------------------ perfil
 
@@ -597,12 +630,14 @@ class Estudio:
         argv = ["spark-submit", "--master", "yarn", *rec.argumentos_spark(recursos), "--name", f"estudio-ml: {lote_id}",
                 "codigo.py"]
         titulo = lote["titulo"]
+        tipo = lote.get("tipo", "lote")
+        que = "Generar datos" if tipo == "generar" else "Predicción por lotes"
         run = self.runner.start(Action(
-            f"Predicción por lotes: {titulo}", argv, display=self.comando_texto("spark", f"{lote_id}.py", recursos),
+            f"{que}: {titulo}", argv, display=lote.get("comando") or self.comando_texto("spark", f"{lote_id}.py", recursos),
             input=lote.get("entrada") or "datos nuevos", action=f"{titulo}, con un límite de {minutos} min",
-            source="ML", timeout=minutos * 60 + 30, env=self.env(None, "lote"), cwd=str(d)))
-        c = {"id": run.id, "experimento": None, "tipo": "lote", "lote": lote_id, "estado": "corriendo", "progreso": 0.0,
-             "mensaje": "Arrancando", "motor": "spark", "titulo": titulo, "origen": "lote", "inicio": now_ms(),
+            source="ML", timeout=minutos * 60 + 30, env=self.env(None, tipo), cwd=str(d)))
+        c = {"id": run.id, "experimento": None, "tipo": tipo, "lote": lote_id, "estado": "corriendo", "progreso": 0.0,
+             "mensaje": "Arrancando", "motor": "spark", "titulo": titulo, "origen": tipo, "inicio": now_ms(),
              "ajustes": None, "limites": {"minutos": minutos, "memoriaMb": memoria_mb}, "memoriaMb": None,
              "recursos": recursos, "modelo": lote.get("modelo"), "version": lote.get("version")}
         self._seguir_corrida(run, c, d, minutos, memoria_mb)
@@ -705,7 +740,7 @@ class Estudio:
             (d / "salida.log").write_text("\n".join(l["text"] for l in run.lines) + "\n", encoding="utf-8")
         except OSError:
             pass
-        if c.get("tipo") == "lote":
+        if c.get("tipo") in ("lote", "generar"):
             await self._terminar_lote(run, c, d)
             return
         exp = self._leer_json(d / "experimento.json") or {}
@@ -750,12 +785,16 @@ class Estudio:
 
     async def _terminar_lote(self, run, c: dict, d: Path) -> None:
         lote = self._leer_json(d / "lote.json") or {}
-        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(PREDICCION)), None)
+        marca = RESULTADO if c.get("tipo") == "generar" else PREDICCION
+        linea = next((l["text"] for l in reversed(run.lines) if l["text"].startswith(marca)), None)
         if run.state == "done" and linea:
-            res = json.loads(linea[len(PREDICCION):])
+            res = json.loads(linea[len(marca):])
             filas = res.get("filas")
-            c.update(estado="listo", progreso=1.0, resultado=res,
-                     mensaje=f"{filas:,} predicciones en {res.get('destino')}" if isinstance(filas, int) else "Listo")
+            if c.get("tipo") == "generar":
+                msg = f"{filas:,} filas en hdfs://{res.get('salida')}" if isinstance(filas, int) else "Listo"
+            else:
+                msg = f"{filas:,} predicciones en {res.get('destino')}" if isinstance(filas, int) else "Listo"
+            c.update(estado="listo", progreso=1.0, resultado=res, mensaje=msg)
             lote.update(estado="listo", resumen=res)
         else:
             err = run.error or "terminó con código " + str(run.exitCode)
@@ -996,6 +1035,9 @@ class Estudio:
             b = await hdfs_mod._json(request)
             return JSONResponse(await self.ejemplo(b.get("ejemplo")))
 
+        async def generate(request: Request) -> JSONResponse:
+            return JSONResponse(await self.generar(await hdfs_mod._json(request)), status_code=202)
+
         async def profile(request: Request) -> JSONResponse:
             b = await hdfs_mod._json(request)
             return JSONResponse(await self.perfil(b.get("datos"), b.get("objetivo"), b.get("motor"), b.get("modo", "muestra"),
@@ -1062,6 +1104,7 @@ class Estudio:
             Route("/api/ml/catalog", catalog, methods=["GET"]),
             Route("/api/ml/sources", sources, methods=["GET"]),
             Route("/api/ml/sources/example", example, methods=["POST"]),
+            Route("/api/ml/sources/generate", generate, methods=["POST"]),
             Route("/api/ml/profile", profile, methods=["POST"]),
             Route("/api/ml/cleaning/preview", cleaning_preview, methods=["POST"]),
             Route("/api/ml/cleaning", cleaning_get, methods=["GET"]),

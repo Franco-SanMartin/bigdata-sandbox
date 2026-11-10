@@ -93,6 +93,7 @@ export function createDemoApi(): SandboxApi {
     mlCatalog: () => call(() => est.catalog()),
     mlSources: () => call(() => est.sources()),
     mlExample: () => call(() => est.example()),
+    mlGenerate: () => call(() => fail('unsupported', 'En el modo demo no se generan datos: con la imagen full, el generador escribe en HDFS con Spark en YARN (de mil a miles de millones de filas)')),
     mlProfile: (d, o, op) => call(() => est.profile(d, o, op)),
     mlCleaningPreview: (d, l) => call(() => est.cleaningPreview(d, l)),
     mlCleanings: () => call(() => est.cleanings()),

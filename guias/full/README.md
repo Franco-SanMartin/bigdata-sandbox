@@ -144,6 +144,9 @@ orden; el número es el de siempre, para no romper enlaces.
   Hive y PySpark, con lo que movió cada una y el glosario.
 - [07. Machine Learning y el modelo por dentro](07-machine-learning.md):
   entrenar, comparar y mirar qué aprendió.
+- [13. Estudio de ML](13-estudio-ml.md): datos a escala en HDFS, limpieza
+  adentro del modelo, entrenamiento en YARN, la biblioteca con versiones, la
+  predicción por lotes con la deriva y exportar el modelo con un servicio.
 
 **Ingesta: cómo entran los datos** (Pipeline)
 
