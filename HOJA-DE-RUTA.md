@@ -16,7 +16,8 @@ escala están en `:ml` y `:full`.
 **`empresa` en el aula.** Todo sale del workflow *Empresa*, corrido a mano
 desde `main` con publicar y release tildados: arma y prueba el maestro y las
 PCs, publica `:empresa` y `:empresa-trabajador` y arma el release `aula-v2`.
-Ya no hay rama `empresa`.
+Ya no hay rama `empresa`. Publicado el 2026-11-11 desde `main` (1.4.0): las dos
+imágenes para amd64 y arm64 y el prerelease `aula-v2`.
 1. **Prueba piloto** con 2 o 3 PCs, con la [guía de `empresa`](docs/empresa/guia.md)
    y el release `aula-v2`. Antes, pasarle a sistemas lo que necesita el aula
    (UDP 51820 y TCP 8099 en la PC del profe, red Pública; está en la misma

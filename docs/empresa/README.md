@@ -253,11 +253,10 @@ El de alumno no publica puertos ni pide administrador: sólo sale hacia la PC de
 - **La red del aula es el cuello.** Todo el tráfico pasa por la PC del profe (hub). El techo de 50 Mbit/s de la vista es una referencia para dibujar, no una medición del aula.
 - **Probado en CI, no con PCs reales:** el agente de apagado por el túnel, lo que ve YARN al apagar (SHUTDOWN o LOST), el reparto real entre colas, el historial de un trabajo real para la localidad y la curva de escala con 20 PCs se prueban por primera vez en la prueba piloto.
 - **Los racks se leen al registrarse** cada DataNode. Si cambiás el plano con la clase andando, las PCs ya sumadas siguen en su rack viejo hasta que se reinician.
-- **Estado de publicación (10/11/2026):**
-  - El release `aula-v2` todavía no existe; el último es `aula-v1` (prerelease del 29/10).
-  - La `:empresa` publicada en Docker Hub es la del 27/10, sin la vista Aula en vivo.
-  - `:empresa-trabajador` todavía no se publicó.
-  - La imagen con el aula en vivo no se armó todavía en CI: sin verificar.
+- **Estado de publicación (11/11/2026):**
+  - El release `aula-v2` (prerelease) tiene las tres imágenes en `.tar.gz`, los dos `.cmd` y el `LEEME.md`.
+  - `:empresa` y `:empresa-trabajador` están en Docker Hub para amd64 y arm64, con la vista Aula en vivo y los opcionales.
+  - Todo eso pasó las pruebas del workflow *Empresa* en CI (aula simulada y con el túnel). Con PCs reales del aula: sin verificar.
 
 ## Dónde está cada cosa en el repo
 

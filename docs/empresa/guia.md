@@ -37,7 +37,7 @@ Del release **`aula-v2`** de GitHub (*Releases → Aula v2*) bajá a una carpeta
 | `empresa-profe.cmd` | Se corre en la PC del profe |
 | `empresa-alumno.cmd` | Se manda a las PCs |
 
-> **Estado al 10/11/2026:** el release `aula-v2` todavía no está publicado. Hasta que salga, el último es `aula-v1`, un prerelease del 29/10 con los mismos cinco archivos pero sin la vista Aula en vivo. Con los `.tar.gz` al lado, el aula anda sin internet. Sin ellos, los `.cmd` bajan las imágenes de Docker Hub (`:empresa` y `:empresa-trabajador`).
+> Con los `.tar.gz` al lado, el aula anda sin internet. Sin ellos, los `.cmd` bajan las imágenes de Docker Hub (`:empresa` y `:empresa-trabajador`).
 
 Si en el laboratorio hay una carpeta compartida de sólo lectura, podés dejar ahí el `.tar.gz` del trabajador. El alumno lo busca en la carpeta que le pases como tercer argumento.
 
