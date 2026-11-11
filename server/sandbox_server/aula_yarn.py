@@ -457,6 +457,9 @@ class YarnEnAula:
                           else "no se encontró su historial (¿está prendido el JobHistory?)")
                 return {**base, "soportado": True, "fuente": fuente, "tareas": [], "resumen": resumen([]),
                         "motivo": motivo}
+            if texto.startswith("Avro-Binary"):  # lo de fábrica en Hadoop 3; el aula pide json (conf_aula)
+                return {**base, "soportado": True, "fuente": fuente, "tareas": [], "resumen": resumen([]),
+                        "motivo": "su historial está en binario: falta mapreduce.jobhistory.jhist.format=json"}
             tareas = localidad_mr(parse_jhist(texto), rack)
         elif tipo == "SPARK":
             fuente = "en curso" if corriendo else "historial"
