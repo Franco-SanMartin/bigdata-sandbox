@@ -239,6 +239,26 @@ def test_acciones_sobre_procesos(settings):
     asyncio.run(main())
 
 
+@pytest.mark.parametrize("pid,linea", [("hiveserver2", "org.apache.hive.service.server.HiveServer2"),
+                                       ("jupyter", "jupyter-lab")])
+def test_apagar_proceso_no_se_mata_a_si_mismo(settings, pid, linea):
+    """El apagado corre con bash -c (como ActionRunner): con el patrón tal cual en la línea, pkill -f
+    mataba al bash de arriba (rc 143) y, si sobrevivía, pgrep se encontraba a sí mismo 15 s y daba error."""
+    if subprocess.run(["pgrep", "-f", linea], capture_output=True).returncode == 0:
+        pytest.skip(f"ya hay un {linea} corriendo en esta máquina")
+    falso = subprocess.Popen(["python3", "-I", "-c", "import time; time.sleep(60)", linea])
+    try:
+        cl, _ = nuevo(settings)
+        cl.phase = "running"
+        cmd = cl.process_action_for(pid, "stop").command
+        r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=20)
+        assert r.returncode == 0, r.stderr
+        assert falso.wait(timeout=2) is not None       # el proceso de verdad se apagó
+    finally:
+        falso.kill()
+        falso.wait()
+
+
 def test_apagado_en_orden_es_el_de_lib_sh(settings, tmp_path, monkeypatch):
     """El servidor no repite el orden: llama a apagar_en_orden de sandbox/lib.sh
     (la misma del trap del entrypoint). pkill y pgrep son falsos que anotan."""

@@ -498,8 +498,10 @@ class Cluster:
                                   "pkill -TERM -x mongod"),
             ("hiveserver2", "start"): ('cd /hadoop && (nohup hive --service hiveserver2 > "${HIVE_HOME:-/opt/hive}/hiveserver2.log" 2>&1 &)',
                                        "hive --service hiveserver2 &"),
-            ("hiveserver2", "stop"): ("pkill -TERM -f org.apache.hive.service.server.HiveServer2; "
-                                      "for _ in $(seq 1 60); do pgrep -f org.apache.hive.service.server.HiveServer2 > /dev/null || exit 0; sleep 0.25; done; exit 1",
+            # '[o]rg...': con varios comandos bash no hace exec y lleva el patrón en su línea; tal cual, pkill
+            # mataba al bash de arriba y pgrep se encontraba a sí mismo (igual que '[-]Dproc_' del aula)
+            ("hiveserver2", "stop"): ("pkill -TERM -f '[o]rg.apache.hive.service.server.HiveServer2'; "
+                                      "for _ in $(seq 1 60); do pgrep -f '[o]rg.apache.hive.service.server.HiveServer2' > /dev/null || exit 0; sleep 0.25; done; exit 1",
                                       "pkill -f HiveServer2"),
             ("jupyter", "start"): ("(nohup jupyter lab > /var/log/jupyter.log 2>&1 &)", "jupyter lab &"),
             ("jupyter", "stop"): ("pkill -TERM -f jupyter-lab", "pkill -f jupyter-lab"),

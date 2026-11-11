@@ -11,6 +11,14 @@ las PCs del aula).
 
 ## [Sin publicar]
 
+### Arreglado
+
+- **Apagar HiveServer2** desde la vista ya no termina con error: el comando
+  llevaba el patrón tal cual en la línea del `bash -c`, así que `pkill -f`
+  mataba al propio bash y, si sobrevivía, `pgrep` se encontraba a sí mismo
+  15 s. Ahora usa `[o]rg.apache...`, el mismo arreglo que el apagado de las
+  PCs del aula.
+
 ## [1.4.0] - 2026-11-11
 
 El estudio de ML entrena en Spark y guarda cada modelo en una biblioteca con
