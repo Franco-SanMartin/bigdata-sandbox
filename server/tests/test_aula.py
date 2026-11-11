@@ -198,3 +198,88 @@ def test_api_aula_fuera_del_maestro(settings, tmp_path):
     with TestClient(build_app(settings, ui_dir=tmp_path)) as c:
         r = c.get("/api/aula")
     assert r.status_code == 501 and r.json()["code"] == "unsupported"
+
+
+def test_destino_del_agente():
+    pcs = [{"nodo": "pc01", "ip": "10.13.0.11"}]
+    assert aula.destino_agente("pc1", M_WG, pcs, {}) == ("pc01", "10.13.0.11")
+    assert aula.destino_agente("pc07", M_WG, pcs, {}) == ("pc07", "10.13.0.17")   # sin inscripción: por el número
+    assert aula.destino_agente("pc02", M_DOCKER, pcs, {}) == ("pc02", "pc02")
+    for malo in ("maestro", "pc00", "pc100", "10.0.0.1", "pc01.evil.com", ""):
+        with pytest.raises(aula.ApiError):
+            aula.destino_agente(malo, M_WG, pcs, {})
+
+
+def test_apagar_y_prender_una_pc(maestro):
+    pedidos = []
+
+    def agente(host, accion, datos):
+        pedidos.append((host, accion, datos))
+        vivo = "si" if accion == "prender" else "no"
+        return {"nodo": "pc01", "datanode": vivo, "nodemanager": vivo}
+    maestro.app.state.aula.pedir_agente = agente
+    r = maestro.post("/api/aula/pcs/pc01/apagar", json={"modo": "ordenado"})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"nodo": "pc01", "accion": "apagar", "modo": "ordenado", "datanode": False, "nodemanager": False}
+    assert pedidos[-1] == ("10.13.0.11", "apagar", {"codigo": "K7Q2", "modo": "ordenado"})
+    a = maestro.get("/api/aula").json()
+    assert a["pcs"][0]["apagada"]["modo"] == "ordenado" and a["pcs"][0]["apagada"]["desde"] > 0
+    assert "pc01 apagada desde la vista Aula (ordenado)" in a["eventos"][-1]
+    # sin cuerpo: a golpe
+    assert maestro.post("/api/aula/pcs/pc01/apagar").json()["modo"] == "golpe"
+    r = maestro.post("/api/aula/pcs/pc01/prender")
+    assert r.status_code == 200 and r.json()["datanode"] is True
+    assert pedidos[-1] == ("10.13.0.11", "prender", {"codigo": "K7Q2"})
+    assert "apagada" not in maestro.get("/api/aula").json()["pcs"][0]
+
+
+def test_apagar_pedidos_malos(maestro):
+    pedidos = []
+    maestro.app.state.aula.pedir_agente = lambda *a: pedidos.append(a) or {}
+    assert maestro.post("/api/aula/pcs/pc01/apagar", json={"modo": "rm"}).json()["code"] == "invalid"
+    assert maestro.post("/api/aula/pcs/maestro/apagar", json={}).json()["code"] == "invalid"
+    assert maestro.post("/api/aula/pcs/pc01/reiniciar").status_code == 404
+    assert maestro.get("/api/aula/pcs/pc01/apagar").status_code in (404, 405)
+    assert pedidos == []
+
+
+def test_apagar_sin_codigo_de_clase(settings, tmp_path, monkeypatch):
+    monkeypatch.setenv("ROL", "maestro")
+    monkeypatch.setenv("RED", "docker")
+    monkeypatch.delenv("CODIGO", raising=False)
+    with TestClient(build_app(settings, ui_dir=tmp_path)) as c:
+        c.app.state.aula.pedir_agente = lambda *a: pytest.fail("no tenía que pedirle nada al agente")
+        r = c.post("/api/aula/pcs/pc01/apagar")
+    assert r.status_code == 501 and "CODIGO" in r.json()["error"]
+
+
+def test_pedir_al_agente_de_verdad(tmp_path):
+    """El maestro contra empresa/aula/agente.py escuchando en 127.0.0.1 (con un bash falso)."""
+    import importlib.util
+    import socket
+    import threading
+    from pathlib import Path
+    ruta = Path(__file__).resolve().parents[2] / "empresa" / "aula" / "agente.py"
+    spec = importlib.util.spec_from_file_location("agente_aula_m", ruta)
+    ag = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ag)
+    a = ag.Agente({"RED": "docker", "MAESTRO": "127.0.0.1", "CODIGO": "SIMU", "AULA_DIR": str(tmp_path),
+                   "NODO": "pc01", "ESCUCHA_AGENTE": "127.0.0.1"}, ejecutar=lambda s: (1 if s.startswith("pgrep") else 0, ""))
+    srv = ag.servidor(a, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    puerto = srv.server_address[1]
+    try:
+        r = aula.pedir_agente("127.0.0.1", "apagar", {"codigo": "simu", "modo": "golpe"}, puerto)
+        assert r["accion"] == "golpe" and r["datanode"] == "no"
+        with pytest.raises(aula.ApiError) as e:
+            aula.pedir_agente("127.0.0.1", "apagar", {"codigo": "OTRO"}, puerto)
+        assert e.value.code == "forbidden" and "código" in str(e.value)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+    with socket.socket() as s:   # un puerto donde no escucha nadie
+        s.bind(("127.0.0.1", 0))
+        libre = s.getsockname()[1]
+    with pytest.raises(aula.ApiError) as e:
+        aula.pedir_agente("127.0.0.1", "prender", {"codigo": "SIMU"}, libre, timeout=2)
+    assert e.value.code == "service_down"

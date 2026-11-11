@@ -5,7 +5,7 @@
 #                     el cluster del aula (AUTOSTART) y tiene la vista Aula.
 #                     Con INTERFAZ=no, el arranque directo sin interfaz
 #   trabajador        una PC del aula: su DataNode y su NodeManager, directo
-#                     con /opt/entrypoint.sh
+#                     con /opt/entrypoint.sh, y el agente de apagado (:8098)
 # Con RED=wireguard, antes de todo se arma la red del aula (aula/red.sh): el
 # hub y la inscripcion en el maestro, el tunel en cada PC.
 set -e
@@ -33,5 +33,11 @@ case "$ROL" in
     fi
     exec /opt/entrypoint.sh "$@" ;;
   *)
+    # el agente de apagado (aula/agente.py): el profe apaga y prende esta PC
+    # desde la vista Aula. Solo atiende al maestro con el codigo de la clase.
+    # Con AGENTE=no no arranca
+    if [ "$ROL" = trabajador ] && [ -f /opt/sandbox/aula/agente.py ]; then
+      python3 /opt/sandbox/aula/agente.py &
+    fi
     exec /opt/entrypoint.sh "$@" ;;
 esac

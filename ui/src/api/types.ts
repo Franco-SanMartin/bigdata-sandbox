@@ -167,6 +167,95 @@ export interface AulaPc {
   lugar?: { fila: number; lugar: number };
   /** Los contenedores que corre, por trabajo (am: tiene el ApplicationMaster) */
   apps?: { app: string; n: number; am: boolean }[];
+  /** La apagaron desde la vista Aula (el agente de la PC paró su DataNode y su NodeManager) */
+  apagada?: { desde: number; modo: AulaModoApagar } | null;
+}
+
+/** ordenado: avisa a YARN y HDFS (los trabajos se reacomodan enseguida); golpe: como desenchufarla */
+export type AulaModoApagar = 'ordenado' | 'golpe';
+
+/** POST /api/aula/pcs/{nodo}/apagar|prender: lo que hizo el agente de la PC */
+export interface AulaEnergia { nodo: string; accion: 'apagar' | 'prender'; modo: AulaModoApagar | null; datanode: boolean; nodemanager: boolean }
+
+/** Una cola de YARN (la de un grupo, o default): su parte del aula, hasta dónde crece y lo que usa (en %) */
+export interface AulaCola {
+  nombre: string;
+  estado: 'RUNNING' | 'STOPPED' | string;
+  capacidad: number;
+  maxima: number;
+  usada: number;
+  mb: number;
+  vcores: number;
+  apps: number;
+  pendientes: number;
+  contenedores: number;
+}
+
+/** PUT /api/aula/colas { grupos } */
+export interface AulaColasGuardadas { grupos: string[]; paradas: string[]; colas: AulaCola[] }
+
+export type AulaLocalidadTipo = 'data-local' | 'rack-local' | 'off-rack';
+
+/** Una tarea de un trabajo: dónde estaba su bloque y dónde corrió */
+export interface AulaTarea {
+  id: string;
+  tipo: 'map' | 'reduce' | 'spark';
+  /** Las PCs con una copia del bloque que leyó (null: no lee un bloque, o Spark, que no lo dice) */
+  bloque: string[] | null;
+  corrio: string | null;
+  rack: string | null;
+  localidad: AulaLocalidadTipo | null;
+  /** Lo que dijo YARN/Spark (NODE_LOCAL, RACK_LOCAL...) */
+  yarn: string | null;
+  estado: 'ok' | 'corriendo' | 'fallo' | 'muerta' | 'esperando';
+  intentos: number;
+  fallidos: number;
+}
+
+/** GET /api/aula/localidad/{app} */
+export interface AulaLocalidad {
+  app: string;
+  tipo: string;
+  estado: string;
+  nombre?: string | null;
+  cola?: string | null;
+  soportado: boolean;
+  fuente: 'en curso' | 'historial' | null;
+  tareas: AulaTarea[];
+  resumen: Record<AulaLocalidadTipo, number>;
+  motivo?: string;
+}
+
+export type AulaTrabajoEscala = 'mr-pi' | 'spark-pi' | 'mr-wordcount';
+
+/** Una medición del botón «medir»: el mismo trabajo con las PCs que había en ese momento */
+export interface AulaMedida {
+  id: string;
+  trabajo: AulaTrabajoEscala;
+  entrada: string | null;
+  cola: string | null;
+  estado: 'corriendo' | 'ok' | 'fallo';
+  inicio: number;
+  app: string | null;
+  pcs: number;
+  nodos: string[];
+  mb: number;
+  vcores: number;
+  segundos?: number | null;
+  resultado?: string;
+  pcsAlFinal?: number;
+  /** Se sumó o se fue una PC mientras corría: el punto es menos confiable */
+  cambiaron?: boolean;
+}
+
+export interface AulaPuntoEscala { pcs: number; segundos: number; medidas: number; aceleracion: number }
+
+/** GET /api/aula/escala: las medidas (la más nueva primero) y la curva por trabajo */
+export interface AulaEscala {
+  corriendo: AulaMedida | null;
+  medidas: AulaMedida[];
+  curva: { trabajo: AulaTrabajoEscala; entrada: string | null; puntos: AulaPuntoEscala[] }[];
+  ahora: { pcs: number; nodos: string[]; mb: number; vcores: number };
 }
 
 /** El plano del aula: en qué fila y lugar está cada PC. Las filas son los racks de HDFS */
@@ -226,6 +315,8 @@ export interface AulaStatus {
   eventos: string[];
   /** El plano guardado en el maestro (null: las filas salen del número de cada PC) */
   plano?: AulaPlano | null;
+  /** Las colas de YARN (una por grupo); null si YARN no contesta */
+  colas?: AulaCola[] | null;
   ahora: number;
 }
 
@@ -1136,6 +1227,20 @@ export interface SandboxApi {
   aulaTrafico(desde?: number): Promise<AulaTrafico>;
   /** GET /api/aula/caidas → las PCs que se cayeron, con su línea de tiempo */
   aulaCaidas(): Promise<AulaCaida[]>;
+  /** PUT /api/aula/colas { grupos } → una cola de YARN por grupo, partes iguales (las que sobran quedan paradas) */
+  aulaGuardarColas(grupos: string[]): Promise<AulaColasGuardadas>;
+  /** POST /api/aula/colas/{cola}/trabajo { trabajo } → manda un π de muestra a esa cola */
+  aulaTrabajoEnCola(cola: string, trabajo: 'mr-pi' | 'spark-pi'): Promise<{ id: string; cola: string }>;
+  /** GET /api/aula/localidad/{app} → por tarea, dónde estaba el bloque y dónde corrió */
+  aulaLocalidad(app: string): Promise<AulaLocalidad>;
+  /** GET /api/aula/escala → las mediciones y la curva */
+  aulaEscala(): Promise<AulaEscala>;
+  /** POST /api/aula/escala { trabajo, cola? } → corre el trabajo y anota cuánto tardó con las PCs de ahora */
+  aulaMedir(trabajo: AulaTrabajoEscala, cola?: string | null): Promise<AulaMedida>;
+  /** DELETE /api/aula/escala[/id] → borra una medida (o todas) */
+  aulaBorrarMedida(id?: string): Promise<AulaEscala>;
+  /** POST /api/aula/pcs/{nodo}/apagar|prender { modo } → se lo pide al agente de la PC */
+  aulaEnergia(nodo: string, accion: 'apagar' | 'prender', modo?: AulaModoApagar): Promise<AulaEnergia>;
   /** GET /api/yarn/apps/:id → detalle con el DAG (Tez, Spark o MapReduce), contadores y comando */
   app(id: string): Promise<YarnAppDetail>;
   /** GET /api/yarn/apps/:id/logs?container=… → stdout, stderr y syslog de un contenedor */

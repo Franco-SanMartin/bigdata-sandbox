@@ -166,7 +166,7 @@ def build_app(settings: Settings | None = None, ui_dir: str | Path | None = None
     biblioteca = ml_biblioteca.Biblioteca(estudio)
     pipeline = pipeline_mod.Pipeline(cluster, runner, bus, hdfs, datos, ml)
     terminal = terminal_mod.Terminal()
-    aula = aula_mod.Aula(cluster)
+    aula = aula_mod.Aula(cluster, yarn=yarn)
 
     api = [
         Route("/api/status", status),

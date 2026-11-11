@@ -1,5 +1,6 @@
 /* La vista Aula: qué color tiene cada lámpara y cómo se agrupan las PCs por fila (los racks). */
-import type { AulaLampara, AulaPc } from '../api/types';
+import type { AulaLampara, AulaMedida, AulaPc, AulaTarea } from '../api/types';
+import { toCsv } from './csv';
 
 export const LAMPARA: Record<AulaLampara, { k: 'ok' | 'run' | 'bad'; label: string; que: string }> = {
   sumandose: { k: 'run', label: 'Sumándose', que: 'se inscribió y está prendiendo su DataNode y su NodeManager' },
@@ -76,4 +77,42 @@ export function leerPlano(texto: string): Plano {
     throw new Error('no es un plano del aula: {"filas": [["pc01", null, ...], ...]} con hasta 8 filas de 12 lugares');
   }
   return { filas: filas as (string | null)[][] };
+}
+
+/* ---------- Los opcionales: localidad, colas por grupo y escala ---------- */
+
+export type Resalte = 'bloque' | 'corrio' | 'ambos';
+
+/** Qué se prende en el plano al pasar por una tarea: las PCs con una copia de su bloque y la PC donde corrió */
+export function resalteDeTarea(t: AulaTarea | null | undefined): Record<string, Resalte> {
+  const out: Record<string, Resalte> = {};
+  if (!t) return out;
+  for (const n of t.bloque ?? []) out[n] = 'bloque';
+  if (t.corrio) out[t.corrio] = out[t.corrio] ? 'ambos' : 'corrio';
+  return out;
+}
+
+const GRUPO_RE = /^[a-z][a-z0-9_]{0,19}$/;
+export const GRUPOS_MAX = 12;
+
+/** Los grupos que escribió el profe ("grupo1, grupo2 ..."), con las mismas reglas que el maestro */
+export function leerGrupos(texto: string): { grupos: string[]; error?: string } {
+  const grupos: string[] = [];
+  for (const x of texto.split(/[\s,;]+/).filter(Boolean)) {
+    const n = x.toLowerCase();
+    if (!GRUPO_RE.test(n) || n === 'default' || n === 'root') {
+      return { grupos, error: `${x} no sirve de nombre de grupo: letras, números y _ (hasta 20), sin default ni root` };
+    }
+    if (grupos.includes(n)) return { grupos, error: `El grupo ${n} está dos veces` };
+    grupos.push(n);
+  }
+  if (grupos.length > GRUPOS_MAX) return { grupos, error: `Hasta ${GRUPOS_MAX} grupos` };
+  return { grupos };
+}
+
+/** Las medidas del botón «medir» en CSV, por trabajo y cantidad de PCs (para graficarlas en una planilla) */
+export function escalaCsv(medidas: AulaMedida[]): string {
+  const ms = [...medidas].sort((a, b) => a.trabajo.localeCompare(b.trabajo) || a.pcs - b.pcs || a.inicio - b.inicio);
+  return toCsv(['trabajo', 'pcs', 'segundos', 'estado', 'memoria_mb', 'cores', 'cambiaron_pcs', 'app', 'inicio'],
+    ms.map(m => [m.trabajo, m.pcs, m.segundos ?? null, m.estado, m.mb, m.vcores, m.cambiaron ? 'si' : 'no', m.app, new Date(m.inicio).toISOString()]));
 }
