@@ -1,4 +1,4 @@
-/* Guía 10: MongoDB. Documentos, find, aggregate e índices. */
+/* docs/base/guia.md §13: MongoDB. Documentos, find, aggregate e índices. */
 import { rowsCheck, runQuery } from './comun';
 import type { Practice } from './tipos';
 
@@ -17,7 +17,7 @@ const sh = (js: string) => `mongosh tienda --eval '${js}'`;
 const CONT = 'MongoDB guarda la base tienda en el contenedor (en /data/db): no está en HDFS';
 
 export const mongodb: Practice = {
-  id: 'mongodb', guide: '10', guideFile: '10-mongodb.md',
+  id: 'mongodb', guide: '13', guideAnchor: '13-mongodb',
   title: 'MongoDB: documentos e índices',
   summary: 'Leés un documento entero, filtrás con find, agrupás con aggregate y comparás una búsqueda con índice y sin índice.',
   minutes: 15, cap: 'mongodb',

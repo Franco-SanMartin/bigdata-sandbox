@@ -143,19 +143,18 @@ Spark y Tez no van: les llegan desde HDFS (`spark.yarn.archive` y
 
 ## Probarlo en una sola compu
 
-Alcanza con bajar [`aula-simulada.yml`](aula-simulada.yml), sin clonar el repo:
+Alcanza con copiar [`aula-simulada.yml`](aula-simulada.yml) a cualquier
+carpeta, sin clonar el repo:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Franki-678/bigdata-sandbox/empresa/empresa/aula-simulada.yml
 docker compose -f aula-simulada.yml up -d
 docker exec maestro estado
 docker exec -it pc01 bash
 hdfs dfsadmin -printTopology
 ```
 
-La interfaz del maestro queda en <http://localhost:8080> si se publica el
-puerto (en `aula-simulada.yml` no está: agregar `- "8080:8080"` en
-`ports` del maestro).
+La interfaz del maestro queda en <http://localhost:8080>. Todos los puertos
+se publican solo en `127.0.0.1`: YARN, HDFS y HiveServer2 no piden usuario.
 
 Las pruebas automáticas están en `pruebas/aula.sh`: `aula` y `aula-caida`
 con `RED=docker`; `aula-wg`, `aula-wg-caida` y `aula-wg-cero` con el túnel,

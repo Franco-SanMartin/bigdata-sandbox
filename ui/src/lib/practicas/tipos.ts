@@ -127,10 +127,10 @@ export interface Step {
 
 export interface Practice {
   id: string;
-  /** Número de guía del repo (03, 04…) */
+  /** Número de sección de docs/base/guia.md (7, 8…) */
   guide: string;
-  /** Nombre del archivo de la guía en guias/ */
-  guideFile: string;
+  /** Ancla de esa sección en GitHub (7-hdfs) */
+  guideAnchor: string;
   title: string;
   /** Una línea: qué se aprende */
   summary: string;

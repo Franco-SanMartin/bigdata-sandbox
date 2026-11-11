@@ -1,6 +1,7 @@
 {
   "tag": "full",
   "nombre": "Versión",
+  "contenedor": "bigdata-full",
   "titulo": "BigData Sandbox · full, el cluster con interfaz web",
   "subtitulo": "Todo Hadoop en un contenedor y una **interfaz en el 8080** que lo maneja de verdad: tocá una pieza para ver qué es, cómo se usa y con qué se conecta.",
   "arranque": {
@@ -302,7 +303,7 @@
       "nombre": "ZooKeeper",
       "capa": "recursos",
       "corto": "sólo con 2+ NameNodes",
-      "version": "3.8.7",
+      "version": "3.8.8",
       "que": "Con `NAMENODES=2` o `3` decide qué NameNode está activo y promueve al de espera si el activo se cae.",
       "no": "Con un solo NameNode no se prende.",
       "guia": {

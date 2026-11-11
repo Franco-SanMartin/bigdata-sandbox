@@ -7,6 +7,7 @@ import {
 } from './motor';
 import { PRACTICES, practiceById } from './index';
 import type { Practice, StepCtx } from './tipos';
+import guia from '../../../../docs/base/guia.md?raw';
 
 const mem = (init: Record<string, string> = {}): Storage & { data: Record<string, string> } => {
   const data = { ...init };
@@ -14,7 +15,7 @@ const mem = (init: Record<string, string> = {}): Storage & { data: Record<string
 };
 
 const P: Practice = {
-  id: 'p', guide: '03', guideFile: '03-hdfs.md', title: 'Prueba', summary: '', minutes: 1, cap: 'hdfs.read', learn: [],
+  id: 'p', guide: '7', guideAnchor: '7-hdfs', title: 'Prueba', summary: '', minutes: 1, cap: 'hdfs.read', learn: [],
   steps: [
     { id: 'a', title: 'A', command: 'a', input: '', does: '', expect: '' },
     { id: 'b', title: 'B', command: 'b', input: '', does: '', expect: '' },
@@ -174,7 +175,17 @@ describe('catálogo', () => {
         expect(s.run || s.verify, `${p.id}/${s.id}`).toBeTruthy();
       }
     }
-    expect(practiceById('hive')?.guide).toBe('06');
+    expect(practiceById('hive')?.guide).toBe('10');
+  });
+
+  it('el botón de la guía lleva a una sección que existe en docs/base/guia.md', () => {
+    // el ancla de GitHub de "## 10. Hive" es "10-hive"
+    const anclas = new Set([...guia.matchAll(/^## (\d+)\. (.+)$/gm)].map(([, n, t]) =>
+      `${n}-${t.toLowerCase().replace(/[^a-z0-9áéíóúñü -]/g, '').replace(/ /g, '-')}`));
+    for (const p of PRACTICES) {
+      expect(anclas.has(p.guideAnchor), `${p.id}: ${p.guideAnchor}`).toBe(true);
+      expect(p.guideAnchor.startsWith(`${p.guide}-`), p.id).toBe(true);
+    }
   });
 
   it('sugiere primero las empezadas y no las completas', () => {

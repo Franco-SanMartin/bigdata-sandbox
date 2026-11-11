@@ -1,4 +1,4 @@
-/* La franja de camino de datos (REDISENO-FULL.md §4): de dónde vienen los datos, qué los procesa y con
+/* La franja de camino de datos: de dónde vienen los datos, qué los procesa y con
    qué motor, y dónde quedan. Cada tramo dice su capa (el color del mapa), adónde lleva y qué término del
    glosario lo explica. Funciones puras: las usan el detalle de un trabajo y el resultado de una consulta. */
 import type { DataSource, ModelRun, QueryResult, StepRun, YarnAppDetail } from '../api/types';

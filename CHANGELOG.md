@@ -5,9 +5,62 @@ Los cambios que importan de cada versión. El formato sigue
 [Semantic Versioning](https://semver.org/lang/es/). Las imágenes se publican
 en Docker Hub como
 [`franki678/bigdata-sandbox`](https://hub.docker.com/r/franki678/bigdata-sandbox),
-con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
+con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`) y los dos
+de la versión empresa (`empresa` para el maestro y `empresa-trabajador` para
+las PCs del aula).
 
 ## [Sin publicar]
+
+## [1.4.0] - 2026-11-11
+
+El estudio de ML entrena en Spark y guarda cada modelo en una biblioteca con
+predicción y deriva; `full` compara motores, lenguajes y formatos con números
+reales; `empresa` suma el aula en vivo (plano, tráfico, caídas, apagar una PC
+desde la vista, colas por grupo, localidad y escala) y todo lo de empresa sale
+de un solo workflow desde `main`. La documentación se rehízo desde cero.
+
+### Cambiado (empresa unificada)
+
+- **Un solo paquete para el mini servidor del aula**: el workflow Empresa
+  (`.github/workflows/empresa.yml`), corrido a mano desde `main`, arma y
+  prueba el maestro y las PCs (aula simulada y por el túnel, con caídas,
+  arranque de cero y los opcionales) y publica las dos imágenes y el release
+  del aula. Un push a una rama solo prueba. Ya no hay rama `empresa`.
+- **La imagen de las PCs del aula se llama `empresa-trabajador`**
+  (`franki678/bigdata-sandbox:empresa-trabajador`, amd64 y arm64), al lado de
+  `:empresa`, que es el maestro. `empresa-alumno.cmd` y `pruebas/aula.sh`
+  usan ese nombre.
+- **Release `aula-v2`**: las dos imágenes en `.tar.gz` y los `.cmd` del aula
+  para el pendrive. Reemplaza a `aula-v1`.
+- **`empresa-alumno.cmd` sin `.tar.gz` al lado** hace `docker pull` de
+  `:empresa-trabajador`, igual que `empresa-profe.cmd`, para las PCs con
+  internet.
+- La corrida de Empresa revisa la sintaxis de los dos `.cmd` con el parser de
+  PowerShell (y así apareció un `$archivoImagen:` que PowerShell leía como
+  unidad, en `empresa-alumno.cmd`: corregido).
+- Los cambios en `empresa/`, `sonda/`, `pruebas/aula.sh` y los workflows de
+  empresa, sonda, aula y release no republican `latest`, `base`, `ml` ni
+  `full`.
+
+### Agregado (opcionales del aula)
+
+- **Apagar y prender una PC desde la vista Aula**, ordenado o de golpe, sin ir
+  hasta la PC. Cada PC trabajador corre un agente (`empresa/aula/agente.py`,
+  TCP 8098) que solo atiende al maestro y con el código de la clase; para el
+  DataNode y el NodeManager (Windows y Docker siguen prendidos) y no da la PC
+  por apagada si alguno quedó vivo. `AGENTE=no` lo desactiva. API:
+  `POST /api/aula/pcs/{nodo}/apagar|prender`.
+- **Colas por grupo**: una cola de YARN por grupo con partes iguales del aula,
+  que pueden crecer hasta el 100 %, con su barra de uso y un π de muestra por
+  cola (`GET`/`PUT /api/aula/colas`). Si YARN rechaza el cambio, el archivo
+  vuelve a como estaba.
+- **Dónde corrió cada tarea**: la localidad (data-local, rack-local, off-rack)
+  de cada tarea de un trabajo MapReduce o Spark; al pasar el mouse, el plano
+  marca las PCs que tenían el bloque y la que la corrió
+  (`GET /api/aula/localidad/{app}`).
+- **¿Cuánto más rápido con más PCs?**: mide el mismo trabajo con las PCs que
+  hay y arma la curva de tiempo y aceleración, con exportar a CSV
+  (`/api/aula/escala`).
 
 ### Cambiado (documentación)
 
@@ -77,8 +130,7 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   `Ctrl+K`), y la columna de Pig suma sus tres trabajos. En un `:full` real,
   Pig mandó 646 bytes por el shuffle (el combiner de `SUM` suma en cada map)
   contra 3,2 MB de MapReduce a mano, y tardó 50 s contra 19 s porque lanza tres
-  trabajos en fila. "Qué muestran los números" lo dice, y la guía 11 suma la
-  columna de Pig.
+  trabajos en fila. "Qué muestran los números" lo dice.
 
 - **Inicio con el mapa vivo del ecosistema** (`full`): las 20 herramientas
   ordenadas por capa (desde dónde trabajás → cómo lo pedís → quién hace el
@@ -95,7 +147,6 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   - **¿Cuál uso?**: las seis preguntas (lenguajes, motores, almacenamiento,
     una máquina contra el cluster, quién coordina, cómo entran los datos),
     cada una abre su tabla en Comparar.
-  - El contenido sale de `docs/maquetas/ecosistema.html`.
 - **Pantalla Comparar** (`full`, `G K`): la misma cuenta de ventas por
   producto en MapReduce a mano, Pig, Hive y PySpark, con el código real de
   `datos/ejemplos` (la parte que hace la cuenta o el archivo entero). Arriba,
@@ -160,17 +211,13 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     en cuántos bloques queda, leído del listado de su carpeta.
   - La misma consulta corre en las tres, una por vez, con su tiempo y su
     trabajo de YARN.
-  - Guía 12 y la sección en la referencia.
-- **Glosario único** (`guias/glosario.md`): las palabras del cluster por capa
+- **Glosario único** (`docs/glosario.md`): las palabras del cluster por capa
   (almacenamiento, recursos, motores, lenguajes, ingesta y alta
   disponibilidad), más la tabla "la misma tarea, con varias herramientas".
   - En `full`, el `?` de cada pantalla suma la pestaña **Glosario**, con
     buscador y los términos de esa pantalla a un clic.
   - En `Ctrl+K`, escribir una palabra lo abre en ella.
   - La interfaz lee el mismo `.md` al armarse la imagen: hay un solo texto.
-- **Guía 11 de `full`: Comparar**, con los números reales de las cuatro
-  versiones. El índice de las guías de `full` queda ordenado por capas, y la
-  guía 5 suma la pantalla Tablas.
 - **`GET /api/yarn/metrics?apps=…`** (servidor): lo que costó cada trabajo,
   igual para los tres motores. Tiempo, MB·s y vcores·s salen del RM; cuando
   terminó, lo leído y escrito en HDFS, el shuffle, el disco local y las tareas
@@ -198,7 +245,7 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 - **Capturas nuevas** en `docs/capturas`, sacadas de la demo con la barra por
   capas: Inicio con el mapa del ecosistema, Trabajos, Pipeline y Machine
   Learning con su franja de camino de datos, y Cluster; más Comparar,
-  Formatos, Tablas y Motores (en el README y en las guías 11 y 12).
+  Formatos, Tablas y Motores (en el README).
 - **Consultas se partió en Lenguajes y Bases** (`full`): Lenguajes (`G L`)
   tiene Hive y Pig, que corren en el cluster; Bases (`G B`) tiene MariaDB y
   MongoDB, de una sola máquina. Es el mismo editor (documentos, ejemplos,
@@ -227,7 +274,7 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     con su IP del túnel (`10.13.0.x`). Las PCs no publican ningún puerto (no
     aparece el cartel del firewall). MTU 1380, con respaldo a 1280 por PC.
     Módulo del kernel o `wireguard-go`.
-  - Imagen **`trabajador`** para las PCs: Java 8, Hadoop recortado al
+  - Imagen para las PCs (hoy **`empresa-trabajador`**, ver arriba): Java 8, Hadoop recortado al
     DataNode y al NodeManager, Python con numpy (el mismo que el maestro) y
     WireGuard; Spark y Tez llegan desde HDFS. 192 MB comprimida, contra
     1,6 GB de `empresa`. amd64 y arm64.
@@ -243,8 +290,6 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
     carga datasets midiendo la velocidad) y `empresa-alumno.cmd` (carga la
     imagen de su carpeta o de una ruta de red y suma la PC). Release
     `aula-v1` con las imágenes en `.tar.gz`.
-  - Guía 3 reescrita como el paso a paso de la clase, con tiempos y una tabla
-    de tamaños de dataset para esta red.
 - Sonda: `sonda-alumno.cmd IP sin-b`, sin la prueba B (no publica el 8098 y
   no aparece el cartel del firewall).
 - Pruebas `aula-wg`, `aula-wg-caida` y `aula-wg-cero`: las PCs en redes de
@@ -422,10 +467,9 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   - `POST /api/ml/sources/generate` y **Datos a escala en HDFS…** en el paso
     Datos del estudio: corre con el mismo lanzador de las corridas y, al
     terminar, elige la fuente nueva.
-  - Guías: 13 de `full` (`guias/full/13-estudio-ml.md`) (el estudio de punta a
-    punta: datos a escala, limpieza, YARN, biblioteca, lotes con deriva y
-    exportar) y 8 de `ml` (`guias/ml/08-estudio-desde-jupyter.md`) (lo mismo
-    con `sandbox_ml` desde JupyterLab).
+  - El estudio de punta a punta (datos a escala, limpieza, YARN, biblioteca,
+    lotes con deriva y exportar) está en `docs/full/guia.md` y, con
+    `sandbox_ml` desde JupyterLab, en `docs/ml/guia.md`.
   - Humo de `full`: genera 200.000 clientes y entrena una logística de Spark
     sobre ellos. La guarda en la biblioteca, la promueve, predice al instante y
     por lotes (la deriva tiene que salir fuerte en la antigüedad corrida y
@@ -440,6 +484,21 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Corregido
 
+- **ZooKeeper 3.8.7 → 3.8.8**, bajado de dlcdn y verificado con el sha512 que
+  publica Apache: la 3.8.7 ya solo estaba en archive.apache.org, que desde los
+  runners a veces no contesta, y así se cayó el armado arm64.
+- Humo de `full`: espera que termine el cambio de réplica antes de leerla
+  (a veces leía la vieja).
+- Aula: el apagado "de golpe" de una PC también mata por el nombre del
+  servicio (`-Dproc_datanode`, `-Dproc_nodemanager`), porque en CI un DataNode
+  sobrevivió a un `pkill` solo por nombre de proceso; y la prueba de una PC
+  caída por el túnel espera que los bloques vuelvan a 2 copias antes de
+  contarlas.
+- El humo de `:empresa` en CI prende la terminal (`TERMINAL=1`), que la imagen
+  trae apagada de fábrica.
+- Prácticas: el botón de la guía abre la sección de `docs/base/guia.md` de
+  cada práctica (llevaba a `guias/`, que ya no existe), y el glosario de la
+  ayuda dice que su texto está en `docs/glosario.md`.
 - `pruebas/solo_full.sh` leía mal los tramos del `Dockerfile` que cambian una
   sola línea (git no escribe la cantidad cuando es 1): el `read` corría los
   campos y lo tomaba como un cambio de `base`. Ahora la completa.
@@ -453,6 +512,10 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ### Seguridad
 
+- **El aula simulada publica todo solo en `127.0.0.1`**
+  (`empresa/aula-simulada.yml`): el NameNode, YARN, JobHistory, Spark History
+  y HiveServer2 estaban en `0.0.0.0`, y como no piden usuario cualquiera de la
+  red podía mandar trabajos al cluster o leer y borrar HDFS.
 - `vitest` 3.2.4 → 4.1.12 en `ui/` (solo corre las pruebas: no entra en la
   imagen ni en la demo). La 3.2.x arrastraba `tinypool` con dos fallas
   críticas y `@vitest/mocker` con una moderada; `npm audit` queda en 0.
@@ -695,8 +758,9 @@ GitHub Actions en Intel/AMD y ARM antes de publicarse.
 - Primeros arranques cortados a la mitad: el siguiente arranque los
   recupera.
 
-[Sin publicar]: https://github.com/Franki-678/bigdata-sandbox/compare/v1.3.0...main
-[1.3.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.3.0
-[1.2.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.2.0
-[1.1.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.1.0
-[1.0.0]: https://github.com/Franki-678/bigdata-sandbox/releases/tag/v1.0.0
+[Sin publicar]: https://github.com/Franco-SanMartin/bigdata-sandbox/compare/v1.4.0...main
+[1.4.0]: https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/v1.4.0
+[1.3.0]: https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/v1.3.0
+[1.2.0]: https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/v1.2.0
+[1.1.0]: https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/v1.1.0
+[1.0.0]: https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/v1.0.0

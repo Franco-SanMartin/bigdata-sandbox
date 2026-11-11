@@ -1,4 +1,4 @@
-/* Guía 06: Hive. Tabla externa sobre HDFS, consultas simples y con Tez, y el plan. */
+/* docs/base/guia.md §10: Hive. Tabla externa sobre HDFS, consultas simples y con Tez, y el plan. */
 import { VENTAS_DIR, rowsCheck, runQuery, ventasEnHdfs } from './comun';
 import type { Practice } from './tipos';
 
@@ -28,7 +28,7 @@ ORDER BY facturado DESC`;
 const EN = 'En beeline, la consola de Hive (beeline -u jdbc:hive2://localhost:10000)';
 
 export const hive: Practice = {
-  id: 'hive', guide: '06', guideFile: '06-hive.md',
+  id: 'hive', guide: '10', guideAnchor: '10-hive',
   title: 'Hive: SQL sobre HDFS',
   summary: 'Creás una tabla externa sobre las ventas, consultás con y sin Tez y mirás el plan con EXPLAIN.',
   minutes: 15, cap: 'hive',

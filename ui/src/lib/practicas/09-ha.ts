@@ -1,4 +1,4 @@
-/* Guía 09: ZooKeeper y alta disponibilidad. Apagar el NameNode activo y ver el failover. */
+/* docs/base/guia.md §14: ZooKeeper y alta disponibilidad. Apagar el NameNode activo y ver el failover. */
 import type { ClusterStatus } from '../../api/types';
 import { waitFor } from './motor';
 import { actionRaw, armada, lsRaw, textLines } from './comun';
@@ -20,7 +20,7 @@ const nnAction = async (c: StepCtx, id: string, a: 'start' | 'stop') => { const 
 const STATE = 'hdfs haadmin -getAllServiceState';
 
 export const ha: Practice = {
-  id: 'ha', guide: '09', guideFile: '09-zookeeper-ha.md',
+  id: 'ha', guide: '14', guideAnchor: '14-zookeeper-y-alta-disponibilidad',
   title: 'Alta disponibilidad: se cae el NameNode',
   summary: 'Apagás el NameNode activo, ZooKeeper elige otro y HDFS sigue andando. Después vuelve como standby.',
   minutes: 10, cap: 'ha',

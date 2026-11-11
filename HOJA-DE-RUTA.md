@@ -2,70 +2,44 @@
 
 Qué está hecho, qué está en curso y qué sigue en BigData Sandbox. Es el punto de
 partida para retomar el trabajo desde cualquier sesión o compu. Última
-actualización: 2026-11-10. Las decisiones están en [DECISIONES.md](DECISIONES.md)
+actualización: 2026-11-11. Las decisiones están en [DECISIONES.md](DECISIONES.md)
 y los cambios de cada versión, en el [CHANGELOG](CHANGELOG.md).
 
 ## Para seguir
 
-Todo lo que falta, por frente (al 2026-11-10):
+Todo lo que falta, por frente (al 2026-11-11, con la versión 1.4.0 en `main`):
 
-**Rediseño 360 de `full`**: hecho y
-publicado en `:full` (PRs #10 y #11: Comparar lanza Pig desde la pantalla y
-`vitest` sin vulnerabilidades).
+**Rediseño 360 de `full` y ML sobre HDFS:** hechos y en `main`. Las etapas
+(c) modelos en Spark, (d) biblioteca, predicción y deriva y (e) generador a
+escala están en `:ml` y `:full`.
 
-**ML sobre HDFS** (versiones `ml` y `full`, sección de abajo):
-1. **(c) Modelos, búsqueda y evaluación en Spark:** terminada en
-   `ui2-ml-etapa-c-fin` (junta los dos WIP de `ui2-ml-etapa-c` con la interfaz
-   y las pruebas de los 19 modelos de Spark). Publica `:ml` y `:full`.
-2. **(d) Biblioteca de modelos, predicción y deriva:** hecha en
-   `ui2-ml-etapa-d` (sobre la c): biblioteca con versiones, estados y linaje,
-   deriva con PSI, lotes en YARN, predicción al instante y exportar con
-   `servir.py`.
-3. **(e) Generador a escala, guías y pruebas de humo:** hecha en
-   `ui2-ml-etapa-e` (sobre la d): `generar.py` en YARN, guías 13 de `full` y 8
-   de `ml`, y el estudio de punta a punta en el humo de `full`.
-
-**`empresa` en el aula** (sección de abajo):
-1. **Prueba piloto** con 2 o 3 PCs: la [guía de `empresa`](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/empresa/guia.md)
-   con el release `aula-v1`. Antes, pasarle a sistemas lo que necesita el aula
-   (red, puertos y permisos, en la misma guía). Con
-   lo que se anote, decidir la clase con las 20.
-2. **Aula 2D y tráfico real:** hecho en `ui2-aula-vivo` (sobre el PR #14):
-   - el editor del plano, cuyas filas son los racks (la topología del maestro
-     lee el plano);
-   - el tráfico en el `wg0` del maestro: por PC con `wg` y por par y tipo con
-     `nftables`;
-   - la línea de tiempo de una PC que se cae;
-   - los contenedores de cada trabajo por PC.
-
-   Faltan de la sección 11:
-   - el agente para apagar una PC desde la interfaz (11.3, opcional);
-   - las colas por grupo, la localidad al pasar el mouse y el botón "medir"
-     de la escala (11.4).
-
-   Probarlo con PCs reales es parte de la prueba piloto.
-3. **Terminal en `empresa`:** hecho, apagada de fábrica (`TERMINAL=0`); el
-   maestro del aula la prende.
-4. **¿Publicar `:empresa` y `:trabajador` en Docker Hub?** Workflow *Empresa*
-   con publicar tildado (~2 h). Hoy `:empresa` es del 27/10 y `:trabajador` no
-   existe; para el aula alcanza con el release `aula-v1`. Decide Franki.
+**`empresa` en el aula.** Todo sale del workflow *Empresa*, corrido a mano
+desde `main` con publicar y release tildados: arma y prueba el maestro y las
+PCs, publica `:empresa` y `:empresa-trabajador` y arma el release `aula-v2`.
+Ya no hay rama `empresa`.
+1. **Prueba piloto** con 2 o 3 PCs, con la [guía de `empresa`](docs/empresa/guia.md)
+   y el release `aula-v2`. Antes, pasarle a sistemas lo que necesita el aula
+   (UDP 51820 y TCP 8099 en la PC del profe, red Pública; está en la misma
+   guía). Con lo que se anote, decidir la clase con las 20. Ahí se prueba por
+   primera vez con PCs reales:
+   - el aula en vivo (plano, tráfico, caídas, YARN);
+   - los opcionales: apagar y prender una PC desde la vista (el agente por el
+     túnel), las colas por grupo, la localidad con el historial de un trabajo
+     real y la curva de escala con 1, 5, 10 y 20 PCs;
+   - los `.cmd` en Windows de verdad (en CI solo se revisa su sintaxis).
+2. **Aula 2D, tráfico y opcionales de la sección 11** (agente de apagado,
+   colas, localidad y escala): hechos y en `main` (PRs #18 y #21).
+3. **Terminal en `empresa`:** apagada de fábrica (`TERMINAL=0`); el maestro
+   del aula la prende.
 
 **`base`, `latest` y mantenimiento:**
-1. **Hive 4.0.0 ya no está en dlcdn** (404): el tarball quedó en el release
-   [`deps-hive-4.0.0`](https://github.com/Franco-SanMartin/bigdata-sandbox/releases/tag/deps-hive-4.0.0)
-   (verificado con el sha256 de Apache). La rama `ui2-hive-release` (PR abierto)
-   lo usa cuando archive.apache.org no contesta y verifica el sha256 siempre.
-   **Toca `base`: mergearlo republica `latest`.** Decide Franki cuándo.
-2. Correr el workflow **aula** para que el `.tar.gz` del release coincida con
-   `latest`.
-3. Borrar las ramas que ya están en `main`: `full`, `versiones`, `ui`, `ui2`,
-   `practicas`, `empresa-aula` y las `ui2-*` de PRs mergeados. Quedan
-   `empresa` (la usa su workflow), `ui2-ml-etapa-c` (la etapa c) y
-   `ui2-ml-pro` (respaldo).
-4. El compose que genera la interfaz usa el contenedor y el volumen de las
-   guías de su versión (`bigdata-full` y `bigdata_full`; con `empresa`,
-   `bigdata-empresa` y `bigdata_empresa`). Hecho.
-5. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
+1. Hive 4.0.0 con copia propia (release `deps-hive-4.0.0`, sha256 de Apache)
+   y ZooKeeper 3.8.8 desde dlcdn con su sha512: en `main`. Al subir de versión
+   ZooKeeper, cambiar también `ZOOKEEPER_SHA512` en el `Dockerfile`.
+2. Borrar las ramas que ya están en `main` (`docs-full-empresa`,
+   `docs-nuevas`, `empresa-opcionales`, `fix-arm64-imagen`). Los tags
+   `respaldo/*` se quedan.
+3. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
    reescribiendo `main` con force-push: no hacerlo sin que Franki lo decida.
 
 Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
@@ -83,10 +57,10 @@ Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
 
 Documentación por versión en `docs/<versión>/` (README, guía y mapa interactivo; ver el [README](README.md)); cambios en el [CHANGELOG](CHANGELOG.md).
 
-## En curso: ML distribuido sobre HDFS (versiones `ml` y `full`)
+## Hecho: ML distribuido sobre HDFS (versiones `ml` y `full`)
 
-Un PR a `main` por etapa (no se mergean sin el OK de Franki). La rama
-`ui2-ml-pro` queda como respaldo del primer intento.
+Se hizo con un PR a `main` por etapa; está todo en `main` desde la 1.4.0. El
+tag `respaldo/ui2-ml-pro` guarda el primer intento.
 
 **La idea:** entrenar modelos sobre los datos que YA están en HDFS, en el formato
 que estén, eligiendo cómo limpiar cada columna, guardar cada modelo en una

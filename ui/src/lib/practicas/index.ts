@@ -12,7 +12,7 @@ import type { CapaId } from '../ecosistema';
 
 export const PRACTICES: Practice[] = [hdfsBasico, hdfsFalla, mapreduce, pig, hive, mysqlSqoop, spark, ha, mongodb];
 
-/** Cómo se muestran: por capa, como la barra y el mapa de Inicio (REDISENO-FULL.md §6). Los ids y el orden de
+/** Cómo se muestran: por capa, como la barra y el mapa de Inicio. Los ids y el orden de
     PRACTICES (el de las guías de la materia) no cambian: lo usan el humo y el avance guardado */
 export const POR_CAPA: { capa?: CapaId; titulo: string; sub: string; ids: string[] }[] = [
   { capa: 'datos', titulo: 'Almacenamiento', sub: 'Dónde viven los datos: HDFS y una base de documentos', ids: ['hdfs-basico', 'hdfs-falla', 'mongodb'] },

@@ -1,4 +1,4 @@
-/* Guía 05: Pig Latin sobre las ventas de HDFS. */
+/* docs/base/guia.md §9: Pig Latin sobre las ventas de HDFS. */
 import { VENTAS_DIR, rowsCheck, runQuery, ventasEnHdfs } from './comun';
 import type { Practice } from './tipos';
 
@@ -27,7 +27,7 @@ const ALGUNAS = 'algunas = LIMIT con_importe 10;\nDUMP algunas;';
 export const PIG_CENTRO = LOAD + CENTRO + ALGUNAS;
 
 export const pig: Practice = {
-  id: 'pig', guide: '05', guideFile: '05-pig.md',
+  id: 'pig', guide: '9', guideAnchor: '9-pig',
   title: 'Pig: las ventas en Pig Latin',
   summary: 'Cargás las ventas desde HDFS, filtrás una sucursal y agrupás por producto con LOAD, FILTER, GROUP y DUMP.',
   minutes: 15, cap: 'pig',

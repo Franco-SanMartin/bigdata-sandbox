@@ -146,6 +146,10 @@ Está pensada para proyectar con la Demostración de Veyon, en pantalla completa
 - **La red del aula:** el tráfico por PC y por tipo (HDFS, shuffle, YARN, otro), contra un techo de referencia de 50 Mbit/s, y la tabla de quién más mueve.
 - **Si una PC se cae:** la línea de tiempo de cada caída, con los contenedores perdidos, los bloques re-copiados y cuánto tardó en recuperarse.
 - **Editar el plano**, **Pantalla completa** y un **modo demo** con las 11 PCs de la prueba del 27/10.
+- **Apagar y prender una PC** desde su detalle, sin ir hasta la PC: **Ordenado** (avisa a YARN y a HDFS: las tareas pasan a otras PCs enseguida) o **De golpe** (como desenchufarla: se ve en «Si una PC se cae»). La PC queda con el ícono de apagada y **Prender pcNN** la vuelve a sumar. Ver «El agente de apagado», abajo.
+- **Colas por grupo:** se escriben los grupos separados por coma (`grupo1, grupo2, grupo3`) y **Armar colas** crea una cola de YARN por grupo con partes iguales del aula; lo que sobra queda en `default`. Cada cola puede crecer hasta el 100 % si las otras no usan lo suyo. La barra de cada cola marca su parte, lo que usa y hasta dónde puede crecer; **Mandar un π** corre un MapReduce de muestra en esa cola. Con el campo vacío todo vuelve a `default`.
+- **Dónde corrió cada tarea:** para un trabajo MapReduce o Spark, cada tarea con su localidad (data-local, rack-local u off-rack) y una barra con el resumen. Al pasar el mouse (o el foco con Tab) por una tarea, el plano marca con borde punteado las PCs que tenían el bloque y con borde lleno la PC donde corrió.
+- **¿Cuánto más rápido con más PCs?:** corre siempre el mismo trabajo (π con MapReduce, π con Spark o contar palabras) con las PCs que hay y anota cuánto tardó. Con varias medidas (por ejemplo con 1, 5, 10 y 20 PCs) arma la curva de tiempo y la aceleración contra la medida con menos PCs, con la línea ideal punteada. Se exporta a CSV y se borra una medida o todas.
 
 Se refresca cada 2 s y guarda los últimos 10 minutos de tráfico, en 300 muestras. El tráfico sale de `wg show wg0 dump` y de los contadores de nftables por par de PCs y por puerto:
 
@@ -154,6 +158,21 @@ Se refresca cada 2 s y guarda los últimos 10 minutos de tráfico, en 300 muestr
 | HDFS | 9866, 9867 |
 | shuffle | 13562 |
 | YARN | 8030–8033, 8040–8042, 10020 |
+
+### El agente de apagado (TCP 8098, en cada PC)
+
+Cada PC trabajador lanza al arrancar un agente chico (`empresa/aula/agente.py`, sólo biblioteca estándar de Python). Cuando el profe toca «Apagar», el maestro le pide al agente de esa PC que pare el DataNode y el NodeManager:
+
+| Modo | Qué hace | Qué se ve |
+|---|---|---|
+| Ordenado | `yarn --daemon stop nodemanager` y para el DataNode con sus comandos | YARN la ve SHUTDOWN enseguida; HDFS igual espera los 40 s (un DataNode no avisa que se va) |
+| De golpe | `kill -9` al DataNode, al NodeManager y a todo Java de la PC | HDFS la da por muerta a los 40 s y YARN la pierde (LOST) al minuto |
+
+Después de apagar, el agente mira si quedó algo vivo: si el DataNode o el NodeManager siguen corriendo contesta error y la vista no la marca apagada. El contenedor y el túnel siguen andando, por eso «Prender» la vuelve a sumar.
+
+El agente sólo atiende al maestro: con `RED=wireguard` escucha sólo en la IP del túnel de la PC y acepta pedidos de `10.13.0.1`; con `RED=docker`, de la IP del contenedor `maestro`. Además pide el **código de la clase**. El puerto no se publica fuera del contenedor.
+
+API del maestro: `POST /api/aula/pcs/{nodo}/apagar` (con `modo`: `ordenado` o `golpe`) y `POST /api/aula/pcs/{nodo}/prender`. Las de los otros opcionales: `GET`/`PUT /api/aula/colas`, `POST /api/aula/colas/{cola}/trabajo`, `GET /api/aula/localidad/{app}` y `GET`/`POST`/`DELETE /api/aula/escala`.
 
 ### Los tiempos de una caída
 
@@ -211,6 +230,8 @@ El de alumno no publica puertos ni pide administrador: sólo sale hacia la PC de
 | `ESPERA_MAESTRO` | `600` | Segundos que una PC espera al maestro |
 | `TERMINAL` | `0` | La terminal web viene apagada; `empresa-profe.cmd` la prende con `TERMINAL=1` (sólo localhost) |
 | `SIMULAR_SIN_KERNEL` | — | Con `1`, fuerza `wireguard-go` (para probar el respaldo) |
+| `AGENTE` | `si` | En una PC trabajador, con `no` no arranca el agente de apagado |
+| `P_AGENTE` | `8098` | Puerto del agente de apagado |
 
 ## Qué NO hace
 
@@ -220,12 +241,17 @@ El de alumno no publica puertos ni pide administrador: sólo sale hacia la PC de
 - **No mueve los cómputos al maestro.** Si no hay PCs sumadas, no hay dónde correr tareas, salvo `MAESTRO_NM=si`.
 - **No guarda la clase en las PCs.** Si una PC se une a otra clase, borra su HDFS viejo. Lo que importa queda en el maestro.
 - **No reemplaza a Veyon.** Lo usa para mandar los archivos y la línea; no trae un repartidor propio.
+- **«Apagar» no apaga la PC.** Para el DataNode y el NodeManager; Windows y Docker siguen prendidos. No hace Wake-on-LAN, no apaga el maestro y no anda con imágenes de trabajador anteriores, que no traen el agente (la vista dice que no responde).
+- **Las colas no son por alumno.** No asignan alumnos a colas ni controlan quién manda a cuál (todos los trabajos del aula los manda `root`), ni ponen prioridades o límites distintos por grupo. Hasta 12 grupos, con letras, números y `_` (hasta 20), sin `default` ni `root`. Una cola que se quita queda parada: lo que ya corría termina.
+- **La localidad es de MapReduce y Spark.** Spark no informa dónde estaba el bloque (sólo dónde corrió y la localidad que logró); Tez (Hive) no se muestra, y un MapReduce recién lanzado puede no tener historial todavía.
+- **La medida de escala no aísla el aula.** Mide una por vez; si cambian las PCs mientras mide, la medida queda marcada pero entra igual en la curva, y otros trabajos corriendo la ensucian. Guarda hasta 100 medidas en el maestro.
 
 ## Limitaciones conocidas
 
 - **Windows + Docker Desktop** en todas las PCs. Los `.cmd` son para Windows. En Linux o Mac se usa `docker run` a mano (ver la guía).
 - **El kernel de Docker Desktop** puede no traer WireGuard: ahí entra `wireguard-go`, que necesita `/dev/net/tun`. Si tampoco está, el túnel no levanta.
 - **La red del aula es el cuello.** Todo el tráfico pasa por la PC del profe (hub). El techo de 50 Mbit/s de la vista es una referencia para dibujar, no una medición del aula.
+- **Probado en CI, no con PCs reales:** el agente de apagado por el túnel, lo que ve YARN al apagar (SHUTDOWN o LOST), el reparto real entre colas, el historial de un trabajo real para la localidad y la curva de escala con 20 PCs se prueban por primera vez en la prueba piloto.
 - **Los racks se leen al registrarse** cada DataNode. Si cambiás el plano con la clase andando, las PCs ya sumadas siguen en su rack viejo hasta que se reinician.
 - **Estado de publicación (10/11/2026):**
   - El release `aula-v2` todavía no existe; el último es `aula-v1` (prerelease del 29/10).
@@ -243,9 +269,10 @@ El de alumno no publica puertos ni pide administrador: sólo sale hacia la PC de
 | `empresa/aula/inscripcion.py` | La inscripción en el TCP 8099 |
 | `empresa/aula/topologia` | Racks |
 | `empresa/aula/bloques.sh` | Cómo quedaron repartidos los bloques |
+| `empresa/aula/agente.py` | El agente de apagado de cada PC (TCP 8098) |
 | `empresa/empresa-profe.cmd`, `empresa/empresa-alumno.cmd` | Los scripts de Windows |
 | `empresa/aula-simulada.yml` | El aula simulada (maestro + 2 PCs) |
-| `server/sandbox_server/aula.py`, `aula_vivo.py` | La API `/api/aula*` |
+| `server/sandbox_server/aula.py`, `aula_vivo.py`, `aula_yarn.py` | La API `/api/aula*` (`aula_yarn.py`: colas, localidad y escala) |
 | `ui/src/pages/aula/` | La vista Aula |
 | `pruebas/aula.sh` | Las pruebas del aula |
 | `.github/workflows/empresa.yml` | Armado, pruebas, publicación y release |

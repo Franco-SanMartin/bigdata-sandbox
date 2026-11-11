@@ -185,6 +185,26 @@ yarn node -list
 
 `yarn node -list` muestra un NodeManager por PC sumada.
 
+### Colas por grupo
+
+Si la clase trabaja en grupos, en la vista Aula abrí **Colas por grupo**, escribí los grupos separados por coma (por ejemplo `grupo1, grupo2, grupo3`) y tocá **Armar colas**. Cada grupo recibe una cola de YARN con una parte igual del aula, y puede crecer hasta el 100 % si las otras no usan la suya.
+
+En la barra de cada cola, la marca es su parte, el relleno lo que usa y lo rayado hasta dónde puede crecer. **Mandar un π** lanza un MapReduce de muestra en esa cola: mandá uno en dos colas a la vez para ver cómo YARN reparte. Para volver a una sola cola, dejá el campo vacío y tocá **Armar colas**.
+
+Las colas no saben qué alumno es de qué grupo: todos los trabajos del aula los manda `root`, y la cola se elige al mandar.
+
+### Dónde corrió cada tarea
+
+En **Dónde corrió cada tarea**, elegí un trabajo MapReduce o Spark ya terminado. Cada tarea aparece con su localidad: **data-local** (corrió en una PC que tenía el bloque), **rack-local** (en otra PC de la misma fila) u **off-rack** (en otra fila). Pasá el mouse por una tarea: en el plano, las PCs que tenían el bloque quedan con borde punteado y la PC donde corrió con borde lleno.
+
+De Spark se ve dónde corrió y la localidad que logró, pero no dónde estaba el bloque.
+
+### ¿Cuánto más rápido con más PCs?
+
+En **¿Cuánto más rápido con más PCs?** elegí el trabajo (π con MapReduce, π con Spark o contar palabras) y tocá **Medir con N PCs**. Después sumá o apagá PCs y volvé a medir. La tabla y la curva muestran cuánto tardó con cada cantidad de PCs y cuántas veces más rápido fue que con la medida de menos PCs; la línea punteada es lo ideal. **Exportar CSV** baja las medidas.
+
+Mientras mide, que el aula quede quieta: otros trabajos corriendo ensucian el tiempo.
+
 ## 9. La red del aula
 
 En la vista Aula, la sección **La red del aula** muestra en vivo el tráfico de cada PC, separado por tipo:
@@ -211,6 +231,15 @@ Es el experimento más lindo de la clase:
 4. El trabajo termina igual. La línea de tiempo de la caída resume cuántos contenedores se perdieron, cuántos bloques se re-copiaron y cuánto tardó.
 
 Si la PC vuelve a prenderse, para volver a sumarla corré otra vez la línea de Veyon en esa PC.
+
+### Desde la vista Aula, sin tocar la PC
+
+En la vista Aula, tocá la PC y en su detalle **Apagar pcNN…**. Elegí:
+
+- **Ordenado:** avisa a YARN y a HDFS; las tareas pasan a otras PCs enseguida.
+- **De golpe:** como desenchufarla; se ve igual que arriba en **Si una PC se cae**.
+
+Confirmá con **Apagar pcNN**. La PC queda con el ícono de apagada y **Prender pcNN** la vuelve a sumar, sin la línea de Veyon. No apaga Windows: sólo para el DataNode y el NodeManager de esa PC.
 
 ## 11. Terminar la clase: «Ya pueden apagar»
 

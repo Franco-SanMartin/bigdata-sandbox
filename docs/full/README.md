@@ -55,7 +55,7 @@ Las corridas medidas de ese workflow tardaron 53 min 47 s (run 42894896304) y 57
 | Hive (HiveServer2 + Metastore) | 4.0.0 | `Dockerfile`, sha256 verificado |
 | Tez | 0.10.3 | `Dockerfile` |
 | Spark | 3.5.9 | `Dockerfile` |
-| ZooKeeper | 3.8.7 | `Dockerfile` |
+| ZooKeeper | 3.8.8 | `Dockerfile` |
 | Pig | 0.18.0 | `Dockerfile` |
 | Sqoop | 1.4.7 | `Dockerfile` |
 | MariaDB | la de Ubuntu 24.04 | `apt` |

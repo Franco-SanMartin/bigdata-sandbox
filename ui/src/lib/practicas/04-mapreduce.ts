@@ -1,4 +1,4 @@
-/* Guía 04: YARN y MapReduce. El wordcount de siempre, de la entrada al part-r-00000.
+/* docs/base/guia.md §8: YARN y MapReduce. El wordcount de siempre, de la entrada al part-r-00000.
    El id del trabajo que se lanza queda en {app}: los pasos que siguen lo muestran en el comando. */
 import { appCheck, appResult, armada, ensureExample, entry, fileCheck, logsRaw, lsOut, statusRaw, submitTemplate, textLines, waitApp } from './comun';
 import { notThere } from './motor';
@@ -17,7 +17,7 @@ const top = (text: string, n = 10) => text.split('\n').filter(Boolean)
   .sort((a, b) => b.k - a.k || (a.w < b.w ? 1 : -1)).slice(0, n).map(x => x.l);
 
 export const mapreduce: Practice = {
-  id: 'mapreduce', guide: '04', guideFile: '04-yarn-mapreduce.md',
+  id: 'mapreduce', guide: '8', guideAnchor: '8-yarn-y-mapreduce',
   title: 'MapReduce: contar palabras',
   summary: 'Lanzás el wordcount en YARN, seguís sus contenedores, leés sus logs y abrís el resultado en HDFS.',
   minutes: 15, cap: 'mapreduce', after: ['hdfs-basico'],

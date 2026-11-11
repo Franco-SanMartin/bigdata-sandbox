@@ -1,6 +1,6 @@
 /* El ecosistema de la imagen: qué es cada herramienta, en qué capa está, a quién le pide qué
-   (las flechas), los recorridos guiados y las comparaciones. El contenido sale de la maqueta
-   docs/maquetas/ecosistema.html (ecosistema.json); acá se le suma el estado en vivo de cada
+   (las flechas), los recorridos guiados y las comparaciones. El contenido está en ecosistema.json
+   (salió de la maqueta del rediseño, que ya no está en el repo); acá se le suma el estado en vivo de cada
    herramienta según los procesos, las capacidades y los trabajos de YARN. */
 import data from './ecosistema.json';
 import type { ClusterStatus, Process, YarnApp } from '../api/types';

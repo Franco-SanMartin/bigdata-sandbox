@@ -1,4 +1,4 @@
-/* Guía 03: HDFS. Lo básico (carpetas, put, ls, cat, réplica, fsck, bajar) y qué pasa cuando se cae un DataNode.
+/* docs/base/guia.md §7: HDFS. Lo básico (carpetas, put, ls, cat, réplica, fsck, bajar) y qué pasa cuando se cae un DataNode.
    Lo que se muestra y lo que corre salen de lo mismo: los comandos con {variables} se llenan con plan()
    o con lo que dejó el paso anterior (el DataNode que se apagó es el que se vuelve a prender). */
 import type { DataNode } from '../../api/types';
@@ -58,7 +58,7 @@ function reportLines(l: DataNode[]) {
 }
 
 export const hdfsBasico: Practice = {
-  id: 'hdfs-basico', guide: '03', guideFile: '03-hdfs.md',
+  id: 'hdfs-basico', guide: '7', guideAnchor: '7-hdfs',
   title: 'HDFS: subir, mirar y replicar',
   summary: 'Creás una carpeta, subís 200.000 ventas, las leés, cambiás la réplica y revisás la salud con fsck.',
   minutes: 15, cap: 'hdfs.write',
@@ -285,7 +285,7 @@ const planDown = (s: Parameters<NonNullable<Practice['needs']>>[0]) => dnVars(
   ?? [...s.processes].reverse().find(p => p.kind === 'datanode' && p.state === 'off'));
 
 export const hdfsFalla: Practice = {
-  id: 'hdfs-falla', guide: '03', guideFile: '03-hdfs.md',
+  id: 'hdfs-falla', guide: '7', guideAnchor: '7-hdfs',
   title: 'HDFS: se cae un DataNode',
   summary: 'Apagás un DataNode, ves cómo el NameNode lo da por muerto y los bloques quedan sub-replicados, y lo volvés a prender.',
   minutes: 10, cap: 'hdfs.write', needs: needDataNodes(2), after: ['hdfs-basico'],

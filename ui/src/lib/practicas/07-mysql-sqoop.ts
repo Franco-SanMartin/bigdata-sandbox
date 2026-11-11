@@ -1,4 +1,4 @@
-/* Guía 07: MariaDB y Sqoop. La base de origen y cómo pasar una tabla a HDFS. */
+/* docs/base/guia.md §11: MariaDB y Sqoop. La base de origen y cómo pasar una tabla a HDFS. */
 import { waitFor } from './motor';
 import { armada, lsOut, lsRaw, rowsCheck, runQuery } from './comun';
 import type { Practice } from './tipos';
@@ -15,7 +15,7 @@ const PRODUCTOS = `mysql tienda -e "${SQL_PRODUCTOS}"`;
 const SQOOP = `sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table ventas -m 4 --target-dir ${TARGET} --delete-target-dir`;
 
 export const mysqlSqoop: Practice = {
-  id: 'mysql-sqoop', guide: '07', guideFile: '07-mysql-sqoop.md',
+  id: 'mysql-sqoop', guide: '11', guideAnchor: '11-mysql-y-sqoop',
   title: 'MariaDB y Sqoop: de la base a HDFS',
   summary: 'Consultás la base tienda, hacés un JOIN y traés la tabla ventas a HDFS con Sqoop.',
   minutes: 15, cap: 'mysql',

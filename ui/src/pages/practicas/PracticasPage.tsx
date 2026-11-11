@@ -20,7 +20,7 @@ import { TraceView } from '../../components/Trace';
 import { terminal } from '../../lib/terminal';
 import './practicas.css';
 
-const GUIDE_URL = 'https://github.com/Franki-678/bigdata-sandbox/blob/main/guias/';
+const GUIDE_URL = 'https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/base/guia.md#';
 
 const STATE_LABEL = { nueva: 'Sin empezar', 'en-curso': 'En curso', completa: 'Completa' } as const;
 
@@ -109,7 +109,7 @@ function Card({ pr, pp, cap }: { pr: Practice; pp?: PracticeProgress; cap: Capab
   return (
     <article className="capcard pr-card" data-k={blocked ? 'blocked' : 'ready'}>
       <div className="capcard-h">
-        <span className="pr-guide">Guía {pr.guide}</span>
+        <span className="pr-guide">Guía §{pr.guide}</span>
         <StateChip pr={pr} pp={pp} cap={cap} />
       </div>
       <h3><button type="button" className="pr-title-btn" onClick={() => navigate('practicas', pr.id)}>{pr.title}</button></h3>
@@ -158,7 +158,7 @@ function NextCard({ pr, pp, cap }: { pr: Practice; pp?: PracticeProgress; cap: C
   return (
     <article className="pr-nextcard" data-k={cap ? 'blocked' : 'ready'}>
       <div className="pr-nextcard-t">
-        <span className="pr-guide">Guía {pr.guide} · {pr.minutes} min</span>
+        <span className="pr-guide">Guía §{pr.guide} · {pr.minutes} min</span>
         <h3>{pr.title}</h3>
         <span className="muted">{st === 'en-curso' && step ? <>Sigue en: <b>{step.title}</b></> : pr.summary}</span>
       </div>
@@ -209,7 +209,7 @@ function Detail({ pr }: { pr: Practice }) {
       <PageHeader title={pr.title} sub={pr.summary}
         status={st === 'completa' ? { k: 'ok', label: 'Completa' } : st === 'en-curso' ? { k: 'run', label: 'En curso' } : undefined}
         actions={<>
-          <a className="btn btn-sm" href={GUIDE_URL + pr.guideFile} target="_blank" rel="noreferrer"><BookOpen size={14} aria-hidden="true" /> Guía {pr.guide} <ExternalLink size={12} aria-hidden="true" /></a>
+          <a className="btn btn-sm" href={GUIDE_URL + pr.guideAnchor} target="_blank" rel="noreferrer"><BookOpen size={14} aria-hidden="true" /> Guía §{pr.guide} <ExternalLink size={12} aria-hidden="true" /></a>
           {st !== 'nueva' && <button type="button" className="btn btn-sm btn-ghost" onClick={reset}><RotateCcw size={14} aria-hidden="true" /> Empezar de nuevo</button>}
         </>} />
 

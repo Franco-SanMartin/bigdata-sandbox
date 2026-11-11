@@ -1,4 +1,4 @@
-/* Guía 08: Spark. SparkPi, las ventas con DataFrames y el DAG de etapas. */
+/* docs/base/guia.md §12: Spark. SparkPi, las ventas con DataFrames y el DAG de etapas. */
 import { appCheck, appResult, submitTemplate, waitApp } from './comun';
 import { notThere, waitFor } from './motor';
 import type { Practice } from './tipos';
@@ -9,7 +9,7 @@ const PI = `spark-submit --class org.apache.spark.examples.SparkPi ${SPARK_JAR} 
 const HISTORY = 'http://localhost:18080';
 
 export const spark: Practice = {
-  id: 'spark', guide: '08', guideFile: '08-spark.md',
+  id: 'spark', guide: '12', guideAnchor: '12-spark',
   title: 'Spark: el mismo cálculo en memoria',
   summary: 'Corrés SparkPi y ventas.py en YARN y mirás el DAG: etapas, tareas y el shuffle entre ellas.',
   minutes: 15, cap: 'spark',

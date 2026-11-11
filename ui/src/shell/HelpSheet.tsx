@@ -60,7 +60,7 @@ function Glosario({ foco }: { foco: string }) {
           {!t && s.tabla && <button type="button" className="btn btn-sm glo-ir" onClick={() => navigate('comparar')}>Verlo corriendo en Comparar<ArrowRight size={13} /></button>}
         </section>
       ))}
-      <p className="glo-fuente">El mismo texto está en <code>guias/glosario.md</code>.</p>
+      <p className="glo-fuente">El mismo texto está en <code>docs/glosario.md</code>.</p>
     </div>
   );
 }

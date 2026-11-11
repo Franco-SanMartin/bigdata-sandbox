@@ -1,6 +1,7 @@
 {
   "tag": "empresa",
   "nombre": "Versión",
+  "contenedor": "bigdata-maestro",
   "titulo": "BigData Sandbox · empresa, el cluster con las PCs del aula",
   "subtitulo": "La PC del profe es el **maestro** y cada PC de alumno se suma como **trabajador** por un túnel WireGuard. Tocá una pieza para ver qué es, cómo se usa y con qué se conecta.",
   "arranque": {
