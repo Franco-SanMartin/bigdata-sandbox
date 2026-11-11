@@ -4,6 +4,7 @@ al armar los grupos, la localidad de cada tarea y el botón «medir» de la esca
 import copy
 import json
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 
@@ -424,6 +425,18 @@ def test_api_localidad_mapreduce_terminado_y_corriendo(aula_yarn):
     c.rest.r[f"{staging}?op=LISTSTATUS"] = {"FileStatuses": {"FileStatus": []}}
     r = c.get(f"/api/aula/localidad/{APP}").json()
     assert r["tareas"] == [] and "todavía no" in r["motivo"]
+    # En binario (lo de fábrica en Hadoop 3; en CI vino así y daba cero tareas sin decir por qué): lo dice
+    c.rest.r[f"{staging}?op=LISTSTATUS"] = {"FileStatuses": {"FileStatus": [{"pathSuffix": f"{JOB}_1.jhist"}]}}
+    c.rest.r[".jhist?op=OPEN"] = "Avro-Binary\n\x00\x02basura"
+    r = c.get(f"/api/aula/localidad/{APP}").json()
+    assert r["tareas"] == [] and "jhist.format=json" in r["motivo"]
+
+
+def test_conf_aula_pide_el_historial_en_json():
+    # parse_jhist lee Avro-JSON: si conf_aula deja de pedirlo, la localidad da cero tareas
+    lib = (Path(__file__).resolve().parents[2] / "sandbox" / "lib.sh").read_text()
+    cuerpo = lib.split("conf_aula() {", 1)[1].split("\n}\n", 1)[0]
+    assert "mapreduce.jobhistory.jhist.format json" in cuerpo
 
 
 def test_api_localidad_spark_tez_y_errores(aula_yarn):

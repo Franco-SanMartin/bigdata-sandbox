@@ -292,10 +292,13 @@ conf_aula() {
     xml_poner "$HADOOP_CONF_DIR/capacity-scheduler.xml" \
       yarn.scheduler.capacity.resource-calculator org.apache.hadoop.yarn.util.resource.DominantResourceCalculator
   fi
+  # El historial de cada trabajo (.jhist) en Avro-JSON y no en binario (lo de fabrica en Hadoop 3): la vista
+  # Aula lo lee para mostrar donde corrio cada tarea. El JobHistory lee los dos
   xml_poner "$HADOOP_CONF_DIR/mapred-site.xml" \
     mapreduce.jobhistory.address "$MAESTRO:10020" \
     mapreduce.jobhistory.webapp.address "$MAESTRO:19888" \
-    mapreduce.jobhistory.bind-host 0.0.0.0
+    mapreduce.jobhistory.bind-host 0.0.0.0 \
+    mapreduce.jobhistory.jhist.format json
   # La imagen trabajador no trae Hive ni Spark (le llegan desde HDFS)
   if [ -f "${HIVE_CONF_DIR:-/-}/hive-site.xml" ]; then
     xml_poner "$HIVE_CONF_DIR/hive-site.xml" hive.metastore.uris "thrift://$MAESTRO:9083"
