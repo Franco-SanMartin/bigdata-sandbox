@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -22,6 +24,15 @@ def _modulo():
 ag = _modulo()
 
 
+def esperar(cond, segundos: float = 5) -> bool:
+    fin = time.monotonic() + segundos
+    while time.monotonic() < fin:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return False
+
+
 class Shell:
     """Hace de bash: anota los scripts y dice qué procesos Java corren."""
 
@@ -31,8 +42,8 @@ class Shell:
         self.rc = 0
 
     def __call__(self, script: str) -> tuple[int, str]:
-        if script.startswith("pgrep -f 'proc_"):
-            que = script.split("proc_")[1].split("'")[0]
+        if script.startswith("pgrep -f '[-]Dproc_"):
+            que = script.split("Dproc_")[1].split("'")[0]
             return (0 if que in self.vivos else 1), ""
         self.scripts.append(script)
         if self.rc:
@@ -71,7 +82,7 @@ def test_apagar_no_dice_que_apago_si_el_datanode_sigue(tmp_path):
     # en el CI el DataNode sobrevivió al pkill y el agente igual contestó 200
     class Terco(Shell):
         def __call__(self, script: str) -> tuple[int, str]:
-            if script.startswith("pgrep -f 'proc_"):
+            if script.startswith("pgrep -f '[-]Dproc_"):
                 return super().__call__(script)
             self.scripts.append(script)
             self.vivos = {"datanode"}
@@ -83,6 +94,21 @@ def test_apagar_no_dice_que_apago_si_el_datanode_sigue(tmp_path):
     for modo in ("golpe", "ordenado"):
         codigo, r = a.atender("POST", "/apagar", "127.0.0.1", f"codigo=aula-7\nmodo={modo}\n")
         assert codigo == 500 and r["datanode"] == "si" and "datanode" in r["error"]
+
+
+def test_estado_con_bash_de_verdad_no_se_encuentra_a_si_mismo(tmp_path):
+    # en el CI estado() decía que el DataNode corría siempre: el bash que corre pgrep llevaba el patrón
+    a = ag.Agente({"RED": "docker", "MAESTRO": "127.0.0.1", "CODIGO": "x", "AULA_DIR": str(tmp_path), "NODO": "pc03"})
+    if subprocess.run(["pgrep", "-f", "[-]Dproc_(datanode|nodemanager)"], capture_output=True).returncode == 0:
+        pytest.skip("hay un DataNode o un NodeManager de verdad en esta máquina")
+    falso = subprocess.Popen(["bash", "-c", "exec -a 'java -Dproc_datanode' sleep 30"])
+    try:
+        assert esperar(lambda: a.corre("datanode"))
+        assert not a.corre("nodemanager")
+    finally:
+        falso.kill()
+        falso.wait()
+    assert not a.corre("datanode")
 
 
 def test_apagar_ordenado_usa_los_comandos_de_hadoop(tmp_path):
