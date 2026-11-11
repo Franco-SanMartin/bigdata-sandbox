@@ -34,8 +34,8 @@ PUERTO = int(os.environ.get("P_AGENTE", "8098"))
 LIB = "/opt/sandbox/lib.sh"
 ACCIONES = {
     # -9 a todo Java: en la PC solo corren el DataNode, el NodeManager y los contenedores de los trabajos.
-    # Primero por el nombre del servicio (-Dproc_..., lo mismo que mira estado()): en el CI el DataNode
-    # sobrevivió a un pkill solo por nombre de proceso. El [-] evita que el patrón se encuentre a sí mismo
+    # Primero por el nombre del servicio (-Dproc_..., lo mismo que mira estado()). El [-] evita que el
+    # patrón se encuentre a sí mismo en la línea de comandos del bash
     "golpe": "pkill -9 -f '[-]Dproc_(datanode|nodemanager)'; pkill -9 -x java; sleep 1; ! pgrep -x java > /dev/null",
     "ordenado": f". {LIB}; if con_yarn; then yarn --daemon stop nodemanager; fi; datanode_stop 1",
     "prender": f". {LIB}; datanode_start 1; if con_yarn; then yarn --daemon start nodemanager; fi",
@@ -101,7 +101,10 @@ class Agente:
         return origen == self.ip_maestro()
 
     def corre(self, que: str) -> bool:
-        return self.ejecutar(f"pgrep -f 'proc_{que}' > /dev/null")[0] == 0
+        # Con la redirección, bash no hace exec: pgrep corre como hijo y el bash de arriba lleva el patrón en
+        # su línea de comandos. Con 'proc_x' se encontraba a sí mismo y todo daba «corre»; '[-]Dproc_x' solo
+        # encuentra el -Dproc_x del java del servicio
+        return self.ejecutar(f"pgrep -f '[-]Dproc_{que}' > /dev/null")[0] == 0
 
     def estado(self) -> dict[str, object]:
         return {"nodo": self.nodo, "datanode": "si" if self.corre("datanode") else "no",
