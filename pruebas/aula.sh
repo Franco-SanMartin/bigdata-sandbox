@@ -297,7 +297,8 @@ esc_aula_opcionales() {
 
   paso "Colas por grupo: grupo1 y grupo2, y un pi en grupo2"
   api_ok PUT /api/aula/colas '{"grupos":["grupo1","grupo2"]}' > "$T/colas.json"
-  colas=$(api_ok GET /api/aula/colas | python3 -c 'import json,sys; print(" ".join(q["nombre"] for q in json.load(sys.stdin)))')
+  # ordenadas: la API las da en el orden de YARN, que no es fijo (en el CI vino grupo2 grupo1 default)
+  colas=$(api_ok GET /api/aula/colas | python3 -c 'import json,sys; print(" ".join(sorted(q["nombre"] for q in json.load(sys.stdin))))')
   echo "colas: $colas"
   [ "$colas" = "default grupo1 grupo2" ] || falla "las colas no quedaron armadas ($colas)"
   app=$(api_ok POST /api/aula/colas/grupo2/trabajo '{"trabajo":"mr-pi"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
