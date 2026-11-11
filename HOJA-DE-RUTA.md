@@ -37,9 +37,8 @@ imágenes para amd64 y arm64 y el prerelease `aula-v2`.
 1. Hive 4.0.0 con copia propia (release `deps-hive-4.0.0`, sha256 de Apache)
    y ZooKeeper 3.8.8 desde dlcdn con su sha512: en `main`. Al subir de versión
    ZooKeeper, cambiar también `ZOOKEEPER_SHA512` en el `Dockerfile`.
-2. Borrar las ramas que ya están en `main` (`docs-full-empresa`,
-   `docs-nuevas`, `empresa-opcionales`, `fix-arm64-imagen`). Los tags
-   `respaldo/*` se quedan.
+2. ~~Borrar las ramas que ya están en `main`.~~ Hecho: en el remoto solo
+   queda `main`. Los tags `respaldo/*` se quedan.
 3. ~~Autores ajenos en la historia.~~ Hecho el 11/11/2026: `main` y los
    tags se reescribieron con force-push (lo decidió Franki) y todos los
    commits quedan como Franki. Los SHAs desde la etapa A del estudio de ML
@@ -221,8 +220,10 @@ pruebas de humo.
 
 **Mantenimiento:**
 
-- [ ] Correr el workflow **aula** para que el `.tar.gz` del Release coincida con `latest`.
-- [ ] Borrar las ramas viejas que ya están en `main` (`full`, `ui`, `versiones`).
+- [x] Correr el workflow **aula** para que el `.tar.gz` del Release coincida con `latest`.
+      *Corrió el 11/11/2026 después de publicar `latest`.*
+- [x] Borrar las ramas viejas que ya están en `main` (`full`, `ui`, `versiones`).
+      *Hecho: en el remoto solo queda `main`.*
 - [ ] Decidir si Grupo-ManIAco sigue de colaborador; pedir a GitHub Support que
       limpie la lista de contributors (commits viejos 50a18a8, 61db729, 9b4080a, 74f289a).
 
