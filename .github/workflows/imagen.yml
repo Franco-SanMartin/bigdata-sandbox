@@ -26,7 +26,7 @@
 #                 los tags base, latest y ml a lo que subio el paso 1 (solo ml
 #                 si el push no cambio base: pruebas/solo_full.sh).
 #
-# El archivo del aula (Releases, guias/01-instalacion.md) NO se arma aca: es
+# El archivo del aula (Releases, docs/base/guia.md parte 3) NO se arma aca: es
 # el workflow "Aula", a mano, despues de que este publico.
 # Necesita en el repo (Settings > Secrets and variables > Actions) la
 # variable DOCKERHUB_USERNAME y el secreto DOCKERHUB_TOKEN (token de Docker
@@ -40,7 +40,6 @@ on:
     # la imagen (las guias se prueban en el workflow "Documentacion")
     paths-ignore:
       - '**.md'
-      - 'guias/**'
       - 'docs/**'
       - 'pruebas/tutoriales.py'
       - 'pruebas/enlaces.py'

@@ -21,5 +21,5 @@ Para ARM (Mac M1–M4) no hay archivo: con internet, `docker compose up -d` baja
 
 **Guías**
 
-- [Instalación, con el paso a paso para el aula](https://github.com/Franki-678/bigdata-sandbox/blob/main/guias/01-instalacion.md)
-- [Todas las guías](https://github.com/Franki-678/bigdata-sandbox/blob/main/guias/README.md)
+- [Guía de `base`, con el paso a paso para el aula](https://github.com/Franco-SanMartin/bigdata-sandbox/blob/main/docs/base/guia.md#b-en-el-aula-el-archivo-de-la-imagen)
+- [Toda la documentación](https://github.com/Franco-SanMartin/bigdata-sandbox#la-documentación)

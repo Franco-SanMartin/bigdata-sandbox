@@ -1,4 +1,4 @@
-<# : empresa-profe.cmd - BigData Sandbox, el cluster del aula: PC del profe (ver guias/empresa/03-laboratorio.md)
+<# : empresa-profe.cmd - BigData Sandbox, el cluster del aula: PC del profe (ver docs/empresa/guia.md)
 @echo off
 rem Uso:
 rem   empresa-profe.cmd                      arranca el maestro (o muestra el que ya anda): IP, codigo y la linea para Veyon

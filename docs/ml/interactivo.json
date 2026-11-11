@@ -1,0 +1,1336 @@
+{
+  "tag": "ml",
+  "nombre": "Versión",
+  "contenedor": "bigdata",
+  "titulo": "BigData Sandbox · versión ml",
+  "subtitulo": "Todo lo de base más Python para datos (pandas, scikit-learn, XGBoost, matplotlib, pymongo), Spark MLlib y JupyterLab. Tocá una pieza para ver qué hace y con qué se conecta.",
+  "arranque": {
+    "texto": "Crear el cluster con la imagen ml (Mac y Linux)",
+    "cmd": "docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -p 127.0.0.1:8888:8888 -v bigdata_hadoop:/hadoop -v \"$(pwd)/datos:/datos\" franki678/bigdata-sandbox:ml"
+  },
+  "intro": "Cada caja es una pieza de la imagen `franki678/bigdata-sandbox:ml`. Las de arriba están en **tu compu**; la fila rosa es **lo que agrega ml** (Python para datos y JupyterLab); el resto es el cluster de `base`, igual. Las flechas llenas son datos o pedidos; las punteadas, control. Abajo hay **recorridos**: una tarea paso a paso, resaltando las piezas que toca.",
+  "guia": {
+    "md": "guia.md",
+    "pdf": "guia.pdf"
+  },
+  "readme": {
+    "md": "README.md",
+    "pdf": "README.pdf"
+  },
+  "pie": "BigData Sandbox · versión ml · generado desde docs/ml/interactivo.json. Anda sin internet: se puede copiar a un pendrive.",
+  "capas": [
+    {
+      "id": "puertas",
+      "nombre": "Tu compu",
+      "desc": "por dónde entrás",
+      "color": "#6B7280"
+    },
+    {
+      "id": "python",
+      "nombre": "Python para datos",
+      "desc": "lo que agrega ml",
+      "color": "#B0527E"
+    },
+    {
+      "id": "lenguajes",
+      "nombre": "Lenguajes y clientes",
+      "desc": "lo que escribís y corrés adentro",
+      "color": "#7A5AB8"
+    },
+    {
+      "id": "motores",
+      "nombre": "Motores",
+      "desc": "quién procesa",
+      "color": "#3D6FB6"
+    },
+    {
+      "id": "recursos",
+      "nombre": "Recursos",
+      "desc": "quién reparte memoria y CPU",
+      "color": "#A67C1E"
+    },
+    {
+      "id": "datos",
+      "nombre": "Datos",
+      "desc": "dónde se guarda",
+      "color": "#2F8A78"
+    },
+    {
+      "id": "maquina",
+      "nombre": "Contenedor",
+      "desc": "lo que lo sostiene",
+      "color": "#B8613F"
+    }
+  ],
+  "componentes": [
+    {
+      "id": "carpeta",
+      "nombre": "Carpeta datos/",
+      "capa": "puertas",
+      "corto": "= /datos",
+      "que": "Tu carpeta de trabajo, compartida con el contenedor (`-v \"$(pwd)/datos:/datos\"`). Lo que dejás ahí se ve adentro en `/datos`, y al revés. Cada arranque copia los ejemplos a `datos/ejemplos` sin pisar lo tuyo. Es también la carpeta raíz de JupyterLab: los notebooks quedan acá.",
+      "no": "No es HDFS: para que el cluster lo procese hay que subirlo con `hdfs dfs -put`.",
+      "guia": {
+        "archivo": "../base/guia.md#4-crear-el-cluster",
+        "seccion": "Guía de base · 4. Crear el cluster"
+      }
+    },
+    {
+      "id": "terminal",
+      "nombre": "Terminal",
+      "capa": "puertas",
+      "corto": "docker exec",
+      "que": "La consola **adentro** del contenedor: ahí se corren `hdfs`, `pig`, `beeline`, `spark-submit`, `sqoop`, `mongosh` y los comandos propios (`estado`, `datanode`, `namenode`, `jps`). Arranca parada en `/datos`. En `ml` también se abre desde JupyterLab: *File → New → Terminal*.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker exec -it bigdata bash"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker exec bigdata estado"
+        }
+      ],
+      "no": "No es tu compu: `docker` no existe adentro, y `hdfs` no existe afuera.",
+      "guia": {
+        "archivo": "../base/guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "Guía de base · 5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "navegador",
+      "nombre": "Navegador",
+      "capa": "puertas",
+      "corto": "localhost",
+      "que": "Las páginas web de cada servicio, en `http://localhost:<puerto>`, y **JupyterLab** en el 8888. Sólo desde tu compu: el `docker run` publica los puertos con `127.0.0.1`.",
+      "comandos": [
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:8888"
+        },
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:9870"
+        }
+      ],
+      "no": "No hay usuario ni contraseña (tampoco en JupyterLab): no publiques los puertos a la red.",
+      "guia": {
+        "archivo": "../base/guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "Guía de base · 5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "clientes",
+      "nombre": "DBeaver / Compass",
+      "capa": "puertas",
+      "corto": "3306 · 27017",
+      "que": "Programas de tu compu para mirar las bases: DBeaver o Workbench para MySQL (`alumno`/`alumno`, base `tienda`), MongoDB Compass con `mongodb://localhost:27017`. También HiveServer2 por JDBC en el 10000.",
+      "puertos": [
+        {
+          "n": 3306,
+          "que": "MySQL"
+        },
+        {
+          "n": 27017,
+          "que": "MongoDB"
+        }
+      ],
+      "no": "No vienen en la imagen: se instalan aparte, si querés.",
+      "guia": {
+        "archivo": "../base/guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "Guía de base · 5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "jupyter",
+      "nombre": "JupyterLab",
+      "capa": "python",
+      "corto": ":8888",
+      "version": "4.6.4",
+      "que": "Notebooks y terminales en el navegador, corriendo **adentro** del contenedor. Sin contraseña, mirando `/datos` (tu carpeta). El kernel es el `python3` de la imagen, con todas las librerías y `pyspark`.",
+      "puertos": [
+        {
+          "n": 8888,
+          "que": "JupyterLab",
+          "url": "http://localhost:8888"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:8888"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "curl -s http://localhost:8888/api"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker exec bigdata tail -20 /var/log/jupyter.log"
+        }
+      ],
+      "no": "No tiene contraseña: sólo con el puerto publicado en `127.0.0.1`. Con `JUPYTER=no` no se prende.",
+      "guia": {
+        "archivo": "guia.md#3-jupyterlab",
+        "seccion": "3. JupyterLab"
+      }
+    },
+    {
+      "id": "pylibs",
+      "nombre": "pandas · numpy",
+      "capa": "python",
+      "corto": "tablas en memoria",
+      "version": "pandas 2.3.3 · numpy 1.26.4",
+      "que": "Tablas (DataFrames) en la memoria de una compu, para el ETL: leer, limpiar, agrupar. Con **pyarrow** (Parquet, `toPandas`) y **matplotlib** (gráficos).",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/generar_sucios.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/etl_pandas.py"
+        }
+      ],
+      "no": "No reparte el trabajo: todo tiene que entrar en la memoria. numpy queda en 1.x porque Spark 3.5 no anda con numpy 2.",
+      "guia": {
+        "archivo": "guia.md#4-datos-sucios-con-pandas",
+        "seccion": "4. Datos sucios con pandas"
+      }
+    },
+    {
+      "id": "sklearn",
+      "nombre": "scikit-learn · XGBoost",
+      "capa": "python",
+      "corto": "modelos en una compu",
+      "version": "1.9.1 · 3.1.1",
+      "que": "Machine learning en una compu: regresión, clasificación (árbol, logística, red neuronal `MLPClassifier`), clustering (KMeans), validación cruzada. XGBoost para gradient boosting.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/generar_senal.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/modelos_sklearn.py"
+        }
+      ],
+      "no": "Sin GPU (XGBoost es la versión sin CUDA), sin TensorFlow ni PyTorch, sin LightGBM (no tiene versión para arm64).",
+      "guia": {
+        "archivo": "guia.md#6-modelos-con-scikit-learn",
+        "seccion": "6. Modelos con scikit-learn"
+      }
+    },
+    {
+      "id": "sandboxml",
+      "nombre": "sandbox_ml",
+      "capa": "python",
+      "corto": "estudio de ML",
+      "version": "1.0.0",
+      "que": "Librería propia: un experimento como receta JSON se convierte en un script de scikit-learn o PySpark; cada corrida queda registrada; los modelos elegidos van a una biblioteca con versiones y se usan para predecir por lotes. Catálogo de 52 modelos.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 -c \"from sandbox_ml import estudio; print(estudio.tabla())\""
+        }
+      ],
+      "no": "En `ml` no tiene pantallas: se usa desde un notebook. Las pantallas son la versión full.",
+      "guia": {
+        "archivo": "guia.md#9-el-estudio-de-ml-desde-jupyterlab",
+        "seccion": "9. El estudio de ML desde JupyterLab"
+      }
+    },
+    {
+      "id": "pymongo",
+      "nombre": "pymongo",
+      "capa": "python",
+      "corto": "MongoDB → pandas",
+      "version": "4.19.0",
+      "que": "Lee MongoDB desde Python. Con `pd.json_normalize`, cada subdocumento pasa a columnas y las listas de adentro a otra tabla.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/mongo_pandas.py"
+        }
+      ],
+      "no": "Necesita `MONGODB=si`.",
+      "guia": {
+        "archivo": "guia.md#8-de-mongodb-a-pandas",
+        "seccion": "8. De MongoDB a pandas"
+      }
+    },
+    {
+      "id": "pig",
+      "nombre": "Pig",
+      "capa": "lenguajes",
+      "corto": "Pig Latin",
+      "version": "0.18.0",
+      "que": "Escribís el procesamiento paso a paso (LOAD, FILTER, GROUP, STORE) y Pig lo traduce a trabajos MapReduce. Nada corre hasta un `DUMP` o un `STORE`. Con `-x local` corre sin cluster, sobre archivos de `/datos`.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "pig ejemplos/ventas.pig"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig"
+        }
+      ],
+      "no": "No es un servicio que quede prendido: es un comando. Sin YARN (`SERVICIOS=hdfs`) sólo anda `-x local`.",
+      "guia": {
+        "archivo": "../base/guia.md#9-pig",
+        "seccion": "Guía de base · 9. Pig"
+      }
+    },
+    {
+      "id": "beeline",
+      "nombre": "beeline",
+      "capa": "lenguajes",
+      "corto": "cliente SQL",
+      "version": "Hive 4.0.0",
+      "que": "El cliente de consola de Hive: se conecta a HiveServer2 por JDBC y le manda SQL, interactivo o desde un archivo con `-f`.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000"
+        }
+      ],
+      "no": "No procesa nada: sólo manda la consulta y muestra el resultado.",
+      "guia": {
+        "archivo": "../base/guia.md#10-hive",
+        "seccion": "Guía de base · 10. Hive"
+      }
+    },
+    {
+      "id": "pyspark",
+      "nombre": "spark-submit / pyspark",
+      "capa": "lenguajes",
+      "corto": "Python · MLlib",
+      "version": "Python 3.12",
+      "que": "Programas en Python con la API de Spark. `spark-submit` corre un archivo; `pyspark` abre una consola. En `ml`, además, `import pyspark` anda en cualquier `python3` (un notebook, un script) y trae **Spark MLlib** para entrenar modelos repartidos en el cluster.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ml/etl_spark.py 2> etl_spark.log | tee etl_spark.txt"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ml/modelos_spark.py 2> modelos_spark.log | tee modelos_spark.txt"
+        }
+      ],
+      "no": "Una sesión de Spark abierta en un notebook ocupa memoria de YARN hasta `spark.stop()`.",
+      "guia": {
+        "archivo": "guia.md#5-el-mismo-etl-con-spark",
+        "seccion": "5. El mismo ETL con Spark"
+      }
+    },
+    {
+      "id": "sqoop",
+      "nombre": "Sqoop",
+      "capa": "lenguajes",
+      "corto": "MySQL ⇄ HDFS",
+      "version": "1.4.7",
+      "que": "Copia tablas entre MySQL y HDFS por JDBC. Cada `import` o `export` es un trabajo MapReduce de sólo mappers; con `-m 4` parte la tabla en 4 rangos de la clave primaria.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table productos --target-dir /user/root/tienda/productos --delete-target-dir -m 1"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "bash ejemplos/sqoop.sh"
+        }
+      ],
+      "no": "No sincroniza: copia una vez. Para `export`, la tabla destino tiene que existir.",
+      "guia": {
+        "archivo": "../base/guia.md#11-mysql-y-sqoop",
+        "seccion": "Guía de base · 11. MySQL y Sqoop"
+      }
+    },
+    {
+      "id": "hadoopjar",
+      "nombre": "hadoop jar",
+      "capa": "lenguajes",
+      "corto": "MapReduce",
+      "version": "Hadoop 3.3.6",
+      "que": "Manda un trabajo MapReduce: los ejemplos en Java de Hadoop (`wordcount`) o Hadoop Streaming, que usa cualquier programa (como `mapper.py` y `reducer.py`) como mapper y reducer.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar -files ejemplos/mapper.py,ejemplos/reducer.py -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" -input /user/root/ventas -output /user/root/resultados/mr_por_producto"
+        }
+      ],
+      "no": "No pisa resultados: si la carpeta de salida existe, el trabajo falla.",
+      "guia": {
+        "archivo": "../base/guia.md#8-yarn-y-mapreduce",
+        "seccion": "Guía de base · 8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "hive",
+      "nombre": "Hive",
+      "capa": "motores",
+      "corto": "SQL · Tez",
+      "version": "Hive 4.0.0 · Tez 0.10.3",
+      "que": "SQL sobre archivos de HDFS. **HiveServer2** atiende a los clientes, el **Metastore** guarda el esquema de cada tabla (en Derby, dentro del volumen) y cada consulta corre como un trabajo **Tez** en YARN. Tablas externas (sólo el esquema) o administradas (en `/user/hive/warehouse`).",
+      "puertos": [
+        {
+          "n": 10000,
+          "que": "HiveServer2 (JDBC)"
+        },
+        {
+          "n": 10002,
+          "que": "web de HiveServer2",
+          "url": "http://localhost:10002"
+        },
+        {
+          "n": 9083,
+          "que": "Metastore (Thrift, adentro)"
+        }
+      ],
+      "no": "Necesita `SERVICIOS=todo`. No es una base transaccional: las consultas tardan segundos aunque la tabla sea chica.",
+      "guia": {
+        "archivo": "../base/guia.md#10-hive",
+        "seccion": "Guía de base · 10. Hive"
+      }
+    },
+    {
+      "id": "spark",
+      "nombre": "Spark",
+      "capa": "motores",
+      "corto": "en memoria",
+      "version": "3.5.9",
+      "que": "Procesamiento en memoria sobre YARN: el driver es tu programa, los executors corren en contenedores de YARN. Usa el mismo Metastore que Hive, así que ve sus tablas. Las librerías de Spark se suben a HDFS en el primer arranque.",
+      "puertos": [
+        {
+          "n": 4040,
+          "que": "trabajo corriendo",
+          "url": "http://localhost:4040"
+        },
+        {
+          "n": 18080,
+          "que": "Spark History",
+          "url": "http://localhost:18080"
+        }
+      ],
+      "no": "Necesita `SERVICIOS=todo`. Una consola `pyspark` abierta ocupa memoria de YARN aunque no haga nada.",
+      "guia": {
+        "archivo": "../base/guia.md#12-spark",
+        "seccion": "Guía de base · 12. Spark"
+      }
+    },
+    {
+      "id": "mapreduce",
+      "nombre": "MapReduce",
+      "capa": "motores",
+      "corto": "map · shuffle · reduce",
+      "version": "Hadoop 3.3.6",
+      "que": "El modelo clásico: cada mapper lee un bloque y emite clave → valor, Hadoop agrupa y ordena por clave (shuffle) y cada reducer resume una clave. El **JobHistory** guarda los trabajos terminados.",
+      "puertos": [
+        {
+          "n": 19888,
+          "que": "JobHistory",
+          "url": "http://localhost:19888"
+        }
+      ],
+      "no": "No guarda nada en memoria entre pasos: todo pasa por disco. Por eso es más lento que Spark.",
+      "guia": {
+        "archivo": "../base/guia.md#8-yarn-y-mapreduce",
+        "seccion": "Guía de base · 8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "yarn",
+      "nombre": "YARN",
+      "capa": "recursos",
+      "corto": "ResourceManager",
+      "version": "Hadoop 3.3.6",
+      "que": "Reparte memoria y CPU entre los trabajos. El **ResourceManager** recibe cada trabajo y le da contenedores; el **NodeManager** los corre. Su página muestra todo lo que corre: MapReduce, Pig, Hive, Spark y Sqoop.",
+      "puertos": [
+        {
+          "n": 8088,
+          "que": "ResourceManager",
+          "url": "http://localhost:8088"
+        },
+        {
+          "n": 8042,
+          "que": "NodeManager",
+          "url": "http://localhost:8042"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "yarn node -list"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "yarn application -list -appStates FINISHED"
+        }
+      ],
+      "no": "No guarda datos. Con `SERVICIOS=hdfs` no se prende.",
+      "guia": {
+        "archivo": "../base/guia.md#8-yarn-y-mapreduce",
+        "seccion": "Guía de base · 8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "zookeeper",
+      "nombre": "ZooKeeper",
+      "capa": "datos",
+      "corto": "sólo HA",
+      "version": "3.8.8",
+      "que": "Con `NAMENODES` 2 o 3: guarda el candado (`ActiveStandbyElectorLock`) que sólo puede tener el NameNode activo. Cada **ZKFC** vigila a su NameNode y, si se cae, otro toma el candado.",
+      "puertos": [
+        {
+          "n": 2181,
+          "que": "ZooKeeper (adentro)"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs haadmin -getAllServiceState"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "zkCli.sh -server localhost:2181 ls /hadoop-ha/sandbox"
+        }
+      ],
+      "no": "Con 1 NameNode no se prende.",
+      "guia": {
+        "archivo": "../base/guia.md#14-zookeeper-y-alta-disponibilidad",
+        "seccion": "Guía de base · 14. ZooKeeper y alta disponibilidad"
+      }
+    },
+    {
+      "id": "namenode",
+      "nombre": "NameNode",
+      "capa": "datos",
+      "corto": "metadatos",
+      "version": "Hadoop 3.3.6",
+      "que": "El índice de HDFS: qué archivos hay, en qué bloques está cada uno y en qué DataNodes está cada copia. Con 1 NameNode lo acompaña el **Secondary** (9868), que hace checkpoints. Con `NAMENODES=2` o `3` hay uno *active* y los demás *standby*, con JournalNodes y ZKFC.",
+      "puertos": [
+        {
+          "n": 9870,
+          "que": "NameNode 1",
+          "url": "http://localhost:9870"
+        },
+        {
+          "n": 9871,
+          "que": "NameNode 2 (HA)",
+          "url": "http://localhost:9871"
+        },
+        {
+          "n": 9868,
+          "que": "Secondary NameNode",
+          "url": "http://localhost:9868"
+        },
+        {
+          "n": 9000,
+          "que": "RPC de HDFS"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -ls /user/root"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "namenode"
+        }
+      ],
+      "no": "No guarda los datos: sólo dónde están. `NAMENODES` queda fijo en el volumen.",
+      "guia": {
+        "archivo": "../base/guia.md#7-hdfs",
+        "seccion": "Guía de base · 7. HDFS"
+      }
+    },
+    {
+      "id": "datanodes",
+      "nombre": "DataNodes",
+      "capa": "datos",
+      "corto": "1 a 9",
+      "version": "Hadoop 3.3.6",
+      "que": "Guardan los bloques. Cada bloque (de `BLOCK_SIZE`) se copia en `REPLICATION` DataNodes distintos. Le avisan al NameNode que están vivos cada 3 s; si uno deja de avisar, a los ~40 s el NameNode lo da por muerto y re-copia sus bloques.",
+      "puertos": [
+        {
+          "n": 9901,
+          "que": "DataNode 1",
+          "url": "http://localhost:9901"
+        },
+        {
+          "n": 9902,
+          "que": "DataNode 2",
+          "url": "http://localhost:9902"
+        },
+        {
+          "n": 9903,
+          "que": "DataNode 3",
+          "url": "http://localhost:9903"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "datanode"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "datanode stop 2"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "datanode start 2"
+        }
+      ],
+      "no": "Comparten el mismo disco de tu compu: más DataNodes no da más espacio, da más copias.",
+      "guia": {
+        "archivo": "../base/guia.md#7-hdfs",
+        "seccion": "Guía de base · 7. HDFS"
+      }
+    },
+    {
+      "id": "mysql",
+      "nombre": "MySQL",
+      "capa": "datos",
+      "corto": "base tienda",
+      "version": "MariaDB 10.11",
+      "que": "Una base relacional aparte del cluster: `tienda`, con `productos`, `sucursales`, las mismas 200.000 `ventas` y `resumen_categoria` (vacía, para el `sqoop export`). Usuario `alumno`, clave `alumno`.",
+      "puertos": [
+        {
+          "n": 3306,
+          "que": "MySQL"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "mysql tienda"
+        }
+      ],
+      "no": "Con `SERVICIOS=hdfs` no se prende. No está en HDFS: para procesarla con el cluster, Sqoop.",
+      "guia": {
+        "archivo": "../base/guia.md#11-mysql-y-sqoop",
+        "seccion": "Guía de base · 11. MySQL y Sqoop"
+      }
+    },
+    {
+      "id": "mongodb",
+      "nombre": "MongoDB",
+      "capa": "datos",
+      "corto": "MONGODB=si",
+      "version": "8.0",
+      "que": "Base NoSQL de documentos con la base `tienda`: 9 productos, 2.000 clientes y 20.000 pedidos con sus ítems adentro. Viene apagada: se prende con `-e MONGODB=si`, con cualquier `SERVICIOS`.",
+      "puertos": [
+        {
+          "n": 27017,
+          "que": "MongoDB"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "mongosh tienda"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "mongosh --quiet tienda ejemplos/consultas_mongo.js"
+        }
+      ],
+      "no": "En Intel/AMD necesita AVX: sin AVX, el arranque avisa y sigue sin MongoDB. No está conectada con Hadoop.",
+      "guia": {
+        "archivo": "../base/guia.md#13-mongodb",
+        "seccion": "Guía de base · 13. MongoDB"
+      }
+    },
+    {
+      "id": "arranque",
+      "nombre": "Arranque",
+      "capa": "maquina",
+      "corto": "entrypoint.sh",
+      "que": "Lo primero que corre (`tini` → `entrypoint.sh`). Valida los parámetros, genera la configuración, formatea HDFS la primera vez y prende cada servicio en orden hasta **Cluster LISTO**; al final prende JupyterLab (`JUPYTER=si`, el de fábrica en `ml`). Con `docker stop` los apaga en orden, en 20 s.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker logs -f bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker stop bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker start bigdata"
+        }
+      ],
+      "no": "Si un parámetro está mal escrito, no arranca: el log dice `[sandbox] ERROR` y cuál.",
+      "guia": {
+        "archivo": "../base/guia.md#6-apagar-prender-y-cambiar-la-arquitectura",
+        "seccion": "Guía de base · 6. Apagar, prender y cambiar la arquitectura"
+      }
+    },
+    {
+      "id": "volumen",
+      "nombre": "Volumen /hadoop",
+      "capa": "maquina",
+      "corto": "bigdata_hadoop",
+      "que": "El disco del cluster: bloques y metadatos de HDFS, el metastore de Hive, las bases de MySQL y MongoDB, y el registro de experimentos de `sandbox_ml` (`/hadoop/ml/experimentos`). Sobrevive a `docker stop` y a `docker rm`: se puede recrear el contenedor con otros parámetros sin perder nada.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker volume ls"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker volume rm bigdata_hadoop"
+        }
+      ],
+      "no": "No se borra solo. `docker volume rm` lo borra todo (empezar de cero).",
+      "guia": {
+        "archivo": "../base/guia.md#16-empezar-de-cero",
+        "seccion": "Guía de base · 16. Empezar de cero"
+      }
+    }
+  ],
+  "conexiones": [
+    {
+      "de": "carpeta",
+      "a": "terminal",
+      "que": "es /datos",
+      "doble": true
+    },
+    {
+      "de": "terminal",
+      "a": "pig",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "beeline",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "pyspark",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "sqoop",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "hadoopjar",
+      "que": "lo corrés"
+    },
+    {
+      "de": "navegador",
+      "a": "yarn",
+      "que": "mira :8088"
+    },
+    {
+      "de": "navegador",
+      "a": "namenode",
+      "que": "mira :9870"
+    },
+    {
+      "de": "clientes",
+      "a": "mysql",
+      "que": ":3306"
+    },
+    {
+      "de": "clientes",
+      "a": "mongodb",
+      "que": ":27017"
+    },
+    {
+      "de": "pig",
+      "a": "mapreduce",
+      "que": "traduce a MapReduce"
+    },
+    {
+      "de": "beeline",
+      "a": "hive",
+      "que": "JDBC :10000"
+    },
+    {
+      "de": "pyspark",
+      "a": "spark",
+      "que": "manda el programa"
+    },
+    {
+      "de": "hadoopjar",
+      "a": "mapreduce",
+      "que": "manda el trabajo"
+    },
+    {
+      "de": "sqoop",
+      "a": "mapreduce",
+      "que": "trabajo de sólo mappers"
+    },
+    {
+      "de": "sqoop",
+      "a": "mysql",
+      "que": "JDBC",
+      "doble": true
+    },
+    {
+      "de": "spark",
+      "a": "hive",
+      "que": "usa el Metastore",
+      "tipo": "control"
+    },
+    {
+      "de": "hive",
+      "a": "yarn",
+      "que": "consultas como Tez"
+    },
+    {
+      "de": "spark",
+      "a": "yarn",
+      "que": "pide executors"
+    },
+    {
+      "de": "mapreduce",
+      "a": "yarn",
+      "que": "pide contenedores"
+    },
+    {
+      "de": "yarn",
+      "a": "datanodes",
+      "que": "lee y escribe bloques",
+      "doble": true
+    },
+    {
+      "de": "yarn",
+      "a": "namenode",
+      "que": "pregunta dónde está cada bloque",
+      "tipo": "control"
+    },
+    {
+      "de": "datanodes",
+      "a": "namenode",
+      "que": "latidos y lista de bloques",
+      "tipo": "control",
+      "doble": true
+    },
+    {
+      "de": "zookeeper",
+      "a": "namenode",
+      "que": "elige el activo (HA)",
+      "tipo": "control"
+    },
+    {
+      "de": "arranque",
+      "a": "namenode",
+      "que": "prende en orden",
+      "tipo": "control"
+    },
+    {
+      "de": "namenode",
+      "a": "volumen",
+      "que": "metadatos"
+    },
+    {
+      "de": "datanodes",
+      "a": "volumen",
+      "que": "bloques"
+    },
+    {
+      "de": "mysql",
+      "a": "volumen",
+      "que": "/hadoop/mysql"
+    },
+    {
+      "de": "mongodb",
+      "a": "volumen",
+      "que": "/hadoop/mongodb"
+    },
+    {
+      "de": "navegador",
+      "a": "jupyter",
+      "que": "abre JupyterLab en localhost:8888"
+    },
+    {
+      "de": "carpeta",
+      "a": "jupyter",
+      "que": "los archivos de JupyterLab son /datos"
+    },
+    {
+      "de": "jupyter",
+      "a": "pylibs",
+      "que": "los notebooks usan pandas"
+    },
+    {
+      "de": "jupyter",
+      "a": "pyspark",
+      "que": "import pyspark desde un notebook"
+    },
+    {
+      "de": "sklearn",
+      "a": "pylibs",
+      "que": "entrena sobre tablas de pandas"
+    },
+    {
+      "de": "sandboxml",
+      "a": "sklearn",
+      "que": "genera scripts de scikit-learn"
+    },
+    {
+      "de": "sandboxml",
+      "a": "pyspark",
+      "que": "genera scripts de PySpark MLlib"
+    },
+    {
+      "de": "sandboxml",
+      "a": "volumen",
+      "que": "registro de experimentos en /hadoop/ml",
+      "tipo": "control"
+    },
+    {
+      "de": "pymongo",
+      "a": "mongodb",
+      "que": "lee los pedidos"
+    }
+  ],
+  "recorridos": [
+    {
+      "id": "etl",
+      "nombre": "De datos sucios a una tabla limpia",
+      "desc": "El mismo ETL con pandas (una compu) y con Spark (el cluster), con los mismos números.",
+      "pasos": [
+        {
+          "titulo": "Generar la suciedad",
+          "texto": "`generar_sucios.py` arma 100.000 ventas con duplicados, fechas en tres formatos, precios con coma, nulos y errores de tipeo, en cantidades conocidas.",
+          "nodos": [
+            "terminal",
+            "carpeta"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/ml/generar_sucios.py"
+          }
+        },
+        {
+          "titulo": "Limpiar con pandas",
+          "texto": "En la memoria de una compu, paso por paso, contando lo que arregla. Quedan 97.200 tickets.",
+          "nodos": [
+            "pylibs",
+            "carpeta"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/ml/etl_pandas.py"
+          }
+        },
+        {
+          "titulo": "Subir a HDFS",
+          "texto": "Para Spark, el archivo va al cluster.",
+          "nodos": [
+            "terminal",
+            "namenode",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -put -f ventas_sucias.csv /user/root/ml/"
+          }
+        },
+        {
+          "titulo": "Limpiar con Spark",
+          "texto": "Los mismos pasos, repartidos en YARN. Deja Parquet en HDFS.",
+          "nodos": [
+            "pyspark",
+            "spark",
+            "yarn",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "spark-submit ejemplos/ml/etl_spark.py 2> etl_spark.log | tee etl_spark.txt"
+          }
+        },
+        {
+          "titulo": "Comparar",
+          "texto": "Los dos resúmenes tienen que ser iguales número por número.",
+          "nodos": [
+            "terminal"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "diff <(sed -n '/=== RESUMEN/,/^$/p' etl_pandas.txt) <(sed -n '/=== RESUMEN/,/^$/p' etl_spark.txt)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "modelos",
+      "nombre": "Entrenar con scikit-learn y con Spark MLlib",
+      "desc": "Datos con reglas conocidas: ver si los modelos las encuentran.",
+      "pasos": [
+        {
+          "titulo": "Datos con señal",
+          "texto": "20.000 clientes con una fórmula para el gasto y una regla para `vuelve`. `edad` no influye.",
+          "nodos": [
+            "terminal",
+            "carpeta"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/ml/generar_senal.py"
+          }
+        },
+        {
+          "titulo": "scikit-learn",
+          "texto": "Regresión, árbol, logística, red neuronal y KMeans en una compu. El árbol encuentra los cortes de la regla real.",
+          "nodos": [
+            "sklearn",
+            "pylibs"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/ml/modelos_sklearn.py"
+          }
+        },
+        {
+          "titulo": "Al cluster",
+          "texto": "El CSV va a HDFS.",
+          "nodos": [
+            "terminal",
+            "namenode"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -put -f clientes_senal.csv /user/root/ml/"
+          }
+        },
+        {
+          "titulo": "Spark MLlib",
+          "texto": "Los mismos modelos, repartidos en YARN, con validación cruzada.",
+          "nodos": [
+            "pyspark",
+            "spark",
+            "yarn"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "spark-submit ejemplos/ml/modelos_spark.py 2> modelos_spark.log | tee modelos_spark.txt"
+          }
+        },
+        {
+          "titulo": "Lado a lado",
+          "texto": "`metricas_sklearn.json` y `metricas_spark.json` en un notebook: con datos chicos, scikit-learn es más rápido.",
+          "nodos": [
+            "jupyter",
+            "carpeta"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "notebook",
+      "nombre": "Un notebook con Spark",
+      "desc": "Desde el navegador hasta YARN.",
+      "pasos": [
+        {
+          "titulo": "Abrir JupyterLab",
+          "texto": "Sin contraseña. A la izquierda, tu carpeta `datos/`.",
+          "nodos": [
+            "navegador",
+            "jupyter",
+            "carpeta"
+          ],
+          "cmd": {
+            "donde": "En el navegador de tu compu",
+            "cmd": "http://localhost:8888"
+          }
+        },
+        {
+          "titulo": "Crear la sesión",
+          "texto": "`SparkSession.builder.getOrCreate()` desde una celda: el driver es el notebook.",
+          "nodos": [
+            "jupyter",
+            "pyspark",
+            "spark"
+          ]
+        },
+        {
+          "titulo": "Corre en YARN",
+          "texto": "Los executors piden memoria al ResourceManager; se ven en http://localhost:8088.",
+          "nodos": [
+            "spark",
+            "yarn",
+            "navegador"
+          ]
+        },
+        {
+          "titulo": "Cerrar",
+          "texto": "`spark.stop()` libera la memoria de YARN. Si no, el próximo `spark-submit` queda en ACCEPTED.",
+          "nodos": [
+            "jupyter",
+            "yarn"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mongo",
+      "nombre": "De MongoDB a pandas",
+      "desc": "Documentos con subdocumentos y listas, aplanados en tablas.",
+      "pasos": [
+        {
+          "titulo": "Los pedidos",
+          "texto": "20.000 documentos en la base `tienda` (con `MONGODB=si`).",
+          "nodos": [
+            "terminal",
+            "mongodb"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "mongosh --quiet tienda --eval \"db.pedidos.countDocuments()\""
+          }
+        },
+        {
+          "titulo": "Leer y aplanar",
+          "texto": "pymongo trae los documentos; `json_normalize` los pasa a columnas.",
+          "nodos": [
+            "pymongo",
+            "mongodb",
+            "pylibs"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/ml/mongo_pandas.py"
+          }
+        }
+      ]
+    },
+    {
+      "id": "estudio",
+      "nombre": "Un experimento con sandbox_ml",
+      "desc": "Receta → script → registro → biblioteca → predicción por lotes.",
+      "pasos": [
+        {
+          "titulo": "Generar datos grandes",
+          "texto": "Un trabajo de Spark arma un millón de clientes en HDFS.",
+          "nodos": [
+            "terminal",
+            "pyspark",
+            "spark",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "spark-submit --master yarn /opt/sandbox/ml/sandbox_ml/generar.py clientes --filas 1000000 --salida /user/root/ml/generado/clientes_1m --suciedad 0.05"
+          }
+        },
+        {
+          "titulo": "La receta",
+          "texto": "En un notebook: `receta.validar({...})` y `codigo.generar(r)` escriben `churn.py` en tu carpeta.",
+          "nodos": [
+            "jupyter",
+            "sandboxml",
+            "carpeta"
+          ]
+        },
+        {
+          "titulo": "Entrenar",
+          "texto": "El script corre en YARN y registra el experimento en el volumen.",
+          "nodos": [
+            "pyspark",
+            "spark",
+            "yarn",
+            "volumen"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "spark-submit --master yarn --num-executors 2 --executor-memory 1g /datos/churn.py"
+          }
+        },
+        {
+          "titulo": "Biblioteca y lote",
+          "texto": "`biblioteca.registrar`, `promover` y `lote.generar` predicen con la versión en producción.",
+          "nodos": [
+            "jupyter",
+            "sandboxml",
+            "volumen"
+          ]
+        }
+      ]
+    }
+  ],
+  "usoIntro": "Lo mínimo, en orden. Lo que es igual a base enlaza a la guía de base.",
+  "uso": [
+    {
+      "titulo": "Tener Docker y la imagen ml",
+      "texto": "Docker con 7 GB de RAM. La imagen `ml` se baja de Docker Hub (1,58 GB): no hay archivo del aula de `ml`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker pull franki678/bigdata-sandbox:ml"
+        }
+      ],
+      "nodos": [
+        "arranque"
+      ],
+      "guia": {
+        "archivo": "guia.md#1-antes-de-empezar",
+        "seccion": "1. Antes de empezar"
+      }
+    },
+    {
+      "titulo": "Crear el cluster",
+      "texto": "El `docker run` de base con `:ml` y el puerto 8888. Esperar **Cluster LISTO**.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker logs -f bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker exec bigdata estado"
+        }
+      ],
+      "nodos": [
+        "arranque",
+        "jupyter"
+      ],
+      "guia": {
+        "archivo": "guia.md#2-crear-el-cluster-con-la-imagen-ml",
+        "seccion": "2. Crear el cluster con la imagen ml"
+      }
+    },
+    {
+      "titulo": "Abrir JupyterLab",
+      "texto": "Notebooks y terminales en el navegador. Los archivos son los de tu carpeta `datos/`.",
+      "comandos": [
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:8888"
+        }
+      ],
+      "nodos": [
+        "navegador",
+        "jupyter",
+        "carpeta"
+      ],
+      "guia": {
+        "archivo": "guia.md#3-jupyterlab",
+        "seccion": "3. JupyterLab"
+      }
+    },
+    {
+      "titulo": "ETL con pandas",
+      "texto": "Generar datos sucios y limpiarlos en una compu.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/generar_sucios.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/etl_pandas.py"
+        }
+      ],
+      "nodos": [
+        "pylibs"
+      ],
+      "guia": {
+        "archivo": "guia.md#4-datos-sucios-con-pandas",
+        "seccion": "4. Datos sucios con pandas"
+      }
+    },
+    {
+      "titulo": "El mismo ETL con Spark",
+      "texto": "Subir a HDFS y limpiar en el cluster: el resumen da igual.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -put -f ventas_sucias.csv /user/root/ml/"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ml/etl_spark.py 2> etl_spark.log | tee etl_spark.txt"
+        }
+      ],
+      "nodos": [
+        "pyspark",
+        "spark"
+      ],
+      "guia": {
+        "archivo": "guia.md#5-el-mismo-etl-con-spark",
+        "seccion": "5. El mismo ETL con Spark"
+      }
+    },
+    {
+      "titulo": "Modelos",
+      "texto": "Con scikit-learn en una compu y con Spark MLlib en el cluster.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/modelos_sklearn.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ml/modelos_spark.py 2> modelos_spark.log | tee modelos_spark.txt"
+        }
+      ],
+      "nodos": [
+        "sklearn",
+        "pyspark"
+      ],
+      "guia": {
+        "archivo": "guia.md#6-modelos-con-scikit-learn",
+        "seccion": "6. Modelos con scikit-learn"
+      }
+    },
+    {
+      "titulo": "MongoDB a pandas",
+      "texto": "Documentos aplanados en tablas.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/ml/mongo_pandas.py"
+        }
+      ],
+      "nodos": [
+        "pymongo",
+        "mongodb"
+      ],
+      "guia": {
+        "archivo": "guia.md#8-de-mongodb-a-pandas",
+        "seccion": "8. De MongoDB a pandas"
+      }
+    },
+    {
+      "titulo": "Lo demás, como en base",
+      "texto": "HDFS, MapReduce, Pig, Hive, Sqoop, HA, apagar y empezar de cero: igual que en base.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker stop bigdata"
+        }
+      ],
+      "nodos": [
+        "namenode",
+        "yarn"
+      ],
+      "guia": {
+        "archivo": "../base/guia.md",
+        "seccion": "Guía de base"
+      }
+    }
+  ],
+  "puertosIntro": "Todos publicados con `127.0.0.1`: sólo se ven desde tu compu. Los que dicen *adentro* no se publican en el `docker run` de la guía."
+}

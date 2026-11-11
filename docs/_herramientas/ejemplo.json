@@ -1,0 +1,36 @@
+{
+  "tag": "ejemplo",
+  "nombre": "Versión",
+  "titulo": "BigData Sandbox · ejemplo de interactivo",
+  "subtitulo": "Datos mínimos para ver cómo se arma un `interactivo.json`. Cada versión tiene el suyo en `docs/<version>/`.",
+  "arranque": { "texto": "Arrancar", "cmd": "docker compose up -d" },
+  "intro": "Este es el ejemplo de `docs/_herramientas/`: copialo como punto de partida.",
+  "guia": { "md": "README.md", "pdf": "README.pdf" },
+  "readme": { "md": "README.md", "pdf": "README.pdf" },
+  "pie": "Ejemplo de la plantilla.",
+  "capas": [
+    { "id": "puertas", "nombre": "Puertas", "desc": "por dónde entrás", "color": "#6B7280" },
+    { "id": "motores", "nombre": "Motores", "desc": "quién procesa", "color": "#3D6FB6" },
+    { "id": "datos", "nombre": "Datos", "desc": "dónde queda", "color": "#2F8A78" }
+  ],
+  "componentes": [
+    { "id": "terminal", "nombre": "Terminal", "capa": "puertas", "corto": "docker exec", "que": "La consola **adentro** del contenedor.", "comandos": [{ "donde": "compu", "cmd": "docker exec -it bigdata bash" }] },
+    { "id": "yarn", "nombre": "YARN", "capa": "motores", "corto": ":8088", "version": "Hadoop 3.3.6", "que": "Reparte CPU y memoria.", "puertos": [{ "n": 8088, "que": "web del ResourceManager", "url": "http://localhost:8088" }], "no": "No guarda datos.", "guia": { "archivo": "README.md#cómo-se-usa", "seccion": "Cómo se usa" } },
+    { "id": "hdfs", "nombre": "HDFS", "capa": "datos", "corto": ":9870", "que": "El sistema de archivos distribuido.", "puertos": [{ "n": 9870, "que": "web del NameNode", "url": "http://localhost:9870" }] }
+  ],
+  "conexiones": [
+    { "de": "terminal", "a": "yarn", "que": "manda un trabajo" },
+    { "de": "yarn", "a": "hdfs", "que": "lee y escribe bloques" },
+    { "de": "hdfs", "a": "yarn", "que": "avisa dónde está cada bloque", "tipo": "control" }
+  ],
+  "recorridos": [
+    { "id": "trabajo", "nombre": "Un trabajo", "desc": "De la terminal al resultado.", "pasos": [
+      { "titulo": "Lo mandás", "texto": "Desde la terminal.", "nodos": ["terminal", "yarn"], "cmd": { "donde": "adentro", "cmd": "yarn jar ..." } },
+      { "titulo": "Lee los datos", "texto": "YARN lee de HDFS.", "nodos": ["yarn", "hdfs"] }
+    ] }
+  ],
+  "usoIntro": "Los pasos para arrancar.",
+  "uso": [
+    { "titulo": "Arrancar", "texto": "Con docker compose.", "comandos": [{ "donde": "compu", "cmd": "docker compose up -d" }], "nodos": ["terminal"] }
+  ]
+}

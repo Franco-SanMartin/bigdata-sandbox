@@ -1,0 +1,1217 @@
+{
+  "tag": "base",
+  "nombre": "Versión",
+  "contenedor": "bigdata",
+  "titulo": "BigData Sandbox · versión base",
+  "subtitulo": "Hadoop, Hive, Spark, Pig, Sqoop, MySQL y MongoDB en un contenedor, cada servicio como proceso aparte. Tocá una pieza para ver qué hace y con qué se conecta.",
+  "arranque": {
+    "texto": "Crear el cluster (Mac y Linux)",
+    "cmd": "docker run -d --name bigdata --stop-timeout 20 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e MONGODB=si -p 127.0.0.1:9870:9870 -p 127.0.0.1:9868:9868 -p 127.0.0.1:9901-9909:9901-9909 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8042:8042 -p 127.0.0.1:19888:19888 -p 127.0.0.1:10000:10000 -p 127.0.0.1:10002:10002 -p 127.0.0.1:18080:18080 -p 127.0.0.1:4040:4040 -p 127.0.0.1:3306:3306 -p 127.0.0.1:27017:27017 -v bigdata_hadoop:/hadoop -v \"$(pwd)/datos:/datos\" franki678/bigdata-sandbox:base"
+  },
+  "intro": "Cada caja es una pieza de la imagen `franki678/bigdata-sandbox:base`. Las de arriba están en **tu compu**; el resto, **adentro del contenedor**. Las flechas llenas son datos o pedidos; las punteadas, control (quién le avisa a quién). Abajo hay **recorridos**: una tarea paso a paso, resaltando las piezas que toca.",
+  "guia": {
+    "md": "guia.md",
+    "pdf": "guia.pdf"
+  },
+  "readme": {
+    "md": "README.md",
+    "pdf": "README.pdf"
+  },
+  "pie": "BigData Sandbox · versión base · generado desde docs/base/interactivo.json. Anda sin internet: se puede copiar a un pendrive.",
+  "capas": [
+    {
+      "id": "puertas",
+      "nombre": "Tu compu",
+      "desc": "por dónde entrás",
+      "color": "#6B7280"
+    },
+    {
+      "id": "lenguajes",
+      "nombre": "Lenguajes y clientes",
+      "desc": "lo que escribís y corrés adentro",
+      "color": "#7A5AB8"
+    },
+    {
+      "id": "motores",
+      "nombre": "Motores",
+      "desc": "quién procesa",
+      "color": "#3D6FB6"
+    },
+    {
+      "id": "recursos",
+      "nombre": "Recursos",
+      "desc": "quién reparte memoria y CPU",
+      "color": "#A67C1E"
+    },
+    {
+      "id": "datos",
+      "nombre": "Datos",
+      "desc": "dónde se guarda",
+      "color": "#2F8A78"
+    },
+    {
+      "id": "maquina",
+      "nombre": "Contenedor",
+      "desc": "lo que lo sostiene",
+      "color": "#B8613F"
+    }
+  ],
+  "componentes": [
+    {
+      "id": "carpeta",
+      "nombre": "Carpeta datos/",
+      "capa": "puertas",
+      "corto": "= /datos",
+      "que": "Tu carpeta de trabajo, compartida con el contenedor (`-v \"$(pwd)/datos:/datos\"`). Lo que dejás ahí se ve adentro en `/datos`, y al revés. Cada arranque copia los ejemplos a `datos/ejemplos` sin pisar lo tuyo.",
+      "no": "No es HDFS: para que el cluster lo procese hay que subirlo con `hdfs dfs -put`.",
+      "guia": {
+        "archivo": "guia.md#4-crear-el-cluster",
+        "seccion": "4. Crear el cluster"
+      }
+    },
+    {
+      "id": "terminal",
+      "nombre": "Terminal",
+      "capa": "puertas",
+      "corto": "docker exec",
+      "que": "La consola **adentro** del contenedor: ahí se corren `hdfs`, `pig`, `beeline`, `spark-submit`, `sqoop`, `mongosh` y los comandos propios (`estado`, `datanode`, `namenode`, `jps`). Arranca parada en `/datos`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker exec -it bigdata bash"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker exec bigdata estado"
+        }
+      ],
+      "no": "No es tu compu: `docker` no existe adentro, y `hdfs` no existe afuera.",
+      "guia": {
+        "archivo": "guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "navegador",
+      "nombre": "Navegador",
+      "capa": "puertas",
+      "corto": "localhost",
+      "que": "Las páginas web de cada servicio, en `http://localhost:<puerto>`. Sólo desde tu compu: el `docker run` publica los puertos con `127.0.0.1`.",
+      "comandos": [
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:9870"
+        }
+      ],
+      "no": "No hay usuario ni contraseña: no publiques los puertos a la red.",
+      "guia": {
+        "archivo": "guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "clientes",
+      "nombre": "DBeaver / Compass",
+      "capa": "puertas",
+      "corto": "3306 · 27017",
+      "que": "Programas de tu compu para mirar las bases: DBeaver o Workbench para MySQL (`alumno`/`alumno`, base `tienda`), MongoDB Compass con `mongodb://localhost:27017`. También HiveServer2 por JDBC en el 10000.",
+      "puertos": [
+        {
+          "n": 3306,
+          "que": "MySQL"
+        },
+        {
+          "n": 27017,
+          "que": "MongoDB"
+        }
+      ],
+      "no": "No vienen en la imagen: se instalan aparte, si querés.",
+      "guia": {
+        "archivo": "guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "id": "pig",
+      "nombre": "Pig",
+      "capa": "lenguajes",
+      "corto": "Pig Latin",
+      "version": "0.18.0",
+      "que": "Escribís el procesamiento paso a paso (LOAD, FILTER, GROUP, STORE) y Pig lo traduce a trabajos MapReduce. Nada corre hasta un `DUMP` o un `STORE`. Con `-x local` corre sin cluster, sobre archivos de `/datos`.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "pig ejemplos/ventas.pig"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "pig -x local -param entrada=ejemplos/texto.txt ejemplos/wordcount.pig"
+        }
+      ],
+      "no": "No es un servicio que quede prendido: es un comando. Sin YARN (`SERVICIOS=hdfs`) sólo anda `-x local`.",
+      "guia": {
+        "archivo": "guia.md#9-pig",
+        "seccion": "9. Pig"
+      }
+    },
+    {
+      "id": "beeline",
+      "nombre": "beeline",
+      "capa": "lenguajes",
+      "corto": "cliente SQL",
+      "version": "Hive 4.0.0",
+      "que": "El cliente de consola de Hive: se conecta a HiveServer2 por JDBC y le manda SQL, interactivo o desde un archivo con `-f`.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000"
+        }
+      ],
+      "no": "No procesa nada: sólo manda la consulta y muestra el resultado.",
+      "guia": {
+        "archivo": "guia.md#10-hive",
+        "seccion": "10. Hive"
+      }
+    },
+    {
+      "id": "pyspark",
+      "nombre": "spark-submit / pyspark",
+      "capa": "lenguajes",
+      "corto": "Python",
+      "version": "Python 3.12",
+      "que": "Programas en Python con la API de Spark (DataFrames y SQL). `spark-submit` corre un archivo; `pyspark` abre una consola con `spark` ya creado.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ventas.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "pyspark"
+        }
+      ],
+      "no": "No trae pandas ni scikit-learn: eso es la versión ml.",
+      "guia": {
+        "archivo": "guia.md#12-spark",
+        "seccion": "12. Spark"
+      }
+    },
+    {
+      "id": "sqoop",
+      "nombre": "Sqoop",
+      "capa": "lenguajes",
+      "corto": "MySQL ⇄ HDFS",
+      "version": "1.4.7",
+      "que": "Copia tablas entre MySQL y HDFS por JDBC. Cada `import` o `export` es un trabajo MapReduce de sólo mappers; con `-m 4` parte la tabla en 4 rangos de la clave primaria.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table productos --target-dir /user/root/tienda/productos --delete-target-dir -m 1"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "bash ejemplos/sqoop.sh"
+        }
+      ],
+      "no": "No sincroniza: copia una vez. Para `export`, la tabla destino tiene que existir.",
+      "guia": {
+        "archivo": "guia.md#11-mysql-y-sqoop",
+        "seccion": "11. MySQL y Sqoop"
+      }
+    },
+    {
+      "id": "hadoopjar",
+      "nombre": "hadoop jar",
+      "capa": "lenguajes",
+      "corto": "MapReduce",
+      "version": "Hadoop 3.3.6",
+      "que": "Manda un trabajo MapReduce: los ejemplos en Java de Hadoop (`wordcount`) o Hadoop Streaming, que usa cualquier programa (como `mapper.py` y `reducer.py`) como mapper y reducer.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar -files ejemplos/mapper.py,ejemplos/reducer.py -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" -input /user/root/ventas -output /user/root/resultados/mr_por_producto"
+        }
+      ],
+      "no": "No pisa resultados: si la carpeta de salida existe, el trabajo falla.",
+      "guia": {
+        "archivo": "guia.md#8-yarn-y-mapreduce",
+        "seccion": "8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "hive",
+      "nombre": "Hive",
+      "capa": "motores",
+      "corto": "SQL · Tez",
+      "version": "Hive 4.0.0 · Tez 0.10.3",
+      "que": "SQL sobre archivos de HDFS. **HiveServer2** atiende a los clientes, el **Metastore** guarda el esquema de cada tabla (en Derby, dentro del volumen) y cada consulta corre como un trabajo **Tez** en YARN. Tablas externas (sólo el esquema) o administradas (en `/user/hive/warehouse`).",
+      "puertos": [
+        {
+          "n": 10000,
+          "que": "HiveServer2 (JDBC)"
+        },
+        {
+          "n": 10002,
+          "que": "web de HiveServer2",
+          "url": "http://localhost:10002"
+        },
+        {
+          "n": 9083,
+          "que": "Metastore (Thrift, adentro)"
+        }
+      ],
+      "no": "Necesita `SERVICIOS=todo`. No es una base transaccional: las consultas tardan segundos aunque la tabla sea chica.",
+      "guia": {
+        "archivo": "guia.md#10-hive",
+        "seccion": "10. Hive"
+      }
+    },
+    {
+      "id": "spark",
+      "nombre": "Spark",
+      "capa": "motores",
+      "corto": "en memoria",
+      "version": "3.5.9",
+      "que": "Procesamiento en memoria sobre YARN: el driver es tu programa, los executors corren en contenedores de YARN. Usa el mismo Metastore que Hive, así que ve sus tablas. Las librerías de Spark se suben a HDFS en el primer arranque.",
+      "puertos": [
+        {
+          "n": 4040,
+          "que": "trabajo corriendo",
+          "url": "http://localhost:4040"
+        },
+        {
+          "n": 18080,
+          "que": "Spark History",
+          "url": "http://localhost:18080"
+        }
+      ],
+      "no": "Necesita `SERVICIOS=todo`. Una consola `pyspark` abierta ocupa memoria de YARN aunque no haga nada.",
+      "guia": {
+        "archivo": "guia.md#12-spark",
+        "seccion": "12. Spark"
+      }
+    },
+    {
+      "id": "mapreduce",
+      "nombre": "MapReduce",
+      "capa": "motores",
+      "corto": "map · shuffle · reduce",
+      "version": "Hadoop 3.3.6",
+      "que": "El modelo clásico: cada mapper lee un bloque y emite clave → valor, Hadoop agrupa y ordena por clave (shuffle) y cada reducer resume una clave. El **JobHistory** guarda los trabajos terminados.",
+      "puertos": [
+        {
+          "n": 19888,
+          "que": "JobHistory",
+          "url": "http://localhost:19888"
+        }
+      ],
+      "no": "No guarda nada en memoria entre pasos: todo pasa por disco. Por eso es más lento que Spark.",
+      "guia": {
+        "archivo": "guia.md#8-yarn-y-mapreduce",
+        "seccion": "8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "yarn",
+      "nombre": "YARN",
+      "capa": "recursos",
+      "corto": "ResourceManager",
+      "version": "Hadoop 3.3.6",
+      "que": "Reparte memoria y CPU entre los trabajos. El **ResourceManager** recibe cada trabajo y le da contenedores; el **NodeManager** los corre. Su página muestra todo lo que corre: MapReduce, Pig, Hive, Spark y Sqoop.",
+      "puertos": [
+        {
+          "n": 8088,
+          "que": "ResourceManager",
+          "url": "http://localhost:8088"
+        },
+        {
+          "n": 8042,
+          "que": "NodeManager",
+          "url": "http://localhost:8042"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "yarn node -list"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "yarn application -list -appStates FINISHED"
+        }
+      ],
+      "no": "No guarda datos. Con `SERVICIOS=hdfs` no se prende.",
+      "guia": {
+        "archivo": "guia.md#8-yarn-y-mapreduce",
+        "seccion": "8. YARN y MapReduce"
+      }
+    },
+    {
+      "id": "zookeeper",
+      "nombre": "ZooKeeper",
+      "capa": "datos",
+      "corto": "sólo HA",
+      "version": "3.8.8",
+      "que": "Con `NAMENODES` 2 o 3: guarda el candado (`ActiveStandbyElectorLock`) que sólo puede tener el NameNode activo. Cada **ZKFC** vigila a su NameNode y, si se cae, otro toma el candado.",
+      "puertos": [
+        {
+          "n": 2181,
+          "que": "ZooKeeper (adentro)"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs haadmin -getAllServiceState"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "zkCli.sh -server localhost:2181 ls /hadoop-ha/sandbox"
+        }
+      ],
+      "no": "Con 1 NameNode no se prende.",
+      "guia": {
+        "archivo": "guia.md#14-zookeeper-y-alta-disponibilidad",
+        "seccion": "14. ZooKeeper y alta disponibilidad"
+      }
+    },
+    {
+      "id": "namenode",
+      "nombre": "NameNode",
+      "capa": "datos",
+      "corto": "metadatos",
+      "version": "Hadoop 3.3.6",
+      "que": "El índice de HDFS: qué archivos hay, en qué bloques está cada uno y en qué DataNodes está cada copia. Con 1 NameNode lo acompaña el **Secondary** (9868), que hace checkpoints. Con `NAMENODES=2` o `3` hay uno *active* y los demás *standby*, con JournalNodes y ZKFC.",
+      "puertos": [
+        {
+          "n": 9870,
+          "que": "NameNode 1",
+          "url": "http://localhost:9870"
+        },
+        {
+          "n": 9871,
+          "que": "NameNode 2 (HA)",
+          "url": "http://localhost:9871"
+        },
+        {
+          "n": 9868,
+          "que": "Secondary NameNode",
+          "url": "http://localhost:9868"
+        },
+        {
+          "n": 9000,
+          "que": "RPC de HDFS"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -ls /user/root"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "namenode"
+        }
+      ],
+      "no": "No guarda los datos: sólo dónde están. `NAMENODES` queda fijo en el volumen.",
+      "guia": {
+        "archivo": "guia.md#7-hdfs",
+        "seccion": "7. HDFS"
+      }
+    },
+    {
+      "id": "datanodes",
+      "nombre": "DataNodes",
+      "capa": "datos",
+      "corto": "1 a 9",
+      "version": "Hadoop 3.3.6",
+      "que": "Guardan los bloques. Cada bloque (de `BLOCK_SIZE`) se copia en `REPLICATION` DataNodes distintos. Le avisan al NameNode que están vivos cada 3 s; si uno deja de avisar, a los ~40 s el NameNode lo da por muerto y re-copia sus bloques.",
+      "puertos": [
+        {
+          "n": 9901,
+          "que": "DataNode 1",
+          "url": "http://localhost:9901"
+        },
+        {
+          "n": 9902,
+          "que": "DataNode 2",
+          "url": "http://localhost:9902"
+        },
+        {
+          "n": 9903,
+          "que": "DataNode 3",
+          "url": "http://localhost:9903"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "datanode"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "datanode stop 2"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "datanode start 2"
+        }
+      ],
+      "no": "Comparten el mismo disco de tu compu: más DataNodes no da más espacio, da más copias.",
+      "guia": {
+        "archivo": "guia.md#7-hdfs",
+        "seccion": "7. HDFS"
+      }
+    },
+    {
+      "id": "mysql",
+      "nombre": "MySQL",
+      "capa": "datos",
+      "corto": "base tienda",
+      "version": "MariaDB 10.11",
+      "que": "Una base relacional aparte del cluster: `tienda`, con `productos`, `sucursales`, las mismas 200.000 `ventas` y `resumen_categoria` (vacía, para el `sqoop export`). Usuario `alumno`, clave `alumno`.",
+      "puertos": [
+        {
+          "n": 3306,
+          "que": "MySQL"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "mysql tienda"
+        }
+      ],
+      "no": "Con `SERVICIOS=hdfs` no se prende. No está en HDFS: para procesarla con el cluster, Sqoop.",
+      "guia": {
+        "archivo": "guia.md#11-mysql-y-sqoop",
+        "seccion": "11. MySQL y Sqoop"
+      }
+    },
+    {
+      "id": "mongodb",
+      "nombre": "MongoDB",
+      "capa": "datos",
+      "corto": "MONGODB=si",
+      "version": "8.0",
+      "que": "Base NoSQL de documentos con la base `tienda`: 9 productos, 2.000 clientes y 20.000 pedidos con sus ítems adentro. Viene apagada: se prende con `-e MONGODB=si`, con cualquier `SERVICIOS`.",
+      "puertos": [
+        {
+          "n": 27017,
+          "que": "MongoDB"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "mongosh tienda"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "mongosh --quiet tienda ejemplos/consultas_mongo.js"
+        }
+      ],
+      "no": "En Intel/AMD necesita AVX: sin AVX, el arranque avisa y sigue sin MongoDB. No está conectada con Hadoop.",
+      "guia": {
+        "archivo": "guia.md#13-mongodb",
+        "seccion": "13. MongoDB"
+      }
+    },
+    {
+      "id": "arranque",
+      "nombre": "Arranque",
+      "capa": "maquina",
+      "corto": "entrypoint.sh",
+      "que": "Lo primero que corre (`tini` → `entrypoint.sh`). Valida los parámetros, genera la configuración, formatea HDFS la primera vez y prende cada servicio en orden hasta **Cluster LISTO**. Con `docker stop` los apaga en orden, en 20 s.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker logs -f bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker stop bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker start bigdata"
+        }
+      ],
+      "no": "Si un parámetro está mal escrito, no arranca: el log dice `[sandbox] ERROR` y cuál.",
+      "guia": {
+        "archivo": "guia.md#6-apagar-prender-y-cambiar-la-arquitectura",
+        "seccion": "6. Apagar, prender y cambiar la arquitectura"
+      }
+    },
+    {
+      "id": "volumen",
+      "nombre": "Volumen /hadoop",
+      "capa": "maquina",
+      "corto": "bigdata_hadoop",
+      "que": "El disco del cluster: bloques y metadatos de HDFS, el metastore de Hive, las bases de MySQL y MongoDB. Sobrevive a `docker stop` y a `docker rm`: se puede recrear el contenedor con otros parámetros sin perder nada.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker volume ls"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker volume rm bigdata_hadoop"
+        }
+      ],
+      "no": "No se borra solo. `docker volume rm` lo borra todo (empezar de cero).",
+      "guia": {
+        "archivo": "guia.md#16-empezar-de-cero",
+        "seccion": "16. Empezar de cero"
+      }
+    }
+  ],
+  "conexiones": [
+    {
+      "de": "carpeta",
+      "a": "terminal",
+      "que": "es /datos",
+      "doble": true
+    },
+    {
+      "de": "terminal",
+      "a": "pig",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "beeline",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "pyspark",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "sqoop",
+      "que": "lo corrés"
+    },
+    {
+      "de": "terminal",
+      "a": "hadoopjar",
+      "que": "lo corrés"
+    },
+    {
+      "de": "navegador",
+      "a": "yarn",
+      "que": "mira :8088"
+    },
+    {
+      "de": "navegador",
+      "a": "namenode",
+      "que": "mira :9870"
+    },
+    {
+      "de": "clientes",
+      "a": "mysql",
+      "que": ":3306"
+    },
+    {
+      "de": "clientes",
+      "a": "mongodb",
+      "que": ":27017"
+    },
+    {
+      "de": "pig",
+      "a": "mapreduce",
+      "que": "traduce a MapReduce"
+    },
+    {
+      "de": "beeline",
+      "a": "hive",
+      "que": "JDBC :10000"
+    },
+    {
+      "de": "pyspark",
+      "a": "spark",
+      "que": "manda el programa"
+    },
+    {
+      "de": "hadoopjar",
+      "a": "mapreduce",
+      "que": "manda el trabajo"
+    },
+    {
+      "de": "sqoop",
+      "a": "mapreduce",
+      "que": "trabajo de sólo mappers"
+    },
+    {
+      "de": "sqoop",
+      "a": "mysql",
+      "que": "JDBC",
+      "doble": true
+    },
+    {
+      "de": "spark",
+      "a": "hive",
+      "que": "usa el Metastore",
+      "tipo": "control"
+    },
+    {
+      "de": "hive",
+      "a": "yarn",
+      "que": "consultas como Tez"
+    },
+    {
+      "de": "spark",
+      "a": "yarn",
+      "que": "pide executors"
+    },
+    {
+      "de": "mapreduce",
+      "a": "yarn",
+      "que": "pide contenedores"
+    },
+    {
+      "de": "yarn",
+      "a": "datanodes",
+      "que": "lee y escribe bloques",
+      "doble": true
+    },
+    {
+      "de": "yarn",
+      "a": "namenode",
+      "que": "pregunta dónde está cada bloque",
+      "tipo": "control"
+    },
+    {
+      "de": "datanodes",
+      "a": "namenode",
+      "que": "latidos y lista de bloques",
+      "tipo": "control",
+      "doble": true
+    },
+    {
+      "de": "zookeeper",
+      "a": "namenode",
+      "que": "elige el activo (HA)",
+      "tipo": "control"
+    },
+    {
+      "de": "arranque",
+      "a": "namenode",
+      "que": "prende en orden",
+      "tipo": "control"
+    },
+    {
+      "de": "namenode",
+      "a": "volumen",
+      "que": "metadatos"
+    },
+    {
+      "de": "datanodes",
+      "a": "volumen",
+      "que": "bloques"
+    },
+    {
+      "de": "mysql",
+      "a": "volumen",
+      "que": "/hadoop/mysql"
+    },
+    {
+      "de": "mongodb",
+      "a": "volumen",
+      "que": "/hadoop/mongodb"
+    }
+  ],
+  "recorridos": [
+    {
+      "id": "subir",
+      "nombre": "Subir un archivo a HDFS",
+      "desc": "De tu carpeta a bloques repartidos en los DataNodes.",
+      "pasos": [
+        {
+          "titulo": "Lo dejás en datos/",
+          "texto": "`generar_ventas.py` arma `ventas_grandes.csv` (200.000 ventas, ~6 MB) en `/datos`, que es tu carpeta `datos/`.",
+          "nodos": [
+            "carpeta",
+            "terminal"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "python3 ejemplos/generar_ventas.py"
+          }
+        },
+        {
+          "titulo": "Lo subís",
+          "texto": "`hdfs dfs -put` le pregunta al NameNode dónde escribir cada bloque.",
+          "nodos": [
+            "terminal",
+            "namenode"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/"
+          }
+        },
+        {
+          "titulo": "Se parte en bloques",
+          "texto": "Con `BLOCK_SIZE=1m` quedan 6 bloques; cada uno se escribe en 2 DataNodes (`REPLICATION=2`).",
+          "nodos": [
+            "namenode",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs fsck /user/root/ventas/ventas_grandes.csv -files -blocks -locations"
+          }
+        },
+        {
+          "titulo": "Queda en el volumen",
+          "texto": "Los bloques y los metadatos viven en `/hadoop`: sobreviven a apagar el contenedor.",
+          "nodos": [
+            "datanodes",
+            "namenode",
+            "volumen"
+          ]
+        },
+        {
+          "titulo": "Se cae un DataNode",
+          "texto": "Con una copia en otro nodo, el archivo se sigue leyendo entero. A los ~40 s el NameNode re-copia lo que quedó con una sola copia.",
+          "nodos": [
+            "datanodes",
+            "namenode"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "datanode stop 2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mapreduce",
+      "nombre": "Un trabajo MapReduce",
+      "desc": "Ventas por producto con Hadoop Streaming.",
+      "pasos": [
+        {
+          "titulo": "Lo mandás",
+          "texto": "`hadoop jar` con Streaming: `mapper.py` y `reducer.py` hacen de map y reduce.",
+          "nodos": [
+            "terminal",
+            "hadoopjar",
+            "mapreduce"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar -files ejemplos/mapper.py,ejemplos/reducer.py -mapper \"python3 mapper.py\" -reducer \"python3 reducer.py\" -input /user/root/ventas -output /user/root/resultados/mr_por_producto"
+          }
+        },
+        {
+          "titulo": "YARN le da contenedores",
+          "texto": "Un mapper por bloque (6 con bloques de 1 MB), cada uno en un contenedor del NodeManager.",
+          "nodos": [
+            "mapreduce",
+            "yarn"
+          ]
+        },
+        {
+          "titulo": "Cada mapper lee su bloque",
+          "texto": "YARN pregunta al NameNode dónde está cada bloque y lo lee del DataNode.",
+          "nodos": [
+            "yarn",
+            "namenode",
+            "datanodes"
+          ]
+        },
+        {
+          "titulo": "Shuffle y reduce",
+          "texto": "Hadoop agrupa por producto; el reducer suma unidades y facturación y escribe el resultado en HDFS.",
+          "nodos": [
+            "mapreduce",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -cat /user/root/resultados/mr_por_producto/part-*"
+          }
+        },
+        {
+          "titulo": "Lo mirás",
+          "texto": "En http://localhost:8088 mientras corre; terminado, en el JobHistory (19888). La yerba da 179512 unidades y 448780000.",
+          "nodos": [
+            "navegador",
+            "yarn",
+            "mapreduce"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hive",
+      "nombre": "Una consulta de Hive",
+      "desc": "SQL sobre los archivos de HDFS.",
+      "pasos": [
+        {
+          "titulo": "beeline manda el SQL",
+          "texto": "Por JDBC a HiveServer2, en el puerto 10000.",
+          "nodos": [
+            "terminal",
+            "beeline",
+            "hive"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql"
+          }
+        },
+        {
+          "titulo": "El Metastore dice dónde está la tabla",
+          "texto": "La tabla externa `ventas` apunta a `/user/root/ventas`: Hive sólo guarda el esquema.",
+          "nodos": [
+            "hive",
+            "namenode"
+          ]
+        },
+        {
+          "titulo": "Corre como Tez en YARN",
+          "texto": "La consulta se vuelve un trabajo Tez, con contenedores de YARN que leen los bloques.",
+          "nodos": [
+            "hive",
+            "yarn",
+            "datanodes"
+          ]
+        },
+        {
+          "titulo": "Spark ve la misma tabla",
+          "texto": "Spark usa el mismo Metastore: `spark.sql(\"SELECT ... FROM ventas\")` da lo mismo.",
+          "nodos": [
+            "spark",
+            "hive"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "spark-submit ejemplos/ventas.py"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sqoop",
+      "nombre": "Sqoop: ida y vuelta",
+      "desc": "MySQL → HDFS → Hive → MySQL.",
+      "pasos": [
+        {
+          "titulo": "Importar",
+          "texto": "Sqoop lee la tabla `ventas` de MySQL por JDBC y la escribe en HDFS con 4 mappers.",
+          "nodos": [
+            "sqoop",
+            "mysql",
+            "mapreduce",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "sqoop import --connect jdbc:mysql://localhost/tienda --username alumno --password alumno --table ventas --target-dir /user/root/tienda/ventas --delete-target-dir -m 4"
+          }
+        },
+        {
+          "titulo": "Procesar en Hive",
+          "texto": "Un JOIN con productos calcula la facturación por categoría y la deja en HDFS.",
+          "nodos": [
+            "beeline",
+            "hive",
+            "yarn"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/tienda.hql"
+          }
+        },
+        {
+          "titulo": "Exportar",
+          "texto": "Sqoop copia el resultado a `resumen_categoria` de MySQL: accesorios factura 906830000.",
+          "nodos": [
+            "sqoop",
+            "mysql",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "bash ejemplos/sqoop.sh"
+          }
+        },
+        {
+          "titulo": "Lo mirás desde tu compu",
+          "texto": "Con DBeaver o Workbench en `localhost:3306`.",
+          "nodos": [
+            "clientes",
+            "mysql"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ha",
+      "nombre": "Se cae el NameNode (HA)",
+      "desc": "Con NAMENODES=2, otro toma el control.",
+      "pasos": [
+        {
+          "titulo": "Un cluster con 2 NameNodes",
+          "texto": "Otro contenedor (`bigdata-ha`) con su propio volumen: `NAMENODES` queda fijo en el volumen.",
+          "nodos": [
+            "arranque",
+            "namenode",
+            "zookeeper"
+          ],
+          "cmd": {
+            "donde": "compu",
+            "cmd": "docker run -d --name bigdata-ha --stop-timeout 20 -e NAMENODES=2 -e DATANODES=3 -e REPLICATION=2 -e BLOCK_SIZE=1m -e SERVICIOS=hdfs -p 127.0.0.1:9870-9872:9870-9872 -p 127.0.0.1:8480-8482:8480-8482 -v bigdata_ha:/hadoop franki678/bigdata-sandbox:base"
+          }
+        },
+        {
+          "titulo": "Uno active, otro standby",
+          "texto": "El activo tiene el candado de ZooKeeper.",
+          "nodos": [
+            "namenode",
+            "zookeeper"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "namenode"
+          }
+        },
+        {
+          "titulo": "Se apaga el activo",
+          "texto": "Su ZKFC suelta el candado y el otro NameNode lo toma.",
+          "nodos": [
+            "namenode",
+            "zookeeper"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "namenode stop 1"
+          }
+        },
+        {
+          "titulo": "HDFS sigue andando",
+          "texto": "Los DataNodes le hablan al nuevo activo; los archivos se siguen leyendo.",
+          "nodos": [
+            "namenode",
+            "datanodes"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -cat /user/root/texto.txt"
+          }
+        }
+      ]
+    }
+  ],
+  "usoIntro": "Lo mínimo, en orden. Cada paso tiene su parte en la guía con el detalle y los resultados esperados.",
+  "uso": [
+    {
+      "titulo": "Tener Docker y la imagen",
+      "texto": "Docker Desktop (Windows, Mac) o Docker Engine (Linux), con 7 GB de RAM. La imagen de Docker Hub o, en el aula, el archivo del release `imagen`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker pull franki678/bigdata-sandbox:base"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker load -i bigdata-sandbox.tar.gz"
+        }
+      ],
+      "nodos": [
+        "arranque"
+      ],
+      "guia": {
+        "archivo": "guia.md#3-tener-la-imagen",
+        "seccion": "3. Tener la imagen"
+      }
+    },
+    {
+      "titulo": "Crear el cluster",
+      "texto": "Una sola vez, parado en tu carpeta de trabajo. El comando completo está arriba a la derecha.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker logs -f bigdata"
+        }
+      ],
+      "nodos": [
+        "arranque",
+        "volumen",
+        "carpeta"
+      ],
+      "guia": {
+        "archivo": "guia.md#4-crear-el-cluster",
+        "seccion": "4. Crear el cluster"
+      }
+    },
+    {
+      "titulo": "Entrar",
+      "texto": "Esperá **Cluster LISTO** y entrá. `estado` muestra cada proceso.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker exec -it bigdata bash"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "estado"
+        }
+      ],
+      "nodos": [
+        "terminal"
+      ],
+      "guia": {
+        "archivo": "guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "titulo": "Subir datos a HDFS",
+      "texto": "Generá las 200.000 ventas y subilas.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "python3 ejemplos/generar_ventas.py"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -mkdir -p /user/root/ventas"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -put -f ventas_grandes.csv /user/root/ventas/"
+        }
+      ],
+      "nodos": [
+        "namenode",
+        "datanodes"
+      ],
+      "guia": {
+        "archivo": "guia.md#7-hdfs",
+        "seccion": "7. HDFS"
+      }
+    },
+    {
+      "titulo": "Procesar con cuatro herramientas",
+      "texto": "El mismo cálculo con MapReduce, Pig, Hive y Spark: tiene que dar lo mismo.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "pig ejemplos/ventas.pig"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000 -f ejemplos/ventas.hql"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ventas.py"
+        }
+      ],
+      "nodos": [
+        "pig",
+        "hive",
+        "spark",
+        "mapreduce",
+        "yarn"
+      ],
+      "guia": {
+        "archivo": "guia.md#8-yarn-y-mapreduce",
+        "seccion": "8. YARN y MapReduce"
+      }
+    },
+    {
+      "titulo": "Mirar en el navegador",
+      "texto": "HDFS en 9870, los trabajos en 8088, Hive en 10002, Spark en 18080.",
+      "comandos": [
+        {
+          "donde": "En el navegador de tu compu",
+          "cmd": "http://localhost:8088"
+        }
+      ],
+      "nodos": [
+        "navegador",
+        "yarn",
+        "namenode"
+      ],
+      "guia": {
+        "archivo": "guia.md#5-entrar-mirar-y-las-páginas-web",
+        "seccion": "5. Entrar, mirar y las páginas web"
+      }
+    },
+    {
+      "titulo": "Apagar y prender",
+      "texto": "Al terminar la clase, `exit` y apagar. La próxima, prender y esperar LISTO. No repitas el `docker run`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker stop bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker start bigdata"
+        }
+      ],
+      "nodos": [
+        "arranque",
+        "volumen"
+      ],
+      "guia": {
+        "archivo": "guia.md#6-apagar-prender-y-cambiar-la-arquitectura",
+        "seccion": "6. Apagar, prender y cambiar la arquitectura"
+      }
+    },
+    {
+      "titulo": "Cambiar la arquitectura",
+      "texto": "Borrar el contenedor (el volumen queda) y crearlo con otros `-e`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker rm -f bigdata"
+        }
+      ],
+      "nodos": [
+        "arranque",
+        "datanodes"
+      ],
+      "guia": {
+        "archivo": "guia.md#cambiar-los-parámetros",
+        "seccion": "Cambiar los parámetros"
+      }
+    },
+    {
+      "titulo": "Empezar de cero",
+      "texto": "Borra HDFS, Hive y las bases. Tu carpeta `datos/` queda.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker rm -f bigdata"
+        },
+        {
+          "donde": "compu",
+          "cmd": "docker volume rm bigdata_hadoop"
+        }
+      ],
+      "nodos": [
+        "volumen"
+      ],
+      "guia": {
+        "archivo": "guia.md#16-empezar-de-cero",
+        "seccion": "16. Empezar de cero"
+      }
+    }
+  ],
+  "puertosIntro": "Todos publicados con `127.0.0.1`: sólo se ven desde tu compu. Los que dicen *adentro* no se publican en el `docker run` de la guía."
+}

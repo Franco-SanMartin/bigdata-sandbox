@@ -1,5 +1,5 @@
 # Archivo para el aula: la imagen base (Intel/AMD) en un solo archivo, para
-# bajarla una vez y repartirla en las PCs del aula (guias/01-instalacion.md).
+# bajarla una vez y repartirla en las PCs del aula (docs/base/guia.md, parte 3).
 # Lleva UN solo nombre, franki678/bigdata-sandbox:base, el que usan todas las
 # guias y el docker-compose.yml: despues de docker load queda una sola fila en
 # docker images. Queda en el release 'imagen' como bigdata-sandbox.tar.gz y

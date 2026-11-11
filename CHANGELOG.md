@@ -9,6 +9,20 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
 
 ## [Sin publicar]
 
+### Cambiado (documentación)
+
+- **Documentación rehecha desde cero, una carpeta por versión**: `docs/base/`
+  y `docs/ml/` traen cada una su `README` (qué es, cómo se hizo, qué hace y qué
+  no, cómo se prueba), su `guia` paso a paso (las dos también en PDF) y
+  `interactivo.html`, un mapa sin internet de cada pieza, sus puertos y cómo se
+  conecta con las demás. Salen de `docs/_herramientas/generar.sh`.
+- **README general nuevo**: lo común primero y después una sección por tag.
+  La portada de GitHub Pages (`docs/index.html`) enlaza los mapas y la demo.
+- **Se borraron `guias/`** (las guías numeradas, teoría y evaluación por
+  versión), `docs/maquetas/`, `REDISENO-FULL.md` y `EVENTOS.md`. El glosario
+  pasó a `docs/glosario.md` (la interfaz lo sigue leyendo en el build) y el
+  escenario `tutoriales` corre `docs/base/guia.md`.
+
 ### Cambiado (base)
 
 - **Hive 4.0.0 con copia propia**: si archive.apache.org no contesta (la CDN
@@ -408,9 +422,9 @@ con un tag por versión de la imagen (`latest`, `base`, `ml`, `full`).
   - `POST /api/ml/sources/generate` y **Datos a escala en HDFS…** en el paso
     Datos del estudio: corre con el mismo lanzador de las corridas y, al
     terminar, elige la fuente nueva.
-  - Guías: [13 de `full`](guias/full/13-estudio-ml.md) (el estudio de punta a
+  - Guías: 13 de `full` (`guias/full/13-estudio-ml.md`) (el estudio de punta a
     punta: datos a escala, limpieza, YARN, biblioteca, lotes con deriva y
-    exportar) y [8 de `ml`](guias/ml/08-estudio-desde-jupyter.md) (lo mismo
+    exportar) y 8 de `ml` (`guias/ml/08-estudio-desde-jupyter.md`) (lo mismo
     con `sandbox_ml` desde JupyterLab).
   - Humo de `full`: genera 200.000 clientes y entrena una logística de Spark
     sobre ellos. La guarda en la biblioteca, la promueve, predice al instante y
@@ -462,7 +476,7 @@ pensar el comando antes de correrlo, y sale `empresa` en beta.
   `guias/empresa`: paso a paso, referencia (qué hace cada cosa, dónde se usa y
   cómo), teoría y evaluación (opción múltiple con el porqué de cada respuesta,
   preguntas de desarrollo con respuesta modelo y ejercicios sobre la imagen
-  con solución y rúbrica). El [índice de guías](guias/README.md) dice qué
+  con solución y rúbrica). El índice de guías (`guias/README.md`) dice qué
   versión usar. Las guías 03 a 10 terminan con un *Para profundizar*.
 - **`empresa` en beta** (tag `empresa`, amd64 y arm64): varias compus arman un
   solo cluster, con la del profe como maestro y cada PC como DataNode y
@@ -470,7 +484,7 @@ pensar el comando antes de correrlo, y sale `empresa` en beta.
   anda el aula simulada en una sola compu (`empresa/aula-simulada.yml`); la
   red entre PCs reales viene después, con lo que mida la sonda del
   laboratorio. Guía para probarla en clase:
-  [`guias/empresa/03-laboratorio.md`](guias/empresa/03-laboratorio.md).
+  `guias/empresa/03-laboratorio.md`.
 
 - **Pregunta antes de ejecutar** en cada paso que corre un comando (guías 03 a
   10): tres o cuatro opciones, y al elegir te dice por qué esa sí o por qué no

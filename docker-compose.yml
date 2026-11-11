@@ -1,5 +1,5 @@
 # BigData Sandbox con Docker Compose: el mismo cluster que el "docker run" de
-# la guia 2 (guias/02-arrancar-y-apagar.md), pero con todos los parametros en este archivo. Para cambiar algo, se
+# la guia de base (docs/base/guia.md, parte 4), pero con todos los parametros en este archivo. Para cambiar algo, se
 # edita aca y se vuelve a correr "docker compose up -d".
 #
 # Las lineas que empiezan con # estan apagadas. Para prender una, se le saca el

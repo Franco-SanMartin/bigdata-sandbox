@@ -509,7 +509,7 @@ jobs:
           # Las PCs del aula son Intel: la de amd64 va con el nombre corto
           mv aula/bigdata-sandbox-trabajador-amd64.tar.gz aula/bigdata-sandbox-trabajador.tar.gz
           cp empresa/empresa-profe.cmd empresa/empresa-alumno.cmd aula/
-          cp guias/empresa/03-laboratorio.md aula/LEEME.md
+          cp docs/empresa/guia.md aula/LEEME.md
           ls -l aula
           for f in aula/*.tar.gz; do [ "$(stat -c %s "$f")" -lt 2147483648 ]; done   # tope de GitHub: 2 GiB
 

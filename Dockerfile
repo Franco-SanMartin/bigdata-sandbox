@@ -370,8 +370,8 @@ RUN npm ci --no-audit --no-fund
 # tareas.ts los importan de ../datos/ejemplos y ../datos/comparar): van al lado de /ui, como en el repo
 COPY datos/ejemplos/ /datos/ejemplos/
 COPY datos/comparar/ /datos/comparar/
-# El "?" de cada pantalla muestra el glosario de las guias (ui/src/help/glosario.ts lo importa)
-COPY guias/glosario.md /guias/glosario.md
+# El "?" de cada pantalla muestra el glosario (docs/glosario.md; ui/src/help/glosario.ts lo importa)
+COPY docs/glosario.md /docs/glosario.md
 COPY ui/ ./
 RUN npm run build
 
