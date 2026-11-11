@@ -493,7 +493,10 @@ de un solo workflow desde `main`. La documentación se rehízo desde cero.
   corriendo siempre: `pgrep -f proc_datanode` dentro de `bash -c` con una
   redirección se encontraba a sí mismo (el bash de arriba lleva el patrón).
   Ahora buscan `[-]Dproc_...`, que solo encuentra el Java del servicio, y el
-  agente contesta error si después de apagar algo sigue vivo. La prueba de una
+  agente contesta error si después de apagar algo sigue vivo. «Dónde corrió
+  cada tarea» daba cero tareas: Hadoop 3 escribe el historial del trabajo en
+  binario y la vista lo lee en JSON; el aula ahora lo pide en JSON
+  (`mapreduce.jobhistory.jhist.format`). La prueba de una
   PC caída por el túnel espera que los bloques vuelvan a 2 copias antes de
   contarlas.
 - El humo de `:empresa` en CI prende la terminal (`TERMINAL=1`), que la imagen
