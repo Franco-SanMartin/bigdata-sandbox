@@ -33,8 +33,10 @@ from pathlib import Path
 PUERTO = int(os.environ.get("P_AGENTE", "8098"))
 LIB = "/opt/sandbox/lib.sh"
 ACCIONES = {
-    # -9 a todo Java: en la PC solo corren el DataNode, el NodeManager y los contenedores de los trabajos
-    "golpe": "pkill -9 -x java; sleep 1; ! pgrep -x java > /dev/null",
+    # -9 a todo Java: en la PC solo corren el DataNode, el NodeManager y los contenedores de los trabajos.
+    # Primero por el nombre del servicio (-Dproc_..., lo mismo que mira estado()): en el CI el DataNode
+    # sobrevivió a un pkill solo por nombre de proceso. El [-] evita que el patrón se encuentre a sí mismo
+    "golpe": "pkill -9 -f '[-]Dproc_(datanode|nodemanager)'; pkill -9 -x java; sleep 1; ! pgrep -x java > /dev/null",
     "ordenado": f". {LIB}; if con_yarn; then yarn --daemon stop nodemanager; fi; datanode_stop 1",
     "prender": f". {LIB}; datanode_start 1; if con_yarn; then yarn --daemon start nodemanager; fi",
 }
@@ -131,6 +133,10 @@ class Agente:
                                 **self.estado()}
         if rc != 0:
             r["error"] = next((l for l in reversed(salida.splitlines()) if l.strip()), f"salió con {rc}")
+            return 500, r
+        siguen = [s for s in ("datanode", "nodemanager") if r[s] == "si"] if accion != "prender" else []
+        if siguen:  # el maestro no la marca apagada si algo quedó vivo
+            r["error"] = "siguen corriendo: " + ", ".join(siguen)
             return 500, r
         print(f"[agente] {accion} pedido por el maestro", flush=True)
         return 200, r
