@@ -1,0 +1,740 @@
+{
+  "tag": "full",
+  "nombre": "Versión",
+  "titulo": "BigData Sandbox · full, el cluster con interfaz web",
+  "subtitulo": "Todo Hadoop en un contenedor y una **interfaz en el 8080** que lo maneja de verdad: tocá una pieza para ver qué es, cómo se usa y con qué se conecta.",
+  "arranque": {
+    "texto": "Arrancar full",
+    "cmd": "docker run -d --name bigdata-full --stop-timeout 20 -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 -v bigdata_full:/hadoop -v \"$(pwd)/datos:/datos\" franki678/bigdata-sandbox:full"
+  },
+  "intro": "La **interfaz** (un servidor Python en el 8080) recibe lo que hacés en el navegador y lo convierte en comandos reales adentro del contenedor: `hdfs`, `yarn`, `beeline`, `spark-submit`, `pig`, `sqoop`. Tocá una caja para ver su detalle, o seguí un recorrido de abajo.",
+  "guia": {
+    "md": "guia.md",
+    "pdf": "guia.pdf"
+  },
+  "readme": {
+    "md": "README.md",
+    "pdf": "README.pdf"
+  },
+  "pie": "Sale del código de `Dockerfile` (etapas `interfaz` y `full`), `server/sandbox_server/` y `ui/`.",
+  "capas": [
+    {
+      "id": "puertas",
+      "nombre": "Puertas",
+      "desc": "por dónde entrás",
+      "color": "#6B7280"
+    },
+    {
+      "id": "lenguajes",
+      "nombre": "Lenguajes",
+      "desc": "cómo lo pedís",
+      "color": "#7A5AB8"
+    },
+    {
+      "id": "motores",
+      "nombre": "Motores",
+      "desc": "quién procesa",
+      "color": "#3D6FB6"
+    },
+    {
+      "id": "recursos",
+      "nombre": "Recursos",
+      "desc": "quién reparte CPU y memoria",
+      "color": "#A67C1E"
+    },
+    {
+      "id": "datos",
+      "nombre": "Datos",
+      "desc": "dónde queda",
+      "color": "#2F8A78"
+    },
+    {
+      "id": "puente",
+      "nombre": "Puentes",
+      "desc": "mueven datos entre mundos",
+      "color": "#B0527E"
+    }
+  ],
+  "componentes": [
+    {
+      "id": "navegador",
+      "nombre": "Tu navegador",
+      "capa": "puertas",
+      "corto": "localhost:8080",
+      "que": "Donde ves la interfaz. Sólo entra desde tu compu: el contenedor publica los puertos en `127.0.0.1`.",
+      "puertos": [
+        {
+          "n": 8080,
+          "que": "la interfaz",
+          "url": "http://localhost:8080"
+        }
+      ],
+      "no": "No guarda nada: si cerrás la pestaña, el cluster sigue igual.",
+      "guia": {
+        "archivo": "guia.md#4-abrir-la-interfaz-e-iniciar-el-cluster",
+        "seccion": "4. Abrir la interfaz"
+      }
+    },
+    {
+      "id": "interfaz",
+      "nombre": "Interfaz (sandbox_server)",
+      "capa": "puertas",
+      "corto": ":8080 · Starlette",
+      "version": "starlette 1.9.0 · uvicorn 0.54.0 · React 19",
+      "que": "El servidor Python que sirve la UI y la API `/api/*`. Cada botón corre un comando real y la **Consola** muestra cuál. Tiene tres barreras: sólo hosts confiables, `Origin` del mismo sitio y cuerpos JSON.",
+      "puertos": [
+        {
+          "n": 8080,
+          "que": "UI + API + eventos (SSE)",
+          "url": "http://localhost:8080"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker logs bigdata-full"
+        }
+      ],
+      "no": "No es una simulación ni tiene usuarios: no la publiques fuera de `127.0.0.1`.",
+      "guia": {
+        "archivo": "guia.md#4-abrir-la-interfaz-e-iniciar-el-cluster",
+        "seccion": "4. Abrir la interfaz"
+      }
+    },
+    {
+      "id": "terminal",
+      "nombre": "Terminal web",
+      "capa": "puertas",
+      "corto": "bash en /datos",
+      "que": "Una bash de root adentro del contenedor, en el cajón de la interfaz (WebSocket `/api/terminal`). Hasta 4 a la vez.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker exec -it bigdata-full bash"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "estado"
+        }
+      ],
+      "no": "Con `-e TERMINAL=0` queda apagada.",
+      "guia": {
+        "archivo": "guia.md#5-confirmar-desde-la-terminal",
+        "seccion": "5. Confirmar desde la terminal"
+      }
+    },
+    {
+      "id": "jupyter",
+      "nombre": "Jupyter",
+      "capa": "puertas",
+      "corto": ":8888",
+      "que": "JupyterLab con los ejemplos de `/datos/ejemplos/ml`.",
+      "puertos": [
+        {
+          "n": 8888,
+          "que": "JupyterLab",
+          "url": "http://localhost:8888"
+        }
+      ],
+      "no": "Se apaga con `JUPYTER=no` (o desde Config)."
+    },
+    {
+      "id": "hive",
+      "nombre": "Hive",
+      "capa": "lenguajes",
+      "corto": ":10000 · SQL",
+      "version": "4.0.0",
+      "que": "SQL sobre archivos de HDFS. HiveServer2 recibe las consultas (pantallas Tablas, Motores y Pipeline) y las compila a un plan de **Tez**.",
+      "puertos": [
+        {
+          "n": 10000,
+          "que": "HiveServer2 (JDBC)"
+        },
+        {
+          "n": 10002,
+          "que": "web de HiveServer2",
+          "url": "http://localhost:10002"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "beeline -u jdbc:hive2://localhost:10000 -n root -e \"SHOW DATABASES;\""
+        }
+      ],
+      "no": "No guarda los datos: los deja en HDFS. El catálogo va al Metastore, en MariaDB.",
+      "guia": {
+        "archivo": "guia.md#10-tablas-bases-y-formatos",
+        "seccion": "10. Tablas, Bases y Formatos"
+      }
+    },
+    {
+      "id": "pig",
+      "nombre": "Pig",
+      "capa": "lenguajes",
+      "corto": "Pig Latin",
+      "version": "0.18.0",
+      "que": "Un lenguaje de flujo de datos (`LOAD`, `FILTER`, `GROUP`) que se traduce a MapReduce. Está en Lenguajes, Pipeline (ETL) y Prácticas.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "pig ejemplos/ventas.pig"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#11-motores-lenguajes-y-comparar",
+        "seccion": "11. Motores, Lenguajes y Comparar"
+      }
+    },
+    {
+      "id": "ml",
+      "nombre": "Estudio de ML",
+      "capa": "lenguajes",
+      "corto": "pandas · scikit-learn · MLlib",
+      "que": "De un dataset de HDFS a un modelo, paso a paso: Datos, Objetivo, Limpieza, Preproceso, Modelo, Validación, Entrenar y Código. Entrena con scikit-learn (una compu) o Spark MLlib (sobre YARN).",
+      "no": "No es un AutoML: te recomienda, pero vos elegís cada paso.",
+      "guia": {
+        "archivo": "guia.md#13-ml-tecla-m",
+        "seccion": "13. ML"
+      }
+    },
+    {
+      "id": "mapreduce",
+      "nombre": "MapReduce",
+      "capa": "motores",
+      "corto": ":19888 historial",
+      "version": "Hadoop 3.3.6",
+      "que": "El motor clásico: map, shuffle a disco, reduce. Lo usan Pig, Sqoop y el wordcount.",
+      "puertos": [
+        {
+          "n": 19888,
+          "que": "JobHistory",
+          "url": "http://localhost:19888"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "yarn jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-*.jar wordcount ENTRADA SALIDA"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#7-trabajos-de-yarn-tecla-y",
+        "seccion": "7. Trabajos de YARN"
+      }
+    },
+    {
+      "id": "tez",
+      "nombre": "Tez",
+      "capa": "motores",
+      "corto": "DAG de Hive",
+      "version": "0.10.3",
+      "que": "Ejecuta las consultas de Hive como un grafo de tareas, sin escribir a disco entre cada paso. En **Motores** lo comparás con MapReduce y Spark.",
+      "no": "No se usa solo: siempre es Hive el que lo llama."
+    },
+    {
+      "id": "spark",
+      "nombre": "Spark",
+      "capa": "motores",
+      "corto": ":18080 · :4040",
+      "version": "3.5.9",
+      "que": "Procesa en memoria: PySpark, Spark SQL y MLlib. Corre sobre YARN.",
+      "puertos": [
+        {
+          "n": 18080,
+          "que": "Spark History",
+          "url": "http://localhost:18080"
+        },
+        {
+          "n": 4040,
+          "que": "la app Spark en curso",
+          "url": "http://localhost:4040"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "spark-submit ejemplos/ventas.py"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#11-motores-lenguajes-y-comparar",
+        "seccion": "11. Motores, Lenguajes y Comparar"
+      }
+    },
+    {
+      "id": "yarn",
+      "nombre": "YARN",
+      "capa": "recursos",
+      "corto": ":8088",
+      "version": "Hadoop 3.3.6",
+      "que": "El ResourceManager reparte memoria y CPU en contenedores; el NodeManager los corre. La pantalla **Trabajos** lee su API REST.",
+      "puertos": [
+        {
+          "n": 8088,
+          "que": "ResourceManager",
+          "url": "http://localhost:8088"
+        },
+        {
+          "n": 8042,
+          "que": "NodeManager",
+          "url": "http://localhost:8042"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "yarn application -list"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "curl -s http://localhost:8088/ws/v1/cluster/metrics"
+        }
+      ],
+      "no": "No guarda datos: sólo reparte recursos.",
+      "guia": {
+        "archivo": "guia.md#7-trabajos-de-yarn-tecla-y",
+        "seccion": "7. Trabajos de YARN"
+      }
+    },
+    {
+      "id": "zookeeper",
+      "nombre": "ZooKeeper",
+      "capa": "recursos",
+      "corto": "sólo con 2+ NameNodes",
+      "version": "3.8.7",
+      "que": "Con `NAMENODES=2` o `3` decide qué NameNode está activo y promueve al de espera si el activo se cae.",
+      "no": "Con un solo NameNode no se prende.",
+      "guia": {
+        "archivo": "guia.md#9-config-tecla-s-cambiar-la-forma-del-cluster",
+        "seccion": "9. Config"
+      }
+    },
+    {
+      "id": "hdfs",
+      "nombre": "HDFS",
+      "capa": "datos",
+      "corto": ":9870",
+      "version": "Hadoop 3.3.6",
+      "que": "El sistema de archivos distribuido: el NameNode sabe dónde está cada bloque y los DataNodes los guardan (de 1 a 9, con sus réplicas). Vive en el volumen `bigdata_full`.",
+      "puertos": [
+        {
+          "n": 9870,
+          "que": "NameNode",
+          "url": "http://localhost:9870"
+        }
+      ],
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfs -ls /user/root"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "hdfs dfsadmin -report"
+        }
+      ],
+      "no": "Si borrás el volumen `bigdata_full`, se va todo lo que tenía.",
+      "guia": {
+        "archivo": "guia.md#6-hdfs-tecla-h",
+        "seccion": "6. HDFS"
+      }
+    },
+    {
+      "id": "mariadb",
+      "nombre": "MariaDB",
+      "capa": "datos",
+      "corto": "tienda + Metastore",
+      "que": "Base relacional con la base de ejemplo `tienda`. También guarda el catálogo de Hive (Metastore). Está en la pantalla **Bases**.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "mysql -ualumno -palumno tienda -e \"SHOW TABLES;\""
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#10-tablas-bases-y-formatos",
+        "seccion": "10. Tablas, Bases y Formatos"
+      }
+    },
+    {
+      "id": "mongodb",
+      "nombre": "MongoDB",
+      "capa": "datos",
+      "corto": ":27017",
+      "version": "8.0",
+      "que": "Base de documentos, para la práctica de MongoDB.",
+      "puertos": [
+        {
+          "n": 27017,
+          "que": "mongod"
+        }
+      ],
+      "no": "Viene apagada: se prende con `MONGODB=si` o desde Config."
+    },
+    {
+      "id": "sqoop",
+      "nombre": "Sqoop",
+      "capa": "puente",
+      "corto": "MySQL ⇄ HDFS",
+      "version": "1.4.7",
+      "que": "Copia tablas de MariaDB a HDFS (import) y resultados de HDFS a MariaDB (export), con mappers de MapReduce.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "bash ejemplos/sqoop.sh"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#12-pipeline-tecla-p",
+        "seccion": "12. Pipeline"
+      }
+    }
+  ],
+  "conexiones": [
+    {
+      "de": "navegador",
+      "a": "interfaz",
+      "que": "HTTP, eventos en vivo (SSE) y la terminal (WebSocket)"
+    },
+    {
+      "de": "interfaz",
+      "a": "terminal",
+      "que": "abre una bash por WebSocket"
+    },
+    {
+      "de": "interfaz",
+      "a": "hdfs",
+      "que": "hdfs dfs y el JMX del NameNode"
+    },
+    {
+      "de": "interfaz",
+      "a": "yarn",
+      "que": "API REST del ResourceManager"
+    },
+    {
+      "de": "interfaz",
+      "a": "hive",
+      "que": "consultas con beeline"
+    },
+    {
+      "de": "interfaz",
+      "a": "ml",
+      "que": "corre el estudio de ML"
+    },
+    {
+      "de": "interfaz",
+      "a": "mariadb",
+      "que": "consultas con mysql"
+    },
+    {
+      "de": "interfaz",
+      "a": "mongodb",
+      "que": "consultas con mongosh"
+    },
+    {
+      "de": "jupyter",
+      "a": "ml",
+      "que": "notebooks con los mismos ejemplos"
+    },
+    {
+      "de": "hive",
+      "a": "tez",
+      "que": "compila la consulta a un DAG"
+    },
+    {
+      "de": "hive",
+      "a": "mariadb",
+      "que": "el Metastore guarda el catálogo",
+      "tipo": "control"
+    },
+    {
+      "de": "pig",
+      "a": "mapreduce",
+      "que": "se traduce a trabajos MapReduce"
+    },
+    {
+      "de": "ml",
+      "a": "spark",
+      "que": "MLlib y PySpark"
+    },
+    {
+      "de": "mapreduce",
+      "a": "yarn",
+      "que": "pide contenedores"
+    },
+    {
+      "de": "tez",
+      "a": "yarn",
+      "que": "pide contenedores"
+    },
+    {
+      "de": "spark",
+      "a": "yarn",
+      "que": "pide contenedores"
+    },
+    {
+      "de": "mapreduce",
+      "a": "hdfs",
+      "que": "lee y escribe bloques",
+      "doble": true
+    },
+    {
+      "de": "tez",
+      "a": "hdfs",
+      "que": "lee y escribe bloques",
+      "doble": true
+    },
+    {
+      "de": "spark",
+      "a": "hdfs",
+      "que": "lee y escribe bloques",
+      "doble": true
+    },
+    {
+      "de": "zookeeper",
+      "a": "hdfs",
+      "que": "elige el NameNode activo",
+      "tipo": "control"
+    },
+    {
+      "de": "sqoop",
+      "a": "mariadb",
+      "que": "lee o escribe tablas",
+      "doble": true
+    },
+    {
+      "de": "sqoop",
+      "a": "hdfs",
+      "que": "deja o toma archivos",
+      "doble": true
+    },
+    {
+      "de": "sqoop",
+      "a": "mapreduce",
+      "que": "corre como mappers"
+    }
+  ],
+  "recorridos": [
+    {
+      "id": "subir",
+      "nombre": "Subir un archivo a HDFS",
+      "desc": "Del botón Subir al bloque guardado.",
+      "pasos": [
+        {
+          "titulo": "Lo elegís en el navegador",
+          "texto": "En la pantalla HDFS, **Subir** manda el archivo a la interfaz (la única ruta que acepta multipart).",
+          "nodos": [
+            "navegador",
+            "interfaz"
+          ]
+        },
+        {
+          "titulo": "La interfaz lo pone en HDFS",
+          "texto": "El NameNode decide en qué DataNodes va cada bloque, y lo guardan con las réplicas que pediste.",
+          "nodos": [
+            "interfaz",
+            "hdfs"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "hdfs dfs -ls /user/root"
+          }
+        }
+      ]
+    },
+    {
+      "id": "consulta",
+      "nombre": "Una consulta de Hive",
+      "desc": "De la pantalla Tablas al resultado.",
+      "pasos": [
+        {
+          "titulo": "Escribís el SQL",
+          "texto": "La interfaz lo manda a HiveServer2 con `beeline`.",
+          "nodos": [
+            "navegador",
+            "interfaz",
+            "hive"
+          ]
+        },
+        {
+          "titulo": "Hive mira el catálogo",
+          "texto": "El Metastore (en MariaDB) dice qué columnas tiene la tabla y en qué carpeta de HDFS están los archivos.",
+          "nodos": [
+            "hive",
+            "mariadb"
+          ]
+        },
+        {
+          "titulo": "Tez arma el DAG",
+          "texto": "La consulta pasa a un grafo de tareas; `EXPLAIN` te lo muestra.",
+          "nodos": [
+            "hive",
+            "tez"
+          ]
+        },
+        {
+          "titulo": "YARN da contenedores",
+          "texto": "Tez pide memoria y CPU; la pantalla Trabajos muestra la aplicación.",
+          "nodos": [
+            "tez",
+            "yarn"
+          ],
+          "cmd": {
+            "donde": "adentro",
+            "cmd": "yarn application -list"
+          }
+        },
+        {
+          "titulo": "Se leen los bloques",
+          "texto": "Las tareas leen los archivos de HDFS y el resultado vuelve a la pantalla.",
+          "nodos": [
+            "tez",
+            "hdfs",
+            "interfaz"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pipeline",
+      "nombre": "El pipeline de ventas",
+      "desc": "ventas_sucias.csv de punta a punta.",
+      "pasos": [
+        {
+          "titulo": "Ingesta",
+          "texto": "`hdfs dfs -put` o Sqoop desde MariaDB.",
+          "nodos": [
+            "sqoop",
+            "mariadb",
+            "hdfs"
+          ]
+        },
+        {
+          "titulo": "ETL",
+          "texto": "pandas, PySpark o Pig limpian fechas, montos y duplicados.",
+          "nodos": [
+            "pig",
+            "spark",
+            "hdfs"
+          ]
+        },
+        {
+          "titulo": "Almacén y análisis",
+          "texto": "Tabla externa de Hive o Parquet; se agrupa con Hive (Tez), Spark SQL o pandas.",
+          "nodos": [
+            "hive",
+            "tez",
+            "spark"
+          ]
+        },
+        {
+          "titulo": "ML y resultados",
+          "texto": "scikit-learn o MLlib entrenan; el resumen sale con `getmerge` o Sqoop export.",
+          "nodos": [
+            "ml",
+            "spark",
+            "sqoop"
+          ]
+        }
+      ]
+    }
+  ],
+  "usoIntro": "Lo mínimo para tener full andando y recorrerla. El detalle está en la guía.",
+  "uso": [
+    {
+      "titulo": "Bajar la imagen",
+      "texto": "Necesitás Docker con 6 a 8 GB de memoria.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker pull franki678/bigdata-sandbox:full"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#2-bajar-la-imagen",
+        "seccion": "2. Bajar la imagen"
+      }
+    },
+    {
+      "titulo": "Arrancar el contenedor",
+      "texto": "Con los puertos sólo en `127.0.0.1` y el volumen `bigdata_full`.",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker run -d --name bigdata-full --stop-timeout 20 -p 127.0.0.1:8080:8080 -p 127.0.0.1:8888:8888 -v bigdata_full:/hadoop -v \"$(pwd)/datos:/datos\" franki678/bigdata-sandbox:full"
+        }
+      ],
+      "nodos": [
+        "navegador",
+        "interfaz"
+      ],
+      "guia": {
+        "archivo": "guia.md#3-arrancar-el-contenedor",
+        "seccion": "3. Arrancar el contenedor"
+      }
+    },
+    {
+      "titulo": "Abrir la interfaz e Iniciar",
+      "texto": "Entrá a `http://localhost:8080` y tocá **Iniciar** (con `AUTOSTART=1` arranca solo).",
+      "nodos": [
+        "interfaz",
+        "hdfs",
+        "yarn",
+        "hive"
+      ],
+      "guia": {
+        "archivo": "guia.md#4-abrir-la-interfaz-e-iniciar-el-cluster",
+        "seccion": "4. Abrir la interfaz"
+      }
+    },
+    {
+      "titulo": "Mirar que esté todo arriba",
+      "texto": "Desde el cajón de terminal o con `docker exec`.",
+      "comandos": [
+        {
+          "donde": "adentro",
+          "cmd": "estado"
+        },
+        {
+          "donde": "adentro",
+          "cmd": "jps"
+        }
+      ],
+      "nodos": [
+        "terminal"
+      ],
+      "guia": {
+        "archivo": "guia.md#5-confirmar-desde-la-terminal",
+        "seccion": "5. Confirmar desde la terminal"
+      }
+    },
+    {
+      "titulo": "Hacer una práctica",
+      "texto": "En **Prácticas** (tecla `r`): cada paso corre su comando y al final hay autoevaluación.",
+      "nodos": [
+        "interfaz",
+        "terminal"
+      ],
+      "guia": {
+        "archivo": "guia.md#8-prácticas-tecla-r",
+        "seccion": "8. Prácticas"
+      }
+    },
+    {
+      "titulo": "Apagar sin perder nada",
+      "texto": "**Apagar** en Inicio y después `docker stop` (los 20 s de margen son para que apague en orden).",
+      "comandos": [
+        {
+          "donde": "compu",
+          "cmd": "docker stop bigdata-full"
+        }
+      ],
+      "guia": {
+        "archivo": "guia.md#15-apagar-volver-y-empezar-de-cero",
+        "seccion": "15. Apagar, volver y empezar de cero"
+      }
+    }
+  ],
+  "puertosIntro": "Todos se publican sólo en `127.0.0.1`. El `docker run` de la guía publica el 8080 y el 8888; los demás se suman con `-p 127.0.0.1:PUERTO:PUERTO`."
+}
