@@ -40,8 +40,10 @@ imágenes para amd64 y arm64 y el prerelease `aula-v2`.
 2. Borrar las ramas que ya están en `main` (`docs-full-empresa`,
    `docs-nuevas`, `empresa-opcionales`, `fix-arm64-imagen`). Los tags
    `respaldo/*` se quedan.
-3. **El merge del #5 (`ca98877`) quedó con autor ManIAco.** Solo se arregla
-   reescribiendo `main` con force-push: no hacerlo sin que Franki lo decida.
+3. ~~Autores ajenos en la historia.~~ Hecho el 11/11/2026: `main` y los
+   tags se reescribieron con force-push (lo decidió Franki) y todos los
+   commits quedan como Franki. Los SHAs desde la etapa A del estudio de ML
+   cambiaron.
 
 Reglas de siempre: commits como `Franki <fransanmartin.ies@gmail.com>`, **sin**
 `Co-Authored-By` ni "Generated with". Todo en castellano rioplatense.

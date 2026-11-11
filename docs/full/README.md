@@ -44,7 +44,7 @@ Las pruebas automáticas están en el workflow `.github/workflows/full.yml`. Par
 2. Le corre la prueba de humo: la API, la interfaz con Playwright y el chequeo de que con `AUTOSTART=1` arranca sola y `docker stop` la apaga en orden.
 3. Si todo pasa, publica `:full`.
 
-Las corridas medidas de ese workflow tardaron 53 min 47 s (run 42894896304) y 57 min 44 s el job más largo (run 42896926516). Según el estado relevado, la última `:full` publicada salió el 10/11/2026 del commit 2a759f8.
+Las corridas medidas de ese workflow tardaron 53 min 47 s (run 42894896304) y 57 min 44 s el job más largo (run 42896926516). Según el estado relevado, la última `:full` publicada salió el 10/11/2026 del commit 55da4f9.
 
 ## Herramientas y versiones
 

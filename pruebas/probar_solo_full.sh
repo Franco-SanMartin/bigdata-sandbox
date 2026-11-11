@@ -51,7 +51,7 @@ espera "Dockerfile, etapa full" si "$(dockerfile_linea $((int_ini + 5)))"
 espera "Dockerfile, etapa base" no "$(dockerfile_linea $((ml_ini - 10)))"
 espera "configuración de Hadoop" no "$(commit_con conf/core-site.xml)"
 espera "ML + algo de base" no "$(commit_con ml/sandbox_ml/catalogo.py entrypoint.sh)"
-r=$(bash pruebas/solo_full.sh 8b291b2 deb6733 2>/dev/null); [ "$r" = si ] && echo "ok   historia PR 10 -> si" || { echo "MAL  historia PR 10 -> $r"; mal=1; }
-r=$(bash pruebas/solo_full.sh deb6733 5316fab 2>/dev/null); [ "$r" = si ] && echo "ok   historia PR 11 -> si" || { echo "MAL  historia PR 11 -> $r"; mal=1; }
+r=$(bash pruebas/solo_full.sh 0554d8f 8e76656 2>/dev/null); [ "$r" = si ] && echo "ok   historia PR 10 -> si" || { echo "MAL  historia PR 10 -> $r"; mal=1; }
+r=$(bash pruebas/solo_full.sh 8e76656 2de65a6 2>/dev/null); [ "$r" = si ] && echo "ok   historia PR 11 -> si" || { echo "MAL  historia PR 11 -> $r"; mal=1; }
 rm -f "$GIT_INDEX_FILE"
 exit $mal
