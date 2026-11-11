@@ -61,6 +61,30 @@ def test_apagar_golpe_y_prender(tmp_path):
     assert "datanode_start 1" in sh.scripts[-1]
 
 
+def test_apagar_golpe_mata_por_nombre_de_servicio(tmp_path):
+    a, sh = _agente(tmp_path)
+    a.atender("POST", "/apagar", "127.0.0.1", "codigo=aula-7\nmodo=golpe\n")
+    assert "pkill -9 -f '[-]Dproc_(datanode|nodemanager)'" in sh.scripts[-1]
+
+
+def test_apagar_no_dice_que_apago_si_el_datanode_sigue(tmp_path):
+    # en el CI el DataNode sobrevivió al pkill y el agente igual contestó 200
+    class Terco(Shell):
+        def __call__(self, script: str) -> tuple[int, str]:
+            if script.startswith("pgrep -f 'proc_"):
+                return super().__call__(script)
+            self.scripts.append(script)
+            self.vivos = {"datanode"}
+            return 0, ""
+
+    sh = Terco()
+    a = ag.Agente({"RED": "docker", "MAESTRO": "127.0.0.1", "CODIGO": "aula-7", "AULA_DIR": str(tmp_path),
+                   "NODO": "pc03"}, ejecutar=sh)
+    for modo in ("golpe", "ordenado"):
+        codigo, r = a.atender("POST", "/apagar", "127.0.0.1", f"codigo=aula-7\nmodo={modo}\n")
+        assert codigo == 500 and r["datanode"] == "si" and "datanode" in r["error"]
+
+
 def test_apagar_ordenado_usa_los_comandos_de_hadoop(tmp_path):
     a, sh = _agente(tmp_path)
     codigo, r = a.atender("POST", "/apagar", "127.0.0.1", "codigo=aula-7\nmodo=ordenado\n")

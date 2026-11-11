@@ -303,7 +303,9 @@ jobs:
           HUMO_SALIDAS: ${{ runner.temp }}/humo-salidas
           HUMO_TAG: empresa
         run: |
-          docker run -d --name humo -p 127.0.0.1:8080:8080 -v humo_hadoop:/hadoop "$LOCAL:empresa"
+          # la terminal viene apagada de fabrica en empresa (TERMINAL=0); el humo la prende como
+          # empresa-profe.cmd, que tambien publica solo en 127.0.0.1
+          docker run -d --name humo -p 127.0.0.1:8080:8080 -e TERMINAL=1 -v humo_hadoop:/hadoop "$LOCAL:empresa"
           for i in $(seq 1 60); do
             curl -sf http://localhost:8080/api/status > /dev/null && break
             sleep 1

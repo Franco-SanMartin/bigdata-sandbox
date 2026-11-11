@@ -283,7 +283,7 @@ esc_aula_opcionales() {
 
   paso "Apagar pc03 a golpe: se mata Java y nada mas"
   api_ok POST /api/aula/pcs/pc03/apagar '{"modo":"golpe"}' > /dev/null
-  dn_corre pc03 && falla "el DataNode de pc03 sigue corriendo"
+  dn_corre pc03 && { en pc03 "ps -eo pid,stat,comm,args | grep -E '[p]roc_|[j]ava'"; falla "el DataNode de pc03 sigue corriendo"; }
   api_ok POST /api/aula/pcs/pc03/prender > /dev/null
   esperar 120 "pc03 no volvio" igual 4 nn NumLiveDataNodes
 
@@ -393,6 +393,12 @@ import json, sys, urllib.request
 d = json.load(urllib.request.urlopen("http://localhost:8088/ws/v1/cluster/nodes", timeout=10))
 print(next((n["state"] for n in d["nodes"]["node"] if n["nodeHostName"] == sys.argv[1]), "-"))
 PY
+}
+
+replicas_listas() { # $1=archivo $2=copias: como replicas_wg, sin cortar (para esperar)
+  local f; f=$(en maestro "hdfs fsck $1 -files -blocks -locations 2>/dev/null")
+  local b; b=$(grep -c 'blk_' <<< "$f" || true)
+  [ "$b" -gt 0 ] && [ "$(grep 'blk_' <<< "$f" | grep "Live_repl=$2" | awk '{ print gsub(/ARCHIVE/, "") }' | grep -cx 1 || true)" -eq "$b" ]
 }
 
 replicas_wg() { # $1=archivo: cada bloque con REPLICATION copias y una en el maestro (ARCHIVE)
@@ -558,6 +564,9 @@ esc_aula_wg_caida() {
   echo "sin bloques sub-replicados a los $(( SECONDS - t0 )) s"
   esperar 60 "fsck no da HEALTHY sin pc02" fsck_sano
   esperar 60 "quedaron bloques fuera de la politica de racks sin pc02" bien_ubicados
+  # justo al darla por muerta el NameNode puede no haber encolado todavia sus bloques (UnderReplicated
+  # da 0 un instante): se espera a que cada bloque tenga sus 2 copias antes de mirar el detalle
+  esperar 300 "los bloques de /aula/caida.bin no volvieron a 2 copias sin pc02" replicas_listas /aula/caida.bin 2
   replicas_wg /aula/caida.bin 2
   en wpc1 "hdfs dfs -cat /aula/caida.bin | wc -c" | grep -qx 12582912 || falla "no se lee el archivo sin pc02"
 
