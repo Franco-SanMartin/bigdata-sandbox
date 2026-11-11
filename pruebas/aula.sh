@@ -259,7 +259,8 @@ api_ok() { # como api, pero falla si no da 2xx; imprime solo el cuerpo
   local r; r=$(api "$@")
   case "${r##*$'\n'}" in 2??) printf '%s\n' "${r%$'\n'*}" ;; *) falla "$1 $2 dio ${r##*$'\n'}: ${r%$'\n'*}" ;; esac
 }
-dn_corre() { en "$1" "pgrep -f proc_datanode > /dev/null"; }
+# [-]: con la redireccion bash no hace exec y pgrep encontraba al bash de arriba (siempre daba "corre")
+dn_corre() { en "$1" "pgrep -f '[-]Dproc_datanode' > /dev/null"; }
 
 esc_aula_opcionales() {
   ESC=aula-opcionales

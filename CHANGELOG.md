@@ -489,10 +489,12 @@ de un solo workflow desde `main`. La documentación se rehízo desde cero.
   runners a veces no contesta, y así se cayó el armado arm64.
 - Humo de `full`: espera que termine el cambio de réplica antes de leerla
   (a veces leía la vieja).
-- Aula: el apagado "de golpe" de una PC también mata por el nombre del
-  servicio (`-Dproc_datanode`, `-Dproc_nodemanager`), porque en CI un DataNode
-  sobrevivió a un `pkill` solo por nombre de proceso; y la prueba de una PC
-  caída por el túnel espera que los bloques vuelvan a 2 copias antes de
+- Aula: el agente de apagado y las pruebas decían que el DataNode seguía
+  corriendo siempre: `pgrep -f proc_datanode` dentro de `bash -c` con una
+  redirección se encontraba a sí mismo (el bash de arriba lleva el patrón).
+  Ahora buscan `[-]Dproc_...`, que solo encuentra el Java del servicio, y el
+  agente contesta error si después de apagar algo sigue vivo. La prueba de una
+  PC caída por el túnel espera que los bloques vuelvan a 2 copias antes de
   contarlas.
 - El humo de `:empresa` en CI prende la terminal (`TERMINAL=1`), que la imagen
   trae apagada de fábrica.
